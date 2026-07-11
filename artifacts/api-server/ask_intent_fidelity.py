@@ -1036,6 +1036,107 @@ def relationship_future_angle_label(angle: str | None) -> str:
     return _RELATIONSHIP_FUTURE_ANGLE_LABELS.get(key, "Relationship future outlook")
 
 
+_RELATIONSHIP_DECISIONS_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "second_chance",
+        re.compile(r"(?ix)\b(second\s+chance|ek\s+aur\s+mauka|try\s+again|wapas\s+try)\b"),
+    ),
+    (
+        "stay_or_leave",
+        re.compile(
+            r"(?ix)\b("
+            r"rehna\s+chahiye\s+ya\s+chhod|stay\s+or\s+leave|rahun\s+ya\s+chhod|"
+            r"rahun\s+ya\s+alag|continue\s+ya\s+end|stay\s+ya\s+leave"
+            r")\b"
+        ),
+    ),
+    (
+        "overall_suitability",
+        re.compile(
+            r"(?ix)\b("
+            r"mere\s+liye\s+sahi|right\s+for\s+me|right\s+fit|overall.*sahi|"
+            r"rishta.*theek|theek\s+hai.*rishta|relationship.*sahi|sahi\s+hai"
+            r")\b"
+        ),
+    ),
+    (
+        "leave_decision",
+        re.compile(
+            r"(?ix)\b("
+            r"chhod\s+du|chhod\s+dun|leave|move\s+on|alag\s+ho|breakup\s+karu|"
+            r"break\s+up|khatam\s+karu|end\s+kar"
+            r")\b"
+        ),
+    ),
+    (
+        "stay_continue",
+        re.compile(r"(?ix)\b(stay|rehna|rahun|continue\s+karu|nibha|nibhana)\b"),
+    ),
+    (
+        "move_forward",
+        re.compile(r"(?ix)\b(propose|move\s+forward|aage\s+badh\w*|next\s+step|official\s+kare)\b"),
+    ),
+    (
+        "should_i",
+        re.compile(r"(?ix)\b(should\s+i|kya\s+main|karu\s+ya\s+nahi)\b"),
+    ),
+    (
+        "general_decision",
+        re.compile(r"(?ix)\b(decision\s+kya|kya\s+karna\s+chahiye|kya\s+karein)\b"),
+    ),
+]
+
+_RELATIONSHIP_DECISIONS_ANGLE_LABELS: dict[str, str] = {
+    "general_decision": "General relationship decision",
+    "stay_or_leave": "Stay or leave decision",
+    "second_chance": "Second chance decision",
+    "leave_decision": "Leave / move-on decision",
+    "stay_continue": "Stay / continue decision",
+    "overall_suitability": "Overall suitability decision",
+    "move_forward": "Move forward / next step",
+    "should_i": "Should-I decision framing",
+}
+
+
+def infer_relationship_decisions_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if re.search(
+        r"(?ix)\b(wapas|patch\s*up|patchup|reconcile|reconciliation|mil\s+jaay|mil\s+jaye)\b",
+        q,
+    ) and not re.search(
+        r"(?ix)\b(stay|leave|chhod|rehna|decision|sahi|continue|propose|mauka)\b",
+        q,
+    ):
+        return None
+    if _TIMING_TRIGGER_RX.search(q) and not re.search(
+        r"(?ix)\b(stay|leave|chhod|rehna|decision|sahi|continue|propose|mauka|rishta|relationship)\b",
+        q,
+    ):
+        return None
+    if not re.search(
+        r"(?ix)\b("
+        r"stay|leave|chhod|rehna|rahun|decision|continue|propose|mauka|sahi|theek|"
+        r"rishta|relationship|should|nibha|breakup|alag|move\s+on|second\s+chance|"
+        r"try|forward|right|fit|partner|move|badh|karna\s+chahiye|chahiye"
+        r")\b",
+        q,
+    ):
+        return None
+    for name, rx in _RELATIONSHIP_DECISIONS_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    if re.search(r"(?ix)\b(rishta|relationship)\b", q):
+        return "general_decision"
+    return None
+
+
+def relationship_decisions_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _RELATIONSHIP_DECISIONS_ANGLE_LABELS.get(key, "Relationship decision")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

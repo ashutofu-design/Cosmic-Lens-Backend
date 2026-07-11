@@ -125,6 +125,12 @@ def _default_checks(
             "relationship_future_level": level,
             "rfut_level": level,
         })
+    elif eid == "relationship_decisions":
+        checks.update({
+            "decision_level": level,
+            "relationship_decisions_level": level,
+            "rdec_level": level,
+        })
     elif eid == "communication":
         checks["communication_level"] = level
     elif eid == "emotional_attachment":

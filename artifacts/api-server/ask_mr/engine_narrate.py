@@ -66,6 +66,7 @@ def format_engine_rich_plain(
         infer_bed_intimacy_angle,
         infer_karmic_marriage_angle,
         infer_relationship_future_angle,
+        infer_relationship_decisions_angle,
         infer_one_sided_love_angle,
         infer_toxicity_angle,
         infer_loyalty_angle,
@@ -263,6 +264,17 @@ def format_engine_rich_plain(
 
             data = engine_result_to_relationship_future_json(result, question=q)
             big = render_relationship_future_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "relationship_decisions" or infer_relationship_decisions_angle(q):
+        try:
+            from ask_mr.relationship_decisions_narrator import (
+                engine_result_to_relationship_decisions_json,
+                render_relationship_decisions_template_answer,
+            )
+
+            data = engine_result_to_relationship_decisions_json(result, question=q)
+            big = render_relationship_decisions_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
     elif arch == "one_sided_love" or infer_one_sided_love_angle(q):
@@ -766,6 +778,35 @@ def narrate_mr_engine_llm(
             )
         else:
             return render_relationship_future_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "relationship_decisions":
+        from ask_mr.relationship_decisions_narrator import (
+            engine_result_to_relationship_decisions_json,
+            relationship_decisions_engine_narrator_payload,
+            render_relationship_decisions_template_answer,
+            validate_relationship_decisions_narrator_output,
+        )
+
+        _rdec_dna = None
+        if isinstance(llm_intent, dict):
+            _rdec_dna = llm_intent.get("question_dna")
+        narrator_json = engine_result_to_relationship_decisions_json(
+            engine_result,
+            question=question or "",
+            question_dna=_rdec_dna if isinstance(_rdec_dna, dict) else None,
+        )
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_RELATIONSHIP_DECISIONS_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = relationship_decisions_engine_narrator_payload(
+                engine_result,
+                wants_explain=wants_explain,
+                question=question or "",
+                question_dna=_rdec_dna if isinstance(_rdec_dna, dict) else None,
+            )
+        else:
+            return render_relationship_decisions_template_answer(narrator_json, question or "", lang=eff_lang)
     elif arch == "one_sided_love":
         from ask_mr.one_sided_love_narrator import (
             engine_result_to_one_sided_love_json,
@@ -1052,6 +1093,18 @@ def narrate_mr_engine_llm(
                     from ask_mr.relationship_future_narrator import render_relationship_future_template_answer
 
                     return render_relationship_future_template_answer(
+                        narrator_json, question or "", lang=eff_lang
+                    )
+            if arch == "relationship_decisions" and narrator_json:
+                ok, issues = validate_relationship_decisions_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] relationship_decisions validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.relationship_decisions_narrator import render_relationship_decisions_template_answer
+
+                    return render_relationship_decisions_template_answer(
                         narrator_json, question or "", lang=eff_lang
                     )
             if arch == "one_sided_love" and narrator_json:

@@ -67,7 +67,18 @@ def format_engine_rich_plain(
         infer_partner_commitment_angle(q)
         or str(getattr(result, "archetype", "")) in ("loyalty_trust", "commitment")
     ):
-        big = format_partner_commitment_user_reply(q, result)
+        try:
+            from ask_mr.commitment_narrator import (
+                engine_result_to_commitment_json,
+                render_commitment_template_answer,
+            )
+
+            data = engine_result_to_commitment_json(result)
+            big = render_commitment_template_answer(data, q, lang=lang)
+        except Exception:
+            from ask_mr.commitment_reply import format_partner_commitment_user_reply
+
+            big = format_partner_commitment_user_reply(q, result)
     elif infer_compatibility_angle(q) or str(getattr(result, "checks", {}).get("question_intent") or "").endswith("compatibility"):
         big = format_compatibility_user_reply(q, result)
     else:
@@ -166,22 +177,38 @@ def narrate_mr_engine_llm(
     from ask_cosmo_narrator import enforce_cosmo_engine_answer
 
     arch = str(getattr(engine_result, "archetype", "") or "general_mr").strip().lower()
+    eff_lang = _resolve_response_lang(question or "", lang, None)
+    narrator_json: dict[str, Any] | None = None
     if arch == "commitment":
         from ask_mr.commitment_narrator import (
             commitment_narrator_payload,
             engine_result_to_commitment_json,
+            render_commitment_template_answer,
+            validate_commitment_narrator_output,
         )
 
+        narrator_json = engine_result_to_commitment_json(engine_result)
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_COMMITMENT_TEMPLATE_ONLY", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            return render_commitment_template_answer(
+                narrator_json,
+                question or "",
+                lang=eff_lang,
+            )
         chart_text = commitment_narrator_payload(
             engine_result,
             wants_explain=wants_explain,
+            question=question or "",
         )
-        _checks = dict(engine_result.checks or {})
-        _checks["narrator_input"] = engine_result_to_commitment_json(engine_result)
-        engine_result.checks = _checks
     else:
         chart_text = engine_result.to_narrator_payload()
-    eff_lang = _resolve_response_lang(question or "", lang, None)
     intent = narrator_intent_hint(
         question or "",
         llm_intent if isinstance(llm_intent, dict) else {},
@@ -239,6 +266,20 @@ def narrate_mr_engine_llm(
                     text = re.sub(r"^[*•]\s+", "", text, flags=re.M)
                     text = re.sub(r"\s{2,}", " ", text).strip()
             polished = polish_mr_confident_tone(text)
+            if arch == "commitment" and narrator_json:
+                ok, issues = validate_commitment_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] commitment validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.commitment_narrator import render_commitment_template_answer
+
+                    return render_commitment_template_answer(
+                        narrator_json,
+                        question or "",
+                        lang=eff_lang,
+                    )
             return polished or None
         except Exception as exc:
             last_exc = exc

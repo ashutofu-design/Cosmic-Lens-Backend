@@ -7923,6 +7923,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             chart_text = commitment_narrator_payload(
                                 _mr_engine_result,
                                 wants_explain=wants_explain,
+                                question=question or "",
                             )
                             _ni_checks = dict(_mr_engine_result.checks or {})
                             _ni_checks["narrator_input"] = engine_result_to_commitment_json(

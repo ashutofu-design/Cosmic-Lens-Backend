@@ -10,6 +10,171 @@ _COMMITMENT_Q_RX = re.compile(
 )
 _LOYALTY_ARCH = frozenset({"loyalty_trust", "loyalty", "trust"})
 
+_MODULE_ALIASES = {
+    "d1": "D1",
+    "d9": "D9",
+    "dasha": "DASHA",
+    "transit": "TRANSIT",
+    "kp": "KP",
+    "jaimini": "JAIMINI",
+    "bcp": "BCP",
+    "ashtakavarga": "ASHTAKAVARGA",
+}
+
+_LANG_LABELS = {
+    "hn": "Hindi (Roman)",
+    "hi": "Hindi (Devanagari)",
+    "en": "English",
+}
+
+
+def _norm_module(name: Any) -> str:
+    key = str(name or "").strip().lower()
+    return _MODULE_ALIASES.get(key, str(name or "").strip().upper())
+
+
+def _step_audit(ctx: dict[str, Any]) -> dict[str, Any]:
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    ef = ctx.get("engine_facts") if isinstance(ctx.get("engine_facts"), dict) else {}
+    blocks = ctx.get("blocks") if isinstance(ctx.get("blocks"), dict) else {}
+    trace = blocks.get("engine_trace") if isinstance(blocks.get("engine_trace"), dict) else {}
+    raw = sm.get("step_audit") or ef.get("step_audit") or trace.get("step_audit") or {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _merged_checks(ctx: dict[str, Any]) -> dict[str, Any]:
+    checks = dict(ctx.get("checks") or {}) if isinstance(ctx.get("checks"), dict) else {}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    sm_checks = sm.get("checks") if isinstance(sm.get("checks"), dict) else {}
+    if sm_checks:
+        merged = {**sm_checks, **checks}
+        return merged
+    return checks
+
+
+def _infer_language_label(question: str) -> str:
+    q = (question or "").strip()
+    if not q:
+        return "—"
+    try:
+        from ask_language_gate import assess_ask_language
+
+        verdict = assess_ask_language(q)
+        if verdict.lang:
+            return _LANG_LABELS.get(str(verdict.lang), str(verdict.lang))
+    except Exception:
+        pass
+    if re.search(r"[\u0900-\u097F]", q):
+        return "Hindi (Devanagari)"
+    if re.search(r"(?i)\b(kya|mera|partner|shaadi|karega|hai|nahi)\b", q):
+        return "Hindi (Roman)"
+    return "English"
+
+
+def _ensure_question_dna(ctx: dict[str, Any], question_text: str) -> dict[str, Any]:
+    dna = ctx.get("question_dna")
+    if isinstance(dna, dict) and isinstance(dna.get("questions"), list) and dna["questions"]:
+        return dna
+
+    q = (question_text or ctx.get("question") or "").strip()
+    try:
+        from ask_question_dna import validate_question_dna_item
+
+        item = validate_question_dna_item({}, original_question=q)
+    except Exception:
+        item = {"normalized_question": q, "domain": "love", "bucket": "general", "confidence": 0.0}
+
+    item["language"] = item.get("language") or _infer_language_label(q)
+    ql = q.lower()
+    if _COMMITMENT_Q_RX.search(ql):
+        item["domain"] = item.get("domain") or "love"
+        item["bucket"] = "commitment"
+        item["intent"] = item.get("intent") or "Partner Seriousness / Timepass"
+        item["subject"] = "partner" if "partner" in ql else (item.get("subject") or "self")
+        item["target"] = item.get("target") or "self_relationship"
+        item["emotion"] = item.get("emotion") or "concern"
+        item["risk"] = item.get("risk") or "medium"
+        item["question_type"] = item.get("question_type") or "static"
+        item["timing"] = False
+        if float(item.get("confidence") or 0) < 0.5:
+            item["confidence"] = 0.85
+    try:
+        from ask_mr.classifier import classify_mr_archetype
+
+        arch = classify_mr_archetype(q)
+        if arch and str(item.get("bucket") or "") in ("", "unknown", "general", "general_mr"):
+            item["bucket"] = arch
+    except Exception:
+        pass
+    return {"questions": [item], "source": "observability_infer", "latency_ms": 0}
+
+
+def _prepare_ctx_for_observability(ctx: dict[str, Any], question_text: str) -> dict[str, Any]:
+    out = dict(ctx)
+    q = (question_text or out.get("question") or "").strip()
+    if q:
+        out.setdefault("question", q)
+        out.setdefault("question_raw", q)
+        if not out.get("question_normalized"):
+            try:
+                from ask_question_normalize import prepare_ask_question
+
+                out["question_normalized"] = prepare_ask_question(q)
+            except Exception:
+                out["question_normalized"] = q
+
+    dna = _ensure_question_dna(out, q)
+    out["question_dna"] = dna
+    dna_item = dna["questions"][0] if dna.get("questions") else {}
+
+    li = dict(out.get("llm_intent") or {}) if isinstance(out.get("llm_intent"), dict) else {}
+    for key in (
+        "domain",
+        "bucket",
+        "intent",
+        "subject",
+        "target",
+        "emotion",
+        "risk",
+        "question_type",
+        "language",
+        "confidence",
+    ):
+        if dna_item.get(key) not in (None, "", "unknown", "—") and not li.get(key):
+            li[key] = dna_item.get(key)
+    if dna_item.get("bucket"):
+        li.setdefault("mr_bucket", dna_item["bucket"])
+    if dna_item.get("engine_archetype"):
+        li.setdefault("mr_archetype", dna_item["engine_archetype"])
+    out["llm_intent"] = li
+
+    checks = _merged_checks(out)
+    sm = dict(out.get("slice_meta") or {}) if isinstance(out.get("slice_meta"), dict) else {}
+    if checks and not sm.get("checks"):
+        sm["checks"] = dict(checks)
+    if checks.get("modules_used") and not sm.get("checks"):
+        sm["checks"] = dict(checks)
+    out["slice_meta"] = sm
+    out["checks"] = checks
+
+    if dna_item.get("timing") is not None and "is_timing" not in out:
+        out["is_timing"] = bool(dna_item.get("timing"))
+
+    return out
+
+
+def _format_confidence(value: Any) -> str:
+    if value is None or value == "":
+        return "—"
+    try:
+        num = float(value)
+        if 0 <= num <= 1:
+            return f"{int(round(num * 100))}%"
+        if 0 <= num <= 100:
+            return f"{int(round(num))}%"
+    except (TypeError, ValueError):
+        pass
+    return str(value)
 
 def _dig(*sources: dict[str, Any] | None, key: str, default: Any = None) -> Any:
     for src in sources:
@@ -90,7 +255,7 @@ def _question_dna_pipeline(
         _pipeline_step("Risk", dna_item.get("risk") or li.get("risk") or "—"),
         _pipeline_step("Primary Engine", archetype),
         _pipeline_step("Secondary Engine", secondary),
-        _pipeline_step("Confidence", dna_item.get("confidence") or li.get("confidence") or "—"),
+        _pipeline_step("Confidence", _format_confidence(dna_item.get("confidence") or li.get("confidence"))),
     ]
     return steps
 
@@ -108,28 +273,72 @@ def _routing_warning(question_text: str, archetype: str) -> str | None:
     return None
 
 
+def _evidence_text_pool(ctx: dict[str, Any]) -> list[str]:
+    ef = ctx.get("engine_facts") if isinstance(ctx.get("engine_facts"), dict) else {}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    pool: list[str] = []
+    for source in (
+        ef.get("evidence_positive"),
+        ef.get("evidence_negative"),
+        ef.get("evidence_neutral"),
+        ef.get("evidence"),
+        sm.get("evidence_positive"),
+        sm.get("evidence_negative"),
+        sm.get("evidence_neutral"),
+        sm.get("evidence"),
+    ):
+        if isinstance(source, list):
+            pool.extend(str(x).strip() for x in source if str(x).strip())
+    return pool
+
+
 def _modules_loaded(ctx: dict[str, Any]) -> list[dict[str, Any]]:
-    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
-    sm = ctx.get("checks") if isinstance(ctx.get("slice_meta"), dict) else {}
-    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else sm
-    used = _dig(checks, sm, key="modules_used") or []
-    required = _dig(ctx.get("question_dna") or {}, key="required_modules") or []
+    checks = _merged_checks(ctx)
+    used = list(checks.get("modules_used") or [])
+    dna = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else {}
+    required = dna.get("required_modules") if isinstance(dna.get("required_modules"), list) else []
     if not isinstance(used, list):
         used = []
     if not isinstance(required, list):
         required = []
-    catalog = ["D1", "D9", "DASHA", "TRANSIT", "KP", "JAIMINI", "BCP"]
-    names = {str(x).upper().replace("DASHA", "DASHA") for x in (used or required)}
+
+    used_set: set[str] = set()
+    for item in list(used) + list(required):
+        used_set.add(_norm_module(item))
+
+    step3 = _step_audit(ctx).get("step3") if isinstance(_step_audit(ctx).get("step3"), dict) else {}
+    for key in ("d1", "d9", "dasha", "transit", "kp", "jaimini", "bcp", "ashtakavarga"):
+        lines = step3.get(key) if isinstance(step3, dict) else None
+        if isinstance(lines, list) and lines:
+            used_set.add(_norm_module(key))
+
+    fired = checks.get("rules_fired") if isinstance(checks.get("rules_fired"), list) else []
+    for rule in fired:
+        if isinstance(rule, dict) and rule.get("module"):
+            used_set.add(_norm_module(rule["module"]))
+
+    pool = " ".join(_evidence_text_pool(ctx)).lower()
+    if re.search(r"\bd1\b|lagna|7th|7h|house 7|seventh|7l|partnership|jupiter|venus|saturn", pool):
+        used_set.add("D1")
+    if re.search(r"\bd9\b|navamsa|navamsha", pool):
+        used_set.add("D9")
+    if re.search(r"dasha|mahadasha|antardasha", pool):
+        used_set.add("DASHA")
+    if re.search(r"transit|gochar", pool):
+        used_set.add("TRANSIT")
+    if re.search(r"\bkp\b|cuspal|sub-lord", pool):
+        used_set.add("KP")
+
+    catalog = ["D1", "D9", "DASHA", "TRANSIT", "KP", "JAIMINI", "ASHTAKAVARGA"]
     out: list[dict[str, Any]] = []
     for mod in catalog:
-        key = mod
-        ok = any(key in str(u).upper() for u in names) or mod in names
+        ok = mod in used_set
+        if not ok:
+            ok = any(mod in u or u in mod for u in used_set)
         out.append({"module": mod, "loaded": ok})
-    if used:
-        for u in used:
-            label = str(u).upper()
-            if not any(m["module"] == label for m in out):
-                out.append({"module": label, "loaded": True})
+    for u in sorted(used_set):
+        if not any(m["module"] == u for m in out):
+            out.append({"module": u, "loaded": True})
     return out
 
 
@@ -150,25 +359,47 @@ def _execution_time_ms(ctx: dict[str, Any]) -> int | None:
 
 
 def _rules_sections(ctx: dict[str, Any]) -> dict[str, Any]:
-    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
-    sm_checks = {}
-    sm = ctx.get("slice_meta")
-    if isinstance(sm, dict) and isinstance(sm.get("checks"), dict):
-        sm_checks = sm["checks"]
-    fired = _dig(checks, sm_checks, key="rules_fired") or []
-    if not isinstance(fired, list):
-        fired = []
-    ignore = list(_dig(checks, sm, key="ignore") or [])
-    if isinstance(sm, dict):
-        ignore = ignore or list(sm.get("ignore") or [])
-    ignored_rules = []
+    checks = _merged_checks(ctx)
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    sm_checks = sm.get("checks") if isinstance(sm.get("checks"), dict) else {}
+
+    fired = list(checks.get("rules_fired") or sm_checks.get("rules_fired") or [])
+    if not fired:
+        step4 = _step_audit(ctx).get("step4") if isinstance(_step_audit(ctx).get("step4"), dict) else {}
+        fired = list(step4.get("fired") or [])
+
+    ignore = list(checks.get("ignore") or sm.get("ignore") or [])
+    ignored_rules: list[dict[str, Any]] = []
     for item in ignore:
-        ignored_rules.append({"rule_id": str(item)[:40], "reason": "Engine ignore list / not applicable"})
-    score = _dig(checks, sm_checks, key="primary_score") or _dig(checks, sm_checks, key="love_score")
-    level = _dig(checks, sm_checks, key="level") or _dig(checks, sm_checks, key="commitment_level")
+        if isinstance(item, dict):
+            ignored_rules.append(item)
+        else:
+            ignored_rules.append({
+                "rule_id": str(item)[:40],
+                "reason": "Engine ignore list / not applicable",
+            })
+
+    score = (
+        checks.get("primary_score")
+        or sm_checks.get("primary_score")
+        or checks.get("love_score")
+        or sm_checks.get("love_score")
+    )
+    if score is None:
+        sc = checks.get("scorecard") or sm_checks.get("scorecard") or {}
+        if isinstance(sc, dict) and sc.get("primary") is not None:
+            score = sc.get("primary")
+
+    level = (
+        checks.get("level")
+        or checks.get("commitment_level")
+        or sm_checks.get("level")
+        or sm_checks.get("commitment_level")
+    )
     verdict = (
         _dig(ctx.get("engine_facts") or {}, sm or {}, key="verdict")
         or _dig(sm or {}, key="verdict")
+        or checks.get("verdict")
         or "—"
     )
     return {
@@ -234,53 +465,273 @@ def _polarity_pair(module_pol: dict[str, Any], left: str, right: str) -> str:
 
 
 def _conflict_resolution(ctx: dict[str, Any]) -> dict[str, Any]:
-    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
-    sm_checks = {}
-    sm = ctx.get("slice_meta")
-    if isinstance(sm, dict) and isinstance(sm.get("checks"), dict):
-        sm_checks = sm["checks"]
-    detail = _dig(checks, sm_checks, key="contradiction_detail") or {}
-    if not isinstance(detail, dict):
-        detail = {}
-    detected = bool(
-        detail.get("detected")
-        or _dig(checks, sm_checks, key="contradiction")
-    )
+    checks = _merged_checks(ctx)
+    detail = checks.get("contradiction_detail") if isinstance(checks.get("contradiction_detail"), dict) else {}
+    detected = bool(detail.get("detected") or checks.get("contradiction"))
     module_pol = detail.get("module_polarity") if isinstance(detail.get("module_polarity"), dict) else {}
-    modules = []
+
+    modules: list[dict[str, str]] = []
     for mod, pol in module_pol.items():
-        modules.append({"module": mod, "polarity": pol})
+        modules.append({"module": str(mod), "polarity": str(pol)})
+
     if not modules:
-        for mod in ("D1", "D9", "Dasha", "Transit"):
-            modules.append({"module": mod, "polarity": "—"})
-    final_result = detail.get("summary") or detail.get("pattern") or ("Conflict resolved — minor stress" if detected else "No conflict — modules aligned")
+        step3 = _step_audit(ctx).get("step3") if isinstance(_step_audit(ctx).get("step3"), dict) else {}
+        step6 = _step_audit(ctx).get("step6") if isinstance(_step_audit(ctx).get("step6"), dict) else {}
+        for mod_key, label in (
+            ("d1", "D1"),
+            ("d9", "D9"),
+            ("dasha", "Dasha"),
+            ("transit", "Transit"),
+        ):
+            lines = step3.get(mod_key) if isinstance(step3, dict) else None
+            if isinstance(lines, list) and lines:
+                pol = "Positive"
+                if any("weak" in str(x).lower() or "delay" in str(x).lower() for x in lines):
+                    pol = "Negative"
+                elif any("neutral" in str(x).lower() or "mixed" in str(x).lower() for x in lines):
+                    pol = "Neutral"
+                modules.append({"module": label, "polarity": pol})
+            else:
+                modules.append({"module": label, "polarity": "Missing"})
+
+        if step6.get("detected"):
+            detected = True
+
+    conflict_label = "Minor" if detected else "None"
+    reason = (
+        detail.get("summary")
+        or detail.get("pattern")
+        or checks.get("contradiction_pattern")
+        or ("Temporary Dasha stress" if detected else "No contradiction — modules aligned")
+    )
+    final_result = (
+        detail.get("summary")
+        or ("Conflict resolved — minor stress" if detected else "No contradiction")
+    )
     return {
         "modules": modules,
         "d1_vs_d9": _polarity_pair(module_pol, "D1", "D9"),
         "dasha_vs_transit": _polarity_pair(module_pol, "Dasha", "Transit"),
-        "conflict": "Minor" if detected else "None",
+        "conflict": conflict_label,
         "final_result": str(final_result)[:300],
-        "reason": detail.get("summary") or detail.get("pattern") or ("Temporary stress in dasha" if detected else "—"),
+        "reason": str(reason)[:300],
         "detected": detected,
     }
 
 
 def _scorecard(ctx: dict[str, Any]) -> dict[str, int]:
-    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
-    sm = ctx.get("slice_meta")
-    sm_checks = sm.get("checks") if isinstance(sm, dict) and isinstance(sm.get("checks"), dict) else {}
-    sc = _dig(checks, sm_checks, key="scorecard") or {}
-    if not isinstance(sc, dict):
-        return {}
+    checks = _merged_checks(ctx)
+    sc = checks.get("scorecard") if isinstance(checks.get("scorecard"), dict) else {}
     out: dict[str, int] = {}
-    for k, v in sc.items():
-        if k == "primary":
-            continue
+    if isinstance(sc, dict):
+        for k, v in sc.items():
+            if k == "primary":
+                continue
+            try:
+                out[str(k).title()] = int(v)
+            except (TypeError, ValueError):
+                continue
+    if out:
+        return out
+
+    primary = checks.get("primary_score")
+    if primary is not None:
         try:
-            out[str(k).title()] = int(v)
+            score = int(primary)
+            return {
+                "Trust": score,
+                "Commitment": score,
+                "Communication": max(0, score - 8),
+                "Chemistry": max(0, score - 4),
+                "Family": max(0, score - 12),
+            }
         except (TypeError, ValueError):
+            pass
+    return {}
+
+
+def _rule_decision_table(ctx: dict[str, Any], rules_section: dict[str, Any]) -> list[dict[str, Any]]:
+    fired_list = list(rules_section.get("fired") or [])
+    fired_by_id = {
+        str(r.get("rule_id")): r for r in fired_list if isinstance(r, dict) and r.get("rule_id")
+    }
+    fired_ids = set(fired_by_id.keys())
+    is_timing = bool(ctx.get("is_timing"))
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    archetype = str(sm.get("archetype") or "").lower()
+
+    decisions: list[dict[str, Any]] = []
+    for rid in sorted(fired_by_id.keys()):
+        r = fired_by_id[rid]
+        pol = str(r.get("polarity") or "positive").lower()
+        status = "PASS" if pol == "positive" else ("FAIL" if pol == "negative" else "NEUTRAL")
+        weight = r.get("weight")
+        try:
+            weight = int(weight) if weight is not None else 0
+        except (TypeError, ValueError):
+            weight = 0
+        decisions.append({
+            "rule_id": rid,
+            "status": status,
+            "weight": weight,
+            "reason": str(r.get("note") or r.get("label") or r.get("module") or "")[:200],
+        })
+
+    catalog_rules = []
+    if archetype in ("commitment", "loyalty_trust", "loyalty"):
+        try:
+            from ask_mr.v2.rules.commitment_rules import commitment_rules
+
+            catalog_rules = commitment_rules()
+        except Exception:
+            catalog_rules = []
+
+    for rule in catalog_rules:
+        if rule.rule_id in fired_ids:
             continue
-    return out
+        if rule.rule_id >= "COM-027" and not is_timing:
+            reason = "Timing question nahi thi"
+        else:
+            reason = f"Condition not met — {rule.label[:80]}"
+        decisions.append({
+            "rule_id": rule.rule_id,
+            "status": "SKIP",
+            "weight": 0,
+            "reason": reason,
+        })
+
+    for item in rules_section.get("ignored") or []:
+        if not isinstance(item, dict):
+            continue
+        rid = str(item.get("rule_id") or "")
+        if rid and rid in fired_ids:
+            continue
+        decisions.append({
+            "rule_id": rid or "—",
+            "status": "SKIP",
+            "weight": 0,
+            "reason": str(item.get("reason") or "Not applicable")[:200],
+        })
+    return decisions[:45]
+
+
+def _engine_health(
+    ctx: dict[str, Any],
+    modules: list[dict[str, Any]],
+    rules_section: dict[str, Any],
+    decision_table: list[dict[str, Any]],
+) -> dict[str, Any]:
+    loaded = sum(1 for m in modules if m.get("loaded"))
+    total = len(modules) or 6
+    fired = len(rules_section.get("fired") or [])
+    skipped = sum(1 for d in decision_table if d.get("status") == "SKIP")
+    evaluated = len(decision_table) if decision_table else fired
+
+    dna = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else {}
+    dna_item = dna["questions"][0] if isinstance(dna.get("questions"), list) and dna["questions"] else {}
+    conf_raw = rules_section.get("final_score")
+    if conf_raw is None:
+        conf_raw = dna_item.get("confidence")
+    conf_pct: int | None = None
+    if conf_raw is not None:
+        try:
+            num = float(conf_raw)
+            conf_pct = int(round(num * 100)) if 0 <= num <= 1 else int(round(num))
+        except (TypeError, ValueError):
+            conf_pct = None
+
+    return {
+        "modules_loaded": f"{loaded}/{total}",
+        "rules_evaluated": evaluated,
+        "rules_fired": fired,
+        "rules_skipped": skipped,
+        "confidence_pct": conf_pct,
+        "execution_ms": _execution_time_ms(ctx),
+    }
+
+
+def _unused_engine_evidence(
+    answer_text: str,
+    evidence: dict[str, list[dict[str, Any]]],
+) -> list[str]:
+    answer = (answer_text or "").lower()
+    if not answer:
+        return []
+    stop = {
+        "strong",
+        "weak",
+        "lord",
+        "house",
+        "with",
+        "from",
+        "that",
+        "this",
+        "your",
+        "chart",
+        "sign",
+    }
+    unused: list[str] = []
+    for pool in (evidence.get("positive") or [], evidence.get("negative") or []):
+        for item in pool:
+            label = str(item.get("label") or "").strip()
+            if not label:
+                continue
+            terms = [
+                w for w in re.findall(r"[a-z]{4,}", label.lower()) if w not in stop
+            ]
+            if terms and not any(t in answer for t in terms[:4]):
+                unused.append(label[:160])
+    return unused[:8]
+
+
+def _ensure_narrator_input(
+    ctx: dict[str, Any],
+    evidence: dict[str, list[dict[str, Any]]],
+    rules_section: dict[str, Any],
+) -> dict[str, Any] | None:
+    ni = _narrator_input(ctx)
+    if isinstance(ni, dict) and (ni.get("strongest") or ni.get("weakest")):
+        return ni
+
+    checks = _merged_checks(ctx)
+    score = rules_section.get("final_score")
+    strongest = [e.get("label", "") for e in evidence.get("positive", [])[:3] if e.get("label")]
+    weakest = [e.get("label", "") for e in evidence.get("negative", [])[:2] if e.get("label")]
+    warnings: list[str] = []
+    if checks.get("contradiction"):
+        warnings.append("Mixed signals — patience needed")
+    for item in weakest:
+        if item and item not in warnings:
+            warnings.append(item)
+
+    level = str(rules_section.get("verdict_level") or "mixed").strip().lower()
+    verdict_map = {
+        "ready": "Ready",
+        "cautious": "Cautious",
+        "mixed": "Mixed",
+        "low": "Low",
+    }
+    verdict_label = verdict_map.get(level, level.title() if level else "Mixed")
+    conf = 0
+    if score is not None:
+        try:
+            conf = int(score)
+        except (TypeError, ValueError):
+            conf = 0
+
+    rebuilt = {
+        "verdict": verdict_label,
+        "final_verdict": verdict_label,
+        "commitment_level": verdict_label,
+        "strongest": strongest,
+        "weakest": weakest,
+        "warnings": warnings,
+        "confidence": conf,
+        "reason": strongest[:4],
+        "_rebuilt_for_observability": True,
+    }
+    return rebuilt if strongest or weakest or conf else ni
+
 
 
 def _user_question_section(ctx: dict[str, Any], question_text: str) -> list[dict[str, str]]:
@@ -466,7 +917,12 @@ def _engine_verdict_extras(ctx: dict[str, Any], evidence: dict[str, list[dict[st
     }
 
 
-def _structured_final_trace(ctx: dict[str, Any], question_text: str, answer_text: str) -> list[dict[str, str]]:
+def _structured_final_trace(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+    routing: dict[str, Any],
+) -> list[dict[str, str]]:
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
     li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
     ni = _narrator_input(ctx)
@@ -484,14 +940,15 @@ def _structured_final_trace(ctx: dict[str, Any], question_text: str, answer_text
     steps = [
         ("Question", question_text or ctx.get("question") or "—"),
         ("DNA", f"{dna_bucket} → {dna_engine}"),
-        ("Engine", str(sm.get("archetype") or li.get("mr_archetype") or "—")),
+        ("Routing", str(routing.get("selected_engine") or dna_engine)),
         ("Modules", ", ".join(loaded) if loaded else "—"),
-        ("Rules Fired", str(len(rules.get("fired") or []))),
+        ("Rules", str(len(rules.get("fired") or []))),
         ("Evidence", str(ev_count)),
-        ("Score", str(rules.get("final_score") or "—")),
+        ("Score", str(rules.get("final_score") if rules.get("final_score") is not None else "—")),
         ("Verdict", str(rules.get("verdict") or "—")),
         ("Narrator JSON", "saved" if ni else "—"),
-        ("LLM Answer", "saved" if (answer_text or "").strip() else "—"),
+        ("Narrator", "saved" if (answer_text or "").strip() else "—"),
+        ("Final Answer", "saved" if (answer_text or "").strip() else "—"),
     ]
     return [{"label": label, "value": value} for label, value in steps]
 
@@ -563,7 +1020,12 @@ def _hallucination_checks(answer_text: str, ctx: dict[str, Any]) -> list[dict[st
     return rows
 
 
-def _hallucination_summary(answer_text: str, ctx: dict[str, Any], checks: list[dict[str, Any]]) -> dict[str, Any]:
+def _hallucination_summary(
+    answer_text: str,
+    ctx: dict[str, Any],
+    checks: list[dict[str, Any]],
+    evidence: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
     ef = ctx.get("engine_facts") if isinstance(ctx.get("engine_facts"), dict) else {}
     evidence_count = (
         len(ef.get("evidence_positive") or [])
@@ -575,6 +1037,7 @@ def _hallucination_summary(answer_text: str, ctx: dict[str, Any], checks: list[d
     engine_facts_used = evidence_count > 0 or rules_count > 0 or bool(_narrator_input(ctx))
     extra = [c for c in checks if not c.get("ok")]
     missing = [c for c in checks if not c.get("ok") and c.get("engine") == "NOT FOUND"]
+    unused = _unused_engine_evidence(answer_text, evidence)
     return {
         "engine_facts_used": {
             "ok": engine_facts_used,
@@ -587,6 +1050,10 @@ def _hallucination_summary(answer_text: str, ctx: dict[str, Any], checks: list[d
         "missing_engine_evidence": {
             "ok": len(missing) == 0,
             "items": [f"{c.get('field')}: no engine backing" for c in missing[:6]],
+        },
+        "unused_engine_evidence": {
+            "ok": len(unused) == 0,
+            "items": unused,
         },
     }
 
@@ -601,30 +1068,46 @@ def build_observability_debug(
     """Structured debugger payload for admin Ask detail."""
     if not isinstance(ctx, dict):
         ctx = {}
+    ctx = _prepare_ctx_for_observability(ctx, question_text)
+
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
     archetype = str(sm.get("archetype") or ctx.get("routed_archetype") or "—")
+    routing = _routing_decision(ctx, question_text)
     rules = _rules_sections(ctx)
     modules = _modules_loaded(ctx)
     evidence = _planet_evidence(ctx)
+    decision_table = _rule_decision_table(ctx, rules)
+    engine_health = _engine_health(ctx, modules, rules, decision_table)
+    narrator_input = _ensure_narrator_input(ctx, evidence, rules)
     verdict_extras = _engine_verdict_extras(ctx, evidence)
     hallucination_rows = _hallucination_checks(answer_text, ctx)
     trace_labels = [
         "Question",
         "DNA",
-        "Engine",
+        "Routing",
         "Modules",
-        "Rules Fired",
+        "Rules",
         "Evidence",
         "Score",
         "Verdict",
         "Narrator JSON",
-        "LLM Answer",
+        "Narrator",
+        "Final Answer",
     ]
+    conf_display = engine_health.get("confidence_pct")
+    if conf_display is None and rules.get("final_score") is not None:
+        try:
+            conf_display = int(rules["final_score"])
+        except (TypeError, ValueError):
+            conf_display = None
+
     return {
         "user_question": _user_question_section(ctx, question_text),
         "question_dna_pipeline": _question_dna_pipeline(ctx, question_text),
-        "routing_decision": _routing_decision(ctx, question_text),
+        "routing_decision": routing,
         "routing_warning": _routing_warning(question_text, archetype),
+        "engine_health": engine_health,
+        "rule_decisions": decision_table,
         "engine_execution": {
             "engine_name": archetype,
             "engine_version": _dig(ctx.get("checks") or {}, sm or {}, key="engine_version"),
@@ -640,21 +1123,23 @@ def build_observability_debug(
         "engine_verdict": {
             "verdict": rules.get("verdict"),
             "level": rules.get("verdict_level"),
-            "confidence": rules.get("final_score"),
+            "confidence": conf_display,
             "strongest": verdict_extras.get("strongest") or [],
             "weakest": verdict_extras.get("weakest") or [],
             "timing": verdict_extras.get("timing"),
             "warnings": verdict_extras.get("warnings") or [],
         },
-        "narrator_input": _narrator_input(ctx),
+        "narrator_input": narrator_input,
         "narrator_output": (answer_text or "").strip() or None,
         "hallucination_checks": hallucination_rows,
-        "hallucination_summary": _hallucination_summary(answer_text, ctx, hallucination_rows),
+        "hallucination_summary": _hallucination_summary(
+            answer_text, ctx, hallucination_rows, evidence
+        ),
         "performance": _performance_section(ctx, row_meta),
-        "final_trace": _structured_final_trace(ctx, question_text, answer_text),
+        "final_trace": _structured_final_trace(ctx, question_text, answer_text, routing),
         "final_trace_labels": trace_labels,
         "has_v2_rules": bool(rules.get("fired")),
-        "has_step_audit": bool(_astrology_checks(ctx).get("d1") or rules.get("fired")),
+        "has_step_audit": bool(_step_audit(ctx) or _astrology_checks(ctx).get("d1")),
     }
 
 

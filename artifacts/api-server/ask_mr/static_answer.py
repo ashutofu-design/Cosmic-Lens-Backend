@@ -76,7 +76,7 @@ def _run_mr_engine(
 
     archetype = None
     if infer_partner_commitment_angle(question):
-        archetype = "loyalty_trust"
+        archetype = "commitment"
     return run_mr_static_engine(
         kundli,
         question,

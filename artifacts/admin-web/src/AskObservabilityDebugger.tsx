@@ -7,6 +7,7 @@ import {
   resolveAskObservability,
   type ObservabilityEvidence,
   type ObservabilityRule,
+  type ObservabilityRuleDecision,
 } from "./askObservability";
 
 function Section({
@@ -81,7 +82,7 @@ function EvidenceColumn({
 
 function formatRulesFired(fired: ObservabilityRule[]): string {
   if (!fired.length) {
-    return "— (no COM rules saved — legacy row or re-ask after deploy)";
+    return "— (re-open after API deploy + re-ask for COM rules)";
   }
   return fired
     .map((r) => {
@@ -151,6 +152,36 @@ function buildConflictSteps(
   return steps;
 }
 
+function RuleDecisionTable({ rows }: { rows: ObservabilityRuleDecision[] }) {
+  if (!rows.length) {
+    return <p className="detail-muted">No rule decision table — re-ask after API deploy.</p>;
+  }
+  return (
+    <div className="obs-rule-decisions">
+      {rows.map((row, i) => (
+        <div key={`${row.rule_id}-${i}`} className="obs-rule-decision-row">
+          <div className="obs-rule-decision-head">
+            <code>{row.rule_id}</code>
+            <span
+              className={
+                row.status === "PASS"
+                  ? "obs-rule-pass"
+                  : row.status === "FAIL"
+                    ? "obs-rule-fail"
+                    : "obs-rule-skip"
+              }
+            >
+              {row.status}
+              {row.weight != null && row.status !== "SKIP" ? ` ${row.weight > 0 ? "+" : ""}${row.weight}` : ""}
+            </span>
+          </div>
+          <p className="detail-muted obs-rule-reason">{row.reason || "—"}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function formatMs(ms: number | null | undefined): string {
   if (ms == null) return "—";
   return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${ms}ms`;
@@ -166,6 +197,8 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
   const perf = obs.performance || {};
   const trace = obs.final_trace || [];
   const hallSummary = obs.hallucination_summary;
+  const health = obs.engine_health || {};
+  const ruleDecisions = obs.rule_decisions || [];
 
   return (
     <div className="obs-debugger">
@@ -175,7 +208,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
           <span className="obs-version-badge">v{OBS_DEBUGGER_VERSION}</span>
         </div>
         <p className="detail-muted">
-          Question → DNA → Engine → Modules → Rules → Evidence → Score → Verdict → Narrator → Answer
+          Question → DNA → Routing → Modules → Rules → Evidence → Score → Verdict → Narrator → Answer
         </p>
         <p className="obs-telemetry detail-muted">
           {perf.model || row.llm_model ? `Model ${perf.model || row.llm_model}` : null}
@@ -195,8 +228,8 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
 
       {!obs.has_v2_rules && !obs.has_step_audit ? (
         <div className="obs-routing-warning obs-legacy-hint">
-          Legacy row — limited engine audit. Re-ask this question after API deploy for full COM rules,
-          narrator JSON, and hallucination checks.
+          Limited audit on this row. Open detail after deploy — admin re-runs engine from kundli when
+          chart is available. For full COM rules, re-ask the question in app.
         </div>
       ) : null}
 
@@ -204,7 +237,40 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         <PipelineList steps={obs.question_dna_pipeline || []} />
       </Section>
 
-      <Section title="2. Engine Execution" stars={5}>
+      <Section title="2. Engine Health" stars={5}>
+        <div className="obs-health-grid">
+          <div>
+            <span className="detail-muted">Modules loaded</span>
+            <div className="obs-big-value obs-big-value-sm">{health.modules_loaded || "—"}</div>
+          </div>
+          <div>
+            <span className="detail-muted">Rules evaluated</span>
+            <div className="obs-big-value obs-big-value-sm">{health.rules_evaluated ?? "—"}</div>
+          </div>
+          <div>
+            <span className="detail-muted">Rules fired</span>
+            <div className="obs-big-value obs-big-value-sm">{health.rules_fired ?? "—"}</div>
+          </div>
+          <div>
+            <span className="detail-muted">Skipped</span>
+            <div className="obs-big-value obs-big-value-sm">{health.rules_skipped ?? "—"}</div>
+          </div>
+          <div>
+            <span className="detail-muted">Confidence</span>
+            <div className="obs-big-value obs-big-value-sm">
+              {health.confidence_pct != null ? `${health.confidence_pct}%` : "—"}
+            </div>
+          </div>
+          <div>
+            <span className="detail-muted">Execution</span>
+            <div className="obs-big-value obs-big-value-sm">
+              {formatMs(health.execution_ms ?? exec.execution_time_ms)}
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="3. Engine Execution" stars={5}>
         <p className="detail-muted obs-engine-name">
           Engine: <code>{exec.engine_name || "—"}</code>
           {exec.engine_version ? ` · v${exec.engine_version}` : null}
@@ -212,23 +278,22 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         <PipelineList steps={buildEngineExecutionSteps(exec)} />
       </Section>
 
-      <Section title="3. Planet Evidence" stars={5}>
+      <Section title="4. Rule Decision Table" stars={5}>
+        <RuleDecisionTable rows={ruleDecisions} />
+      </Section>
+
+      <Section title="5. Planet Evidence" stars={5}>
         <div className="obs-evidence-cols">
           <EvidenceColumn title="Positive" items={evidence.positive || []} icon="✅" />
           <EvidenceColumn title="Negative" items={evidence.negative || []} icon="❌" />
         </div>
-        {(evidence.neutral || []).length > 0 ? (
-          <div className="obs-subblock">
-            <EvidenceColumn title="Neutral" items={evidence.neutral || []} icon="○" />
-          </div>
-        ) : null}
       </Section>
 
-      <Section title="4. Conflict Resolution" stars={3}>
+      <Section title="6. Conflict Resolution" stars={3}>
         <PipelineList steps={buildConflictSteps(conflict)} />
       </Section>
 
-      <Section title="5. Scorecard" stars={5}>
+      <Section title="7. Scorecard" stars={5}>
         {scoreEntries.length === 0 ? (
           <p className="detail-muted">No scorecard saved.</p>
         ) : (
@@ -243,21 +308,19 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         )}
       </Section>
 
-      <Section title="6. Narrator Input" stars={5}>
+      <Section title="8. Narrator Input" stars={5}>
         {obs.narrator_input ? (
           <pre className="obs-json">{JSON.stringify(obs.narrator_input, null, 2)}</pre>
         ) : (
-          <p className="detail-muted">
-            Not saved — exact JSON sent to LLM missing. Re-ask after deploy.
-          </p>
+          <p className="detail-muted">Not saved — exact JSON sent to LLM missing.</p>
         )}
       </Section>
 
-      <Section title="7. Narrator Output">
+      <Section title="9. Narrator Output">
         <pre className="obs-answer-preview">{obs.narrator_output || row.answer_text || "—"}</pre>
       </Section>
 
-      <Section title="8. Hallucination Check" stars={5}>
+      <Section title="10. Hallucination Check" stars={5}>
         {hallSummary ? (
           <ul className="obs-hallucination-summary">
             <li className={hallSummary.engine_facts_used?.ok ? "obs-ok" : "obs-bad"}>
@@ -265,6 +328,14 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
               {hallSummary.engine_facts_used?.detail ? (
                 <span className="detail-muted"> — {hallSummary.engine_facts_used.detail}</span>
               ) : null}
+            </li>
+            <li className={hallSummary.unused_engine_evidence?.ok ? "obs-ok" : "obs-bad"}>
+              Unused engine evidence {hallSummary.unused_engine_evidence?.ok ? "✅" : "❌"}
+              {(hallSummary.unused_engine_evidence?.items || []).map((item) => (
+                <span key={item} className="obs-hallucination-chip">
+                  {item}
+                </span>
+              ))}
             </li>
             <li className={hallSummary.extra_llm_assumptions?.ok ? "obs-ok" : "obs-bad"}>
               Extra LLM assumptions {hallSummary.extra_llm_assumptions?.ok ? "✅" : "❌"}
@@ -285,7 +356,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
           </ul>
         ) : null}
         {(obs.hallucination_checks || []).length === 0 ? (
-          <p className="detail-muted">No field-level mismatches detected (or insufficient engine data).</p>
+          <p className="detail-muted">No field-level mismatches detected.</p>
         ) : (
           <table className="obs-hallucination-table">
             <thead>
@@ -310,7 +381,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         )}
       </Section>
 
-      <Section title="9. Final Trace" stars={4} defaultOpen>
+      <Section title="11. Final Trace" stars={4} defaultOpen>
         <PipelineList steps={trace} />
       </Section>
     </div>

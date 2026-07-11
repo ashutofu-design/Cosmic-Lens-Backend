@@ -2060,6 +2060,57 @@ code {
   color: #bfdbfe;
 }
 
+.obs-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.obs-rule-decisions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.obs-rule-decision-row {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.obs-rule-decision-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.obs-rule-pass {
+  color: #86efac;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.obs-rule-fail {
+  color: #fca5a5;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.obs-rule-skip {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.obs-rule-reason {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+
 .obs-engine-name {
   margin: 0 0 12px;
 }

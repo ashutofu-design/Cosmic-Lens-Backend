@@ -2328,7 +2328,12 @@ def recompute_mr_engine_admin_context(
         or (ctx.get("engine_facts") or {}).get("evidence")
         or []
     )
-    if ev and str(sm.get("slice") or trace.get("engine") or "") == "mr_engine_v1":
+    sm_checks = sm.get("checks") if isinstance(sm.get("checks"), dict) else {}
+    has_rules = bool(
+        (isinstance(ctx.get("checks"), dict) and (ctx.get("checks") or {}).get("rules_fired"))
+        or sm_checks.get("rules_fired")
+    )
+    if ev and str(sm.get("slice") or trace.get("engine") or "") == "mr_engine_v1" and has_rules:
         return ctx
     should_run = src.startswith("mr_engine") or sm.get("slice") == "mr_engine_v1"
     if not should_run:
@@ -2352,8 +2357,11 @@ def recompute_mr_engine_admin_context(
         arch = sm.get("archetype") or trace.get("archetype")
         if not arch:
             from ask_mr.classifier import classify_mr_archetype
+            from ask_intent_fidelity import infer_partner_commitment_angle
 
             arch = classify_mr_archetype(q)
+            if infer_partner_commitment_angle(q):
+                arch = "commitment"
         rec = run_mr_static_engine(
             chart,
             q,
@@ -2378,12 +2386,25 @@ def recompute_mr_engine_admin_context(
     }
     out["blocks"] = blocks
     checks = dict(out.get("checks") or {}) if isinstance(out.get("checks"), dict) else {}
+    meta_checks = dict(meta.get("checks") or {}) if isinstance(meta.get("checks"), dict) else {}
+    checks.update(meta_checks)
     checks.setdefault("slice_type", "mr_engine_v1")
-    checks.setdefault("mr_engine", "v1")
+    checks.setdefault("mr_engine", meta_checks.get("engine_version") or "v2")
     checks.setdefault("is_mr_static", True)
     if meta.get("archetype"):
-        checks.setdefault("archetype", meta.get("archetype"))
+        checks["archetype"] = meta.get("archetype")
+    if not checks.get("narrator_input"):
+        try:
+            arch = str(meta.get("archetype") or "").lower()
+            if arch in ("commitment", "loyalty_trust", "loyalty"):
+                from ask_mr.commitment_narrator import engine_result_to_commitment_json
+
+                checks["narrator_input"] = engine_result_to_commitment_json(rec)
+        except Exception:
+            pass
     out["checks"] = checks
+    merged_sm["checks"] = checks
+    out["slice_meta"] = merged_sm
     try:
         ef = build_engine_facts_snapshot(checks=checks, slice_meta=merged_sm)
         out["engine_facts"] = _enrich_engine_facts_from_blocks(ef, blocks)

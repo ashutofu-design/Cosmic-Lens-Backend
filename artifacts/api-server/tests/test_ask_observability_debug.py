@@ -30,7 +30,12 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertIn("user_question", obs)
         self.assertIn("routing_decision", obs)
         self.assertIn("astrology_checks", obs)
-        self.assertEqual(len(obs["question_dna_pipeline"]), 15)
+        self.assertIn("engine_health", obs)
+        self.assertIn("rule_decisions", obs)
+        self.assertIn("unused_engine_evidence", obs["hallucination_summary"])
+        dna_labels = [s["label"] for s in obs["question_dna_pipeline"]]
+        self.assertIn("Language Detection", dna_labels)
+        self.assertIn("Intent", dna_labels)
         self.assertIn("modules_skipped", obs["engine_execution"])
         self.assertIn("neutral", obs["planet_evidence"])
         self.assertIn("hallucination_summary", obs)

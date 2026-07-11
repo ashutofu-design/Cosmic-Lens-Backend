@@ -13,6 +13,9 @@ from ask_mr.v2.adapter import v2_to_engine_result
 from ask_mr.commitment_narrator import (
     commitment_narrator_payload,
     engine_result_to_commitment_json,
+    render_commitment_template_answer,
+    validate_commitment_narrator_output,
+    _build_direct_answer,
 )
 from ask_mr.narrator import build_mr_engine_narrator_system_prompt
 
@@ -79,7 +82,7 @@ class CommitmentNarratorTests(unittest.TestCase):
         )
         self.assertIn("ENGINE_JSON", prompt)
         self.assertIn("commitment", prompt.lower())
-        self.assertIn("shayad", prompt.lower())
+        self.assertIn("LOCKED_TEMPLATE", payload)
         self.assertIn("Confidence:", prompt)
         self.assertNotIn("The Big Picture", prompt)
         self.assertIn("ENGINE LOCK", prompt)
@@ -97,6 +100,40 @@ class CommitmentNarratorTests(unittest.TestCase):
     def test_timing_omitted_when_not_applicable(self):
         data = engine_result_to_commitment_json(self.result)
         self.assertNotIn("timing", data)
+
+    def test_confidence_never_zero(self):
+        data = engine_result_to_commitment_json(self.result)
+        self.assertGreater(data["confidence"], 0)
+        self.assertIn("Confidence:", data.get("locked_template", ""))
+
+    def test_locked_template_has_evidence(self):
+        data = engine_result_to_commitment_json(self.result)
+        template = data.get("locked_template") or ""
+        self.assertIn("Strongest astrology evidence", template)
+        self.assertIn("Weakest astrology evidence", template)
+        self.assertIn("Practical guidance", template)
+        self.assertRegex(template, r"Confidence:\s*\w+\s*\(\d+%\)")
+
+    def test_validate_rejects_contradiction(self):
+        data = engine_result_to_commitment_json(self.result)
+        data["final_verdict"] = "Low"
+        bad = (
+            "genuine commitment level low hai. kehna mushkil hai ki serious hain ya sirf timepass. "
+            "Confidence: Medium (0%)."
+        )
+        ok, issues = validate_commitment_narrator_output(bad, data)
+        self.assertFalse(ok)
+        self.assertTrue(issues)
+
+    def test_render_template_low_verdict_no_hedge(self):
+        data = engine_result_to_commitment_json(self.result)
+        data["final_verdict"] = "Low"
+        data["commitment_level"] = "Low"
+        data["direct_answer"] = _build_direct_answer("low", timepass_q=True, genuine_q=True)
+        data.pop("verdict_line", None)
+        text = render_commitment_template_answer(data, "kya partner timepass kar raha hai")
+        self.assertNotRegex(text, r"(?i)kehna mushkil|ho sakta hai")
+        self.assertIn("timepass", text.lower())
 
     def test_adapter_passes_timing_meta(self):
         checks = self.result.checks or {}

@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from .types import EngineResult
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
 
 _VERDICT_LABELS = {
     "ready": "Ready",
@@ -126,13 +127,7 @@ _COM_RULE_EFFECTS: dict[str, str] = {
     "COM-007": "Long-term faith aur promise layer me weakness dikh rahi hai.",
 }
 
-_USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+_USER_SECTION = dict(_NATURAL_SEC)
 
 _TIMING_RX = re.compile(
     r"(?i)(late\s+20\d{2}|early\s+20\d{2}|mid\s+20\d{2}|"
@@ -643,26 +638,32 @@ def _build_confidence_explanation(
     strongest: list[str],
     weakest: list[str],
     scorecard: dict[str, Any],
+    *,
+    topic: str = "commitment",
 ) -> str:
+    topic_word = (topic or "chart").strip().replace("_", " ") or "chart"
     reasons: list[str] = []
     if strongest and weakest:
         reasons.append("positive aur negative dono tarah ke indicators ek saath mile")
     elif strongest:
-        reasons.append("zyada tar indicators commitment-supporting direction me hain")
+        reasons.append(f"zyada tar indicators {topic_word}-supporting direction me hain")
     elif weakest:
-        reasons.append("zyada tar indicators commitment-challenging direction me hain")
+        reasons.append(f"zyada tar indicators {topic_word}-challenging direction me hain")
 
     if strongest and weakest and abs(len(strongest) - len(weakest)) <= 1:
         reasons.append("chart mixed signals de raha hai")
 
-    comm = scorecard.get("communication")
-    commit = scorecard.get("commitment")
-    if comm is not None and commit is not None:
-        try:
-            if int(comm) < int(commit) - 5:
-                reasons.append("communication ke indicators commitment ke comparison me kam supportive hain")
-        except (TypeError, ValueError):
-            pass
+    if topic_word == "commitment":
+        comm = scorecard.get("communication")
+        commit = scorecard.get("commitment")
+        if comm is not None and commit is not None:
+            try:
+                if int(comm) < int(commit) - 5:
+                    reasons.append(
+                        "communication ke indicators commitment ke comparison me kam supportive hain"
+                    )
+            except (TypeError, ValueError):
+                pass
 
     if 36 <= score <= 65 and conf_label == "Medium":
         reasons.append("score mid-range par hai")

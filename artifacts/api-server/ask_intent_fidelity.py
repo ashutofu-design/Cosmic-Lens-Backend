@@ -394,13 +394,22 @@ def infer_secret_angle(question: str) -> str | None:
         return None
     if not re.search(
         r"(?ix)\b(secret|chupke|chhupa|chhipa|hidden|affair|chakkar|parallel|multiple|"
-        r"do\s+rishte|teesra|third\s+person|secrecy|secretly|dating)\b",
+        r"do\s+rishte|teesra|third\s+person|secrecy|secretly|dating|"
+        r"kisi\s+aur|kis[ei]\s+aur|dusre\s+(?:me|se|ke\s+saath)|someone\s+else|"
+        r"interested|interest(?:ed)?\s+(?:me|in|hai)|flirt(?:ing)?|"
+        r"crush\s+on\s+someone|dating\s+someone\s+else)\b",
         q,
     ):
         return None
     for name, rx in _SECRET_ANGLE_RULES:
         if rx.search(q):
             return name
+    if re.search(
+        r"(?ix)\b(kisi\s+aur|kis[ei]\s+aur|dusre\s+(?:me|se)|someone\s+else|"
+        r"interested|flirt(?:ing)?)\b",
+        q,
+    ):
+        return "third_person_risk"
     return "general_secrecy"
 
 

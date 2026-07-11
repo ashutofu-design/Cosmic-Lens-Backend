@@ -44,18 +44,6 @@ _ENGINE_USE_LLM_ENV: dict[str, str] = {
     "one_sided_love": "ASK_ONE_SIDED_LOVE_USE_LLM",
 }
 
-_COMMITMENT_SECTION_SKELETON = """
-STRUCTURE (mandatory order — plain paragraphs, NO Cosmo section headers):
-P1 — Direct Answer: use direct_answer only; keep verdict-locked tone.
-P2 — Kyun ye verdict aaya: use reason_summary only.
-P3 — Mukhya sanket: expand strongest_effects[] only (real-life effects, no planet jargon).
-P4 — Dhyan dene layak challenges: expand weakest_effects[] only.
-P5 — Iska practical matlab: meaning_note + scorecard_user_note if present (no raw score numbers).
-P6 — Timing: ONLY if timing.window exists in PRESENTER_JSON.
-P7 — Aapko kis baat par dhyan dena chahiye: practical_guidance only.
-Final line: confidence_explanation — exact score + kyunki reason from JSON.
-""".strip()
-
 
 def _truthy(val: str) -> bool:
     return (val or "").strip().lower() in ("1", "true", "yes")
@@ -79,6 +67,14 @@ def use_engine_presenter_mode(engine: str) -> bool:
         return False
     if _truthy(per):
         return True
+    return engine_llm_enabled(eng)
+
+
+def engine_llm_enabled(engine: str) -> bool:
+    """True when per-engine USE_LLM or global ASK_MR_HUMAN_NARRATOR is on."""
+    eng = (engine or "").strip().lower()
+    if _truthy(os.environ.get("ASK_MR_HUMAN_NARRATOR", "")):
+        return eng in _ENGINE_USE_LLM_ENV
     use_llm_key = _ENGINE_USE_LLM_ENV.get(eng)
     if not use_llm_key:
         return False
@@ -113,29 +109,100 @@ def _commitment_presenter_fields(data: dict[str, Any]) -> dict[str, Any]:
     return fields
 
 
+def _generic_presenter_fields(engine: str, data: dict[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {
+        "engine": engine,
+        "original_question": data.get("original_question", ""),
+        "answer_focus": data.get("answer_focus", ""),
+        "final_verdict": data.get("final_verdict") or data.get("verdict", ""),
+        "direct_answer": data.get("direct_answer", ""),
+        "reason_summary": data.get("reason_summary", ""),
+        "strongest_effects": list(
+            data.get("strongest_effects") or data.get("strongest") or []
+        ),
+        "weakest_effects": list(
+            data.get("weakest_effects") or data.get("weakest") or []
+        ),
+        "meaning_note": data.get("meaning_note", ""),
+        "practical_guidance": data.get("practical_guidance", ""),
+        "confidence": data.get("confidence"),
+        "confidence_label": data.get("confidence_label", ""),
+        "confidence_explanation": data.get("confidence_explanation", ""),
+        "forbidden_phrases": list(data.get("forbidden_phrases") or []),
+    }
+    locked = data.get("locked_template")
+    if isinstance(locked, str) and locked.strip():
+        fields["locked_template"] = locked.strip()
+    for key in (
+        "transparency_outlook",
+        "nature_outlook",
+        "rem_outlook",
+        "rver_outlook",
+        "rdec_outlook",
+        "rfut_outlook",
+        "conditions_line",
+    ):
+        if data.get(key):
+            fields[key] = data.get(key)
+    timing = data.get("timing")
+    if isinstance(timing, dict) and str(timing.get("window") or timing.get("summary") or "").strip():
+        fields["timing"] = timing
+    return fields
+
+
 def extract_presenter_fields(engine: str, narrator_json: dict[str, Any]) -> dict[str, Any]:
     """Map narrator JSON to presenter-safe field subset."""
     eng = (engine or "").strip().lower()
     data = dict(narrator_json or {})
     if eng == "commitment":
         return _commitment_presenter_fields(data)
-    return {
-        "engine": eng,
-        "locked_template": str(data.get("locked_template") or "").strip(),
-        "final_verdict": data.get("final_verdict", ""),
-        "confidence_explanation": data.get("confidence_explanation", ""),
-    }
+    return _generic_presenter_fields(eng, data)
 
 
 def _presenter_lang_block(lang: str) -> str:
     rl = (lang or "hn").strip().lower()
     if rl in ("hi", "hn", "hinglish"):
         return (
-            'LANGUAGE: Warm Roman Hinglish (default). Use Devanagari only if user question is Devanagari.'
+            "LANGUAGE: Warm Roman Hinglish (default). Use Devanagari only if user question is Devanagari."
         )
     if rl == "en":
         return "LANGUAGE: Plain English — warm, direct, no jargon."
     return f"LANGUAGE: Match user lang={rl}."
+
+
+_COMMITMENT_SECTION_SKELETON = """
+STRUCTURE (human conversation — plain paragraphs, NO robotic section headers):
+Write like a warm, honest friend explaining chart truth in Hinglish.
+
+P1 — Seedha jawab: answer the ORIGINAL QUESTION directly using direct_answer. Lead with haan/nahi/mixed tone locked to final_verdict.
+P2 — Kyun: weave reason_summary into 1–2 natural sentences (do NOT write "Kyun ye verdict aaya:" as a label).
+P3 — Support: expand strongest_effects[] as everyday life meaning (no planet jargon).
+P4 — Caution: expand weakest_effects[] as real challenges (no planet jargon).
+P5 — Matlab: meaning_note + scorecard_user_note if present — practical, human.
+P6 — Timing: ONLY if timing.window exists.
+P7 — Focus: practical_guidance as caring next step.
+Final line: confidence_explanation — keep exact score + kyunki reason from JSON.
+
+FREEDOM (allowed):
+• Light rephrase, connectors, and emotional warmth so it does not sound copy-paste.
+• Short bridging phrases ("iska matlab yeh hai", "seedhi baat").
+• Merge short related points into smooth paragraphs.
+
+NOT allowed:
+• New planets/houses/dasha/dates/scores/psychology not in PRESENTER_JSON.
+• Softening or flipping final_verdict.
+• Hedging (shayad / ho sakta hai / maybe).
+• Generic counselling (clarity, patience, boundaries, open communication).
+""".strip()
+
+
+def _generic_section_skeleton(engine: str) -> str:
+    return f"""
+STRUCTURE (human conversation for {engine} — plain paragraphs, NO robotic labels):
+Answer the user's exact question first. Then explain why, what supports it, what challenges it,
+practical meaning, and one focus line. End with confidence_explanation from JSON.
+Use PRESENTER_JSON / locked_template facts only. Sound like a human, not a form.
+""".strip()
 
 
 def _presenter_length_block(
@@ -157,10 +224,10 @@ def _presenter_length_block(
     if concise:
         return f"LENGTH: {min(lo, 70)}–{min(hi, 90)} words — one short paragraph, no headers."
     if wants_explain:
-        return f"LENGTH: {lo}–{hi} words — expand each skeleton step to 1–2 sentences."
+        return f"LENGTH: {lo}–{hi} words — explain naturally, 1–2 sentences per idea."
     if engine == "commitment":
-        return "LENGTH: 85–120 words — same facts as LOCKED_TEMPLATE, light Hinglish polish only."
-    return f"LENGTH: {lo}–{hi} words total."
+        return "LENGTH: 90–140 words — natural Hinglish paragraphs, not form fields."
+    return f"LENGTH: {lo}–{max(hi, 130)} words — natural flowing paragraphs."
 
 
 def build_engine_presenter_system_prompt(
@@ -173,38 +240,45 @@ def build_engine_presenter_system_prompt(
     question: str = "",
     user_intent: str = "",
 ) -> str:
-    """Strict presenter prompt — LLM may only rephrase PRESENTER_JSON fields."""
+    """Presenter prompt — fact-locked, human Hinglish with light phrasing freedom."""
     eng = (engine or "").strip().lower()
     fields = extract_presenter_fields(eng, narrator_json)
     presenter_blob = json.dumps(fields, indent=2, ensure_ascii=False)
     forbidden = fields.get("forbidden_phrases") or []
     forbidden_line = ", ".join(str(x) for x in forbidden[:12] if x)
 
-    skeleton = _COMMITMENT_SECTION_SKELETON if eng == "commitment" else (
-        "STRUCTURE: Follow locked_template paragraph order if present; otherwise "
-        "direct_answer → reasons → strongest → weakest → meaning → guidance → confidence."
+    skeleton = (
+        _COMMITMENT_SECTION_SKELETON
+        if eng == "commitment"
+        else _generic_section_skeleton(eng)
     )
 
     intent_block = ""
     if (user_intent or "").strip():
         intent_block = (
-            "\nUSER ACTUALLY ASKED (anchor opening to this — do not drift):\n"
+            "\nUSER ACTUALLY ASKED (open with THIS concern first):\n"
             f"{user_intent.strip()}\n"
         )
 
     q_line = (question or fields.get("original_question") or "").strip()
-    return f"""You are "Cosmo Ask" — a PRESENTER only, not an astrologer or counsellor.
-The {eng} engine already decided the verdict. You receive PRESENTER_JSON with final facts.
+    return f"""You are "Cosmo Ask" — a warm, honest Hinglish guide.
+You are a PRESENTER, not an astrologer. The {eng} engine already decided the verdict.
+Your job: explain PRESENTER_JSON facts so the user feels understood — human, clear, not template-y.
 
-ROLE LOCK:
-• Use ONLY fields in PRESENTER_JSON. Skip any missing field or section.
-• Do NOT invent planets, houses, lords, dasha, dates, scores, or psychology beyond JSON.
-• Do NOT recalculate or contradict final_verdict.
-• Rephrase lightly in natural Hinglish — same facts, same order, same verdict strength.
-• NEVER use hedging: shayad, ho sakta hai, kehna mushkil, lagta hai, maybe, perhaps, might.
-• NEVER use planet/house/lord jargon in user-facing text — use strongest_effects/weakest_effects only.
-• NEVER say "Engine ke hisaab" or expose raw scorecard numbers.
-• BANNED phrases: {forbidden_line or "clarity, patience, boundaries, open communication"}.
+FACT LOCK (hard):
+• Use ONLY PRESENTER_JSON fields. Skip missing fields.
+• Do NOT invent planets, houses, lords, dasha, dates, scores, or new psychology.
+• Do NOT contradict final_verdict or weaken/strengthen it beyond JSON.
+• Prefer strongest_effects / weakest_effects / meaning_note / practical_guidance over raw evidence jargon.
+
+HUMAN STYLE (soft freedom):
+• Write flowing paragraphs — NEVER robotic labels like "Kyun ye verdict aaya:" or "Mukhya sanket:".
+• Speak to the user's exact question in the first 1–2 sentences.
+• You MAY rephrase, connect ideas, and add warmth — same facts, clearer feeling.
+• Keep Roman Hinglish unless Lang says Devanagari.
+• NEVER hedge: shayad, ho sakta hai, kehna mushkil, lagta hai, maybe, perhaps, might.
+• NEVER say "Engine ke hisaab" or print raw scorecard numbers.
+• BANNED: {forbidden_line or "clarity, patience, boundaries, open communication"}.
 
 {_presenter_lang_block(lang)}
 {intent_block}
@@ -215,12 +289,12 @@ PRESENTER_JSON:
 
 {skeleton}
 
-REFERENCE (mandatory structure — do not add/remove facts):
-{fields.get("locked_template") or "(use PRESENTER_JSON fields in skeleton order)"}
+REFERENCE FACTS (same truth — rewrite as natural speech, do not invent):
+{fields.get("locked_template") or "(use PRESENTER_JSON fields)"}
 
 {_presenter_length_block(eng, wants_explain=wants_explain, concise=concise)}
 
-OUTPUT: Plain paragraphs only. No Markdown headers (**, ---). No bullets unless concise mode.
+OUTPUT: Plain paragraphs only. No Markdown headers. No bullet list unless concise mode.
 """.strip()
 
 
@@ -249,7 +323,21 @@ def validate_presenter_output(
         from ask_mr.commitment_narrator import validate_commitment_narrator_output
 
         ok, sub = validate_commitment_narrator_output(t, narrator_json)
-        if not ok:
+        # Presenter may drop robotic section labels — ignore those section checks.
+        soft_ok_issues = {
+            "missing_positive_section",
+            "missing_challenges_section",
+        }
+        sub = [s for s in sub if s not in soft_ok_issues]
+        if sub:
             issues.extend(sub)
+            ok = False
+        else:
+            ok = True
+        if not ok:
+            pass
 
     return len(issues) == 0, issues
+
+
+# Keep length helpers used above defined once — remove duplicate if present below.

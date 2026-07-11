@@ -1,6 +1,8 @@
 """Relationship future engine — intent templates (non-timing)."""
 from __future__ import annotations
 
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
+
 import re
 from typing import Any
 
@@ -20,14 +22,8 @@ LEVEL_SCORE_FALLBACK: dict[str, int] = {
     "weak": 30,
 }
 
-USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "outlook": "Relationship future outlook:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+USER_SECTION = dict(_NATURAL_SEC)
+USER_SECTION["outlook"] = _NATURAL_SEC["rfut_outlook"]
 
 _BASE_OPENINGS: dict[str, str] = {
     "promising": "Chart ke hisaab se relationship future mostly promising range me dikhta hai — bond steady effort se deepen hota hai.",

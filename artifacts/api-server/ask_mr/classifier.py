@@ -448,7 +448,7 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
-    # --- Multiple / secret / affair ---
+    # --- Multiple / secret / affair / third-person interest ---
 
     if re.search(
 
@@ -456,7 +456,13 @@ def classify_mr_archetype(question: str) -> str:
 
         r"multiple\s*(?:love|relationships?|relations?|rishte)|parallel\s*(?:love|relations?|rishte)|"
 
-        r"do\s*rishte|secret|hidden|chhup|chhupa|affair|chakkar|private\s*rishta|gupt"
+        r"do\s*rishte|secret|hidden|chhup|chhupa|affair|chakkar|private\s*rishta|gupt|"
+
+        r"kisi\s+aur|kis[ei]\s+aur|dusre\s+(?:me|se|ke\s+saath)|someone\s+else|"
+
+        r"third\s+person|teesr[ae]|interested|interest(?:ed)?\s+(?:me|in|hai)|"
+
+        r"flirt(?:ing)?|crush\s+on\s+someone|dating\s+someone\s+else"
 
         r")\b",
 
@@ -829,7 +835,15 @@ def classify_mr_archetype(question: str) -> str:
 
         r"\b(partner|spouse|husband|wife|pati|patni|jeevan\s*sathi|age\s*gap|umar)\b", q
 
-    ) and not re.search(r"(?ix)\b(samajh\s*payeg\w*|communication|baat\s*cheet)\b", q):
+    ) and not re.search(r"(?ix)\b(samajh\s*payeg\w*|communication|baat\s*cheet)\b", q) and not re.search(
+
+        r"(?ix)\b(kisi\s+aur|kis[ei]\s+aur|dusre\s+(?:me|se)|someone\s+else|"
+
+        r"interested|affair|chakkar|secret|chupke|flirt|cheat|dhokha)\b",
+
+        q,
+
+    ):
 
         return "partner_nature"
 

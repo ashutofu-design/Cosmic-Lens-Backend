@@ -1,6 +1,8 @@
 """Partner nature engine — intent templates."""
 from __future__ import annotations
 
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
+
 import re
 from typing import Any
 
@@ -20,14 +22,8 @@ LEVEL_SCORE_FALLBACK: dict[str, int] = {
     "challenging": 32,
 }
 
-USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "outlook": "Partner nature outlook:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+USER_SECTION = dict(_NATURAL_SEC)
+USER_SECTION["outlook"] = "Partner nature outlook —"
 
 _BASE_OPENINGS: dict[str, str] = {
     "balanced": "Chart ke hisaab se partner ka nature mostly balanced dikhta hai — steady temperament ke saath grow karne ki room hai.",

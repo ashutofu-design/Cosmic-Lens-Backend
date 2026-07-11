@@ -427,6 +427,10 @@ def narrate_mr_engine_llm(
             "1",
             "true",
             "yes",
+        ) or os.environ.get("ASK_MR_HUMAN_NARRATOR", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
         ):
             chart_text = commitment_narrator_payload(
                 engine_result,
@@ -453,6 +457,10 @@ def narrate_mr_engine_llm(
         _checks["question"] = question or ""
         engine_result.checks = _checks
         if os.environ.get("ASK_PATCHUP_USE_LLM", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ) or os.environ.get("ASK_MR_HUMAN_NARRATOR", "").strip().lower() in (
             "1",
             "true",
             "yes",
@@ -568,7 +576,15 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_SECRET_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if os.environ.get("ASK_SECRET_USE_LLM", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ) or os.environ.get("ASK_MR_HUMAN_NARRATOR", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
             chart_text = secret_narrator_payload(engine_result, wants_explain=wants_explain, question=question or "")
         else:
             return render_secret_template_answer(narrator_json, question or "", lang=eff_lang)

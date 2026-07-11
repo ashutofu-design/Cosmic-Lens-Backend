@@ -9144,6 +9144,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "patchup"
         and os.environ.get("ASK_PATCHUP_USE_LLM", "").strip().lower()
         not in ("1", "true", "yes")
+        and os.environ.get("ASK_MR_HUMAN_NARRATOR", "").strip().lower()
+        not in ("1", "true", "yes")
     ):
         from ask_mr.patchup_narrator import (
             engine_result_to_patchup_json,
@@ -9384,6 +9386,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         and _mr_engine_result is not None
         and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "secret_relationship"
         and os.environ.get("ASK_SECRET_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+        and os.environ.get("ASK_MR_HUMAN_NARRATOR", "").strip().lower()
         not in ("1", "true", "yes")
     ):
         from ask_mr.secret_narrator import (

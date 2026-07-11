@@ -1,6 +1,8 @@
 """Secret relationship engine — intent templates."""
 from __future__ import annotations
 
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
+
 import re
 from typing import Any
 
@@ -20,14 +22,7 @@ LEVEL_SCORE_FALLBACK: dict[str, int] = {
     "high": 28,
 }
 
-USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "transparency": "Transparency / outlook:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+USER_SECTION = dict(_NATURAL_SEC)
 
 _OPENING_COMMON: dict[str, str] = {
     "low": "Secret / hidden relationship ke strong indicators dominant nahi — transparency mostly manageable dikhti hai.",
@@ -57,7 +52,12 @@ OPENING_TEMPLATES: dict[str, dict[str, str]] = {
         "high": "Multiple / parallel relationship ke high-risk pattern chart me active dikh rahe hain.",
     },
     "hidden_behavior": _OPENING_COMMON,
-    "third_person_risk": _OPENING_COMMON,
+    "third_person_risk": {
+        "low": "Partner kisi aur me interest ke strong signals dominant nahi — attention mostly aapki taraf dikhti hai.",
+        "possible": "Partner kisi aur / third person me interest ke possible signals hain — behaviour pattern verify karna zaruri hai.",
+        "likely": "Partner kisi aur me interest ke likely indicators active hain — parallel attention trust ko test karti hai.",
+        "high": "Partner kisi aur me interest ke high-risk indicators active hain — ye final proof nahi, par transparency check zaruri hai.",
+    },
     "general_secrecy": _OPENING_COMMON,
 }
 
@@ -117,6 +117,11 @@ def detect_secret_answer_focus(question: str, *, question_dna: dict[str, Any] | 
             angle = "secret_affair"
         elif re.search(r"(?ix)\b(parallel|multiple|do\s+rishte)\b", q):
             angle = "parallel_attention"
+        elif re.search(
+            r"(?ix)\b(kisi\s+aur|kis[ei]\s+aur|dusre\s+(?:me|se)|someone\s+else|interested|flirt)\b",
+            q,
+        ):
+            angle = "third_person_risk"
     return angle
 
 

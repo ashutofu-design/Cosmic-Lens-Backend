@@ -107,7 +107,9 @@ def render_partner_nature_template_answer(data: dict[str, Any], question: str = 
         f"{USER_SECTION['meaning']} {str(data.get('meaning_note') or '').strip() or get_meaning(angle, level)}",
         f"{USER_SECTION['outlook']} {str(data.get('nature_outlook') or '').strip() or get_nature_outlook(level)}",
         f"{USER_SECTION['focus']} {str(data.get('practical_guidance') or '').strip() or get_practical(angle, level)}",
-        _build_confidence_explanation(score, conf_label, strongest, weakest, scorecard),
+        _build_confidence_explanation(
+            score, conf_label, strongest, weakest, scorecard, topic="partner nature"
+        ),
     ]
     return "\n\n".join(parts)
 

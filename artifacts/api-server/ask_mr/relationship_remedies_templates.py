@@ -1,6 +1,8 @@
 """Relationship remedies engine — intent templates (upay / mantra / puja)."""
 from __future__ import annotations
 
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
+
 import re
 from typing import Any
 
@@ -20,14 +22,8 @@ LEVEL_SCORE_FALLBACK: dict[str, int] = {
     "limited": 28,
 }
 
-USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "outlook": "Relationship remedy outlook:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+USER_SECTION = dict(_NATURAL_SEC)
+USER_SECTION["outlook"] = _NATURAL_SEC["rem_outlook"]
 
 _BASE_OPENINGS: dict[str, str] = {
     "supportive": "Chart ke hisaab se relationship remedies mostly supportive range me dikhte hain — gentle upay + daily habit harmony ko help karte hain.",

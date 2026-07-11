@@ -15,6 +15,7 @@ from .commitment_narrator import (
     _promote_moon_to_weakest,
 )
 from .types import EngineResult
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
 
 _VERDICT_LABELS = {
     "favorable": "Favorable",
@@ -57,14 +58,7 @@ _PATCH_EFFECT_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bdasha\b|\btransit\b", re.I), "Current timing phase reconciliation signals ko colour karti hai."),
 ]
 
-_USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-    "conditions": "Agar wapas aaye to kis condition me:",
-}
+_USER_SECTION = dict(_NATURAL_SEC)
 
 _ANGLE_OPENINGS: dict[str, dict[str, str]] = {
     "ex_return": {
@@ -334,7 +328,11 @@ def render_patchup_template_answer(data: dict[str, Any], question: str = "", *, 
     if timing and str(timing.get("summary") or "").strip():
         parts.append(f"Timing: {str(timing.get('summary')).strip()}")
     parts.append(f"{_USER_SECTION['focus']} {_build_practical_guidance(level, weakest)}")
-    parts.append(_build_confidence_explanation(score, conf_label, strongest, weakest, scorecard))
+    parts.append(
+        _build_confidence_explanation(
+            score, conf_label, strongest, weakest, scorecard, topic="reconciliation"
+        )
+    )
     return "\n\n".join(parts)
 
 

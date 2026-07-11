@@ -1,6 +1,8 @@
 """Toxicity / red-flag engine — intent templates."""
 from __future__ import annotations
 
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
+
 import re
 from typing import Any
 
@@ -20,14 +22,8 @@ LEVEL_SCORE_FALLBACK: dict[str, int] = {
     "high": 28,
 }
 
-USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "outlook": "Toxicity outlook:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+USER_SECTION = dict(_NATURAL_SEC)
+USER_SECTION["outlook"] = "Toxicity outlook —"
 
 _BASE_OPENINGS: dict[str, str] = {
     "low": "Chart ke hisaab se toxicity / red-flag signals mostly low range me dikhte hain — friction repairable range me hai.",

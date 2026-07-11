@@ -1,6 +1,8 @@
 """Karmic marriage engine — intent templates."""
 from __future__ import annotations
 
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
+
 import re
 from typing import Any
 
@@ -20,14 +22,8 @@ LEVEL_SCORE_FALLBACK: dict[str, int] = {
     "weak": 32,
 }
 
-USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "outlook": "Karmic bond outlook:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+USER_SECTION = dict(_NATURAL_SEC)
+USER_SECTION["outlook"] = "Karmic bond outlook —"
 
 _BASE_OPENINGS: dict[str, str] = {
     "strong": "Chart ke hisaab se karmic marriage theme mostly strong range me dikhta hai — depth + lessons dono highlighted hain.",

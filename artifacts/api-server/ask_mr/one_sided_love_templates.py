@@ -1,6 +1,8 @@
 """One-sided love engine — intent templates."""
 from __future__ import annotations
 
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
+
 import re
 from typing import Any
 
@@ -20,14 +22,8 @@ LEVEL_SCORE_FALLBACK: dict[str, int] = {
     "unlikely": 28,
 }
 
-USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "outlook": "Reciprocity outlook:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+USER_SECTION = dict(_NATURAL_SEC)
+USER_SECTION["outlook"] = "Reciprocity outlook —"
 
 _BASE_OPENINGS: dict[str, str] = {
     "reciprocal": "Chart ke hisaab se reciprocity / mutual pull mostly reciprocal range me dikhti hai — dono taraf effort se bond grow ho jayega.",

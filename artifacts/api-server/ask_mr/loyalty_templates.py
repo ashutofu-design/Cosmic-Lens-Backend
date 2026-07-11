@@ -1,6 +1,8 @@
 """Loyalty / trust engine — intent templates (opening, meaning, practical per angle × level)."""
 from __future__ import annotations
 
+from .user_section_labels import NATURAL_USER_SECTION as _NATURAL_SEC
+
 import re
 from typing import Any
 
@@ -20,13 +22,7 @@ LEVEL_SCORE_FALLBACK: dict[str, int] = {
     "risky": 28,
 }
 
-USER_SECTION = {
-    "why_verdict": "Kyun ye verdict aaya:",
-    "positive": "Is verdict ko support karne wale mukhya sanket:",
-    "challenges": "Dhyan dene layak challenges:",
-    "meaning": "Iska practical matlab:",
-    "focus": "Aapko kis baat par dhyan dena chahiye:",
-}
+USER_SECTION = dict(_NATURAL_SEC)
 
 OPENING_TEMPLATES: dict[str, dict[str, str]] = {
     "cheating_risk": {

@@ -107,7 +107,9 @@ def render_secret_template_answer(data: dict[str, Any], question: str = "", *, l
         f"{USER_SECTION['meaning']} {str(data.get('meaning_note') or '').strip() or get_meaning(angle, level)}",
         f"{USER_SECTION['transparency']} {str(data.get('transparency_outlook') or '').strip() or get_transparency_outlook(level)}",
         f"{USER_SECTION['focus']} {str(data.get('practical_guidance') or '').strip() or get_practical(angle, level)}",
-        _build_confidence_explanation(score, conf_label, strongest, weakest, scorecard),
+        _build_confidence_explanation(
+            score, conf_label, strongest, weakest, scorecard, topic="secrecy"
+        ),
     ]
     return "\n\n".join(parts)
 

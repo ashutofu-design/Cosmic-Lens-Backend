@@ -289,6 +289,64 @@ def loyalty_angle_label(angle: str | None) -> str:
     return _LOYALTY_ANGLE_LABELS.get(key, "Trust / loyalty")
 
 
+_BREAKUP_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("breakup_timing", re.compile(r"(?ix)\b(kab|when|kitne\s+saal|kis\s+saal|timing|muhurat)\b")),
+    ("avoid_breakup", re.compile(r"(?ix)\b(bacha|bach|save|rok|prevent|bachaa|bacha\s+sakte|avoid)\b")),
+    ("breakup_cause", re.compile(r"(?ix)\b(kyun|why|reason|wajah|cause|karan)\b")),
+    ("divorce_risk", re.compile(r"(?ix)\b(divorce|talak|talaq)\b")),
+    ("toxic_breakup", re.compile(r"(?ix)\b(toxic|unhealthy|abuse|manipulat)\b")),
+    ("partner_leave", re.compile(r"(?ix)\b(chhod|chhor|leave|dump|chor\s+de)\b")),
+    ("relationship_survive", re.compile(r"(?ix)\b(survive|tik|chalega|continue|nibhega)\b")),
+    ("separation_risk", re.compile(r"(?ix)\b(alag|separation|separate)\b")),
+    ("will_breakup", re.compile(r"(?ix)\b(breakup|break\s*up|toot[a-z]*|tut[a-z]*|khatam|end\s+ho)\b")),
+]
+
+_BREAKUP_ANGLE_LABELS: dict[str, str] = {
+    "will_breakup": "Kya breakup / rishta tootega",
+    "breakup_cause": "Breakup kyun / reason",
+    "divorce_risk": "Divorce / talak risk",
+    "separation_risk": "Separation / alag hone ka risk",
+    "breakup_timing": "Breakup timing kab",
+    "avoid_breakup": "Kya breakup bacha sakte hain",
+    "relationship_survive": "Kya relationship survive karegi",
+    "toxic_breakup": "Toxic relationship / unhealthy pattern",
+    "partner_leave": "Kya partner chhod dega / leave karega",
+    "general_breakup_risk": "General breakup / separation risk",
+}
+
+
+def infer_breakup_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if re.search(
+        r"(?ix)\b(wapas|patch\s*up|patchup|reconcile|reconciliation|previous\s+relationship)\b",
+        q,
+    ) and not re.search(
+        r"(?ix)\b(breakup|break\s*up|toot|tut|separation|divorce|talak|alag)\b",
+        q,
+    ):
+        return None
+    if not re.search(
+        r"(?ix)\b(breakup|break\s*up|separation|divorce|talak|talaq|toot|tut|alag|"
+        r"rishta|relationship|partner|bf|gf|pati|patni|boyfriend|girlfriend|husband|wife|"
+        r"chor|leave|survive|bacha|bach)\b",
+        q,
+    ):
+        return None
+    for name, rx in _BREAKUP_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    if re.search(r"(?ix)\b(rishta|relationship)\b", q):
+        return "general_breakup_risk"
+    return "general_breakup_risk"
+
+
+def breakup_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _BREAKUP_ANGLE_LABELS.get(key, "Breakup / separation risk")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

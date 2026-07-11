@@ -55,7 +55,13 @@ def format_engine_rich_plain(
     """Human answer without chart jargon — 3-section or short paragraph (batch)."""
     if concise is None:
         concise = _concise_mode()
-    from ask_intent_fidelity import infer_compatibility_angle, infer_loyalty_angle, infer_partner_commitment_angle, infer_reconciliation_angle
+    from ask_intent_fidelity import (
+        infer_breakup_angle,
+        infer_compatibility_angle,
+        infer_loyalty_angle,
+        infer_partner_commitment_angle,
+        infer_reconciliation_angle,
+    )
     from ask_mr.commitment_reply import (
         format_compatibility_user_reply,
         format_partner_commitment_user_reply,
@@ -91,7 +97,18 @@ def format_engine_rich_plain(
             from ask_mr.commitment_reply import format_partner_commitment_user_reply
 
             big = format_partner_commitment_user_reply(q, result)
-    elif infer_reconciliation_angle(q) or str(getattr(result, "archetype", "")) == "patchup":
+    elif arch == "breakup_risk" or infer_breakup_angle(q):
+        try:
+            from ask_mr.breakup_narrator import (
+                engine_result_to_breakup_json,
+                render_breakup_template_answer,
+            )
+
+            data = engine_result_to_breakup_json(result, question=q)
+            big = render_breakup_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif infer_reconciliation_angle(q) or arch == "patchup":
         try:
             from ask_mr.patchup_narrator import (
                 engine_result_to_patchup_json,
@@ -289,6 +306,35 @@ def narrate_mr_engine_llm(
                 question or "",
                 lang=eff_lang,
             )
+    elif arch == "breakup_risk":
+        from ask_mr.breakup_narrator import (
+            breakup_narrator_payload,
+            engine_result_to_breakup_json,
+            render_breakup_template_answer,
+            validate_breakup_narrator_output,
+        )
+
+        narrator_json = engine_result_to_breakup_json(engine_result, question=question or "")
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_BREAKUP_USE_LLM", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            chart_text = breakup_narrator_payload(
+                engine_result,
+                wants_explain=wants_explain,
+                question=question or "",
+            )
+        else:
+            return render_breakup_template_answer(
+                narrator_json,
+                question or "",
+                lang=eff_lang,
+            )
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -386,6 +432,20 @@ def narrate_mr_engine_llm(
                     from ask_mr.loyalty_narrator import render_loyalty_template_answer
 
                     return render_loyalty_template_answer(
+                        narrator_json,
+                        question or "",
+                        lang=eff_lang,
+                    )
+            if arch == "breakup_risk" and narrator_json:
+                ok, issues = validate_breakup_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] breakup validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.breakup_narrator import render_breakup_template_answer
+
+                    return render_breakup_template_answer(
                         narrator_json,
                         question or "",
                         lang=eff_lang,

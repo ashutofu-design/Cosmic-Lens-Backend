@@ -344,6 +344,13 @@ def is_health_static_question(question: str) -> bool:
     if is_love_emotional_dil_question(q):
         return False
     try:
+        from .engines.heart_blood_pressure import detect_heart_blood_pressure_archetype
+
+        if detect_heart_blood_pressure_archetype(q):
+            return True
+    except Exception:
+        pass
+    try:
         from ask_children.timing_registry import is_children_timing_question  # type: ignore
 
         if is_children_timing_question(q):

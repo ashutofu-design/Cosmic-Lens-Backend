@@ -13,9 +13,37 @@ __all__ = [
     "HEALTH_ARCHETYPES",
     "classify_health_archetype",
     "detect_health_archetype",
+    "health_overrides_career",
     "is_health_static_question",
     "resolve_health_archetype",
 ]
+
+
+def health_overrides_career(question: str) -> bool:
+    """Health subdomain Qs beat generic career keyword overlap (medical/problem/kundli)."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    try:
+        from .engines.heart_blood_pressure import detect_heart_blood_pressure_archetype
+
+        if detect_heart_blood_pressure_archetype(q):
+            return True
+    except Exception:
+        pass
+    detected = detect_health_archetype(q)
+    if detected and detected not in {
+        "general_health",
+        "refuse_diagnosis",
+        "refuse_death",
+        "refuse_cure_guarantee",
+        "refuse_timing_decline",
+        "refuse_timing_recovery",
+        "refuse_surgery_muhurat",
+        "crisis_redirect",
+    }:
+        return True
+    return bool(is_health_static_question(q))
 
 
 def resolve_health_archetype(

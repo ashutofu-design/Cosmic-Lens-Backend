@@ -6472,7 +6472,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _gap_det_exc:
                 print(f"[raw_passthrough] gap static detect skipped: {_gap_det_exc}", flush=True)
-        if _health_engine_on and not _direct_llm_bypass and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_numerology_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static and not _is_gap_static:
+        if _health_engine_on and not _direct_llm_bypass and not _is_mr_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_numerology_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static and not _is_gap_static:
             try:
                 from ask_health.classifier import is_health_static_question  # type: ignore
 
@@ -6501,6 +6501,32 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _fo_exc:
                 print(f"[raw_passthrough] FINANCE_OVERRIDES_CAREER skipped: {_fo_exc}", flush=True)
+        if _is_career_static:
+            try:
+                from ask_health.routing import health_overrides_career  # type: ignore
+                from ask_health.classifier import classify_health_archetype  # type: ignore
+
+                if health_overrides_career(question or ""):
+                    _is_career_static = False
+                    _is_health_static = True
+                    _resolved_arch = classify_health_archetype(question or "")
+                    _health_archetype_override = _resolved_arch
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["domain"] = "health"
+                        _llm_intent_admin["routed_domain"] = "health"
+                        _llm_intent_admin["health_archetype"] = _resolved_arch
+                        _llm_intent_admin["routed_archetype"] = _resolved_arch
+                        _llm_intent_admin["dna_engine_archetype"] = _resolved_arch
+                    if isinstance(_llm_intent, dict):
+                        _llm_intent["domain"] = "health"
+                        _llm_intent["health_archetype"] = _resolved_arch
+                    print(
+                        "[raw_passthrough] HEALTH_OVERRIDES_CAREER "
+                        f"archetype={_resolved_arch} q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
+            except Exception as _ho_exc:
+                print(f"[raw_passthrough] HEALTH_OVERRIDES_CAREER skipped: {_ho_exc}", flush=True)
         if _education_engine_on and not _is_mr_static:
             try:
                 from ask_education.education_registry import is_education_static_question  # type: ignore

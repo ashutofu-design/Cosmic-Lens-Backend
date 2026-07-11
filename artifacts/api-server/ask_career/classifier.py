@@ -84,6 +84,14 @@ def is_career_static_question(question: str) -> bool:
         return False
 
     try:
+        from ask_health.routing import health_overrides_career  # type: ignore
+
+        if health_overrides_career(q):
+            return False
+    except Exception:
+        pass
+
+    try:
         from ask_education.education_registry import is_education_static_question  # type: ignore
 
         if is_education_static_question(q):

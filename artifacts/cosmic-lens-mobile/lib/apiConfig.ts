@@ -7,22 +7,20 @@ import { Platform } from "react-native";
 // Priority (highest first):
 //   1. EXPO_PUBLIC_API_URL (from .env — baked in at Metro start)
 //   2. expo.extra.apiUrl (from app.config.js — VPS default)
-//   3. PRODUCTION_API_URL (HTTPS store builds)
+//   3. PRODUCTION_API_URL (release builds)
 //   4. DEV VPS fallback (never localhost unless EXPO_PUBLIC_USE_LOCAL_API=1)
 //
 // Set in artifacts/cosmic-lens-mobile/.env:
-//   EXPO_PUBLIC_API_URL=http://187.127.174.55
-// (nginx :80 → gunicorn :8080 — :8080 is often blocked from mobile networks)
+//   EXPO_PUBLIC_API_URL=http://187.127.174.55:8080
 // After changing .env: stop Metro (Ctrl+C) and run `npx expo start` again.
 // ─────────────────────────────────────────────────────────────────────────────
-
-const PRODUCTION_API_URL = "https://api.cosmiclens.app";
 
 /** VPS public IP — nginx on :80 (preferred; mobile networks often block :8080). */
 const VPS_PUBLIC_IP = "187.127.174.55";
 const VPS_API_NGINX = `http://${VPS_PUBLIC_IP}`;
-/** Direct gunicorn — works on VPS localhost; often blocked from phone/laptop. */
+/** Direct gunicorn — default dev / preview API. */
 const DEFAULT_DEV_VPS_API = `http://${VPS_PUBLIC_IP}:8080`;
+const PRODUCTION_API_URL = DEFAULT_DEV_VPS_API;
 
 const DEV_REPLIT_DOMAIN =
   "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
@@ -88,11 +86,17 @@ function rewriteLocalDevHost(base: string): string {
 function normalizeApiUrl(raw?: string): string | null {
   if (!raw || !/^https?:\/\//.test(raw)) return null;
   const normalized = raw.replace(/\/$/, "");
-  if (!__DEV__ && !normalized.startsWith("https://")) {
+  const allowHttpRelease =
+    (process.env.EXPO_PUBLIC_ALLOW_HTTP_API || "").trim() === "1";
+  if (!__DEV__ && !normalized.startsWith("https://") && !allowHttpRelease) {
     console.warn("[CosmicLens] Ignoring non-HTTPS API URL in production build.");
     return null;
   }
   return rewriteLocalDevHost(normalized);
+}
+
+function isRawVpsIpUrl(url: string): boolean {
+  return /187\.127\.174\.55|:8080(\/|$)/.test(url) && !/coosmic\.icu/i.test(url);
 }
 
 function resolveApiBase(): string {
@@ -117,7 +121,6 @@ function resolveApiBase(): string {
 
   if (!__DEV__) return PRODUCTION_API_URL;
 
-  // Dev: VPS by default (not localhost)
   const vps = normalizeApiUrl(DEFAULT_DEV_VPS_API);
   if (vps) return vps;
 
@@ -128,6 +131,16 @@ export const API_BASE = resolveApiBase();
 
 function installDevFetchInterceptor(): void {
   if (!__DEV__ || !isWeb()) return;
+
+  try {
+    const forced = window.localStorage?.getItem("cl_force_api_base") || "";
+    if (forced && isRawVpsIpUrl(forced)) {
+      window.localStorage.removeItem("cl_force_api_base");
+      console.warn("[CosmicLens] Cleared stale cl_force_api_base (blocked VPS IP)");
+    }
+  } catch {
+    // ignore
+  }
 
   const forced = (() => {
     try {
@@ -150,8 +163,7 @@ function installDevFetchInterceptor(): void {
 
   const shouldRewrite = (url: string) =>
     !!preferred &&
-    (url.includes("api.cosmiclens.app") ||
-      url.startsWith(PRODUCTION_API_URL));
+    (url.includes("api.cosmiclens.app") || url.startsWith(PRODUCTION_API_URL));
 
   const orig = globalThis.fetch?.bind(globalThis);
   if (!orig) return;
@@ -203,7 +215,6 @@ function installDevFetchInterceptor(): void {
 
 /**
  * Ordered API bases for retries when the primary host is down or blocked.
- * Prefer nginx :80 on VPS IP — same backend, port 8080 often blocked externally.
  */
 export function demoLoginApiBases(): string[] {
   const seen = new Set<string>();
@@ -216,14 +227,24 @@ export function demoLoginApiBases(): string[] {
     }
   };
 
-  add(API_BASE);
-  add(VPS_API_NGINX);
-  add(PRODUCTION_API_URL);
   const configured = configuredApiUrl();
-  if (configured && /^https?:\/\//.test(configured)) {
-    add(configured.replace(/\/$/, ""));
+  const configuredNorm = configured
+    ? normalizeApiUrl(configured) || configured.replace(/\/$/, "")
+    : null;
+
+  // Laptop web: sirf configured URL (localhost proxy ya domain) — IP retry mat karo
+  if (__DEV__ && isWeb() && configuredNorm && !isRawVpsIpUrl(configuredNorm)) {
+    add(configuredNorm);
+    return out.filter(Boolean);
   }
-  if (__DEV__) {
+
+  add(API_BASE);
+  if (configuredNorm) add(configuredNorm);
+  if (!__DEV__ || !isWeb()) {
+    add(VPS_API_NGINX);
+    add(PRODUCTION_API_URL);
+  }
+  if (__DEV__ && !isWeb()) {
     add(DEFAULT_DEV_VPS_API);
     if (useLocalBackend()) {
       add("http://127.0.0.1:8080");

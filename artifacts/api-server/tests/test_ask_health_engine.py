@@ -213,8 +213,28 @@ class TestAskHealthEngine(unittest.TestCase):
         self.assertFalse(is_health_static_question(q))
         self.assertIsNone(classify_health_archetype(q))
 
-    def test_dil_ki_sehat_still_cardio(self):
-        self.assertEqual(classify_health_archetype("dil ki sehat kaisi hai chart me?"), "cardio_health")
+    def test_dil_ki_sehat_routes_heart_blood_pressure(self):
+        self.assertEqual(
+            classify_health_archetype("dil ki sehat kaisi hai chart me?"),
+            "heart_blood_pressure",
+        )
+
+    def test_heart_blood_pressure_engine_payload(self):
+        q = "mera blood pressure high rehta hai chart me kya dikhta hai?"
+        self.assertEqual(classify_health_archetype(q), "heart_blood_pressure")
+        res = run_health_static_engine(_SAMPLE_KUNDLI, q, archetype="heart_blood_pressure")
+        self.assertEqual(res.archetype, "heart_blood_pressure")
+        joined = " | ".join(res.evidence or [])
+        self.assertIn("4th house", joined)
+        self.assertIn("Sun", joined)
+        self.assertIn("Moon", joined)
+        self.assertIn("Mars", joined)
+        self.assertIn("6th house", joined)
+        self.assertIn("Severity score", joined)
+        self.assertTrue(res.evidence_positive or res.evidence_negative)
+        self.assertIn("dasha", " ".join(res.ignore or []).lower())
+        checks = res.checks or {}
+        self.assertIn(checks.get("severity"), ("Low", "Moderate", "High"))
 
     def test_hard_guard_skips_llm(self):
         res = run_health_static_engine(

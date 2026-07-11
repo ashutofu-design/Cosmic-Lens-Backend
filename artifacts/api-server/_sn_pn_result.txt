@@ -1,0 +1,40 @@
+
+test_each_angle_has_levels (tests.test_secret_narrator.SecretGoldenTests) ... ok
+test_golden_angles (tests.test_secret_narrator.SecretGoldenTests) ... ok
+test_render_golden_batch (tests.test_secret_narrator.SecretGoldenTests) ... ok
+test_chupke_angle (tests.test_secret_narrator.SecretNarratorTests) ... ok
+test_high_not_low_risk_language (tests.test_secret_narrator.SecretNarratorTests) ... ok
+test_locked_template_valid (tests.test_secret_narrator.SecretNarratorTests) ... ok
+test_payload_no_chart (tests.test_secret_narrator.SecretNarratorTests) ... ok
+test_secret_json_shape (tests.test_secret_narrator.SecretNarratorTests) ... ok
+test_golden_angles (tests.test_partner_nature_narrator.PartnerNatureGoldenTests) ... FAIL
+test_render_golden_batch (tests.test_partner_nature_narrator.PartnerNatureGoldenTests) ... ok
+test_challenging_not_balanced_praise (tests.test_partner_nature_narrator.PartnerNatureNarratorTests) ... ok
+test_dna_bucket_temper (tests.test_partner_nature_narrator.PartnerNatureNarratorTests) ... ok
+test_general_nature_angle (tests.test_partner_nature_narrator.PartnerNatureNarratorTests) ... ok
+test_locked_template_valid (tests.test_partner_nature_narrator.PartnerNatureNarratorTests) ... ok
+test_payload_no_chart (tests.test_partner_nature_narrator.PartnerNatureNarratorTests) ... ok
+test_pn_json_shape (tests.test_partner_nature_narrator.PartnerNatureNarratorTests) ... ok
+
+======================================================================
+FAIL: test_golden_angles (tests.test_partner_nature_narrator.PartnerNatureGoldenTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Cosmic-Lens-Backend\artifacts\api-server\tests\test_partner_nature_narrator.py", line 105, in test_golden_angles
+    self.assertEqual(failures, [], msg="\n".join(failures))
+AssertionError: Lists differ: ["'Ideal spouse ki qualities kya hain?': e[40 chars]act"] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+"'Ideal spouse ki qualities kya hain?': expected ideal_spouse, got qualities_attract"
+
++ []
+- ["'Ideal spouse ki qualities kya hain?': expected ideal_spouse, got "
+-  'qualities_attract'] : 'Ideal spouse ki qualities kya hain?': expected ideal_spouse, got qualities_attract
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.161s
+
+FAILED (failures=1)
+
+EXIT=1

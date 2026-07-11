@@ -238,7 +238,8 @@ export default function OnboardingScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setError(`${e.message} (${e.used}/${e.limit} ${L.quotaUsed})`);
       } else {
-        setError(L.chartFailed);
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg && msg.length < 120 ? msg : L.chartFailed);
       }
     } finally {
       setLoading(false);

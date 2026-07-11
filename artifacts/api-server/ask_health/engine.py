@@ -73,6 +73,9 @@ def run_health_static_engine(
     if archetype == "reproductive_support":
         from .engines.reproductive_support import run_reproductive_support
         return run_reproductive_support(kundli, question, wants_explain=wants_explain)
+    if archetype == "heart_blood_pressure":
+        from .engines.heart_blood_pressure import run_heart_blood_pressure
+        return run_heart_blood_pressure(kundli, question, wants_explain=wants_explain)
     if archetype in _SYSTEM_ARCHETYPES:
         from .engines.system_health import run_system_health
         return run_system_health(kundli, question, archetype=archetype, wants_explain=wants_explain)

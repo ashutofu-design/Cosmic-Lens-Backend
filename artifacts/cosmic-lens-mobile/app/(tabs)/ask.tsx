@@ -89,8 +89,6 @@ interface Message {
   // details" button below the bubble that opens profile-edit pre-set
   // to the right relation slot.
   partnerCta?: { label: string; relation: string };
-  /** Server question_history id — opens developer debugger. */
-  questionId?: string;
 }
 
 const DEMO_MESSAGES: Message[] = [
@@ -1479,7 +1477,6 @@ export default function AskScreen() {
           }
 
           const newAssistantId = Date.now().toString() + "_a";
-          const savedQuestionId = typeof json.question_id === "string" ? json.question_id : undefined;
           setMessages(prev =>
             prev.filter(m => m.id !== "thinking").concat({
               id: newAssistantId,
@@ -1491,9 +1488,9 @@ export default function AskScreen() {
               responseSchema: isV2 ? "v2" : undefined,
               clarification: clar,
               partnerCta,
-              questionId: savedQuestionId,
             })
           );
+          void fetchHistory();
           return;
         }
 
@@ -1527,7 +1524,6 @@ export default function AskScreen() {
         // `clarification` field on the `done` event when its classifier
         // confidence was low. Defensive parsing in the evt.done branch.
         let finalClarification: { prompt: string; options: string[] } | undefined;
-        let finalQuestionId: string | undefined;
         let sawDone         = false;
         let midError: string | null = null;
 
@@ -1567,9 +1563,6 @@ export default function AskScreen() {
               if (_opts.length > 0) {
                 finalClarification = { prompt: String(_clar.prompt), options: _opts };
               }
-            }
-            if (typeof (evt as any).question_id === "string" && (evt as any).question_id.trim()) {
-              finalQuestionId = String((evt as any).question_id).trim();
             }
           }
         };
@@ -1627,10 +1620,10 @@ export default function AskScreen() {
             text:      finalText || accumulated,
             followUps: finalFollowUps,
             streaming: false,
-            questionId: finalQuestionId,
           };
           return next;
         });
+        void fetchHistory();
       } catch (e: any) {
         // Two abort cases to disambiguate:
         //   • Superseded by a newer send → !isCurrent(): the new owner has
@@ -1652,7 +1645,7 @@ export default function AskScreen() {
         if (isCurrent()) setLoading(false);
       }
     },
-    [loading, showDemo, kundli, birthData, user?.id, user?.api_key, askReplyLang, messages, t.askDailyLimitOver],
+    [loading, showDemo, kundli, birthData, user?.id, user?.api_key, askReplyLang, messages, t.askDailyLimitOver, fetchHistory],
   );
 
   // Latest assistant message id — only this one shows follow-up chips.
@@ -1864,6 +1857,7 @@ export default function AskScreen() {
           && !item.streaming
           && item.id !== "thinking"
           && !!item.text?.trim() && (
+          <View style={s.assistantMsgActionsWrap}>
           <View style={s.assistantMsgActions}>
             <Pressable
               onPress={() => copyAssistantAnswer(item.id, item.text)}
@@ -1880,27 +1874,7 @@ export default function AskScreen() {
                 {copiedAssistantMsgId === item.id ? "Copied" : "Copy answer"}
               </Text>
             </Pressable>
-            {!!item.questionId && (
-              <Pressable
-                onPress={() => {
-                  try { Haptics.selectionAsync(); } catch {}
-                  router.push({
-                    pathname: "/ask-engine-debug",
-                    params: { questionId: item.questionId },
-                  });
-                }}
-                style={({ pressed }) => [
-                  s.userMsgActionBtn,
-                  { borderColor: C.border, backgroundColor: C.bgCard },
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="View engine debugger"
-              >
-                <Feather name="cpu" size={12} color={C.textMid} />
-                <Text style={[s.userMsgActionText, { color: C.textMid }]}>View engine</Text>
-              </Pressable>
-            )}
+          </View>
           </View>
         )}
 
@@ -3244,15 +3218,18 @@ const s = StyleSheet.create({
   bubbleTextUser:   { color: "#FFFFFF", fontWeight: "600" },
   bubbleTextAssist: { color: "#94a3b8" },
 
+  assistantMsgActionsWrap: {
+    marginLeft: 38,
+    marginTop: -4,
+    marginBottom: 8,
+    paddingHorizontal: 2,
+    gap: 4,
+  },
   assistantMsgActions: {
     flexDirection: "row",
     justifyContent: "flex-start",
     flexWrap: "wrap",
     gap: 6,
-    marginTop: -4,
-    marginBottom: 8,
-    marginLeft: 38,
-    paddingHorizontal: 2,
   },
   userMsgActions: {
     flexDirection: "row",

@@ -25,7 +25,6 @@ import { useUser, type AuthUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import {
   demoLogin,
-  isAuthNetworkError,
   isDemoLoginEnabled,
   verifyFirebaseIdToken,
 } from "@/lib/authBackend";
@@ -138,15 +137,7 @@ export default function LoginScreen() {
       router.replace("/");
     } catch (e: unknown) {
       const msg = String((e as Error)?.message || e || "");
-      if (isAuthNetworkError(e) || /connection nahi|demo login failed|Server tak/i.test(msg)) {
-        setError(
-          isHindi
-            ? "VPS API bahar se reachable nahi hai (port 8080 blocked ya DNS missing). Hostinger Firewall mein TCP 8080 allow karein, ya api.cosmiclens.app ka A-record + nginx setup karein."
-            : "VPS API is not reachable from your network (port 8080 blocked or DNS missing). Allow TCP 8080 in Hostinger Firewall, or set up api.cosmiclens.app DNS + nginx.",
-        );
-      } else {
-        setError(msg || (isHindi ? "Demo login fail." : "Demo login failed."));
-      }
+      setError(msg || (isHindi ? "Demo login fail." : "Demo login failed."));
     } finally {
       setDemoLoading(false);
     }

@@ -1,0 +1,17 @@
+﻿=== Probe 1: http://187.127.174.55:8080/api/healthz ===
+curl: (28) Connection timed out after 12004 milliseconds
+
+HTTP:000
+STATUS: timed out (exit 28)
+
+=== Probe 2: POST http://187.127.174.55:8080/api/auth/demo ===
+curl: (28) Connection timed out after 12010 milliseconds
+
+HTTP:000
+STATUS: timed out (exit 28)
+
+=== Probe 3: https://api.cosmiclens.app/api/healthz ===
+curl: (6) Could not resolve host: api.cosmiclens.app
+
+HTTP:000
+STATUS: failed (exit 6)

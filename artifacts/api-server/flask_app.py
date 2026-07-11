@@ -2693,6 +2693,8 @@ def _log_question_history(user, question_text: str, result):
             result=result,
             primary_kundli_id=kundli_id,
         )
+        if qid:
+            result["question_id"] = qid
         try:
             from user_ask_profile import record_question_signals_for_user
 
@@ -7791,6 +7793,32 @@ def history_route():
     return jsonify({"items": items})
 
 
+@app.route("/api/history/latest/debug", methods=["GET"])
+def history_latest_debug_route():
+    """Developer debugger for the user's most recent Ask row."""
+    raw_uid = request.headers.get("X-User-Id", "").strip()
+    try:
+        uid = int(raw_uid)
+    except ValueError:
+        return jsonify({"error": "X-User-Id required"}), 401
+    user, err = get_authed_user(uid)
+    if err:
+        return err
+    try:
+        from question_history import get_latest_user_ask_question_debug
+
+        row = get_latest_user_ask_question_debug(user.id)
+        if not row:
+            return jsonify({"error": "Not found"}), 404
+        return jsonify(row)
+    except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
+        app.logger.exception("history latest debug failed")
+        return jsonify({"error": str(exc)[:500]}), 500
+
+
 @app.route("/api/history/<question_id>/debug", methods=["GET"])
 def history_debug_route(question_id: str):
     """Developer debugger for one Ask row — same bundle as admin detail (owner only)."""
@@ -9159,7 +9187,7 @@ def ask_stream_route():
             try:
                 from question_history import persist_ask_question_result
 
-                persist_ask_question_result(
+                qid = persist_ask_question_result(
                     user_id=rp_user_s.id,
                     question_text=question,
                     result=out_s,
@@ -9167,6 +9195,8 @@ def ask_stream_route():
                         rp_user_s.kundli.id if rp_user_s.kundli else None
                     ),
                 )
+                if qid:
+                    out_s["question_id"] = qid
             except Exception as _qh_exc_s:
                 print(
                     f"[ask/stream:RP] question_history save failed "

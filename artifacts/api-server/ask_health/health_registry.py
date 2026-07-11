@@ -18,6 +18,7 @@ HEALTH_ARCHETYPES = frozenset({
     "addiction_support",
     "reproductive_support",
     "digestive_health",
+    "heart_blood_pressure",
     "cardio_health",
     "nervous_health",
     "musculoskeletal_health",
@@ -451,7 +452,15 @@ def detect_health_archetype(question: str) -> str | None:
         return "accident_risk"
     if _RECOVERY_RX.search(q):
         return "recovery_capacity"
-    # Body-system subdomains (pet/heart/breath etc.) before generic mental/chronic
+    # Heart/BP — dedicated engine before generic body-system detect
+    try:
+        from .engines.heart_blood_pressure import detect_heart_blood_pressure_archetype
+
+        if detect_heart_blood_pressure_archetype(q):
+            return "heart_blood_pressure"
+    except Exception:
+        pass
+    # Body-system subdomains (pet/breath etc.) before generic mental/chronic
     try:
         from .engines.system_health import detect_system_archetype
 

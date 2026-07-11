@@ -17,6 +17,7 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "http://187.127.174.55:8080",
         "EXPO_PUBLIC_ALLOW_HTTP_API": "1",
+        "EXPO_PUBLIC_ENABLE_DEMO_LOGIN": "1",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCszzLxjDjdePJFe1dVa6Hktr1wMHjCE50",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "cosmic-lens-42b49.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "cosmic-lens-42b49",
@@ -31,8 +32,9 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.cosmiclens.app",
-        "EXPO_PUBLIC_ENABLE_DEMO_LOGIN": "0",
+        "EXPO_PUBLIC_API_URL": "http://187.127.174.55:8080",
+        "EXPO_PUBLIC_ALLOW_HTTP_API": "1",
+        "EXPO_PUBLIC_ENABLE_DEMO_LOGIN": "1",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyALXoUuzlTnOwTsZmcGMAtDIqR8c6-nSAs",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "cosmic-lens-62cc2.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "cosmic-lens-62cc2",

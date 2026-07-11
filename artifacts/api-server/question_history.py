@@ -715,6 +715,25 @@ def get_user_ask_question_debug(user_id: int, question_id: str) -> dict | None:
     return row
 
 
+def get_latest_user_ask_question_debug(user_id: int) -> dict | None:
+    """Most recent Ask debugger bundle for the user (View engine on latest reply)."""
+    if not user_id:
+        return None
+    try:
+        row = (
+            UserQuestion.query
+            .filter(UserQuestion.user_id == int(user_id))
+            .order_by(UserQuestion.created_at.desc())
+            .first()
+        )
+    except Exception as exc:
+        print(f"[question_history] latest debug lookup failed: {exc}", flush=True)
+        return None
+    if not row or not row.id:
+        return None
+    return get_user_ask_question_debug(user_id, row.id)
+
+
 def list_admin_ask_questions(
     *,
     page: int = 1,
@@ -936,6 +955,8 @@ def persist_ask_question_result(
     )
     if qid:
         payload["question_id"] = qid
+        if isinstance(result, dict):
+            result["question_id"] = qid
         print(
             f"[question_history] persist_ok id={qid} topic={topic_logged} "
             f"q={question_text[:72]!r}",

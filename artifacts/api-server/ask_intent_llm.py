@@ -132,6 +132,7 @@ HEALTH_ARCHETYPES = {
     "addiction_support",
     "reproductive_support",
     "digestive_health",
+    "heart_blood_pressure",
     "cardio_health",
     "nervous_health",
     "musculoskeletal_health",

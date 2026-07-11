@@ -1,0 +1,108 @@
+﻿
+
+========== 1. curl healthz IP:8080 ==========
+
+
+HTTP:000
+curl.exe : curl: (28) Connection timed out after 15007 milliseconds
+At C:\Users\HP\AppData\Local\Temp\ps-script-d5b019eb-8948-4f72-903e-c27a2b56a055.ps1:19 char:33
++ ...  IP:8080" { curl.exe -sS -m 15 -w "`nHTTP:%{http_code}`n" http://187. ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (curl: (28) Conn...07 milliseconds:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+
+========== 2. curl healthz api.cosmiclens.app ==========
+
+curl.exe : curl: (6) Could not resolve host: api.cosmiclens.app
+At C:\Users\HP\AppData\Local\Temp\ps-script-d5b019eb-8948-4f72-903e-c27a2b56a055.ps1:20 char:44
++ ... lens.app" { curl.exe -sS -m 15 -w "`nHTTP:%{http_code}`n" https://api ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (curl: (6) Could....cosmiclens.app:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+HTTP:000
+
+
+========== 3. curl POST auth/demo ==========
+
+curl.exe : curl: (6) Could not resolve host: api.cosmiclens.app
+At C:\Users\HP\AppData\Local\Temp\ps-script-d5b019eb-8948-4f72-903e-c27a2b56a055.ps1:21 char:32
++ ... uth/demo" { curl.exe -sS -m 15 -X POST -H "Content-Type: application/ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (curl: (6) Could....cosmiclens.app:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+
+========== 4. Test-NetConnection 187.127.174.55:8080 ==========
+
+
+
+ComputerName             : 187.127.174.55
+RemoteAddress            : 187.127.174.55
+ResolvedAddresses        : {187.127.174.55}
+PingSucceeded            : False
+PingReplyDetails         : System.Net.NetworkInformation.PingReply
+TcpClientSocket          : 
+TcpTestSucceeded         : False
+RemotePort               : 8080
+TraceRoute               : 
+Detailed                 : False
+InterfaceAlias           : Wi-Fi
+InterfaceIndex           : 16
+InterfaceDescription     : Realtek RTL8821CE 802.11ac PCIe Adapter
+NetAdapter               : MSFT_NetAdapter (CreationClassName = "MSFT_NetAdapter", DeviceID = 
+                           "{C0E0EA73-C5CA-404B-8E91-D65CD862065F}", SystemCreationClassName = "CIM_NetworkPort", 
+                           SystemName = "LAPTOP-Q8MV41O7")
+NetRoute                 : MSFT_NetRoute (InstanceID = ":8:8:8:9:55;@55;C?8;@B8?C8;55;")
+SourceAddress            : 192.168.29.137
+NameResolutionSucceeded  : True
+BasicNameResolution      : {Microsoft.DnsClient.Commands.DnsRecord_PTR}
+LLMNRNetbiosRecords      : {}
+DNSOnlyRecords           : {Microsoft.DnsClient.Commands.DnsRecord_PTR}
+AllNameResolutionResults : Microsoft.DnsClient.Commands.DnsRecord_PTR
+IsAdmin                  : True
+NetworkIsolationContext  : Internet
+MatchingIPsecRules       : 
+
+
+
+
+
+
+========== 5. Test-NetConnection api.cosmiclens.app:443 ==========
+
+
+
+ComputerName             : api.cosmiclens.app
+RemoteAddress            : 
+ResolvedAddresses        : 
+PingSucceeded            : False
+PingReplyDetails         : 
+TcpClientSocket          : 
+TcpTestSucceeded         : False
+RemotePort               : 0
+TraceRoute               : 
+Detailed                 : False
+InterfaceAlias           : 
+InterfaceIndex           : 0
+InterfaceDescription     : 
+NetAdapter               : 
+NetRoute                 : 
+SourceAddress            : 
+NameResolutionSucceeded  : False
+BasicNameResolution      : 
+LLMNRNetbiosRecords      : 
+DNSOnlyRecords           : 
+AllNameResolutionResults : 
+IsAdmin                  : False
+NetworkIsolationContext  : 
+MatchingIPsecRules       : 
+
+
+
+
+

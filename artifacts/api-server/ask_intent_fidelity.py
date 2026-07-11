@@ -856,6 +856,59 @@ def chemistry_angle_label(angle: str | None) -> str:
     return _CHEMISTRY_ANGLE_LABELS.get(key, "Chemistry / attraction")
 
 
+_BED_INTIMACY_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("suhag_raat", re.compile(r"(?ix)\b(suhag\s*raat|first\s*night|wedding\s*night)\b")),
+    ("physical_compat", re.compile(r"(?ix)\b(physical\s*compat\w*)\b")),
+    (
+        "sexual_intimacy",
+        re.compile(r"(?ix)\b(sexual|sex\s+life|\bsex\b|physical\s*intim\w*)\b"),
+    ),
+    ("intimacy_drive", re.compile(r"(?ix)\b(desire|drive|mismatch|passion)\b")),
+    (
+        "conjugal_compat",
+        re.compile(r"(?ix)\b(conjugal|private\s*life|private\s*intimacy)\b"),
+    ),
+    (
+        "emotional_safety",
+        re.compile(r"(?ix)\b(comfort|safety|trust|emotionally\s+safe|emotional\s+safety)\b"),
+    ),
+    ("bedroom_compat", re.compile(r"(?ix)\b(bedroom|bed\s+intimacy|\bbed\b)\b")),
+    ("general_intimacy", re.compile(r"(?ix)\b(intimacy|sharirik|physical\s*closeness)\b")),
+]
+
+_BED_INTIMACY_ANGLE_LABELS: dict[str, str] = {
+    "general_intimacy": "General physical intimacy pattern",
+    "suhag_raat": "Suhag raat / early wedding intimacy",
+    "bedroom_compat": "Bedroom compatibility",
+    "sexual_intimacy": "Sexual / physical intimacy comfort",
+    "conjugal_compat": "Conjugal / private-life compatibility",
+    "physical_compat": "Physical compatibility (intimacy)",
+    "emotional_safety": "Emotional safety before intimacy",
+    "intimacy_drive": "Desire / drive / passion mismatch",
+}
+
+
+def infer_bed_intimacy_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(bed|bedroom|conjugal|sexual|sex|suhag|private\s*life|physical\s*compat|"
+        r"intimacy|sharirik|physical\s*intim|desire|mismatch)\b",
+        q,
+    ):
+        return None
+    for name, rx in _BED_INTIMACY_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_intimacy"
+
+
+def bed_intimacy_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _BED_INTIMACY_ANGLE_LABELS.get(key, "Physical intimacy / bed compatibility")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

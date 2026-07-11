@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Bed intimacy engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "bed_intimacy"
+        and os.environ.get("ASK_BED_INTIMACY_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.bed_intimacy_narrator import (
+            engine_result_to_bed_intimacy_json,
+            render_bed_intimacy_template_answer,
+        )
+
+        _intim_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _intim_dna = _llm_intent_admin.get("question_dna")
+        _intim_json = engine_result_to_bed_intimacy_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_intim_dna if isinstance(_intim_dna, dict) else None,
+        )
+        _intim_checks = dict(_mr_engine_result.checks or {})
+        _intim_checks["narrator_input"] = _intim_json
+        _intim_checks["question"] = question or ""
+        _mr_engine_result.checks = _intim_checks
+        _intim_text = render_bed_intimacy_template_answer(_intim_json, question or "", lang=eff_lang)
+        _out_intim = {
+            "text": _intim_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_intim_json.get("confidence") or 48) / 100.0)),
+            "source": "bed_intimacy_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_intim = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "bed_intimacy",
+            "skip_llm": True,
+            "narrator_input": _intim_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_intim,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_intim,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="bed_intimacy_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── Chemistry engine — deterministic template narrator ──
     if (
         _is_mr_static

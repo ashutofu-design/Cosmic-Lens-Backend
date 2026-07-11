@@ -119,8 +119,19 @@ def format_engine_rich_plain(
             big = render_patchup_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
-    elif infer_compatibility_angle(q) or str(getattr(result, "checks", {}).get("question_intent") or "").endswith("compatibility"):
-        big = format_compatibility_user_reply(q, result)
+    elif arch == "compatibility" or infer_compatibility_angle(q) or str(getattr(result, "checks", {}).get("question_intent") or "").endswith("compatibility"):
+        try:
+            from ask_mr.compatibility_narrator import (
+                engine_result_to_compatibility_json,
+                render_compatibility_template_answer,
+            )
+
+            data = engine_result_to_compatibility_json(result, question=q)
+            big = render_compatibility_template_answer(data, q, lang=lang)
+        except Exception:
+            from ask_mr.commitment_reply import format_compatibility_user_reply
+
+            big = format_compatibility_user_reply(q, result)
     else:
         big = str(getattr(result, "verdict", "") or "").strip()
         big = re.sub(r"^[A-Za-z /]+:\s*", "", big)
@@ -335,6 +346,35 @@ def narrate_mr_engine_llm(
                 question or "",
                 lang=eff_lang,
             )
+    elif arch == "compatibility":
+        from ask_mr.compatibility_narrator import (
+            compatibility_narrator_payload,
+            engine_result_to_compatibility_json,
+            render_compatibility_template_answer,
+            validate_compatibility_narrator_output,
+        )
+
+        narrator_json = engine_result_to_compatibility_json(engine_result, question=question or "")
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_COMPATIBILITY_USE_LLM", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            chart_text = compatibility_narrator_payload(
+                engine_result,
+                wants_explain=wants_explain,
+                question=question or "",
+            )
+        else:
+            return render_compatibility_template_answer(
+                narrator_json,
+                question or "",
+                lang=eff_lang,
+            )
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -446,6 +486,20 @@ def narrate_mr_engine_llm(
                     from ask_mr.breakup_narrator import render_breakup_template_answer
 
                     return render_breakup_template_answer(
+                        narrator_json,
+                        question or "",
+                        lang=eff_lang,
+                    )
+            if arch == "compatibility" and narrator_json:
+                ok, issues = validate_compatibility_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] compatibility validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.compatibility_narrator import render_compatibility_template_answer
+
+                    return render_compatibility_template_answer(
                         narrator_json,
                         question or "",
                         lang=eff_lang,

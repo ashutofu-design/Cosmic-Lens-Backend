@@ -82,6 +82,18 @@ def is_dyadic_couple_question(question: str) -> bool:
 
 _COMPAT_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
     (
+        "gun_milan",
+        re.compile(r"(?ix)\b(gun\s*milan|guna\s*milan|36\s*gun|ashtakoot|kundli\s*milan)\b"),
+    ),
+    (
+        "chemistry_match",
+        re.compile(r"(?ix)\b(chemistry|spark|attraction)\b.{0,35}\b(match|hai|ache|achh|strong)\b"),
+    ),
+    (
+        "overall_match",
+        re.compile(r"(?ix)\b(overall\s+match|rishta\s+achh[a-z]*|good\s+match|sahi\s+match|right\s+person)\b"),
+    ),
+    (
         "personalities_match",
         re.compile(r"(?ix)\b(personality|personalities|swabhav)\b.{0,40}\b(match|milt)"),
     ),
@@ -96,8 +108,12 @@ _COMPAT_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
     (
         "life_goals_match",
         re.compile(
-            r"(?ix)\b(life\s*goals?|goals?|sapne|ambition|ambitions)\b.{0,40}\b(match|milt|align)"
+            r"(?ix)\b(life\s*goals?|goals?|sapne|ambition|ambitions)\b.{0,40}\b(same|match|milt|align)"
         ),
+    ),
+    (
+        "mental_compatibility",
+        re.compile(r"(?ix)\b(mentally|mental|dimaag)\b.{0,35}\b(compat|match|milt|hai)"),
     ),
     (
         "expectations_match",
@@ -108,16 +124,12 @@ _COMPAT_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"(?ix)\b(emotionally|emotional)\b.{0,30}\b(compat|match|milt)"),
     ),
     (
-        "mental_compatibility",
-        re.compile(r"(?ix)\b(mentally|mental)\b.{0,30}\b(compat|match|milt)"),
-    ),
-    (
         "intellectual_compatibility",
         re.compile(r"(?ix)\b(intellectually|intellectual)\b.{0,30}\b(compat|match|milt)"),
     ),
     (
         "general_compatibility",
-        re.compile(r"(?ix)\b(compat(?:ible|ibility)?|match)\b"),
+        re.compile(r"(?ix)\b(compat\w*|match|milan)\b"),
     ),
 ]
 
@@ -139,6 +151,9 @@ _COMPAT_ANGLE_LABELS: dict[str, str] = {
         "Intellectual compatibility — ideas, learning, debate, depth of conversation"
     ),
     "general_compatibility": "General couple compatibility — overall match / bond",
+    "gun_milan": "Gun milan / ashtakoot / 36 gun match",
+    "chemistry_match": "Chemistry / spark / attraction match",
+    "overall_match": "Overall rishta match / sahi match",
 }
 
 
@@ -149,7 +164,12 @@ def infer_compatibility_angle(question: str) -> str | None:
         return None
     if not (
         is_dyadic_couple_question(q)
-        or re.search(r"(?ix)\b(compat|match|values?|personalities?|expectations?)\b", q)
+        or re.search(
+            r"(?ix)\b(compat\w*|match\w*|values?|personalities?|expectations?|"
+            r"gun\s*milan|guna\s*milan|36\s*gun|ashtakoot|chemistry|milan|thinking|soch|"
+            r"life\s*goals?|goals?|dimaag|rishta|same)\b",
+            q,
+        )
     ):
         return None
     for name, rx in _COMPAT_ANGLE_RULES:

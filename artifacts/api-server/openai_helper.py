@@ -6973,6 +6973,47 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _is_finance_static = _resolver_flags["finance"]
             _is_health_static = _resolver_flags["health"]
             _is_mr_static = _resolver_flags["mr"]
+            try:
+                from ask_execution_gatekeeper import (
+                    enforce_dna_routing_flags,
+                    check_routing_gate,
+                )
+
+                _resolver_flags, _gk_force_note = enforce_dna_routing_flags(
+                    _resolver_flags,
+                    _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    _engine_route,
+                )
+                if _gk_force_note:
+                    _is_education_static = _resolver_flags["education"]
+                    _is_children_static = _resolver_flags["children"]
+                    _is_property_static = _resolver_flags["property"]
+                    _is_vehicle_static = _resolver_flags["vehicle"]
+                    _is_travel_static = _resolver_flags["travel"]
+                    _is_litigation_static = _resolver_flags["litigation"]
+                    _is_gap_static = _resolver_flags["gap"]
+                    _is_network_static = _resolver_flags["network"]
+                    _is_luck_static = _resolver_flags["luck"]
+                    _is_career_static = _resolver_flags["career"]
+                    _is_finance_static = _resolver_flags["finance"]
+                    _is_health_static = _resolver_flags["health"]
+                    _is_mr_static = _resolver_flags["mr"]
+                    print(
+                        f"[raw_passthrough] EXECUTION_GATEKEEPER force={_gk_force_note}",
+                        flush=True,
+                    )
+                _gk_route = check_routing_gate(
+                    _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    engine_route=_engine_route,
+                    flags=_resolver_flags,
+                )
+                if not _gk_route.ok and isinstance(_llm_intent_admin, dict):
+                    _llm_intent_admin["gatekeeper_routing"] = _gk_route.to_dict()
+            except Exception as _gk_route_exc:
+                print(
+                    f"[raw_passthrough] EXECUTION_GATEKEEPER routing skipped: {_gk_route_exc}",
+                    flush=True,
+                )
             if isinstance(_llm_intent_admin, dict) and _engine_route:
                 _llm_intent_admin = merge_route_into_admin_intent(_llm_intent_admin, _engine_route)
             print(
@@ -9094,6 +9135,85 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
         if _m17_late is not None:
             return _m17_late
+
+    # ── Execution Gatekeeper — block LLM when DNA/engine/narrator pipeline invalid ──
+    if (
+        not _direct_llm_bypass
+        and isinstance(dcr_love_meta, dict)
+        and dcr_love_meta.get("slice", "").endswith("_engine_v1")
+    ):
+        try:
+            from ask_execution_gatekeeper import (
+                build_blocked_response,
+                run_post_engine_gate,
+                try_recover_engine_from_dna,
+            )
+
+            _gk_pre = run_post_engine_gate(
+                _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                slice_meta=dcr_love_meta,
+                chart_text=chart_text or "",
+            )
+            if not _gk_pre.ok:
+                _recovered = try_recover_engine_from_dna(
+                    question or "",
+                    kundli if isinstance(kundli, dict) else {},
+                    _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    wants_explain=wants_explain,
+                )
+                if _recovered:
+                    dcr_love_meta, chart_text = _recovered
+                    _chart_slice_type = str(dcr_love_meta.get("slice") or _chart_slice_type)
+                    _is_health_static = dcr_love_meta.get("slice") == "health_engine_v1"
+                    _is_career_static = dcr_love_meta.get("slice") == "career_engine_v1"
+                    _gk_pre = run_post_engine_gate(
+                        _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                        slice_meta=dcr_love_meta,
+                        chart_text=chart_text or "",
+                    )
+                    print(
+                        "[raw_passthrough] EXECUTION_GATEKEEPER recovered DNA engine "
+                        f"archetype={dcr_love_meta.get('archetype')}",
+                        flush=True,
+                    )
+                if not _gk_pre.ok:
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["gatekeeper_blocked"] = _gk_pre.to_dict()
+                    print(
+                        f"[raw_passthrough] EXECUTION_GATEKEEPER BLOCK pre-llm "
+                        f"rule={_gk_pre.rule} reason={_gk_pre.reason}",
+                        flush=True,
+                    )
+                    _gk_out = build_blocked_response(
+                        _gk_pre,
+                        question=question or "",
+                        qtype=qtype,
+                        lang=eff_lang,
+                        slice_meta=dcr_love_meta,
+                    )
+                    return _attach_admin(
+                        _gk_out,
+                        question=question or "",
+                        question_type=qtype,
+                        is_timing=bool(is_timing),
+                        checks={
+                            "slice_type": dcr_love_meta.get("slice"),
+                            "gatekeeper_blocked": True,
+                            "gatekeeper": _gk_pre.to_dict(),
+                            "archetype": dcr_love_meta.get("archetype"),
+                        },
+                        chart_text=chart_text,
+                        slice_meta=dcr_love_meta,
+                        llm_called=False,
+                        skip_reason=f"gatekeeper_{_gk_pre.rule}",
+                        intent_source=_intent_source,
+                        llm_intent=_llm_intent_admin,
+                    )
+        except Exception as _gk_pre_exc:
+            print(
+                f"[raw_passthrough] EXECUTION_GATEKEEPER pre-llm skipped: {_gk_pre_exc}",
+                flush=True,
+            )
 
     # ── Health engine template-only (hard guards / crisis — skip LLM) ──
     if (
@@ -11471,6 +11591,50 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _hag:
                 print(f"[raw_passthrough] HEALTH_ANSWER_GUARD skipped: {_hag}", flush=True)
+        # ── Execution Gatekeeper — final answer must match engine verdict ──
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice", "").endswith("_engine_v1"):
+            try:
+                from ask_execution_gatekeeper import (
+                    build_blocked_response,
+                    check_final_answer_gate,
+                    extract_narrator_json_from_chart_text,
+                )
+
+                _nj_final = None
+                _chk_final = dcr_love_meta.get("checks")
+                if isinstance(_chk_final, dict) and isinstance(_chk_final.get("narrator_input"), dict):
+                    _nj_final = _chk_final["narrator_input"]
+                if not _nj_final:
+                    _nj_final = extract_narrator_json_from_chart_text(chart_text or "")
+                _gk_final = check_final_answer_gate(
+                    text,
+                    slice_meta=dcr_love_meta,
+                    narrator_json=_nj_final,
+                    admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                )
+                if not _gk_final.ok:
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["gatekeeper_blocked"] = _gk_final.to_dict()
+                    print(
+                        f"[raw_passthrough] EXECUTION_GATEKEEPER BLOCK post-llm "
+                        f"rule={_gk_final.rule} reason={_gk_final.reason}",
+                        flush=True,
+                    )
+                    _gk_out = build_blocked_response(
+                        _gk_final,
+                        question=question or "",
+                        qtype=qtype,
+                        lang=eff_lang,
+                        slice_meta=dcr_love_meta,
+                    )
+                    text = _gk_out["text"]
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["gatekeeper_final_block"] = _gk_final.to_dict()
+            except Exception as _gk_fin_exc:
+                print(
+                    f"[raw_passthrough] EXECUTION_GATEKEEPER post-llm skipped: {_gk_fin_exc}",
+                    flush=True,
+                )
         if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "education_engine_v1":
             try:
                 from ask_education.answer_guard import guard_education_answer

@@ -909,6 +909,59 @@ def bed_intimacy_angle_label(angle: str | None) -> str:
     return _BED_INTIMACY_ANGLE_LABELS.get(key, "Physical intimacy / bed compatibility")
 
 
+_KARMIC_MARRIAGE_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("twin_flame", re.compile(r"(?ix)\b(twin\s*flame)\b")),
+    ("soulmate", re.compile(r"(?ix)\b(soulmate|soul\s*mate)\b")),
+    ("past_life", re.compile(r"(?ix)\b(past\s*life|pichle\s*janam|purva\s*janm)\b")),
+    ("karmic_debt", re.compile(r"(?ix)\b(karma\s*debt|karmic\s*debt|\brin\b|karmic\s*lesson)\b")),
+    (
+        "spiritual_growth",
+        re.compile(
+            r"(?ix)\b(spiritual\s*growth|aadhyatmik|dharma\s*growth|"
+            r"dharma.{0,25}marriage|marriage.{0,25}dharma)\b"
+        ),
+    ),
+    (
+        "karmic_bond",
+        re.compile(r"(?ix)\b(karmic\s+(marriage|rishta|bond|shaadi|connection))\b"),
+    ),
+    ("nodes_karma", re.compile(r"(?ix)\b(rahu|ketu|nodes?\s+on)\b")),
+    ("general_karmic", re.compile(r"(?ix)\b(karmic|karma)\b")),
+]
+
+_KARMIC_MARRIAGE_ANGLE_LABELS: dict[str, str] = {
+    "general_karmic": "General karmic marriage theme",
+    "soulmate": "Destined partner / deep recognition bond",
+    "twin_flame": "Twin-flame intensity pattern",
+    "past_life": "Past-life connection theme",
+    "karmic_debt": "Karmic debt / lesson repayment",
+    "spiritual_growth": "Spiritual growth through marriage",
+    "karmic_bond": "Karmic marriage / rishta bond",
+    "nodes_karma": "Rahu-Ketu nodal karmic pull",
+}
+
+
+def infer_karmic_marriage_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(soul\s*mate|soulmate|twin\s*flame|karmic|karma\s*debt|past\s*life|"
+        r"pichle\s*janam|purva\s*janm|spiritual\s*growth|aadhyatmik|dharma|rahu|ketu|karma)\b",
+        q,
+    ):
+        return None
+    for name, rx in _KARMIC_MARRIAGE_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_karmic"
+
+
+def karmic_marriage_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _KARMIC_MARRIAGE_ANGLE_LABELS.get(key, "Karmic marriage / spiritual bond")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

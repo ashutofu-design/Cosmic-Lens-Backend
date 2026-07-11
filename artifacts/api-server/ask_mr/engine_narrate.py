@@ -64,6 +64,7 @@ def format_engine_rich_plain(
         infer_long_distance_angle,
         infer_chemistry_angle,
         infer_bed_intimacy_angle,
+        infer_karmic_marriage_angle,
         infer_one_sided_love_angle,
         infer_toxicity_angle,
         infer_loyalty_angle,
@@ -239,6 +240,17 @@ def format_engine_rich_plain(
 
             data = engine_result_to_bed_intimacy_json(result, question=q)
             big = render_bed_intimacy_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "karmic_marriage" or infer_karmic_marriage_angle(q):
+        try:
+            from ask_mr.karmic_marriage_narrator import (
+                engine_result_to_karmic_marriage_json,
+                render_karmic_marriage_template_answer,
+            )
+
+            data = engine_result_to_karmic_marriage_json(result, question=q)
+            big = render_karmic_marriage_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
     elif arch == "one_sided_love" or infer_one_sided_love_angle(q):
@@ -684,6 +696,35 @@ def narrate_mr_engine_llm(
             )
         else:
             return render_bed_intimacy_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "karmic_marriage":
+        from ask_mr.karmic_marriage_narrator import (
+            engine_result_to_karmic_marriage_json,
+            karmic_marriage_engine_narrator_payload,
+            render_karmic_marriage_template_answer,
+            validate_karmic_marriage_narrator_output,
+        )
+
+        _karm_dna = None
+        if isinstance(llm_intent, dict):
+            _karm_dna = llm_intent.get("question_dna")
+        narrator_json = engine_result_to_karmic_marriage_json(
+            engine_result,
+            question=question or "",
+            question_dna=_karm_dna if isinstance(_karm_dna, dict) else None,
+        )
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_KARMIC_MARRIAGE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = karmic_marriage_engine_narrator_payload(
+                engine_result,
+                wants_explain=wants_explain,
+                question=question or "",
+                question_dna=_karm_dna if isinstance(_karm_dna, dict) else None,
+            )
+        else:
+            return render_karmic_marriage_template_answer(narrator_json, question or "", lang=eff_lang)
     elif arch == "one_sided_love":
         from ask_mr.one_sided_love_narrator import (
             engine_result_to_one_sided_love_json,
@@ -946,6 +987,18 @@ def narrate_mr_engine_llm(
                     from ask_mr.bed_intimacy_narrator import render_bed_intimacy_template_answer
 
                     return render_bed_intimacy_template_answer(
+                        narrator_json, question or "", lang=eff_lang
+                    )
+            if arch == "karmic_marriage" and narrator_json:
+                ok, issues = validate_karmic_marriage_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] karmic_marriage validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.karmic_marriage_narrator import render_karmic_marriage_template_answer
+
+                    return render_karmic_marriage_template_answer(
                         narrator_json, question or "", lang=eff_lang
                     )
             if arch == "one_sided_love" and narrator_json:

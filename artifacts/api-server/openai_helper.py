@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Karmic marriage engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "karmic_marriage"
+        and os.environ.get("ASK_KARMIC_MARRIAGE_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.karmic_marriage_narrator import (
+            engine_result_to_karmic_marriage_json,
+            render_karmic_marriage_template_answer,
+        )
+
+        _karm_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _karm_dna = _llm_intent_admin.get("question_dna")
+        _karm_json = engine_result_to_karmic_marriage_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_karm_dna if isinstance(_karm_dna, dict) else None,
+        )
+        _karm_checks = dict(_mr_engine_result.checks or {})
+        _karm_checks["narrator_input"] = _karm_json
+        _karm_checks["question"] = question or ""
+        _mr_engine_result.checks = _karm_checks
+        _karm_text = render_karmic_marriage_template_answer(_karm_json, question or "", lang=eff_lang)
+        _out_karm = {
+            "text": _karm_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_karm_json.get("confidence") or 48) / 100.0)),
+            "source": "karmic_marriage_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_karm = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "karmic_marriage",
+            "skip_llm": True,
+            "narrator_input": _karm_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_karm,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_karm,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="karmic_marriage_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── Bed intimacy engine — deterministic template narrator ──
     if (
         _is_mr_static

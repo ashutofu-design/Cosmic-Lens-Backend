@@ -113,6 +113,12 @@ def _default_checks(
             "bed_intimacy_level": level,
             "intim_level": level,
         })
+    elif eid == "karmic_marriage":
+        checks.update({
+            "karmic_level": level,
+            "karmic_marriage_level": level,
+            "karm_level": level,
+        })
     elif eid == "communication":
         checks["communication_level"] = level
     elif eid == "emotional_attachment":

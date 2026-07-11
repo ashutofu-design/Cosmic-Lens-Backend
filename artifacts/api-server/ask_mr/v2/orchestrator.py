@@ -109,6 +109,15 @@ def _run_engine(engine_id: str, kundli: dict, question: str, **kwargs: Any) -> E
             wants_explain=kwargs.get("wants_explain", False),
             orchestrator_meta=kwargs.get("orchestrator_meta"),
         )
+    if eid == "toxicity":
+        from .engines.toxicity import run_toxicity_v2
+
+        return run_toxicity_v2(
+            kundli,
+            question,
+            wants_explain=kwargs.get("wants_explain", False),
+            orchestrator_meta=kwargs.get("orchestrator_meta"),
+        )
     # Other engines: v1 adapter until migrated
     return None
 

@@ -93,7 +93,10 @@ def _default_checks(
             "ldr_level": level,
         })
     elif eid == "toxicity":
-        checks["toxicity_level"] = level
+        checks.update({
+            "toxicity_level": level,
+            "tox_level": level,
+        })
     elif eid == "communication":
         checks["communication_level"] = level
     elif eid == "emotional_attachment":

@@ -683,6 +683,50 @@ def long_distance_angle_label(angle: str | None) -> str:
     return _LONG_DISTANCE_ANGLE_LABELS.get(key, "Long-distance relationship")
 
 
+_TOXICITY_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("abuse_risk", re.compile(r"(?ix)\b(abuse|abusive|violence|maar|peet|domestic|emotional\s+abuse|hurt)\b")),
+    ("gaslighting", re.compile(r"(?ix)\b(gaslight\w*)\b")),
+    ("control_pattern", re.compile(r"(?ix)\b(control|controlling|manipulat\w*|possessive)\b")),
+    ("jealousy_toxic", re.compile(r"(?ix)\b(jealous\w*|jalan|possessive\s+jealous)\b")),
+    ("red_flags", re.compile(r"(?ix)\b(red\s*flags?)\b")),
+    ("unhealthy_dynamic", re.compile(r"(?ix)\b(unhealthy)\b")),
+    ("toxic_dynamic", re.compile(r"(?ix)\b(toxic\w*|toxicity)\b")),
+    ("general_toxicity", re.compile(r"(?ix)\b(harm|toxic\s+pattern|red[\s-]flag|flags?)\b")),
+]
+
+_TOXICITY_ANGLE_LABELS: dict[str, str] = {
+    "general_toxicity": "General toxicity / red-flag pattern",
+    "toxic_dynamic": "Toxic relationship dynamic",
+    "abuse_risk": "Abuse / violence risk",
+    "control_pattern": "Control / manipulation pattern",
+    "gaslighting": "Gaslighting pattern",
+    "red_flags": "Red flags / warning signals",
+    "unhealthy_dynamic": "Unhealthy relationship dynamic",
+    "jealousy_toxic": "Jealousy-driven toxicity",
+}
+
+
+def infer_toxicity_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(toxic\w*|toxicity|abuse|abusive|manipulat\w*|gaslight\w*|controlling|control|red\s*flag|unhealthy|"
+        r"violence|maar|peet|jealous\w*|jalan|possessive|domestic|harm|flags?)\b",
+        q,
+    ):
+        return None
+    for name, rx in _TOXICITY_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_toxicity"
+
+
+def toxicity_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _TOXICITY_ANGLE_LABELS.get(key, "Toxicity / red-flag pattern")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

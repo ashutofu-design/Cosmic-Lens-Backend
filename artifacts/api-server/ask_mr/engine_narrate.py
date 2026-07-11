@@ -62,6 +62,7 @@ def format_engine_rich_plain(
         infer_emotional_attachment_angle,
         infer_family_approval_angle,
         infer_long_distance_angle,
+        infer_toxicity_angle,
         infer_loyalty_angle,
         infer_partner_commitment_angle,
         infer_partner_nature_angle,
@@ -202,6 +203,17 @@ def format_engine_rich_plain(
 
             data = engine_result_to_long_distance_json(result, question=q)
             big = render_long_distance_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "toxicity" or infer_toxicity_angle(q):
+        try:
+            from ask_mr.toxicity_narrator import (
+                engine_result_to_toxicity_json,
+                render_toxicity_template_answer,
+            )
+
+            data = engine_result_to_toxicity_json(result, question=q)
+            big = render_toxicity_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
     else:
@@ -559,6 +571,25 @@ def narrate_mr_engine_llm(
             )
         else:
             return render_long_distance_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "toxicity":
+        from ask_mr.toxicity_narrator import (
+            engine_result_to_toxicity_json,
+            render_toxicity_template_answer,
+            toxicity_engine_narrator_payload,
+            validate_toxicity_narrator_output,
+        )
+
+        narrator_json = engine_result_to_toxicity_json(engine_result, question=question or "")
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_TOXICITY_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = toxicity_engine_narrator_payload(
+                engine_result, wants_explain=wants_explain, question=question or ""
+            )
+        else:
+            return render_toxicity_template_answer(narrator_json, question or "", lang=eff_lang)
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -756,6 +787,18 @@ def narrate_mr_engine_llm(
                     from ask_mr.long_distance_narrator import render_long_distance_template_answer
 
                     return render_long_distance_template_answer(
+                        narrator_json, question or "", lang=eff_lang
+                    )
+            if arch == "toxicity" and narrator_json:
+                ok, issues = validate_toxicity_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] toxicity validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.toxicity_narrator import render_toxicity_template_answer
+
+                    return render_toxicity_template_answer(
                         narrator_json, question or "", lang=eff_lang
                     )
             return polished or None

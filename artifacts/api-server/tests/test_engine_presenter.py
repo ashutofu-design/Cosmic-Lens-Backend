@@ -16,7 +16,9 @@ from ask_mr.commitment_narrator import (
 from ask_mr.engine_presenter import (
     build_engine_presenter_system_prompt,
     detect_astro_jargon,
+    engine_llm_enabled,
     extract_presenter_fields,
+    human_narrator_enabled,
     use_engine_presenter_mode,
     validate_presenter_output,
 )
@@ -116,6 +118,27 @@ class EnginePresenterTests(unittest.TestCase):
             lang="hn",
         )
         ok, issues = validate_presenter_output(locked, self.data, "commitment")
+        self.assertTrue(ok, msg=f"issues={issues}")
+
+    def test_human_narrator_default_on(self):
+        os.environ.pop("ASK_MR_HUMAN_NARRATOR", None)
+        self.assertTrue(human_narrator_enabled())
+        self.assertTrue(engine_llm_enabled("secret_relationship"))
+
+    def test_secret_presenter_accepts_prose_without_section_labels(self):
+        data = {
+            "final_verdict": "Likely",
+            "secret_level": "likely",
+            "secrecy_level": "likely",
+            "confidence": 45,
+            "confidence_label": "Medium",
+        }
+        human = (
+            "Seedhi baat — partner kisi aur me interest ke signs chart me active dikh rahe hain, "
+            "isliye verdict Likely hai. Trust ko test karne wale signals hain, blind trust avoid karein. "
+            "Confidence Medium (45%) hai kyunki zyada tar indicators secrecy-challenging direction me hain."
+        )
+        ok, issues = validate_presenter_output(human, data, "secret_relationship")
         self.assertTrue(ok, msg=f"issues={issues}")
 
 

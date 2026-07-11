@@ -53,6 +53,22 @@ def _falsy(val: str) -> bool:
     return (val or "").strip().lower() in ("0", "false", "no")
 
 
+def human_narrator_enabled() -> bool:
+    """Default ON — set ASK_MR_HUMAN_NARRATOR=0 to force locked templates."""
+    v = (os.environ.get("ASK_MR_HUMAN_NARRATOR") or "1").strip().lower()
+    return v not in ("0", "false", "no")
+
+
+# Presenter may drop template section labels — keep verdict/confidence checks only.
+_PRESENTER_SOFT_ISSUES = frozenset({
+    "missing_positive_section",
+    "missing_challenges_section",
+    "missing_why_section",
+    "missing_meaning_section",
+    "missing_focus_section",
+})
+
+
 def _engine_presenter_env_key(engine: str) -> str:
     return f"ASK_{engine.strip().upper()}_PRESENTER"
 
@@ -73,7 +89,7 @@ def use_engine_presenter_mode(engine: str) -> bool:
 def engine_llm_enabled(engine: str) -> bool:
     """True when per-engine USE_LLM or global ASK_MR_HUMAN_NARRATOR is on."""
     eng = (engine or "").strip().lower()
-    if _truthy(os.environ.get("ASK_MR_HUMAN_NARRATOR", "")):
+    if human_narrator_enabled():
         return eng in _ENGINE_USE_LLM_ENV
     use_llm_key = _ENGINE_USE_LLM_ENV.get(eng)
     if not use_llm_key:
@@ -181,7 +197,7 @@ P4 — Caution: expand weakest_effects[] as real challenges (no planet jargon).
 P5 — Matlab: meaning_note + scorecard_user_note if present — practical, human.
 P6 — Timing: ONLY if timing.window exists.
 P7 — Focus: practical_guidance as caring next step.
-Final line: confidence_explanation — keep exact score + kyunki reason from JSON.
+Final line: copy confidence_explanation from PRESENTER_JSON exactly (score + kyunki reason).
 
 FREEDOM (allowed):
 • Light rephrase, connectors, and emotional warmth so it does not sound copy-paste.
@@ -199,9 +215,12 @@ NOT allowed:
 def _generic_section_skeleton(engine: str) -> str:
     return f"""
 STRUCTURE (human conversation for {engine} — plain paragraphs, NO robotic labels):
-Answer the user's exact question first. Then explain why, what supports it, what challenges it,
-practical meaning, and one focus line. End with confidence_explanation from JSON.
-Use PRESENTER_JSON / locked_template facts only. Sound like a human, not a form.
+P1 — Seedha jawab: answer ORIGINAL_QUESTION using direct_answer; tone locked to final_verdict.
+P2 — Kyun: weave reason_summary naturally (no "Asli wajah seedhi hai" label).
+P3 — Support + challenges: strongest_effects / weakest_effects as everyday meaning.
+P4 — Matlab + transparency + practical_guidance as caring advice (no section headers).
+Final line: confidence_explanation from JSON — copy exactly.
+Use PRESENTER_JSON facts only. Sound human, not a form.
 """.strip()
 
 
@@ -319,25 +338,25 @@ def validate_presenter_output(
         issues.append(f"astro_jargon:{','.join(sorted(jargon)[:5])}")
 
     eng = (engine or "").strip().lower()
+    engine_validators: dict[str, Any] = {}
     if eng == "commitment":
         from ask_mr.commitment_narrator import validate_commitment_narrator_output
 
-        ok, sub = validate_commitment_narrator_output(t, narrator_json)
-        # Presenter may drop robotic section labels — ignore those section checks.
-        soft_ok_issues = {
-            "missing_positive_section",
-            "missing_challenges_section",
-        }
-        sub = [s for s in sub if s not in soft_ok_issues]
+        engine_validators[eng] = validate_commitment_narrator_output
+    elif eng == "patchup":
+        from ask_mr.patchup_narrator import validate_patchup_narrator_output
+
+        engine_validators[eng] = validate_patchup_narrator_output
+    elif eng == "secret_relationship":
+        from ask_mr.secret_narrator import validate_secret_narrator_output
+
+        engine_validators[eng] = validate_secret_narrator_output
+
+    validator = engine_validators.get(eng)
+    if validator:
+        _ok, sub = validator(t, narrator_json)
+        sub = [s for s in sub if s not in _PRESENTER_SOFT_ISSUES]
         if sub:
             issues.extend(sub)
-            ok = False
-        else:
-            ok = True
-        if not ok:
-            pass
 
     return len(issues) == 0, issues
-
-
-# Keep length helpers used above defined once — remove duplicate if present below.

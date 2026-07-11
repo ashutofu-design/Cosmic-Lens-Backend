@@ -404,6 +404,7 @@ def narrate_mr_engine_llm(
         build_mr_narrator_user_lang_block,
         polish_mr_confident_tone,
     )
+    from ask_mr.engine_presenter import human_narrator_enabled
     from ask_question_understand import narrator_intent_hint
     from ask_cosmo_narrator import enforce_cosmo_engine_answer
 
@@ -427,11 +428,7 @@ def narrate_mr_engine_llm(
             "1",
             "true",
             "yes",
-        ) or os.environ.get("ASK_MR_HUMAN_NARRATOR", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ):
+        ) or human_narrator_enabled():
             chart_text = commitment_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -460,11 +457,7 @@ def narrate_mr_engine_llm(
             "1",
             "true",
             "yes",
-        ) or os.environ.get("ASK_MR_HUMAN_NARRATOR", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ):
+        ) or human_narrator_enabled():
             chart_text = patchup_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -580,11 +573,7 @@ def narrate_mr_engine_llm(
             "1",
             "true",
             "yes",
-        ) or os.environ.get("ASK_MR_HUMAN_NARRATOR", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ):
+        ) or human_narrator_enabled():
             chart_text = secret_narrator_payload(engine_result, wants_explain=wants_explain, question=question or "")
         else:
             return render_secret_template_answer(narrator_json, question or "", lang=eff_lang)
@@ -946,6 +935,7 @@ def narrate_mr_engine_llm(
         word_budget = min(word_budget, 70)
     from ask_mr.engine_presenter import (
         build_engine_presenter_system_prompt,
+        human_narrator_enabled,
         use_engine_presenter_mode,
         validate_presenter_output,
     )
@@ -1036,7 +1026,14 @@ def narrate_mr_engine_llm(
                         lang=eff_lang,
                     )
             if arch == "patchup" and narrator_json:
-                ok, issues = validate_patchup_narrator_output(polished or "", narrator_json)
+                if use_presenter:
+                    ok, issues = validate_presenter_output(
+                        polished or "",
+                        narrator_json,
+                        arch,
+                    )
+                else:
+                    ok, issues = validate_patchup_narrator_output(polished or "", narrator_json)
                 if not ok:
                     print(
                         f"[engine_narrate] patchup validation failed {issues} — using locked template",
@@ -1092,7 +1089,14 @@ def narrate_mr_engine_llm(
                         lang=eff_lang,
                     )
             if arch == "secret_relationship" and narrator_json:
-                ok, issues = validate_secret_narrator_output(polished or "", narrator_json)
+                if use_presenter:
+                    ok, issues = validate_presenter_output(
+                        polished or "",
+                        narrator_json,
+                        arch,
+                    )
+                else:
+                    ok, issues = validate_secret_narrator_output(polished or "", narrator_json)
                 if not ok:
                     print(
                         f"[engine_narrate] secret validation failed {issues} — using locked template",

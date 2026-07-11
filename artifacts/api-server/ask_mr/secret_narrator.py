@@ -89,7 +89,55 @@ def _build_reason_summary(strongest: list[str], weakest: list[str], verdict: str
     return f"Chart ke signals limited ya mixed hain — isi wajah se final verdict {verdict} hai."
 
 
-def render_secret_template_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
+def _plain_effect_clause(items: list[str], *, fallback: str, limit: int = 2) -> str:
+    effects = effects_from_evidence(items, limit=limit)
+    if not effects:
+        return fallback
+    if len(effects) == 1:
+        return effects[0]
+    return f"{effects[0]} Saath hi {effects[1]}"
+
+
+def render_secret_human_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
+    """Plain Hinglish paragraphs — same facts as template, no section labels."""
+    verdict = str(data.get("final_verdict") or "Possible")
+    level = str(data.get("secret_level") or data.get("secrecy_level") or verdict).strip().lower()
+    angle = str(data.get("answer_focus") or data.get("secret_angle") or "general_secrecy")
+    strongest = list(data.get("strongest") or data.get("strongest_effects") or [])
+    weakest = list(data.get("weakest") or data.get("weakest_effects") or [])
+    score = int(data.get("confidence") or 0)
+    conf_label = str(data.get("confidence_label") or "Medium")
+    scorecard = data.get("scorecard") if isinstance(data.get("scorecard"), dict) else {}
+
+    opening = str(data.get("direct_answer") or "").strip() or get_opening(angle, level)
+    reason = str(data.get("reason_summary") or "").strip() or _build_reason_summary(
+        strongest, weakest, verdict
+    )
+    support = _plain_effect_clause(
+        strongest,
+        fallback="Transparency ke supportive signs abhi limited hain.",
+    )
+    challenge = _plain_effect_clause(
+        weakest,
+        fallback="Secrecy ya parallel-attention ke kuch signals active hain.",
+    )
+    meaning = str(data.get("meaning_note") or "").strip() or get_meaning(angle, level)
+    transparency = str(data.get("transparency_outlook") or "").strip() or get_transparency_outlook(level)
+    focus = str(data.get("practical_guidance") or "").strip() or get_practical(angle, level)
+    confidence = str(data.get("confidence_explanation") or "").strip() or _build_confidence_explanation(
+        score, conf_label, strongest, weakest, scorecard, topic="secrecy"
+    )
+
+    body = (
+        f"{reason} {support} — lekin {challenge.lower()} "
+        f"{meaning} {transparency} {focus}"
+    )
+    body = re.sub(r"\s{2,}", " ", body).strip()
+    return "\n\n".join([opening, body, confidence])
+
+
+def render_secret_labeled_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
+    """Internal labeled format — used only for locked_template / validator reference."""
     verdict = str(data.get("final_verdict") or "Possible")
     level = str(data.get("secret_level") or data.get("secrecy_level") or verdict).strip().lower()
     angle = str(data.get("answer_focus") or data.get("secret_angle") or "general_secrecy")
@@ -112,6 +160,11 @@ def render_secret_template_answer(data: dict[str, Any], question: str = "", *, l
         ),
     ]
     return "\n\n".join(parts)
+
+
+def render_secret_template_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
+    """User-facing secret answer — always plain paragraphs (no section labels)."""
+    return render_secret_human_answer(data, question, lang=lang)
 
 
 def validate_secret_narrator_output(text: str, data: dict[str, Any]) -> tuple[bool, list[str]]:
@@ -207,7 +260,7 @@ def engine_result_to_secret_json(
         "ignored_evidence": ignored_evidence,
     }
     payload["_checks"] = checks
-    payload["locked_template"] = render_secret_template_answer(payload, question=q)
+    payload["locked_template"] = render_secret_labeled_answer(payload, question=q)
     return payload
 
 

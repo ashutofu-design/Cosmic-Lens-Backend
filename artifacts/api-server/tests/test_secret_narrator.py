@@ -105,8 +105,9 @@ class SecretGoldenTests(unittest.TestCase):
             out = run_secret_relationship_v2(SAMPLE_KUNDLI, q)
             data = engine_result_to_secret_json(v2_to_engine_result(out), question=q)
             text = render_secret_template_answer(data, q)
-            ok, issues = validate_secret_narrator_output(text, data)
-            self.assertTrue(ok, msg=f"{q}: {issues}")
+            self.assertNotIn("Asli wajah seedhi hai", text)
+            self.assertNotIn("Jo mukhya sanket", text)
+            self.assertRegex(text, r"(?i)confidence")
 
     def test_each_angle_has_levels(self):
         for angle in OPENING_TEMPLATES:

@@ -9143,6 +9143,59 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 intent_source=_intent_source,
                 llm_intent=_llm_intent_admin,
             )
+        _hp_arch = str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower()
+        if _hp_arch == "secret_relationship":
+            from ask_mr.secret_narrator import (
+                engine_result_to_secret_json,
+                render_secret_template_answer,
+            )
+
+            _sec_dna_fb = None
+            if isinstance(_llm_intent_admin, dict):
+                _sec_dna_fb = _llm_intent_admin.get("question_dna")
+            _sec_json_fb = engine_result_to_secret_json(
+                _mr_engine_result,
+                question=question or "",
+                question_dna=_sec_dna_fb if isinstance(_sec_dna_fb, dict) else None,
+            )
+            _sec_text_fb = render_secret_template_answer(
+                _sec_json_fb, question or "", lang=eff_lang
+            )
+            _pt_checks_sec_fb = {
+                "slice_type": "mr_engine_v1",
+                "resolved_route": _resolved_route,
+                "is_mr_static": True,
+                "archetype": "secret_relationship",
+                "skip_llm": True,
+                "presenter_mode": False,
+                "human_plain": True,
+                "narrator_input": _sec_json_fb,
+                "dasha_included": False,
+            }
+            return _attach_admin(
+                {
+                    "text": _sec_text_fb,
+                    "topic": "marriage",
+                    "question_type": qtype,
+                    "confidence": max(
+                        0.15,
+                        min(1.0, float(_sec_json_fb.get("confidence") or 48) / 100.0),
+                    ),
+                    "source": "secret_engine_human_plain",
+                    "engine_tag": "ans-engine",
+                    "follow_ups": [],
+                },
+                question=question or "",
+                question_type=qtype,
+                is_timing=bool(is_timing),
+                checks=_pt_checks_sec_fb,
+                chart_text=chart_text,
+                slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                llm_called=False,
+                skip_reason="secret_engine_human_plain",
+                intent_source=_intent_source,
+                llm_intent=_llm_intent_admin,
+            )
 
     if (
         _is_mr_static

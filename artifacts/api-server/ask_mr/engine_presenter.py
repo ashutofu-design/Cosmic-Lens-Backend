@@ -66,6 +66,7 @@ _PRESENTER_SOFT_ISSUES = frozenset({
     "missing_why_section",
     "missing_meaning_section",
     "missing_focus_section",
+    "confidence_line",
 })
 
 

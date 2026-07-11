@@ -697,6 +697,20 @@ def classify_mr_archetype(question: str) -> str:
     # --- Relationship future outlook (non-timing) ---
     if re.search(
         r"(?ix)\b("
+        r"love\s*life|relationship\s+future|relationship\s+ka\s+future|hamare\s+relationship|"
+        r"rishta\s+ka\s+future|future\s+of\s+(our\s+)?relationship|rishta\s+aage|bond\s+grow|"
+        r"aage\s+grow|grow\s+karega|weak\s+hoga|long[\s-]*term\s+outlook|aage\s+kya\s+hoga|"
+        r"aage\s+kaise\s+rahega"
+        r")\b",
+        q,
+    ) and re.search(
+        r"(?ix)\b(stable|stability|chalega|chalegi|sustain|weak|grow|future|long[\s-]*term)\b",
+        q,
+    ) and not re.search(r"(?ix)\b(kab|when|timing|milega|milegi|kab\s+tak)\b", q):
+        return "relationship_future"
+
+    if re.search(
+        r"(?ix)\b("
         r"relationship\s+future|relationship\s+ka\s+future|hamare\s+relationship|rishta\s+ka\s+future|"
         r"future\s+of\s+(our\s+)?relationship|rishta\s+aage|bond\s+grow|aage\s+grow|grow\s+karega|"
         r"weak\s+hoga|long[\s-]*term\s+outlook|aage\s+kya\s+hoga|aage\s+kaise\s+rahega"

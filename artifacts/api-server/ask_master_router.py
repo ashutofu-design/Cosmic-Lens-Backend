@@ -178,6 +178,26 @@ def resolve_ask_route(
     archetype = _archetype_from_intent(llm_intent, llm_intent_admin)
     guards: list[str] = []
 
+    try:
+        from ask_question_dna import dna_routing_lock
+
+        dna_lock = dna_routing_lock(llm_intent_admin)
+        if dna_lock and not dna_lock.get("is_timing"):
+            guards.append("dna_static_authority")
+            dna_dom = str(dna_lock.get("domain") or domain or "love").strip().lower()
+            dna_arch = str(dna_lock.get("archetype") or archetype or "").strip().lower() or None
+            return MasterRoute(
+                path="engine_static",
+                is_timing=False,
+                domain=dna_dom if dna_dom != "general" else "love",
+                archetype=dna_arch,
+                mr_static=True,
+                reason="dna_static_authority",
+                guards=guards,
+            )
+    except Exception:
+        pass
+
     # ── Guards (refuse wrong path) ─────────────────────────────────────
     if guard_trait_only_blocks_timing(combined):
         guards.append("trait_only_no_timing")

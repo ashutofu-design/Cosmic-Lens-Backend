@@ -2186,6 +2186,19 @@ def reconcile_question_type(
     reasons: list[str] = []
     reconciled = False
 
+    if out.get("dna_routing_applied"):
+        try:
+            from ask_question_dna import dna_primary_item
+
+            item = dna_primary_item(out.get("question_dna"))
+            if item and not bool(item.get("timing")):
+                if out.get("is_timing"):
+                    reconciled = True
+                out["is_timing"] = False
+                reasons.append("dna_timing_static_lock")
+        except Exception:
+            pass
+
     try:
         from ask_question_normalize import prepare_ask_question
 

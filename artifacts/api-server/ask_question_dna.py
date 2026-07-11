@@ -222,6 +222,25 @@ def dna_item_trusted_for_routing(
     return False
 
 
+def dna_routing_lock(
+    llm_intent_admin: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """When trusted DNA routing applied, return static lock {is_timing, archetype, domain}."""
+    if not isinstance(llm_intent_admin, dict) or not llm_intent_admin.get("dna_routing_applied"):
+        return None
+    item = dna_primary_item(llm_intent_admin.get("question_dna"))
+    if not item:
+        return None
+    archetype = resolve_engine_archetype_from_dna_item(item)
+    domain = str(item.get("domain") or llm_intent_admin.get("domain") or "").strip().lower()
+    return {
+        "is_timing": bool(item.get("timing")),
+        "archetype": archetype,
+        "domain": domain or "love",
+        "bucket": str(item.get("bucket") or "").strip().lower(),
+    }
+
+
 def apply_question_dna_to_routing(
     question: str,
     admin: dict[str, Any],

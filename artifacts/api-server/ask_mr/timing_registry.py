@@ -11,6 +11,15 @@ except Exception:
     def prepare_ask_question(q: str) -> str:  # type: ignore
         return (q or "").strip()
 
+# Outcome/continuation "chalega" (no kab/when) = static prediction, not timing.
+_OUTCOME_CHALEGA_STATIC_RX = re.compile(
+    r"(?ix)\b("
+    r"love\s*life|relationship|rishta|rishte|bond|long[\s-]*term|"
+    r"stable|stability|sustain|weak|grow|future|viability|trust|"
+    r"distance|online|ldr"
+    r")\b"
+)
+
 _EXPLICIT_TIMING_RX = re.compile(
     r"(?ix)\b("
     r"kab|kab\s+tak|when|when\s+will|"
@@ -61,6 +70,12 @@ def has_explicit_timing_anchor(question: str) -> bool:
         q,
     ):
         return False
+    if re.search(r"(?ix)\b(chalega|chalegi)\b", q):
+        if not re.search(
+            r"(?ix)\b(kab|when|kab\s+tak|kitne\s+(?:saal|mahine))\b",
+            q,
+        ) and _OUTCOME_CHALEGA_STATIC_RX.search(q):
+            return False
     return bool(_EXPLICIT_TIMING_RX.search(q))
 
 
@@ -225,6 +240,15 @@ def repair_llm_intent_mr_static_timing(
     if not mr_static_overrides_llm_timing(question, intent):
         return False
     arch = resolve_mr_static_archetype(question) or str(intent.get("mr_archetype") or "").strip()
+    if intent.get("dna_routing_applied"):
+        dna_arch = str(
+            intent.get("mr_archetype")
+            or intent.get("routed_archetype")
+            or intent.get("dna_engine_archetype")
+            or ""
+        ).strip()
+        if dna_arch:
+            arch = dna_arch
     if not arch:
         arch = "partner_nature"
     intent["is_timing"] = False

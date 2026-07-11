@@ -75,6 +75,38 @@ class TestMrTimingRegistry(unittest.TestCase):
         self.assertFalse(question_requests_timing(q, llm))
         self.assertTrue(is_mr_static_question(q))
 
+    def test_love_life_stable_chalega_is_static_not_timing(self):
+        from ask_mr.timing_registry import question_requests_timing
+        from ask_master_router import resolve_ask_route
+
+        q = "kya mere love life stable chalega"
+        self.assertFalse(has_explicit_timing_anchor(q))
+        self.assertFalse(question_requests_timing(q, {"domain": "love", "is_timing": True}))
+        self.assertEqual(classify_mr_archetype(q), "relationship_future")
+        admin = {
+            "dna_routing_applied": True,
+            "domain": "love",
+            "mr_archetype": "relationship_future",
+            "question_dna": {
+                "questions": [{
+                    "domain": "love",
+                    "bucket": "relationship_future",
+                    "engine_archetype": "relationship_future",
+                    "timing": False,
+                    "confidence": 0.95,
+                    "bucket_match_confidence": "high",
+                }],
+            },
+        }
+        route = resolve_ask_route(q, llm_intent_admin=admin)
+        self.assertFalse(route.is_timing)
+        self.assertEqual(route.archetype, "relationship_future")
+        self.assertEqual(route.reason, "dna_static_authority")
+
+    def test_kab_tak_chalega_stays_timing(self):
+        q = "Humare rishte me stressful phase kab tak chalega"
+        self.assertTrue(has_explicit_timing_anchor(q))
+
 
 if __name__ == "__main__":
     unittest.main()

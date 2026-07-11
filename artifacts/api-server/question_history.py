@@ -639,6 +639,15 @@ def get_admin_ask_question(question_id: str) -> dict | None:
                 llm_ctx,
                 question_text=uq.question_text or "",
                 answer_text=uq.answer_text or "",
+                row_meta={
+                    "total_tokens": uq.total_tokens,
+                    "prompt_tokens": uq.prompt_tokens,
+                    "completion_tokens": uq.completion_tokens,
+                    "cached_tokens": uq.cached_tokens,
+                    "cost_inr": float(uq.cost_inr) if uq.cost_inr is not None else None,
+                    "cost_usd": float(uq.cost_usd) if uq.cost_usd is not None else None,
+                    "llm_model": uq.llm_model,
+                },
             )
         except Exception as exc:
             print(f"[question_history] observability attach skipped: {exc}", flush=True)

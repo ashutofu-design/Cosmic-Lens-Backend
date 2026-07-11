@@ -51,12 +51,6 @@ def _question_dna_pipeline(
     if isinstance(dna.get("questions"), list) and dna["questions"]:
         dna_item = dna["questions"][0] if isinstance(dna["questions"][0], dict) else {}
 
-    lang = (
-        dna_item.get("language")
-        or li.get("language")
-        or li.get("reply_lang")
-        or "—"
-    )
     domain = dna_item.get("domain") or li.get("domain") or li.get("routed_domain") or "—"
     bucket = dna_item.get("bucket") or li.get("bucket") or li.get("mr_bucket") or "—"
     archetype = (
@@ -73,22 +67,22 @@ def _question_dna_pipeline(
         else None
     ) or _dig(checks, sm, key="orchestrator_secondary") or "—"
 
+    is_timing = dna_item.get("timing") if "timing" in dna_item else ctx.get("is_timing")
+    timing_label = "Timing" if is_timing else "Non-Timing"
+
     steps = [
-        _pipeline_step("Question", question_text or ctx.get("question_raw") or ctx.get("question")),
-        _pipeline_step("Language Detection", lang),
-        _pipeline_step("Normalized Question", ctx.get("question_normalized") or ctx.get("question")),
         _pipeline_step("Domain", domain),
         _pipeline_step("Bucket", bucket),
         _pipeline_step("Intent", dna_item.get("intent") or li.get("intent") or li.get("question_intent") or "—"),
         _pipeline_step("Subject", dna_item.get("subject") or li.get("subject") or "—"),
         _pipeline_step("Target", dna_item.get("target") or li.get("target") or "—"),
         _pipeline_step("Question Type", dna_item.get("question_type") or ctx.get("question_type") or "—"),
-        _pipeline_step("Timing?", dna_item.get("timing") if "timing" in dna_item else ctx.get("is_timing")),
+        _pipeline_step("Timing / Non-Timing", timing_label),
         _pipeline_step("Emotion", dna_item.get("emotion") or li.get("emotion") or "—"),
         _pipeline_step("Risk", dna_item.get("risk") or li.get("risk") or "—"),
         _pipeline_step("Primary Engine", archetype),
         _pipeline_step("Secondary Engine", secondary),
-        _pipeline_step("Confidence", dna_item.get("confidence") or li.get("confidence") or "—"),
+        _pipeline_step("DNA Confidence", dna_item.get("confidence") or li.get("confidence") or "—"),
     ]
     return steps
 
@@ -131,6 +125,22 @@ def _modules_loaded(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _modules_skipped(modules: list[dict[str, Any]]) -> list[str]:
+    return [str(m.get("module") or "") for m in modules if not m.get("loaded")]
+
+
+def _execution_time_ms(ctx: dict[str, Any]) -> int | None:
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    for key in ("execution_time_ms", "latency_ms", "understand_latency_ms", "total_latency_ms"):
+        val = ctx.get(key) if key in ctx else li.get(key)
+        if val is not None:
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 def _rules_sections(ctx: dict[str, Any]) -> dict[str, Any]:
     checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
     sm_checks = {}
@@ -167,11 +177,15 @@ def _planet_evidence(ctx: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
     pos = list(ef.get("evidence_positive") or sm.get("evidence_positive") or [])
     neg = list(ef.get("evidence_negative") or sm.get("evidence_negative") or [])
-    if not pos and not neg:
+    neu = list(ef.get("evidence_neutral") or sm.get("evidence_neutral") or [])
+    if not pos and not neg and not neu:
         pool = list(ef.get("evidence") or sm.get("evidence") or [])
         for line in pool:
             s = str(line)
-            if any(w in s.lower() for w in ("weak", "delay", "afflict", "risk", "negative", "❌")):
+            low = s.lower()
+            if any(w in low for w in ("neutral", "mixed", "average", "moderate")):
+                neu.append(s)
+            elif any(w in low for w in ("weak", "delay", "afflict", "risk", "negative", "❌")):
                 neg.append(s)
             else:
                 pos.append(s)
@@ -197,7 +211,18 @@ def _planet_evidence(ctx: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     return {
         "positive": _parse(pos, "positive"),
         "negative": _parse(neg, "negative"),
+        "neutral": _parse(neu, "neutral"),
     }
+
+
+def _polarity_pair(module_pol: dict[str, Any], left: str, right: str) -> str:
+    lp = str(module_pol.get(left) or module_pol.get(left.lower()) or "—")
+    rp = str(module_pol.get(right) or module_pol.get(right.lower()) or "—")
+    if lp == "—" and rp == "—":
+        return "—"
+    if lp == rp:
+        return f"{left} {lp} · {right} {rp} — aligned"
+    return f"{left} {lp} vs {right} {rp}"
 
 
 def _conflict_resolution(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -220,9 +245,13 @@ def _conflict_resolution(ctx: dict[str, Any]) -> dict[str, Any]:
     if not modules:
         for mod in ("D1", "D9", "Dasha", "Transit"):
             modules.append({"module": mod, "polarity": "—"})
+    final_result = detail.get("summary") or detail.get("pattern") or ("Conflict resolved — minor stress" if detected else "No conflict — modules aligned")
     return {
         "modules": modules,
+        "d1_vs_d9": _polarity_pair(module_pol, "D1", "D9"),
+        "dasha_vs_transit": _polarity_pair(module_pol, "Dasha", "Transit"),
         "conflict": "Minor" if detected else "None",
+        "final_result": str(final_result)[:300],
         "reason": detail.get("summary") or detail.get("pattern") or ("Temporary stress in dasha" if detected else "—"),
         "detected": detected,
     }
@@ -317,15 +346,74 @@ def _astrology_checks(ctx: dict[str, Any]) -> dict[str, list[str]]:
     }
 
 
-def _performance_section(ctx: dict[str, Any]) -> dict[str, Any]:
+def _performance_section(ctx: dict[str, Any], row_meta: dict[str, Any] | None = None) -> dict[str, Any]:
     sizes = ctx.get("sizes") if isinstance(ctx.get("sizes"), dict) else {}
+    row_meta = row_meta if isinstance(row_meta, dict) else {}
+    cached = row_meta.get("cached_tokens")
+    cache_hit = bool(cached) if cached is not None else None
     return {
-        "model": ctx.get("model"),
+        "model": row_meta.get("llm_model") or ctx.get("model"),
         "max_tokens": ctx.get("max_tokens"),
         "chart_chars": sizes.get("chart_chars"),
         "system_prompt_chars": sizes.get("system_prompt_chars"),
         "llm_called": ctx.get("llm_called"),
-        "cache_hit": None,
+        "cache_hit": cache_hit,
+        "total_tokens": row_meta.get("total_tokens"),
+        "prompt_tokens": row_meta.get("prompt_tokens"),
+        "completion_tokens": row_meta.get("completion_tokens"),
+        "cached_tokens": cached,
+        "cost_inr": row_meta.get("cost_inr"),
+        "cost_usd": row_meta.get("cost_usd"),
+        "response_time_ms": _execution_time_ms(ctx),
+    }
+
+
+def _engine_verdict_extras(ctx: dict[str, Any], evidence: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    sm_checks = sm.get("checks") if isinstance(sm.get("checks"), dict) else {}
+    explanation = _dig(checks, sm_checks, key="explanation") or {}
+    if not isinstance(explanation, dict):
+        explanation = {}
+    ni = _narrator_input(ctx) or {}
+    timing = _dig(checks, sm_checks, key="timing") or ni.get("timing") or {}
+    timing_text = "—"
+    if isinstance(timing, dict):
+        windows = timing.get("windows") or []
+        if windows:
+            timing_text = ", ".join(str(w) for w in windows[:3])
+        elif timing.get("window"):
+            timing_text = str(timing.get("window"))
+        elif timing.get("applicable") is False:
+            timing_text = "Not applicable (static question)"
+    elif isinstance(timing, str) and timing.strip():
+        timing_text = timing.strip()
+    warnings: list[str] = []
+    for pool in (ni.get("warnings"), checks.get("warnings"), sm_checks.get("warnings")):
+        if isinstance(pool, list):
+            for item in pool:
+                s = str(item).strip()
+                if s and s not in warnings:
+                    warnings.append(s[:160])
+    strongest = explanation.get("strongest_factor") or ni.get("strongest") or ni.get("strongest_factor")
+    weakest = explanation.get("weakest_factor") or ni.get("weakest") or ni.get("weakest_factor")
+    if isinstance(strongest, list):
+        strongest_items = [str(x) for x in strongest[:5]]
+    elif strongest:
+        strongest_items = [str(strongest)]
+    else:
+        strongest_items = [e.get("label", "") for e in evidence.get("positive", [])[:3] if e.get("label")]
+    if isinstance(weakest, list):
+        weakest_items = [str(x) for x in weakest[:5]]
+    elif weakest:
+        weakest_items = [str(weakest)]
+    else:
+        weakest_items = [e.get("label", "") for e in evidence.get("negative", [])[:2] if e.get("label")]
+    return {
+        "timing": timing_text,
+        "warnings": warnings[:5],
+        "strongest": strongest_items,
+        "weakest": weakest_items,
     }
 
 
@@ -419,11 +507,40 @@ def _hallucination_checks(answer_text: str, ctx: dict[str, Any]) -> list[dict[st
     return rows
 
 
+def _hallucination_summary(answer_text: str, ctx: dict[str, Any], checks: list[dict[str, Any]]) -> dict[str, Any]:
+    ef = ctx.get("engine_facts") if isinstance(ctx.get("engine_facts"), dict) else {}
+    evidence_count = (
+        len(ef.get("evidence_positive") or [])
+        + len(ef.get("evidence_negative") or [])
+        + len(ef.get("evidence_neutral") or [])
+        + len(ef.get("evidence") or [])
+    )
+    rules_count = len(_rules_sections(ctx).get("fired") or [])
+    engine_facts_used = evidence_count > 0 or rules_count > 0 or bool(_narrator_input(ctx))
+    extra = [c for c in checks if not c.get("ok")]
+    missing = [c for c in checks if not c.get("ok") and c.get("engine") == "NOT FOUND"]
+    return {
+        "engine_facts_used": {
+            "ok": engine_facts_used,
+            "detail": f"{evidence_count} evidence lines · {rules_count} rules fired",
+        },
+        "extra_llm_assumptions": {
+            "ok": len(extra) == 0,
+            "items": [f"{c.get('field')}: narrator mentioned, engine silent" for c in extra[:6]],
+        },
+        "missing_engine_evidence": {
+            "ok": len(missing) == 0,
+            "items": [f"{c.get('field')}: no engine backing" for c in missing[:6]],
+        },
+    }
+
+
 def build_observability_debug(
     ctx: dict[str, Any] | None,
     *,
     question_text: str = "",
     answer_text: str = "",
+    row_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Structured debugger payload for admin Ask detail."""
     if not isinstance(ctx, dict):
@@ -431,13 +548,17 @@ def build_observability_debug(
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
     archetype = str(sm.get("archetype") or ctx.get("routed_archetype") or "—")
     rules = _rules_sections(ctx)
+    modules = _modules_loaded(ctx)
+    evidence = _planet_evidence(ctx)
+    verdict_extras = _engine_verdict_extras(ctx, evidence)
+    hallucination_rows = _hallucination_checks(answer_text, ctx)
     trace_labels = [
         "Question",
         "DNA",
         "Routing",
         "Engine",
         "Modules",
-        "Rules Fired",
+        "Rules",
         "Evidence",
         "Score",
         "Verdict",
@@ -452,24 +573,29 @@ def build_observability_debug(
         "engine_execution": {
             "engine_name": archetype,
             "engine_version": _dig(ctx.get("checks") or {}, sm or {}, key="engine_version"),
-            "modules": _modules_loaded(ctx),
+            "modules": modules,
+            "modules_skipped": _modules_skipped(modules),
+            "execution_time_ms": _execution_time_ms(ctx),
             **rules,
         },
         "astrology_checks": _astrology_checks(ctx),
-        "planet_evidence": _planet_evidence(ctx),
+        "planet_evidence": evidence,
         "conflict_resolution": _conflict_resolution(ctx),
         "scorecard": _scorecard(ctx),
         "engine_verdict": {
             "verdict": rules.get("verdict"),
             "level": rules.get("verdict_level"),
             "confidence": rules.get("final_score"),
-            "strongest": _planet_evidence(ctx).get("positive", [])[:3],
-            "weakest": _planet_evidence(ctx).get("negative", [])[:2],
+            "strongest": verdict_extras.get("strongest") or [],
+            "weakest": verdict_extras.get("weakest") or [],
+            "timing": verdict_extras.get("timing"),
+            "warnings": verdict_extras.get("warnings") or [],
         },
         "narrator_input": _narrator_input(ctx),
         "narrator_output": (answer_text or "").strip() or None,
-        "hallucination_checks": _hallucination_checks(answer_text, ctx),
-        "performance": _performance_section(ctx),
+        "hallucination_checks": hallucination_rows,
+        "hallucination_summary": _hallucination_summary(answer_text, ctx, hallucination_rows),
+        "performance": _performance_section(ctx, row_meta),
         "final_trace": _structured_final_trace(ctx, question_text, answer_text),
         "final_trace_labels": trace_labels,
         "has_v2_rules": bool(rules.get("fired")),
@@ -477,11 +603,18 @@ def build_observability_debug(
     }
 
 
-def attach_observability_to_context(ctx: dict[str, Any], *, question_text: str = "", answer_text: str = "") -> dict[str, Any]:
+def attach_observability_to_context(
+    ctx: dict[str, Any],
+    *,
+    question_text: str = "",
+    answer_text: str = "",
+    row_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     out = dict(ctx)
     out["observability"] = build_observability_debug(
         out,
         question_text=question_text,
         answer_text=answer_text,
+        row_meta=row_meta,
     )
     return out

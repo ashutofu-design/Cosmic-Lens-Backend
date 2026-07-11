@@ -8887,6 +8887,61 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Commitment engine — deterministic template narrator (production) ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "commitment"
+        and os.environ.get("ASK_COMMITMENT_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.commitment_narrator import (
+            engine_result_to_commitment_json,
+            render_commitment_template_answer,
+        )
+
+        _commit_json = engine_result_to_commitment_json(_mr_engine_result)
+        _commit_checks = dict(_mr_engine_result.checks or {})
+        _commit_checks["narrator_input"] = _commit_json
+        _commit_checks["question"] = question or ""
+        _mr_engine_result.checks = _commit_checks
+        _commit_text = render_commitment_template_answer(
+            _commit_json,
+            question or "",
+            lang=eff_lang,
+        )
+        _out_commit = {
+            "text": _commit_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.4, min(1.0, float(_commit_json.get("confidence") or 55) / 100.0)),
+            "source": "commitment_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_commit = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "commitment",
+            "skip_llm": True,
+            "narrator_input": _commit_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_commit,
+            question=question or "",
+            question_type=qtype,
+            is_timing=False,
+            checks=_pt_checks_commit,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="commitment_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── MR engine template-only (skip LLM for simple yes/no e.g. manglik) ──
     if (
         _is_mr_static
@@ -9840,6 +9895,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
             text = polish_mr_confident_tone(text)
             text = _strip_decision_template_labels(text)
+            if _archetype_mr == "commitment" and _mr_engine_result is not None:
+                from ask_mr.commitment_narrator import (
+                    engine_result_to_commitment_json,
+                    render_commitment_template_answer,
+                    validate_commitment_narrator_output,
+                )
+
+                _commit_val_json = engine_result_to_commitment_json(_mr_engine_result)
+                _commit_ok, _commit_issues = validate_commitment_narrator_output(
+                    text,
+                    _commit_val_json,
+                )
+                if not _commit_ok:
+                    print(
+                        f"[raw_passthrough] commitment LLM validation failed "
+                        f"{_commit_issues} — template fallback",
+                        flush=True,
+                    )
+                    text = render_commitment_template_answer(
+                        _commit_val_json,
+                        question or "",
+                        lang=eff_lang,
+                    )
         if is_decision:
             if _decision_needs_plain_rewrite(text):
                 try:

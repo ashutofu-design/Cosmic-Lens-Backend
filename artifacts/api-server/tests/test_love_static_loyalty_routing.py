@@ -16,6 +16,18 @@ from ask_love.timing_registry import (
 from ask_marriage_relationship_slice import is_marriage_relationship_static_question
 
 _BETRAYAL_Q = "Kya mujhse love life me dhoka milega ya dhoka nehi milega"
+_BETRAYAL_CHART_Q = (
+    "Mujhe aisa lag raha hai ki mera partner mujhse kuch chhupa raha hai ya kisi aur se baat kar raha hai. "
+    "Kya mere 7th house ya dasha mein koi dhoke (betrayal) ka yog hai?"
+)
+_PATCHUP_Q = (
+    "Mera 2 mahine pehle breakup ho gaya tha. Kya humara dubara patch-up hone ke chances hain "
+    "ya mujhe life mein aage badh jana chahiye?"
+)
+_FAMILY_Q = (
+    "Main jisse pyar karta hoon, uske sath love marriage karni hai, par ghar wale (family) bilkul raazi nahi ho rahe hain. "
+    "Kya family ka approval milega?"
+)
 _TIMING_Q = "Mere jeevan mein pehli baar prem sambandh ka yog kab banega"
 _TIMING_BETRAYAL_Q = "Mujhe kab pata chalega ki mera partner dhoka de raha hai"
 
@@ -82,6 +94,22 @@ class TestLoveStaticLoyaltyRouting(unittest.TestCase):
             "Property ke rates sahi hain ya over-priced hain?"
         )
         self.assertEqual(detect_property_archetype(q), "property_risk")
+
+    def test_chart_betrayal_yog_not_love_timing(self):
+        self.assertTrue(is_love_static_loyalty_question(_BETRAYAL_CHART_Q))
+        self.assertFalse(is_love_timing_question(_BETRAYAL_CHART_Q))
+
+    def test_chart_betrayal_yog_mr_static_despite_dasha_word(self):
+        from ask_mr.timing_registry import has_explicit_timing_anchor, is_mr_static_question
+
+        self.assertFalse(has_explicit_timing_anchor(_BETRAYAL_CHART_Q))
+        self.assertTrue(is_mr_static_question(_BETRAYAL_CHART_Q))
+
+    def test_patchup_not_love_timing(self):
+        self.assertFalse(is_love_timing_question(_PATCHUP_Q))
+
+    def test_family_approval_not_love_timing(self):
+        self.assertFalse(is_love_timing_question(_FAMILY_Q))
 
 
 if __name__ == "__main__":

@@ -30,6 +30,13 @@ CONTENT EXPANSION (mandatory — never give a one-liner):
   engine evidence into plain life language the user can feel and use.
 """.strip()
 
+_COSMO_ASK_MARKDOWN_BATCH = """
+STRUCTURE (batch test — short direct answer only):
+• 2–4 sentences total: direct stance (haan / nahi / mixed) + 1–2 plain reasons from engine evidence.
+• NO section headers (no "The Big Picture", no "---", no bullet lists).
+• Plain paragraph(s) only. No planet/house/sign jargon in the reply.
+""".strip()
+
 _COSMO_ASK_MARKDOWN = """
 STRUCTURE & SCANNABILITY (strict Markdown — never a dense wall of text):
 
@@ -72,8 +79,10 @@ def is_cosmo_engine_slice(slice_id: str | None) -> bool:
     return (slice_id or "").strip() in _ENGINE_SLICE_IDS
 
 
-def cosmo_ask_word_target(*, wants_explain: bool = False) -> tuple[int, int]:
+def cosmo_ask_word_target(*, wants_explain: bool = False, concise: bool = False) -> tuple[int, int]:
     """(min_words, max_words) for engine narrator replies."""
+    if concise:
+        return 35, 90
     if wants_explain:
         return 280, 420
     return 180, 280
@@ -84,17 +93,18 @@ def build_cosmo_ask_length_block(
     wants_explain: bool = False,
     topic: str = "life",
     extra_rules: str = "",
+    concise: bool = False,
 ) -> str:
-    lo, hi = cosmo_ask_word_target(wants_explain=wants_explain)
+    lo, hi = cosmo_ask_word_target(wants_explain=wants_explain, concise=concise)
     rules = f"\n{extra_rules.strip()}\n" if extra_rules.strip() else ""
+    expansion = "" if concise else f"\n\n{_COSMO_ASK_EXPANSION}"
+    markdown = _COSMO_ASK_MARKDOWN_BATCH if concise else _COSMO_ASK_MARKDOWN
     return f"""
 {_COSMO_ASK_IDENTITY}
 
-{_COSMO_ASK_TONALITY}
+{_COSMO_ASK_TONALITY}{expansion}
 
-{_COSMO_ASK_EXPANSION}
-
-{_COSMO_ASK_MARKDOWN}
+{markdown}
 
 LENGTH: {lo}–{hi} words total. Topic focus: {topic}.
 Answer ONLY what the user asked (see USER ACTUALLY ASKED). Engine VERDICT is the ceiling —
@@ -110,7 +120,12 @@ _AI_FILLER_RX = re.compile(
 )
 
 
-def enforce_cosmo_engine_answer(text: str, *, wants_explain: bool = False) -> str:
+def enforce_cosmo_engine_answer(
+    text: str,
+    *,
+    wants_explain: bool = False,
+    concise: bool = False,
+) -> str:
     """Preserve Markdown structure; trim only if far over budget."""
     if not text or not str(text).strip():
         return ""
@@ -118,7 +133,12 @@ def enforce_cosmo_engine_answer(text: str, *, wants_explain: bool = False) -> st
     raw = _AI_FILLER_RX.sub("", raw).strip()
     if "👉" in raw:
         raw = raw.split("👉")[0].strip()
-    _, hi = cosmo_ask_word_target(wants_explain=wants_explain)
+    if concise:
+        raw = re.sub(r"\*\*[^*]+\*\*", "", raw)
+        raw = re.sub(r"\n*---+\n*", " ", raw)
+        raw = re.sub(r"^[*•]\s+", "", raw, flags=re.M)
+        raw = re.sub(r"\s{2,}", " ", raw).strip()
+    _, hi = cosmo_ask_word_target(wants_explain=wants_explain, concise=concise)
     words = raw.split()
     if len(words) <= hi + 60:
         return raw

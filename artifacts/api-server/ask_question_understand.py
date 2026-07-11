@@ -36,6 +36,12 @@ Rules for question_summary — THIS IS THE MAIN TASK:
 - Good pattern:
   Line 1: User kya jaanna chahta hai (core intent)
   Line 2+: kaun sa area (partner/career/self), kis angle se (quality/timing/nature), koi choice/contrast
+- Couple / compatibility questions (hamari/hum dono/dono ke beech):
+  Name the EXACT angle — personalities | thinking/mindset | values | life goals | expectations |
+  emotional | mental | intellectual | general bond. Never mix mental into emotional or vice versa.
+- Partner commitment questions (mera partner … serious/casual/loyal/ready/commit):
+  Name the EXACT intent — ready for commitment | serious vs casual | long-term | loyal/exclusive |
+  time-pass | genuine | effort/responsibility | trust blockers | public vs secret. NOT marriage timing.
 - Fix typos silently in your understanding (shadii→shaadi) but do not mention spelling.
 - No planet/house/dasha jargon. No astrology answer — only prove you understood the ASK.
 - understood=false only for gibberish / empty / not a real question.
@@ -290,6 +296,18 @@ def ensure_question_understanding(
 
     _finalize_question_understanding(out, q, client=client)
 
+    try:
+        from ask_intent_fidelity import infer_compatibility_angle, infer_partner_commitment_angle
+
+        angle = infer_compatibility_angle(q)
+        if angle:
+            out["compatibility_angle"] = angle
+        pc = infer_partner_commitment_angle(q)
+        if pc:
+            out["partner_commitment_angle"] = pc
+    except Exception:
+        pass
+
     out["interpretation"] = out.get("interpretation") or f'User asked: "{q}"'
     out["question_echo"] = q
     out["understanding_detail"] = build_question_understanding_detail(q, out)
@@ -299,7 +317,15 @@ def ensure_question_understanding(
 
 def narrator_intent_hint(question: str, llm_intent: dict[str, Any] | None = None) -> str:
     """Prompt block: LLM must answer this exact understood ask."""
-    from ask_intent_fidelity import format_question_understanding, infer_question_scope, strip_scope_bracket
+    from ask_intent_fidelity import (
+        compatibility_angle_label,
+        format_question_understanding,
+        infer_compatibility_angle,
+        infer_partner_commitment_angle,
+        infer_question_scope,
+        partner_commitment_angle_label,
+        strip_scope_bracket,
+    )
 
     q = (question or "").strip()
     li = llm_intent if isinstance(llm_intent, dict) else {}
@@ -308,7 +334,21 @@ def narrator_intent_hint(question: str, llm_intent: dict[str, Any] | None = None
         return f'User asked: "{q}"'
     scope = infer_question_scope(q, li)
     summary = format_question_understanding(scope, body)
-    return (
+    angle = str(li.get("compatibility_angle") or "").strip() or infer_compatibility_angle(q)
+    hint = (
         f"USER ASKED (answer THIS exact concern — do not drift to other topics):\n"
         f"{summary}"
     )
+    if angle:
+        hint += (
+            f"\n\nEXACT COMPATIBILITY ANGLE: {compatibility_angle_label(angle)}.\n"
+            f"Answer ONLY this angle — do NOT answer emotional bond if they asked mental/intellectual, "
+            f"and vice versa."
+        )
+    pc_angle = str(li.get("partner_commitment_angle") or "").strip() or infer_partner_commitment_angle(q)
+    if pc_angle:
+        hint += (
+            f"\n\nEXACT PARTNER COMMITMENT FOCUS: {partner_commitment_angle_label(pc_angle)}.\n"
+            f"Answer about PARTNER intent only — do NOT give user marriage timing / dasha windows."
+        )
+    return hint

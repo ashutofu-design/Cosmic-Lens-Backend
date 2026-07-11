@@ -34,6 +34,7 @@ except Exception:
 
 from event_timing._shared.generic_timing_engine import (
     DomainTimingConfig,
+    MIN_AD_PD_ACTIVATION,
     _activation_score,
     _aspects_house,
     _classify_lords,
@@ -294,7 +295,7 @@ def _to_domain_cfg(cfg: UniversalFormulaConfig) -> DomainTimingConfig:
         karakas=karakas,
         promote_tags=tags,
         double_transit_houses=list(cfg.target_houses),
-        min_current_activation=8.0,
+        min_current_activation=MIN_AD_PD_ACTIVATION,
     )
 
 
@@ -326,7 +327,7 @@ def _step3_dasha_activation(
         qualified = windows[:5]
 
     primary, next_win, timing_source, _ = pick_primary_timing_window(
-        qualified or windows, ranked, promote, now, min_ad_pd=8.0,
+        qualified or windows, ranked, promote, now, min_ad_pd=MIN_AD_PD_ACTIVATION,
     )
     step3 = {
         "name": "Dasha activation (MD/AD/PD)",
@@ -617,4 +618,5 @@ def format_universal_timing_for_prompt(result: dict, question: str = "") -> str:
         result,
         str(result.get("domain") or "TIMING").upper(),
         str(result.get("domain") or ""),
+        question=question,
     )

@@ -4581,6 +4581,7 @@ def assess_career(kundli: dict,
     except Exception as _bcp_exc:
         result["career_step1_bcp_error"] = str(_bcp_exc)[:200]
 
+    _sync_promotion_timing_window(result)
     result["step_audit"] = build_career_timing_step_audit(result)
     result["step_order"] = list(_CAREER_TIMING_STEP_ORDER)
     result["timing_audit"] = build_career_timing_audit(result)
@@ -4624,6 +4625,201 @@ def career_step_order_for_bucket(bucket: str) -> tuple[str, ...]:
     if str(bucket or "").strip().lower() == "promotion":
         return _PROMOTION_CAREER_STEP_ORDER
     return _CAREER_TIMING_STEP_ORDER
+
+
+_PROMOTION_STEP8_TOP_N = 3
+
+
+def _promotion_period_label(rank: int, lords: str, start: Any, end: Any) -> str:
+    prefix = f"#{rank}"
+    if rank == 1:
+        prefix += " PRIMARY (answer yahi)"
+    body = ""
+    if lords and start and end:
+        body = f"{lords} · {start} → {end}"
+    elif lords and start:
+        body = f"{lords} · {start}"
+    elif start and end:
+        body = f"{start} → {end}"
+    return f"{prefix}: {body}".strip(": ") if body else prefix
+
+
+def _promotion_window_from_t1(result: dict) -> dict:
+    """Fallback: T1 vimshottari next career AD window (no BCP)."""
+    t1 = (result.get("triggers") or {}).get("T1_vimshottari") or {}
+    nxt = t1.get("next_career_window") if isinstance(t1.get("next_career_window"), dict) else {}
+    if not (nxt.get("ad") or nxt.get("start")):
+        tw = result.get("timing_window") if isinstance(result.get("timing_window"), dict) else {}
+        nxt = tw.get("next_career") if isinstance(tw.get("next_career"), dict) else {}
+        if str(nxt.get("timing_source") or "") == "bcp_ages":
+            return {}
+    if not (nxt.get("ad") or nxt.get("start") or nxt.get("lords")):
+        return {}
+    md = nxt.get("md")
+    ad = nxt.get("ad")
+    pd = nxt.get("pd")
+    lords = nxt.get("lords") or "/".join(x for x in (md, ad, pd) if x)
+    start = nxt.get("start")
+    end = nxt.get("end")
+    if isinstance(start, str) and len(start) > 7:
+        start = start[:7]
+    if isinstance(end, str) and len(end) > 7:
+        end = end[:7]
+    timeline = ""
+    if lords and start and end:
+        timeline = f"Promotion kab: {lords} · {start} → {end}"
+    elif lords and start:
+        timeline = f"Promotion kab: {lords} · {start}"
+    row = {
+        "md": md,
+        "ad": ad,
+        "pd": pd,
+        "start": start,
+        "end": end,
+        "lords": lords,
+        "reason": nxt.get("reason") or f"Next career-significator AD {ad}",
+        "timing_source": "next_career_ad",
+        "promotion_timeline": timeline,
+        "band": "T1_SCAN",
+    }
+    return {k: v for k, v in row.items() if v not in (None, "", [])}
+
+
+def _promotion_window_from_result(result: dict) -> dict:
+    """Map promotion_engine timing → step8 row (top 3 periods; #1 = answer)."""
+    promo = result.get("promotion_engine") if isinstance(result.get("promotion_engine"), dict) else {}
+    timing = promo.get("timing") if isinstance(promo.get("timing"), dict) else {}
+
+    def _pack_window(
+        w: dict,
+        *,
+        rank: int,
+        band: str = "",
+    ) -> dict:
+        md = w.get("md")
+        ad = w.get("ad")
+        pd = w.get("pd")
+        lords = w.get("lords") or "/".join(x for x in (md, ad, pd) if x)
+        start = w.get("start")
+        end = w.get("end")
+        if isinstance(start, str) and len(start) > 7:
+            start = start[:7]
+        if isinstance(end, str) and len(end) > 7:
+            end = end[:7]
+        period = _promotion_period_label(rank, str(lords or ""), start, end)
+        return {
+            "rank": rank,
+            "band": band or ("PRIMARY" if rank == 1 else "BACKUP"),
+            "md": md,
+            "ad": ad,
+            "pd": pd,
+            "start": start,
+            "end": end,
+            "lords": lords,
+            "reason": w.get("reason"),
+            "timing_source": w.get("timing_source"),
+            "promotion_period": period,
+        }
+
+    raw_windows = timing.get("windows") if isinstance(timing.get("windows"), list) else []
+    top3: list[dict] = []
+    for i, w in enumerate(raw_windows[:_PROMOTION_STEP8_TOP_N]):
+        if isinstance(w, dict) and (w.get("start") or w.get("lords")):
+            top3.append(_pack_window(w, rank=i + 1, band=str(w.get("band") or "")))
+
+    if not top3:
+        rec = timing.get("recommended_window") if isinstance(timing.get("recommended_window"), dict) else {}
+        if rec:
+            top3.append(_pack_window(rec, rank=1, band="PRIMARY"))
+        else:
+            t1 = _promotion_window_from_t1(result)
+            if t1:
+                top3.append(_pack_window(t1, rank=1, band="T1_SCAN"))
+
+    if not top3:
+        return {}
+
+    primary = top3[0]
+    periods = [w.get("promotion_period") or "" for w in top3 if w.get("promotion_period")]
+    answer_line = periods[0] if periods else ""
+    lords_s = str(primary.get("lords") or "")
+    start = primary.get("start")
+    end = primary.get("end")
+    timeline = ""
+    if lords_s and start and end:
+        timeline = f"Promotion kab: {lords_s} · {start} → {end}"
+    elif lords_s and start:
+        timeline = f"Promotion kab: {lords_s} · {start}"
+
+    return {
+        "md": primary.get("md"),
+        "ad": primary.get("ad"),
+        "pd": primary.get("pd"),
+        "start": start,
+        "end": end,
+        "lords": lords_s or None,
+        "reason": primary.get("reason") or timing.get("llm_directive"),
+        "timing_source": primary.get("timing_source") or timing.get("timing_source"),
+        "promotion_timeline": timeline,
+        "promotion_windows": top3,
+        "promotion_periods": periods,
+        "answer_window": answer_line,
+        "band": "PRIMARY",
+    }
+
+
+def _format_promotion_step8_detail(nxt: dict) -> str:
+    if not nxt:
+        return "upcoming promotion window — dasha scan incomplete"
+    periods = nxt.get("promotion_periods")
+    if isinstance(periods, list) and periods:
+        return "\n".join(str(p) for p in periods if p)
+    windows = nxt.get("promotion_windows")
+    if isinstance(windows, list) and windows:
+        lines = [str(w.get("promotion_period") or "") for w in windows if w.get("promotion_period")]
+        if lines:
+            return "\n".join(lines)
+    if nxt.get("promotion_timeline"):
+        base = str(nxt["promotion_timeline"])
+    else:
+        parts = []
+        lords = nxt.get("lords") or "/".join(
+            x for x in (nxt.get("md"), nxt.get("ad"), nxt.get("pd")) if x
+        )
+        if lords:
+            parts.append(f"next dasha {lords}")
+        if nxt.get("start") and nxt.get("end"):
+            parts.append(f"{nxt['start']} → {nxt['end']}")
+        elif nxt.get("start"):
+            parts.append(str(nxt["start"]))
+        base = "Promotion timeline: " + " · ".join(parts) if parts else "upcoming window pending"
+    if nxt.get("reason") and not isinstance(periods, list):
+        return f"{base} · {nxt['reason']}"
+    return base
+
+
+def _sync_promotion_timing_window(result: dict) -> None:
+    """Promote promotion_engine next window into timing_window + primary_window."""
+    if str(result.get("bucket") or "").strip().lower() != "promotion":
+        return
+    nxt = _promotion_window_from_result(result)
+    if not nxt:
+        return
+    tw = result.get("timing_window")
+    if not isinstance(tw, dict):
+        tw = {}
+        result["timing_window"] = tw
+    tw["next_career"] = {
+        k: nxt[k]
+        for k in ("md", "ad", "pd", "start", "end", "reason", "lords", "timing_source", "promotion_timeline")
+        if nxt.get(k) is not None
+    }
+    if nxt.get("promotion_timeline"):
+        result["primary_window"] = nxt["promotion_timeline"]
+    elif nxt.get("answer_window"):
+        result["primary_window"] = str(nxt["answer_window"])[:200]
+    elif nxt.get("start") and nxt.get("end"):
+        result["primary_window"] = f"{nxt['start']}→{nxt['end']}"
 
 
 def finalize_promotion_admin_step_audit(
@@ -4690,6 +4886,10 @@ def build_career_timing_step_audit(result: dict) -> dict:
 
     cur = tw.get("current") if isinstance(tw.get("current"), dict) else {}
     nxt = tw.get("next_career") if isinstance(tw.get("next_career"), dict) else {}
+    if str(bucket or "").strip().lower() == "promotion":
+        promo_nxt = _promotion_window_from_result(result)
+        if promo_nxt:
+            nxt = {**nxt, **promo_nxt}
     cur_lords = str(t1.get("current_lords") or cur.get("lords") or "")
     career_lords = t1.get("career_lords_set") or []
 
@@ -4920,19 +5120,33 @@ def build_career_timing_step_audit(result: dict) -> dict:
                 if bucket == "job_change"
                 else "Window merge (next career AD)"
             ),
-            "status": "DONE" if nxt.get("ad") else "NONE_FOUND",
+            "status": (
+                "DONE"
+                if nxt.get("ad") or nxt.get("promotion_timeline") or nxt.get("promotion_periods") or nxt.get("start")
+                else "NONE_FOUND"
+            ),
             "next_ad": nxt.get("ad"),
             "next_pd": nxt.get("pd"),
             "next_md": nxt.get("md"),
             "next_start": nxt.get("start"),
             "next_end": nxt.get("end"),
             "reason": nxt.get("reason"),
+            "timing_source": nxt.get("timing_source"),
+            "promotion_timeline": nxt.get("promotion_timeline"),
+            "promotion_windows": nxt.get("promotion_windows"),
+            "promotion_periods": nxt.get("promotion_periods"),
+            "answer_window": nxt.get("answer_window"),
+            "lords": nxt.get("lords"),
             "detail": (
-                f"next {'PD' if nxt.get('pd') else 'AD'} "
-                f"{nxt.get('pd') or nxt.get('ad') or '—'}"
-                + (f" · {nxt.get('start')}→{nxt.get('end')}" if nxt.get("start") else "")
-                + (f" · {nxt.get('reason')}" if nxt.get("reason") else "")
-            ).strip(),
+                _format_promotion_step8_detail(nxt)
+                if bucket == "promotion"
+                else (
+                    f"next {'PD' if nxt.get('pd') else 'AD'} "
+                    f"{nxt.get('pd') or nxt.get('ad') or '—'}"
+                    + (f" · {nxt.get('start')}→{nxt.get('end')}" if nxt.get("start") else "")
+                    + (f" · {nxt.get('reason')}" if nxt.get("reason") else "")
+                ).strip()
+            ),
         },
         "step9": {
             "name": "Verdict + strategy + guard",
@@ -4988,11 +5202,14 @@ def build_career_timing_audit(result: dict) -> dict:
         "detail": str(s7.get("detail") or "neutral"),
     })
 
-    next_win = bool(s8.get("next_ad"))
+    next_win = bool(
+        s8.get("next_ad") or s8.get("promotion_timeline")
+        or s8.get("promotion_periods") or s8.get("next_start")
+    )
     checks.append({
         "name": "next_career_window",
         "ok": next_win,
-        "detail": str(s8.get("detail") or "no upcoming AD on 10L/AmK"),
+        "detail": str(s8.get("detail") or s8.get("promotion_timeline") or "no upcoming AD on 10L/AmK"),
     })
 
     checks.append({
@@ -5030,6 +5247,8 @@ def build_career_timing_engine_trace(verdict: dict) -> dict:
     """Admin engine_trace payload for career timing questions."""
     if not isinstance(verdict, dict):
         return {}
+    verdict = dict(verdict)
+    _sync_promotion_timing_window(verdict)
     step_audit = verdict.get("step_audit") if isinstance(verdict.get("step_audit"), dict) else {}
     if not step_audit:
         step_audit = build_career_timing_step_audit(verdict)
@@ -5048,12 +5267,17 @@ def build_career_timing_engine_trace(verdict: dict) -> dict:
     cur = tw.get("current") if isinstance(tw.get("current"), dict) else {}
     nxt = tw.get("next_career") if isinstance(tw.get("next_career"), dict) else {}
     s8 = (step_audit.get("step8") or {}) if isinstance(step_audit, dict) else {}
-    primary = (
-        verdict.get("primary_window")
-        or s8.get("event_month_year")
-        or s8.get("marriage_month_year")
-        or s8.get("primary_window")
-    )
+    tw = verdict.get("timing_window") if isinstance(verdict.get("timing_window"), dict) else {}
+    nxt = tw.get("next_career") if isinstance(tw.get("next_career"), dict) else {}
+    primary = verdict.get("primary_window")
+    if not primary and nxt.get("promotion_timeline"):
+        primary = str(nxt["promotion_timeline"])
+    if not primary and nxt.get("start") and nxt.get("end"):
+        primary = f"{nxt['start']}→{nxt['end']}"
+    if not primary and isinstance(s8, dict):
+        primary = s8.get("promotion_timeline") or s8.get("detail") or s8.get("primary_window")
+    cur_lords = str(cur.get("lords") or (step_audit.get("step6") or {}).get("current_lords") or "")
+    md, ad, pd = (cur_lords.split("/") + ["?", "?", "?"])[:3]
     return {
         "engine": "career_timing_v1",
         "domain": "career",
@@ -5069,13 +5293,23 @@ def build_career_timing_engine_trace(verdict: dict) -> dict:
             or career_step_order_for_bucket(str(verdict.get("bucket") or ""))
         ),
         "timing_audit": timing_audit,
+        "running_dasha": {
+            "md": md.strip(),
+            "ad": ad.strip(),
+            "pd": pd.strip(),
+            "lords": cur_lords or None,
+            "start": cur.get("start"),
+            "end": cur.get("end"),
+        },
         "dasha_trace": {
             "current_lords": cur.get("lords") or (step_audit.get("step6") or {}).get("current_lords"),
             "current_start": cur.get("start"),
             "current_end": cur.get("end"),
             "next_career_ad": nxt.get("ad"),
+            "next_career_lords": nxt.get("lords"),
             "next_career_start": nxt.get("start"),
             "next_career_end": nxt.get("end"),
+            "promotion_timeline": nxt.get("promotion_timeline") or s8.get("promotion_timeline"),
         },
     }
 

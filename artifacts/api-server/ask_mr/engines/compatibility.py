@@ -287,6 +287,17 @@ def _compat_verdict(intent: str, level: str) -> str:
 
 
 def run_compatibility(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
+    try:
+        from ask_mr.v2 import v2_enabled_for
+        from ask_mr.v2.adapter import v2_to_engine_result
+        from ask_mr.v2.engines.compatibility import run_compatibility_v2
+
+        if v2_enabled_for("compatibility"):
+            out = run_compatibility_v2(kundli, question, wants_explain=wants_explain)
+            return v2_to_engine_result(out)
+    except Exception:
+        pass
+
     sig = build_person_signals(kundli)
     intent = _compatibility_intent(question)
     friction = pick_notes(sig, _FRICTION_NOTE_KEYS, limit=4)

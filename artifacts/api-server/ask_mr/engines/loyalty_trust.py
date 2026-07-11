@@ -66,6 +66,17 @@ def _trust_verdict(level: str) -> str:
 
 
 def run_loyalty_trust(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
+    try:
+        from ask_mr.v2 import v2_enabled_for
+        from ask_mr.v2.adapter import v2_to_engine_result
+        from ask_mr.v2.engines.loyalty_trust import run_loyalty_trust_v2
+
+        if v2_enabled_for("loyalty_trust"):
+            out = run_loyalty_trust_v2(kundli, question, wants_explain=wants_explain)
+            return v2_to_engine_result(out)
+    except Exception:
+        pass
+
     from vedic.love_reality.scoring_core import KundliReader
 
     from ._chart_axes import house_axis_evidence, planet_line

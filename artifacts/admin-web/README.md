@@ -2,23 +2,69 @@
 
 Browser dashboard for users, payments, and reports. **Not** included in the Play Store app.
 
-## Run locally
+## Permanent access (production admin + data)
 
-1. On the VPS API `.env`: `ADMIN_NO_AUTH=0` and `ADMIN_SECRET=<same secret>` (see `artifacts/api-server/.env.example`).
-2. Copy `artifacts/admin-web/.env.example` → `.env` and set `VITE_API_PROXY_TARGET` + `VITE_ADMIN_SECRET` (same as server).
-3. From repo root:
+Your laptop must reach VPS **port 80**. If you see `ETIMEDOUT`, fix **Hostinger Firewall** (not a code bug).
+
+### A) VPS (Browser Terminal) — once
 
 ```bash
-pnpm install
-cd artifacts/admin-web
-pnpm dev
+cd /root/Cosmic-Lens-Backend
+bash scripts/vps-permanent-access-fix.sh
 ```
 
-**Windows Rollup error:** From repo root, delete `node_modules` and run `pnpm install` again. Admin uses WASM Rollup (`@rollup/wasm-node`) so native binaries are not required.
+### B) Hostinger hPanel — permanent firewall
 
-4. Open http://127.0.0.1:5174
+1. [hPanel](https://hpanel.hostinger.com) → **VPS** → your server  
+2. **Security** → **Firewall** → **Add rule**  
+3. Inbound **Accept**: TCP **22**, **80**, **443**  
+4. Save, wait 2 minutes  
 
-Vite proxies `/api` → `http://127.0.0.1:8080`.
+### D) If Hostinger firewall already open but laptop still ETIMEDOUT
+
+Run on **VPS**:
+```bash
+bash scripts/vps-diagnose-network.sh
+```
+
+Run on **laptop**:
+```powershell
+Test-NetConnection 187.127.174.55 -Port 80
+Test-NetConnection 187.127.174.55 -Port 443
+tracert 187.127.174.55
+```
+
+| Result | Cause | Permanent fix |
+|--------|-------|----------------|
+| VPS public :80 **FAIL** | Hostinger edge / VPS ufw | `ufw allow 80` on VPS + Hostinger support ticket |
+| VPS public :80 **OK**, laptop **FAIL** | ISP blocks datacenter IP | **Cloudflare proxy** on `api.cosmiclens.app` + use `https://api.cosmiclens.app` in `.env` |
+| Port 443 OK, 80 FAIL | ISP blocks only :80 | Use HTTPS only |
+
+**Cloudflare (permanent when ISP blocks IP):**
+1. Domain DNS in Cloudflare
+2. A record `api` → `187.127.174.55` — **Proxied (orange cloud)**
+3. SSL mode: Full
+4. Laptop `.env`: `VITE_API_PROXY_TARGET=https://api.cosmiclens.app`
+5. Admin browser: `https://api.cosmiclens.app` or separate `admin` subdomain
+
+```powershell
+cd D:\Cosmic-Lens-Backend
+.\scripts\windows-permanent-admin-setup.ps1
+```
+
+### Permanent URLs (after firewall)
+
+| Use | URL |
+|-----|-----|
+| Admin in browser (no pnpm) | `http://187.127.174.55/` |
+| pnpm dev UI | `http://127.0.0.1:5174` + `.env` → `VITE_API_PROXY_TARGET=http://187.127.174.55` |
+| Mobile / API | `https://api.cosmiclens.app` (DNS A → 187.127.174.55) |
+
+## Temporary tunnel (only if firewall cannot be opened)
+
+```bash
+bash scripts/vps-expose-api-tunnel.sh
+```
 
 ## Production VPS
 

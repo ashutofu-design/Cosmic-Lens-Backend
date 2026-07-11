@@ -152,6 +152,88 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
   return pool.filter((line) => pattern.test(line.toLowerCase()));
 }
 
+/** Visible in admin UI — confirms new debugger bundle loaded. */
+export const OBS_DEBUGGER_VERSION = "2.2.0";
+
+export function buildFullDnaPipeline(
+  ctx: AskLlmContext | null,
+  row: AskQuestionItem,
+): ObservabilityPipelineStep[] {
+  const li = (ctx?.llm_intent || {}) as Record<string, unknown>;
+  const sm = (ctx?.slice_meta || {}) as Record<string, unknown>;
+  const checks = (ctx?.checks || {}) as Record<string, unknown>;
+  const dna = (ctx as AskLlmContext & { question_dna?: { questions?: unknown[] } })?.question_dna;
+  const dnaItem = (
+    Array.isArray(dna?.questions) && dna.questions[0] && typeof dna.questions[0] === "object"
+      ? dna.questions[0]
+      : {}
+  ) as Record<string, unknown>;
+  const orch = li.orchestrator as Record<string, unknown> | undefined;
+  const isTiming = dnaItem.timing ?? ctx?.is_timing;
+  const secondary =
+    checks.secondary_engine ||
+    checks.orchestrator_secondary ||
+    orch?.secondary_engine ||
+    (String(li.mr_archetype || sm.archetype || "").includes("loyalty") ? "loyalty" : "—");
+
+  return [
+    { label: "Question", value: row.question_text || ctx?.question || "—" },
+    {
+      label: "Language Detection",
+      value: String(dnaItem.language || li.language || li.reply_lang || "—"),
+    },
+    {
+      label: "Normalized Question",
+      value: String(ctx?.question_normalized || ctx?.question || row.question_text || "—"),
+    },
+    {
+      label: "Domain",
+      value: String(dnaItem.domain || li.domain || li.routed_domain || "—"),
+    },
+    {
+      label: "Bucket",
+      value: String(dnaItem.bucket || li.bucket || li.mr_bucket || row.topic || "—"),
+    },
+    {
+      label: "Intent",
+      value: String(dnaItem.intent || li.intent || li.question_intent || "—"),
+    },
+    { label: "Subject", value: String(dnaItem.subject || li.subject || "—") },
+    { label: "Target", value: String(dnaItem.target || li.target || "—") },
+    {
+      label: "Question Type",
+      value: String(dnaItem.question_type || ctx?.question_type || "—"),
+    },
+    { label: "Timing?", value: isTiming ? "yes" : "no" },
+    { label: "Emotion", value: String(dnaItem.emotion || li.emotion || "—") },
+    { label: "Risk", value: String(dnaItem.risk || li.risk || "—") },
+    {
+      label: "Primary Engine",
+      value: String(sm.archetype || li.mr_archetype || li.routed_archetype || "—"),
+    },
+    { label: "Secondary Engine", value: String(secondary) },
+    {
+      label: "Confidence",
+      value: String(dnaItem.confidence ?? li.confidence ?? "—"),
+    },
+  ];
+}
+
+function commitmentRoutingWarning(question: string, archetype: string): string | null {
+  const q = question.toLowerCase();
+  const arch = archetype.toLowerCase();
+  if (
+    /commitment|timepass|time\s*pass|genuine|serious|long[\s-]?term|pakka/.test(q) &&
+    (arch.includes("loyalty") || arch === "loyalty_trust")
+  ) {
+    return (
+      "⚠ Routing mismatch: commitment/timepass question routed to loyalty_trust. " +
+      "Expected Primary: commitment · Secondary: loyalty"
+    );
+  }
+  return null;
+}
+
 function parseEvidenceLines(lines: unknown[], polarity: string): ObservabilityEvidence[] {
   return (lines || []).slice(0, 20).map((raw) => {
     const s = String(raw).trim();
@@ -163,6 +245,36 @@ function parseEvidenceLines(lines: unknown[], polarity: string): ObservabilityEv
     const label = s.replace(/\s*[+-]?\d+\s*$/, "").trim();
     return { label: label.slice(0, 200), weight, polarity };
   }).filter((e) => e.label);
+}
+
+function buildFinalTrace(
+  obs: AskObservability,
+  ctx: AskLlmContext | null,
+  row: AskQuestionItem,
+): ObservabilityPipelineStep[] {
+  const dna = buildFullDnaPipeline(ctx, row);
+  const bucket = dna.find((s) => s.label === "Bucket")?.value || "—";
+  const engine = dna.find((s) => s.label === "Primary Engine")?.value || "—";
+  const exec = obs.engine_execution || {};
+  const evidence = obs.planet_evidence || {};
+  const evCount =
+    (evidence.positive?.length || 0) +
+    (evidence.negative?.length || 0) +
+    (evidence.neutral?.length || 0);
+  const loaded = (exec.modules || []).filter((m) => m.loaded).map((m) => m.module);
+
+  return [
+    { label: "Question", value: row.question_text || ctx?.question || "—" },
+    { label: "DNA", value: `${bucket} → ${engine}` },
+    { label: "Engine", value: String(exec.engine_name || engine) },
+    { label: "Modules", value: loaded.length ? loaded.join(", ") : "—" },
+    { label: "Rules Fired", value: String(exec.fired?.length || 0) },
+    { label: "Evidence", value: String(evCount) },
+    { label: "Score", value: String(exec.final_score ?? "—") },
+    { label: "Verdict", value: String(exec.verdict || obs.engine_verdict?.verdict || "—") },
+    { label: "Narrator JSON", value: obs.narrator_input ? "saved" : "—" },
+    { label: "LLM Answer", value: row.answer_text ? "saved" : "—" },
+  ];
 }
 
 function enrichObservability(
@@ -306,8 +418,47 @@ function enrichObservability(
     missing_engine_evidence: { ok: true, items: [] as string[] },
   };
 
-  return {
+  const li = (ctx?.llm_intent || {}) as Record<string, unknown>;
+  const archetype = String(sm.archetype || li.mr_archetype || "");
+  const routingWarning =
+    obs.routing_warning ||
+    obs.routing_decision?.routing_warning ||
+    commitmentRoutingWarning(row.question_text, archetype);
+
+  const detail = (checks.contradiction_detail ||
+    smChecks.contradiction_detail ||
+    {}) as Record<string, unknown>;
+  const modulePol = (detail.module_polarity || {}) as Record<string, string>;
+  if (!conflict.modules?.length && Object.keys(modulePol).length) {
+    conflict.modules = Object.entries(modulePol).map(([module, polarity]) => ({
+      module,
+      polarity: String(polarity),
+    }));
+  }
+  if (!conflict.conflict && step6.detected != null) {
+    conflict.conflict = step6.detected ? "Minor" : "None";
+  }
+
+  const ignoredFromStep = (step4.ignored || []) as ObservabilityRule[];
+  if (!exec.ignored?.length && ignoredFromStep.length) {
+    exec.ignored = ignoredFromStep;
+  }
+  if (exec.final_score == null) {
+    const score =
+      (checks.primary_score as number) ??
+      (smChecks.primary_score as number) ??
+      Object.values(scorecard)[0];
+    if (score != null) exec.final_score = score;
+  }
+
+  const enriched: AskObservability = {
     ...obs,
+    question_dna_pipeline: buildFullDnaPipeline(ctx, row),
+    routing_warning: routingWarning,
+    routing_decision: {
+      ...(obs.routing_decision || {}),
+      routing_warning: routingWarning,
+    },
     astrology_checks: astro,
     engine_execution: exec,
     planet_evidence: planetEvidence,
@@ -317,9 +468,16 @@ function enrichObservability(
     narrator_input: narratorInput,
     narrator_output: obs.narrator_output || row.answer_text,
     hallucination_summary: hallSummary,
+    final_trace: obs.final_trace?.length ? obs.final_trace : buildFinalTrace(obs, ctx, row),
     has_v2_rules: Boolean(exec.fired?.length),
     has_step_audit: Boolean(Object.keys(stepAudit).length),
   };
+
+  if (!enriched.final_trace?.length) {
+    enriched.final_trace = buildFinalTrace(enriched, ctx, row);
+  }
+
+  return enriched;
 }
 
 function ctxFromRow(row: AskQuestionItem): AskLlmContext | null {
@@ -368,20 +526,8 @@ function buildFallbackObservability(
     { label: "Answer Language", value: String(li.reply_lang || li.language || "—") },
   ];
 
-  const pipeline: ObservabilityPipelineStep[] = [
-    { label: "Domain", value: String(li.domain || li.routed_domain || "—") },
-    { label: "Bucket", value: String(li.bucket || li.mr_bucket || row.topic || "—") },
-    { label: "Intent", value: String(li.intent || li.question_intent || "—") },
-    { label: "Subject", value: String(li.subject || "—") },
-    { label: "Target", value: String(li.target || "—") },
-    { label: "Question Type", value: String(ctx?.question_type || "—") },
-    { label: "Timing / Non-Timing", value: ctx?.is_timing ? "Timing" : "Non-Timing" },
-    { label: "Emotion", value: String(li.emotion || "—") },
-    { label: "Risk", value: String(li.risk || "—") },
-    { label: "Primary Engine", value: String(sm.archetype || li.mr_archetype || "—") },
-    { label: "Secondary Engine", value: "—" },
-    { label: "DNA Confidence", value: String(li.confidence ?? "—") },
-  ];
+  const pipeline = buildFullDnaPipeline(ctx, row);
+  const archetype = String(sm.archetype || li.mr_archetype || "—");
 
   const rulesFired = (checks.rules_fired || smChecks.rules_fired || []) as ObservabilityRule[];
   const scorecard = (checks.scorecard || smChecks.scorecard || {}) as Record<string, number>;
@@ -399,14 +545,18 @@ function buildFallbackObservability(
     { module: "ASHTAKAVARGA", loaded: false },
   ];
 
-  return {
+  const routingWarning = commitmentRoutingWarning(row.question_text, archetype);
+
+  const fallback: AskObservability = {
     user_question: userQuestion,
     question_dna_pipeline: pipeline,
     routing_decision: {
-      selected_engine: String(sm.archetype || li.mr_archetype || "—"),
+      selected_engine: archetype,
       why_selected: String(ctx?.engine_route_reason || "—"),
       rejected_engines: [],
+      routing_warning: routingWarning,
     },
+    routing_warning: routingWarning,
     engine_execution: {
       engine_name: String(sm.archetype || "—"),
       modules,
@@ -465,11 +615,10 @@ function buildFallbackObservability(
     },
     final_trace: [
       { label: "Question", value: row.question_text || "—" },
-      { label: "DNA", value: String(li.domain || "—") },
-      { label: "Routing", value: String(sm.archetype || "—") },
-      { label: "Engine", value: String(sm.archetype || "—") },
+      { label: "DNA", value: `${pipeline.find((s) => s.label === "Bucket")?.value || "—"} → ${archetype}` },
+      { label: "Engine", value: archetype },
       { label: "Modules", value: String(modules.filter((m) => m.loaded).length) },
-      { label: "Rules", value: String(rulesFired.length) },
+      { label: "Rules Fired", value: String(rulesFired.length) },
       { label: "Evidence", value: String(pos.length + neg.length) },
       { label: "Score", value: String(checks.primary_score ?? "—") },
       { label: "Verdict", value: String(sm.verdict || "—") },
@@ -479,6 +628,8 @@ function buildFallbackObservability(
     has_v2_rules: rulesFired.length > 0,
     has_step_audit: Boolean(sm.step_audit),
   };
+
+  return enrichObservability(fallback, ctx, row);
 }
 
 export function resolveAskObservability(row: AskQuestionItem): AskObservability {

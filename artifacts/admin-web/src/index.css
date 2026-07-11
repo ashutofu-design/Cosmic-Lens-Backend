@@ -2025,9 +2025,47 @@ code {
 }
 
 .obs-debugger-header h3 {
-  margin: 0 0 4px;
+  margin: 0;
   font-family: "Fraunces", Georgia, serif;
   font-size: 1.15rem;
+}
+
+.obs-debugger-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.obs-version-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  background: rgba(167, 139, 250, 0.12);
+  color: var(--accent);
+}
+
+.obs-telemetry {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+}
+
+.obs-legacy-hint {
+  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(30, 58, 138, 0.25);
+  color: #bfdbfe;
+}
+
+.obs-engine-name {
+  margin: 0 0 12px;
+}
+
+.obs-pipeline-value.obs-pipeline-pre {
+  white-space: pre-wrap;
 }
 
 .obs-routing-warning {

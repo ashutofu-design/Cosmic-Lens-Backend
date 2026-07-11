@@ -15,6 +15,18 @@ TIMING_STEP_ORDER: tuple[str, ...] = (
     "step6",
 )
 
+# Generic love/travel/universal admin — significator step3; no BCP (step0a), no duplicate transit (step7).
+GENERIC_KAAL_STEP_ORDER: tuple[str, ...] = (
+    "step0",
+    "step1",
+    "step2",
+    "step3",
+    "step4",
+    "step5",
+    "step6",
+    "step8",
+)
+
 # Legacy marriage/career engines may still emit step0–step8; admin merges both.
 LEGACY_TIMING_STEP_ORDER: tuple[str, ...] = (
     "step0",
@@ -28,6 +40,24 @@ LEGACY_TIMING_STEP_ORDER: tuple[str, ...] = (
     "step7",
     "step8",
 )
+
+MARRIAGE_KAAL_STEP_ORDER: tuple[str, ...] = LEGACY_TIMING_STEP_ORDER
+
+
+def kaal_step_order_for_domain(domain: str) -> tuple[str, ...]:
+    if str(domain or "").strip().lower() == "marriage":
+        return MARRIAGE_KAAL_STEP_ORDER
+    return GENERIC_KAAL_STEP_ORDER
+
+
+def prune_generic_kaal_steps(step_audit: dict[str, Any], domain: str) -> dict[str, Any]:
+    """Drop BCP shell / duplicate transit rows from non-marriage admin pipeline."""
+    if str(domain or "").strip().lower() == "marriage":
+        return step_audit
+    out = dict(step_audit)
+    for key in ("step0a", "step7"):
+        out.pop(key, None)
+    return out
 
 DOMAIN_ENGINE_IDS: dict[str, str] = {
     "travel": "travel_timing_v1",
@@ -167,7 +197,10 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
     run_start = running.get("start_iso") or running.get("start") or ""
     run_end = running.get("end_iso") or running.get("end") or ""
 
-    rec = result.get("current_window") if isinstance(result.get("current_window"), dict) else {}
+    answer = result.get("answer_window") if isinstance(result.get("answer_window"), dict) else {}
+    rec = answer if (answer.get("md") or answer.get("start_iso")) else {}
+    if not rec:
+        rec = result.get("current_window") if isinstance(result.get("current_window"), dict) else {}
     next_win = result.get("next_child_window") if isinstance(result.get("next_child_window"), dict) else {}
     if not next_win:
         next3 = result.get("next_3_windows") if isinstance(result.get("next_3_windows"), list) else []
@@ -178,13 +211,31 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
 
     timing_source = str(result.get("timing_source") or "")
     current_supports = bool(result.get("current_supports"))
-    activation = rec.get("activation_score")
+    activation = rec.get("activation_score") or rec.get("score")
     min_activation = float(result.get("min_current_activation") or 9.0)
     running_activation = result.get("current_running_activation_score")
 
-    kp_sync = result.get("kp_dasha_sync") if isinstance(result.get("kp_dasha_sync"), dict) else {}
-    kp_active = kp_sync.get("active_now") or []
-    kp_upcoming = kp_sync.get("upcoming") or []
+    house_lord_scores = result.get("domain_house_lords") if isinstance(result.get("domain_house_lords"), list) else []
+    significator_rank = result.get("significator_rank") if isinstance(result.get("significator_rank"), list) else []
+    run_ad = str(running.get("ad") or "").strip().title()
+    run_pd = str(running.get("pd") or "").strip().title()
+    active_lord_tags: list[str] = []
+    for hl in house_lord_scores:
+        if not isinstance(hl, dict):
+            continue
+        planet = str(hl.get("planet") or "").strip().title()
+        in_ad = bool(planet and planet == run_ad)
+        in_pd = bool(planet and planet == run_pd)
+        hl["in_running_ad"] = in_ad
+        hl["in_running_pd"] = in_pd
+        hl["active_in_running_dasha"] = in_ad or in_pd
+        if hl["active_in_running_dasha"]:
+            active_lord_tags.append(str(hl.get("tag") or planet))
+
+    primary_sig = result.get("primary_significator") if isinstance(result.get("primary_significator"), dict) else {}
+    timing_periods = result.get("timing_periods") if isinstance(result.get("timing_periods"), list) else []
+    if not next_win and len(timing_periods) > 1:
+        next_win = timing_periods[1]
 
     step5_primary = [f for f in factors if "STEP5 PRIMARY" in f.upper()]
     activation_detail = step5_primary[0] if step5_primary else ""
@@ -204,25 +255,34 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
                 activation_detail = (
                     f"Current AD/PD weak for {domain} (< {min_activation}) — next scan window"
                 )
+        elif timing_source == "no_qualified_window":
+            activation_detail = (
+                f"No AD/PD window scored >= {min_activation} for {domain} — "
+                "do not cite sub-threshold dasha"
+            )
         else:
             activation_detail = f"Scan source={timing_source or 'unknown'}"
 
-    kp_detail_parts: list[str] = []
-    if kp_active:
-        kp_detail_parts.append(
-            "ACTIVE NOW: "
-            + ", ".join(f"{x.get('house')}H CSL {x.get('csl')}" for x in kp_active[:3])
+    if house_lord_scores and not any("significators=" in f or "domain_lords=" in f for f in factors):
+        lord_line = " · ".join(
+            f"{hl.get('tag')}={hl.get('planet')} score={hl.get('score')}"
+            for hl in house_lord_scores[:5]
+            if isinstance(hl, dict)
         )
-    elif kp_upcoming:
-        up = kp_upcoming[0] if isinstance(kp_upcoming[0], dict) else {}
-        nw = up.get("next_window") if isinstance(up.get("next_window"), dict) else {}
-        if nw.get("start_iso"):
-            kp_detail_parts.append(
-                f"NEXT CSL {up.get('csl')} · {nw.get('start_iso')}→{nw.get('end_iso')}"
-            )
-    kp_layer = result.get("kp_layer") if isinstance(result.get("kp_layer"), dict) else {}
-    if not kp_detail_parts and kp_layer.get("score") is not None:
-        kp_detail_parts.append(f"KP cusp score {kp_layer.get('score')}")
+        activation_detail = (
+            f"{lord_line} · active in running AD/PD: {', '.join(active_lord_tags) or 'none'}"
+            + (f" · {activation_detail}" if activation_detail else "")
+        ).strip()
+    if significator_rank and not any("significators=" in f for f in factors):
+        sig_line = " · ".join(
+            f"{e.get('planet')}({e.get('score')}) {e.get('tag')}"
+            for e in significator_rank[:6]
+            if isinstance(e, dict) and e.get("planet")
+        )
+        activation_detail = (
+            f"ranked triggers: {sig_line}"
+            + (f" · {activation_detail}" if activation_detail else "")
+        ).strip()
 
     rec_lords = _lords_from_window(rec)
     transit_why, transit_detail = _transit_detail(result, factors)
@@ -235,11 +295,55 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
         )
         if prac.get("too_young_now"):
             prac_bit += " · too_young=YES"
+        if prac.get("purchase_timing_mode"):
+            prac_bit += f" · buy={prac.get('buy_timing_label') or prac.get('purchase_timing_mode')}"
 
-    return {
-        "step1": {
+    running_detail = (
+        f"RUNNING MD/AD/PD {run_lords or '—'}"
+        + (f" · {run_start}→{run_end}" if run_start and run_end else "")
+        + (f" · kab tak: {run_end}" if run_end else "")
+    ).strip()
+
+    step1_running = {
+        "name": "Active dasha — abhi kya chal raha hai",
+        "status": "DONE" if run_lords else "MISSING",
+        "md": running.get("md"),
+        "ad": running.get("ad"),
+        "pd": running.get("pd"),
+        "current_lords": run_lords,
+        "current_start": run_start,
+        "current_end": run_end,
+        "detail": running_detail,
+    }
+    step2_activation = {
+        "name": f"Current AD/PD — {label} houses ({', '.join(lords[:3]) or 'topic'}) active?",
+        "status": "DONE" if current_supports else "WEAK",
+        "timing_source": timing_source,
+        "current_supports": current_supports,
+        "activation_score": activation,
+        "running_activation_score": running_activation,
+        "min_activation": min_activation,
+        "dasha_targets": dasha_targets,
+        "house_lord_scores": house_lord_scores,
+        "active_lord_tags": active_lord_tags,
+        "top_planets": top_names[:5],
+        "detail": activation_detail,
+    }
+
+    bcp_raw = result.get("bcp_property_ages") if domain == "property" else None
+    if domain == "property" and isinstance(bcp_raw, dict) and bcp_raw:
+        try:
+            from event_timing.property.bcp_property_ages import build_property_step1_bcp
+
+            step1_out = build_property_step1_bcp(
+                bcp_raw,
+                result.get("user_age"),
+            )
+        except Exception:
+            step1_out = step1_running
+        step2_out = {
+            **step2_activation,
             "name": "Active dasha — abhi kya chal raha hai",
-            "status": "DONE" if run_lords else "MISSING",
             "md": running.get("md"),
             "ad": running.get("ad"),
             "pd": running.get("pd"),
@@ -247,33 +351,46 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
             "current_start": run_start,
             "current_end": run_end,
             "detail": (
-                f"RUNNING MD/AD/PD {run_lords or '—'}"
-                + (f" · {run_start}→{run_end}" if run_start and run_end else "")
-                + (f" · kab tak: {run_end}" if run_end else "")
+                f"{running_detail}"
+                + (f" · {activation_detail}" if activation_detail else "")
             ).strip(),
-        },
-        "step2": {
-            "name": f"Current AD/PD — {label} houses ({', '.join(lords[:3]) or 'topic'}) active?",
-            "status": "DONE" if current_supports else "WEAK",
-            "timing_source": timing_source,
-            "current_supports": current_supports,
-            "activation_score": activation,
-            "running_activation_score": running_activation,
-            "min_activation": min_activation,
-            "dasha_targets": dasha_targets,
-            "top_planets": top_names[:5],
-            "detail": activation_detail,
-        },
+        }
+    else:
+        step1_out = step1_running
+        step2_out = step2_activation
+
+    return {
+        "step1": step1_out,
+        "step2": step2_out,
         "step3": {
-            "name": "KP — current dasha + cusp sub-lords",
-            "status": "DONE" if kp_active or kp_detail_parts else "PARTIAL",
-            "kp_active_now": kp_active,
-            "kp_upcoming": kp_upcoming[:2],
-            "detail": " · ".join(kp_detail_parts) or "KP partial — no CSL match in running lords",
+            "name": f"Significator power — {label} rank (lord/occupant/aspect/conjunct)",
+            "status": "DONE" if primary_sig or significator_rank else "PARTIAL",
+            "primary_significator": primary_sig,
+            "house_lord_scores": house_lord_scores,
+            "significator_rank": significator_rank[:12],
+            "timing_periods": timing_periods[:3],
+            "ranked_top": top_names[:5],
+            "detail": (
+                (
+                    f"TOP {primary_sig.get('name')} score={primary_sig.get('score')} "
+                    f"({', '.join(primary_sig.get('roles') or []) or primary_sig.get('house_tag') or 'karaka'}) "
+                    f"— {primary_sig.get('link') or 'love via AD/PD'}"
+                )
+                if primary_sig.get("name")
+                else "significator scan partial"
+            )
+            + (
+                f" · {len(timing_periods)} ranked windows"
+                if timing_periods
+                else ""
+            ),
         },
         "step4": {
             "name": "Primary answer window (event timing)",
             "status": "DONE" if rec_lords else "NONE_FOUND",
+            "md": rec.get("md"),
+            "ad": rec.get("ad"),
+            "pd": rec.get("pd"),
             "current_lords": rec_lords,
             "current_start": rec.get("start_iso") or rec.get("start"),
             "current_end": rec.get("end_iso") or rec.get("end"),
@@ -287,16 +404,30 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
         },
         "step5": {
             "name": "Next favourable window (forward scan)",
-            "status": "DONE" if next_win else "NONE_FOUND",
+            "status": "DONE" if next_win or len(timing_periods) > 1 else "NONE_FOUND",
             "next_ad": next_win.get("ad"),
             "next_md": next_win.get("md"),
             "next_start": next_win.get("start_iso") or next_win.get("start"),
             "next_end": next_win.get("end_iso") or next_win.get("end"),
             "score": next_win.get("score"),
+            "period_rank_2": timing_periods[1] if len(timing_periods) > 1 else None,
+            "period_rank_3": timing_periods[2] if len(timing_periods) > 2 else None,
             "detail": (
-                f"next {next_win.get('ad') or next_win.get('md') or '—'}"
-                + (f" · {_window_range(next_win)}" if next_win else "")
-                + (f" · score {next_win.get('score')}" if next_win.get("score") is not None else "")
+                (
+                    f"rank #2 {timing_periods[1].get('start_iso')}→{timing_periods[1].get('end_iso')} "
+                    f"{timing_periods[1].get('lords') or ''}"
+                    + (
+                        f" · rank #3 {timing_periods[2].get('start_iso')}→{timing_periods[2].get('end_iso')}"
+                        if len(timing_periods) > 2
+                        else ""
+                    )
+                )
+                if len(timing_periods) > 1
+                else (
+                    f"next {next_win.get('ad') or next_win.get('md') or '—'}"
+                    + (f" · {_window_range(next_win)}" if next_win else "")
+                    + (f" · score {next_win.get('score')}" if next_win.get("score") is not None else "")
+                )
             ).strip(),
         },
         "step6": {
@@ -318,21 +449,29 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
     }
 
 
+def _running_step_for_audit(step_audit: dict, domain: str) -> dict:
+    """Property: running dasha lives in step2 after BCP step1."""
+    if str(domain or "").strip().lower() == "property":
+        return step_audit.get("step2") if isinstance(step_audit.get("step2"), dict) else {}
+    return step_audit.get("step1") if isinstance(step_audit.get("step1"), dict) else {}
+
+
 def build_timing_audit_from_result(result: dict, step_audit: dict, domain: str) -> dict:
     """Marriage-style timing checks — running dasha first (step1)."""
     s1 = step_audit.get("step1") or {}
     s2 = step_audit.get("step2") or {}
+    s_run = _running_step_for_audit(step_audit, domain)
     s4 = step_audit.get("step4") or {}
     s5 = step_audit.get("step5") or {}
     s6 = step_audit.get("step6") or step_audit.get("step8") or {}
     issues: list[str] = []
     checks: list[dict[str, Any]] = []
 
-    dasha_ok = bool(s1.get("current_lords"))
+    dasha_ok = bool(s_run.get("current_lords"))
     checks.append({
         "name": "dasha_running_now",
         "ok": dasha_ok,
-        "detail": str(s1.get("detail") or ""),
+        "detail": str(s_run.get("detail") or s1.get("detail") or ""),
     })
     if not dasha_ok:
         issues.append("running MD/AD/PD not resolved from chart dasha chain")
@@ -377,17 +516,22 @@ def build_timing_audit_from_result(result: dict, step_audit: dict, domain: str) 
         "issues": issues,
         "domain": domain,
         "running_dasha": {
-            "lords": s1.get("current_lords"),
-            "md": s1.get("md"),
-            "ad": s1.get("ad"),
-            "pd": s1.get("pd"),
-            "start": s1.get("current_start"),
-            "end": s1.get("current_end"),
+            "lords": s_run.get("current_lords"),
+            "md": s_run.get("md"),
+            "ad": s_run.get("ad"),
+            "pd": s_run.get("pd"),
+            "start": s_run.get("current_start"),
+            "end": s_run.get("current_end"),
         },
         "primary_dasha": {
             "lords": s4.get("current_lords"),
+            "md": s4.get("md"),
+            "ad": s4.get("ad"),
+            "pd": s4.get("pd"),
             "start": s4.get("current_start"),
             "end": s4.get("current_end"),
+            "start_iso": s4.get("current_start"),
+            "end_iso": s4.get("current_end"),
         },
         "next_window": {
             "ad": s5.get("next_ad"),
@@ -414,6 +558,9 @@ def attach_timing_pipeline_audit(result: dict, domain: str) -> dict:
         from event_timing._shared.kaal_pipeline import expand_to_kaal_pipeline
 
         result = expand_to_kaal_pipeline(result, domain)
+        if isinstance(result.get("step_audit"), dict):
+            result["step_audit"] = prune_generic_kaal_steps(result["step_audit"], domain)
+        result["step_order"] = list(kaal_step_order_for_domain(domain))
     except Exception:
         pass
     return result
@@ -440,12 +587,25 @@ def _timing_evidence_from_result(result: dict) -> list[str]:
     return out[:8]
 
 
+def _running_step_from_audit(step_audit: dict, domain: str) -> dict:
+    """Property BCP uses step2 for running dasha; others use step1."""
+    if str(domain or "").strip().lower() == "property":
+        s1 = step_audit.get("step1") if isinstance(step_audit.get("step1"), dict) else {}
+        name = str(s1.get("name") or "")
+        if s1.get("fourth_lord") or "BCP" in name:
+            s2 = step_audit.get("step2") if isinstance(step_audit.get("step2"), dict) else {}
+            if s2:
+                return s2
+    return step_audit.get("step1") if isinstance(step_audit.get("step1"), dict) else {}
+
+
 def build_domain_timing_slice_meta(result: dict, domain: str) -> dict[str, Any]:
     """Admin slice_meta for non-career/non-marriage timing domains."""
     result = attach_timing_pipeline_audit(dict(result), domain)
     timing_evidence = _timing_evidence_from_result(result)
-    s1 = (result.get("step_audit") or {}).get("step1") or {}
-    s4 = (result.get("step_audit") or {}).get("step4") or {}
+    sa = result.get("step_audit") if isinstance(result.get("step_audit"), dict) else {}
+    s_run = _running_step_from_audit(sa, domain)
+    s4 = sa.get("step4") or {}
     return {
         "slice": slice_for_domain(domain),
         "topic": domain,
@@ -455,13 +615,13 @@ def build_domain_timing_slice_meta(result: dict, domain: str) -> dict[str, Any]:
         "evidence": timing_evidence,
         "timing_evidence": timing_evidence,
         "dasha_trace": {
-            "running_lords": s1.get("current_lords"),
-            "running_start": s1.get("current_start"),
-            "running_end": s1.get("current_end"),
+            "running_lords": s_run.get("current_lords"),
+            "running_start": s_run.get("current_start"),
+            "running_end": s_run.get("current_end"),
             "recommended_lords": s4.get("current_lords"),
             "recommended_start": s4.get("current_start"),
             "recommended_end": s4.get("current_end"),
-            "dasha_targets": (result.get("step_audit") or {}).get("step2", {}).get("dasha_targets"),
+            "dasha_targets": sa.get("step2", {}).get("dasha_targets"),
         },
         "checks": {
             "bucket": result.get("bucket"),
@@ -474,23 +634,59 @@ def build_domain_timing_slice_meta(result: dict, domain: str) -> dict[str, Any]:
     }
 
 
+def ensure_domain_timing_admin_meta(
+    raw: dict | None,
+    *,
+    domain: str,
+    engine_id: str,
+    slice_meta: dict[str, Any] | None = None,
+    engine_trace: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Always produce admin slice_meta + engine_trace when a timing engine ran."""
+    raw_in = dict(raw) if isinstance(raw, dict) else {}
+    dom = str(domain or "").strip().lower() or "general"
+    eid = str(engine_id or slice_for_domain(dom)).strip() or slice_for_domain(dom)
+    meta = dict(slice_meta) if isinstance(slice_meta, dict) else {}
+    trace = dict(engine_trace) if isinstance(engine_trace, dict) else {}
+    try:
+        if not meta.get("slice") or not meta.get("step_audit"):
+            meta = build_domain_timing_slice_meta(raw_in, dom)
+    except Exception:
+        if not meta.get("slice"):
+            meta = {"slice": eid, "topic": dom, "narrator_mode": "engine_facts_only"}
+    try:
+        if not trace.get("engine") or not trace.get("step_audit"):
+            trace = build_domain_timing_engine_trace(raw_in, dom)
+    except Exception:
+        if not trace.get("engine"):
+            trace = {"engine": eid, "domain": dom, "pipeline_version": "kaal_v1"}
+    if not meta.get("slice"):
+        meta["slice"] = eid
+    if not trace.get("engine"):
+        trace["engine"] = meta.get("slice") or eid
+    return meta, trace
+
+
 def build_domain_timing_engine_trace(result: dict, domain: str) -> dict[str, Any]:
     """Admin engine_trace for any timing domain."""
     if not isinstance(result, dict):
         return {}
     result = attach_timing_pipeline_audit(dict(result), domain)
-    s1 = (result.get("step_audit") or {}).get("step1") or {}
-    s4 = (result.get("step_audit") or {}).get("step4") or {}
+    sa = result.get("step_audit") if isinstance(result.get("step_audit"), dict) else {}
+    s_run = _running_step_from_audit(sa, domain)
+    s4 = sa.get("step4") or {}
     running = result.get("dasha_running_now") if isinstance(result.get("dasha_running_now"), dict) else {}
     rec = result.get("current_window") if isinstance(result.get("current_window"), dict) else {}
     next3 = result.get("next_3_windows") if isinstance(result.get("next_3_windows"), list) else []
-    running_range = _window_range(s1) or _window_range(running)
+    running_range = _window_range(s_run) or _window_range(running)
     primary = _window_range(s4) or _window_range(rec)
     if not primary and next3 and isinstance(next3[0], dict):
         primary = _window_range(next3[0])
-    s8 = (result.get("step_audit") or {}).get("step8") or {}
+    s8 = sa.get("step8") or {}
     if isinstance(s8, dict):
-        kaal_pw = s8.get("event_month_year") or s8.get("marriage_month_year") or s8.get("primary_window")
+        kaal_pw = s8.get("event_month_year") or s8.get("primary_window")
+        if domain == "marriage" and not kaal_pw:
+            kaal_pw = s8.get("marriage_month_year")
         if kaal_pw:
             primary = str(kaal_pw)
 
@@ -503,25 +699,25 @@ def build_domain_timing_engine_trace(result: dict, domain: str) -> dict[str, Any
         "bucket": result.get("bucket"),
         "running_dasha_window": running_range,
         "running_dasha": {
-            "md": s1.get("md") or running.get("md"),
-            "ad": s1.get("ad") or running.get("ad"),
-            "pd": s1.get("pd") or running.get("pd"),
-            "lords": s1.get("current_lords") or _lords_from_window(running),
-            "start": s1.get("current_start") or running.get("start_iso"),
-            "end": s1.get("current_end") or running.get("end_iso"),
+            "md": s_run.get("md") or running.get("md"),
+            "ad": s_run.get("ad") or running.get("ad"),
+            "pd": s_run.get("pd") or running.get("pd"),
+            "lords": s_run.get("current_lords") or _lords_from_window(running),
+            "start": s_run.get("current_start") or running.get("start_iso"),
+            "end": s_run.get("current_end") or running.get("end_iso"),
         },
         "primary_window": primary,
         "step_audit": result.get("step_audit"),
         "step_order": list(result.get("step_order") or LEGACY_TIMING_STEP_ORDER),
         "timing_audit": result.get("timing_audit"),
         "dasha_trace": {
-            "running_lords": s1.get("current_lords") or _lords_from_window(running),
-            "running_start": s1.get("current_start") or running.get("start_iso"),
-            "running_end": s1.get("current_end") or running.get("end_iso"),
+            "running_lords": s_run.get("current_lords") or _lords_from_window(running),
+            "running_start": s_run.get("current_start") or running.get("start_iso"),
+            "running_end": s_run.get("current_end") or running.get("end_iso"),
             "recommended_lords": s4.get("current_lords") or _lords_from_window(rec),
             "recommended_start": s4.get("current_start") or rec.get("start_iso"),
             "recommended_end": s4.get("current_end") or rec.get("end_iso"),
-            "dasha_targets": (result.get("step_audit") or {}).get("step2", {}).get("dasha_targets"),
+            "dasha_targets": sa.get("step2", {}).get("dasha_targets"),
         },
         "next_3_windows": next3[:3],
         "factors": list(result.get("factors") or [])[:20],

@@ -66,6 +66,15 @@ class TestMrTimingRegistry(unittest.TestCase):
             )
         )
 
+    def test_love_milega_llm_timing_without_kab_is_static(self):
+        from ask_mr.timing_registry import question_requests_timing
+
+        q = "Kya mujhe life me true love milega?"
+        llm = {"domain": "love", "is_timing": True}
+        self.assertFalse(has_explicit_timing_anchor(q))
+        self.assertFalse(question_requests_timing(q, llm))
+        self.assertTrue(is_mr_static_question(q))
+
 
 if __name__ == "__main__":
     unittest.main()

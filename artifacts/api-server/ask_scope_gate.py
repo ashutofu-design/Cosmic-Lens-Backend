@@ -249,8 +249,59 @@ def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
     except Exception:
         pass
 
+    try:
+        from ask_vehicle.vehicle_registry import is_vehicle_static_question
+
+        if is_vehicle_static_question(q):
+            return AskScopeVerdict(allowed=True, reason="ok")
+    except Exception:
+        pass
+
+    try:
+        from ask_vehicle.timing_registry import is_vehicle_timing_question
+
+        if is_vehicle_timing_question(q):
+            return AskScopeVerdict(allowed=True, reason="ok")
+    except Exception:
+        pass
+
     if _GK_BLOCK_RX.search(q):
         return AskScopeVerdict(allowed=False, reason="general_knowledge")
+
+    # Relationship-compatibility quality questions that may omit "mera/meri"
+    # anchors (e.g. "lifestyle compatibility achhi hai?").
+    if (
+        re.search(r"(?ix)\b(lifestyle|sexual|financial)\s+compatibility\b", q)
+        and re.search(
+            r"(?ix)\b(achhi|achha|strong|weak|average|healthy|balanced|successful|lifetime)\b",
+            q,
+        )
+    ):
+        return AskScopeVerdict(allowed=True, reason="ok")
+
+    # General relationship-compatibility quality (even if no strict "mera/meri"
+    # anchor is present). This prevents "not_personal" blocks for questions
+    # like "hamare values same hain?" or "life goals match karte hain?".
+    if (
+        re.search(
+            r"(?ix)\b("
+            r"compatible|compatibility|match|values?|life\s*goals?|goals?|"
+            r"expectations?|bonding|mutual\s+understanding|understanding|"
+            r"trust|respect|communication|teamwork|conflict|compromise|"
+            r"possessiveness|jealousy|ego\s*clashes|space|healthy|balanced|"
+            r"successful|lifetime\s+partners?"
+            r")\b",
+            q,
+        )
+        and re.search(
+            r"(?ix)\b("
+            r"hum|hamare|hamari|hamara|dono|ek\s+dusre|ek\s+dusri|"
+            r"partner|spouse|relationship|rishta|marriage|shaadi|shadi|vivah"
+            r")\b",
+            q,
+        )
+    ):
+        return AskScopeVerdict(allowed=True, reason="ok")
 
     # "How did you decide this? / kya check kiya?" — transparency follow-up to
     # the previous reading. In scope; the answer layer re-explains the prior

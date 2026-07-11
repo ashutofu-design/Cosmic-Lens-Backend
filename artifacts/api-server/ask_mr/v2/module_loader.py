@@ -12,7 +12,7 @@ from .modules.jaimini import load_jaimini
 from .modules.kp import load_kp
 from .modules.transit import load_transit
 from .modules.types import ModuleBundle
-from .registry import modules_for_engine
+from .module_registry import modules_for_engine
 
 _LOADERS = {
     "d1": load_d1,

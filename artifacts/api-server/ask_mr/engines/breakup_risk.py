@@ -61,6 +61,17 @@ def _pick_evidence(sig: PersonSignals) -> list[str]:
 
 
 def run_breakup_risk(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
+    try:
+        from ask_mr.v2 import v2_enabled_for
+        from ask_mr.v2.adapter import v2_to_engine_result
+        from ask_mr.v2.engines.breakup_risk import run_breakup_risk_v2
+
+        if v2_enabled_for("breakup_risk"):
+            out = run_breakup_risk_v2(kundli, question, wants_explain=wants_explain)
+            return v2_to_engine_result(out)
+    except Exception:
+        pass
+
     # Ensure KundliReader name is stable so notes are predictable.
     k = dict(kundli or {})
     k.setdefault("name", "You")

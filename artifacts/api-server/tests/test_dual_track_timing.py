@@ -95,6 +95,14 @@ def test_marriage_skips_dual_track() -> None:
     assert not ctx.raw.get("dual_track")
 
 
+def test_love_skips_dual_track() -> None:
+    ctx = run_timing_engine("mera love life kab shuru hoga", _KUNDLI, {}, _KP, None)
+    assert ctx.demand.domain == "love"
+    assert ctx.engine_id == "love_timing_v1"
+    assert not ctx.raw.get("dual_track")
+    assert "DUAL-TRACK" not in (ctx.raw.get("_prompt_block") or "")
+
+
 def test_universal_gets_dual_track() -> None:
     ctx = run_timing_engine("Lottery kab lagegi?", _KUNDLI, {}, _KP, None)
     assert ctx.demand.domain == "universal"

@@ -72,7 +72,7 @@ _BUCKET_RULES: list[tuple[str, re.Pattern]] = [
         r"(?ix)\b(affair|third\s*party|dhokha|cheat|koi\s+aur|teesra\s+insaan)\b",
     )),
     ("general_love", re.compile(
-        r"(?ix)\b(love\s+life|relationship\s+theek|struggle\s+khatam|"
+        r"(?ix)\b(love\s+life|love\s+live|relationship\s+theek|struggle\s+khatam|"
         r"dry\s+spell|single\s+status|soulmate|true\s+love|pehla\s+serious|"
         r"relationship\s+shuru|rishta\s+shuru|naya\s+relationship|favorable\s+dasha)\b",
     )),

@@ -31,14 +31,6 @@ class ContradictionReport:
 
 
 @dataclass
-class EngineMemorySnapshot:
-    previously_fired_rules: list[str] = field(default_factory=list)
-    previous_confidence: str = ""
-    previous_evidence: list[str] = field(default_factory=list)
-    previous_scorecard: dict[str, int] = field(default_factory=dict)
-
-
-@dataclass
 class TimingBlock:
     applicable: bool = False
     windows: list[dict[str, Any]] = field(default_factory=list)
@@ -55,7 +47,9 @@ class VerdictBlock:
 @dataclass
 class EngineOutputV2:
     engine_id: str
-    engine_version: str = "v2"
+    engine_version: str = "2.0.0"
+    rules_version: str = ""
+    schema_version: str = "2.0"
     question_intent: str = ""
     mode: str = "static"  # static | timing | couple
     modules_used: list[str] = field(default_factory=list)
@@ -69,7 +63,6 @@ class EngineOutputV2:
     rules_fired: list[dict[str, Any]] = field(default_factory=list)
     contradiction: ContradictionReport = field(default_factory=ContradictionReport)
     explanation: ExplanationLayer = field(default_factory=ExplanationLayer)
-    memory: EngineMemorySnapshot = field(default_factory=EngineMemorySnapshot)
     timing: TimingBlock = field(default_factory=TimingBlock)
     checks: dict[str, Any] = field(default_factory=dict)
     narrator_plan: str = ""

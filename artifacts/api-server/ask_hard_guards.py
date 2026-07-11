@@ -13,6 +13,8 @@ _ENGINE_SLICES = frozenset({
     "education_engine_v1",
     "children_engine_v1",
     "property_engine_v1",
+    "vehicle_engine_v1",
+    "numerology_engine_v1",
     "travel_engine_v1",
     "litigation_engine_v1",
     "luck_engine_v1",
@@ -97,6 +99,7 @@ _MANDATORY_CHECK_FLAGS = (
     "is_travel_static",
     "is_litigation_static",
     "is_vehicle_static",
+    "is_numerology_static",
     "is_network_static",
 )
 
@@ -653,16 +656,24 @@ def career_timing_engine_required(
         return False
 
 
-def build_career_timing_slice_meta(verdict: dict[str, Any]) -> dict[str, Any]:
+def build_career_timing_slice_meta(
+    verdict: dict[str, Any],
+    question: str = "",
+) -> dict[str, Any]:
     """Admin slice_meta for career timing (assess_career → LLM narrator)."""
+    trace: dict[str, Any] = {}
     try:
         from event_timing.career.career_timing import build_career_timing_engine_trace
+
+        trace = build_career_timing_engine_trace(verdict) or {}
     except Exception:
-        build_career_timing_engine_trace = None  # type: ignore
+        trace = {}
 
     strategy = str(verdict.get("strategy") or "").strip()
     timing_evidence = _career_timing_evidence(verdict)
     dasha_trace = _career_dasha_trace(verdict)
+    step_audit = trace.get("step_audit") if isinstance(trace.get("step_audit"), dict) else verdict.get("step_audit")
+    timing_audit = trace.get("timing_audit") if isinstance(trace.get("timing_audit"), dict) else verdict.get("timing_audit")
     meta = {
         "slice": "career_timing_v1",
         "topic": "career",
@@ -682,10 +693,36 @@ def build_career_timing_slice_meta(verdict: dict[str, Any]) -> dict[str, Any]:
         },
         "narrator_mode": "engine_facts_only",
     }
-    if isinstance(verdict.get("step_audit"), dict):
-        meta["step_audit"] = verdict["step_audit"]
-    if isinstance(verdict.get("timing_audit"), dict):
-        meta["timing_audit"] = verdict["timing_audit"]
+    if isinstance(step_audit, dict):
+        meta["step_audit"] = step_audit
+    if isinstance(timing_audit, dict):
+        meta["timing_audit"] = timing_audit
+    if trace.get("step_order"):
+        meta["step_order"] = trace["step_order"]
+    pw = str(verdict.get("primary_window") or "").strip()
+    if pw:
+        meta["primary_window"] = pw
+    try:
+        from event_timing._shared.timing_window_pick import (
+            pick_timing_answer_window,
+            timing_window_index,
+            window_range_label,
+        )
+
+        picked = pick_timing_answer_window(verdict, question or "")
+        if isinstance(picked, dict):
+            meta["answer_window"] = {
+                "start": picked.get("start"),
+                "end": picked.get("end"),
+                "lords": picked.get("lords"),
+                "rank": picked.get("rank"),
+            }
+            locked = window_range_label(picked)
+            if locked:
+                meta["locked_answer_window"] = locked
+            meta["timing_window_rank"] = timing_window_index(question or "") + 1
+    except Exception:
+        pass
     return meta
 
 

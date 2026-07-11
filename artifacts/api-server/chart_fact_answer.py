@@ -213,7 +213,7 @@ _NEEDS_LLM_RX = re.compile(
     r"se\s+kya|isse\s+kya|is\s+se\s+kya|"
     r"kaise\s+(?:affect|prabhav|kar|help|hurt)|"
     r"explain|samjha|samjh|bataye|batao\s+ki|good|bad|accha|bura|favourable|"
-    r"strong|weak|powerful|kamzor"
+    r"strong|weak|powerful|kamzor|kami|lack|loneliness|lonely|akela\s*pan|akele\s*pan|dikh\s+r"
     r")\b",
 )
 
@@ -283,6 +283,13 @@ def is_domain_life_area_interpretation_question(question: str) -> bool:
     q = normalize_ask_typos((question or "").strip())
     if not q or not _DOMAIN_LIFE_INTERPRET_RX.search(q):
         return False
+    try:
+        from ask_mr.timing_registry import has_explicit_timing_anchor
+
+        if has_explicit_timing_anchor(q):
+            return False
+    except Exception:
+        pass
     if re.search(
         r"(?ix)\b(love\s*style|love\s*language|affection\s*style|"
         r"kaise\s+(?:affect|prabhav|kar)|style\s+ko)\b",

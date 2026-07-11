@@ -144,6 +144,8 @@ class TestPropertyVehicleTiming(unittest.TestCase):
         primary, _nxt, source, supports = pick_primary_timing_window(
             windows, ranked, promote, now, min_ad_pd=9.0,
         )
+        self.assertIsNone(primary)
+        self.assertEqual(source, "no_qualified_window")
         self.assertNotEqual(source, "current_dasha_active")
         self.assertFalse(supports)
 

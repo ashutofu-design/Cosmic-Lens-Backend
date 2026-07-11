@@ -15,14 +15,15 @@ class ConflictResolver:
         fired: list[FiredRule],
         *,
         base_score: int = 50,
+        engine_id: str = "",
     ) -> dict[str, Any]:
         score = float(base_score)
         pos: list[str] = []
         neg: list[str] = []
         neu: list[str] = []
 
-        # Module sub-scores (weighted)
         mod_weights = {"d1": 0.30, "d9": 0.25, "ashtakavarga": 0.10, "dasha": 0.12, "transit": 0.10, "kp": 0.08, "bcp": 0.05}
+        blend_weight = 0.20 if (engine_id or "").strip().lower() in ("commitment", "loyalty_trust") else 0.45
         used_w = 0.0
         mod_blend = 0.0
         for mod_id, res in bundle.modules.items():
@@ -32,7 +33,7 @@ class ConflictResolver:
             mod_blend += res.score * w
             used_w += w
         if used_w > 0:
-            score = 0.55 * score + 0.45 * (mod_blend / used_w)
+            score = (1.0 - blend_weight) * score + blend_weight * (mod_blend / used_w)
 
         for fr in sorted(fired, key=lambda r: rule_sort_key(r.to_dict())):
             delta = fr.weight * (1 if fr.polarity == "positive" else (-1 if fr.polarity == "negative" else 0))

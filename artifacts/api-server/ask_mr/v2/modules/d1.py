@@ -31,7 +31,7 @@ def load_d1(kundli: dict, *, engine_id: str) -> ChartModuleResult:
         factors.append({"id": "D1-SEP", "label": "Separation theme", "polarity": "negative", "weight": 2})
     if getattr(sig, "saturn_on_7th", False):
         factors.append({"id": "D1-SAT7", "label": "Saturn on 7th", "polarity": "negative", "weight": 2})
-    if getattr(sig, "third_person_risk", False):
+    if engine_id not in ("commitment", "loyalty_trust") and getattr(sig, "third_person_risk", False):
         factors.append({"id": "D1-TPR", "label": "Third-person risk", "polarity": "negative", "weight": 3})
 
     lord7 = r.house_lord(7)

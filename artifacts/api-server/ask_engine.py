@@ -669,15 +669,27 @@ def process_ask(question: str, kundli: dict | None, lang: str, reply_idx: int = 
 
     if topic == "marriage" and kundli:
         try:
-            result   = analyze_marriage(kundli)
-            text     = format_marriage_response(result, lang)
-            return {
-                "text":       text,
-                "topic":      "marriage",
-                "confidence": result["confidence"],
-            }
+            from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+            # Partner/relationship STATIC questions must not get native marriage-timing dasha spam.
+            if is_marriage_relationship_static_question(question):
+                try:
+                    from ask_mr.static_answer import mr_static_answer_payload
+
+                    return mr_static_answer_payload(question, kundli, lang=lang)
+                except Exception:
+                    topic = "general"
+            else:
+                result = analyze_marriage(kundli)
+                text = format_marriage_response(result, lang)
+                return {
+                    "text": text,
+                    "topic": "marriage",
+                    "confidence": result["confidence"],
+                }
         except Exception:
             import traceback
+
             traceback.print_exc()
 
     # General fallback

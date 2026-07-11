@@ -190,6 +190,66 @@ class AskLlmContextDebugTests(unittest.TestCase):
         self.assertNotIn("10L Mercury", meta["evidence"][0])
         self.assertEqual(meta["dasha_trace"]["current_lords"], "Jupiter/Saturn/Mercury")
 
+    def test_marriage_recompute_skipped_for_career_admin_ctx(self):
+        from ask_llm_context_debug import (
+            _is_career_timing_admin_ctx,
+            _should_recompute_marriage_admin,
+        )
+
+        ctx = {
+            "slice_meta": {"slice": "career_timing_v1"},
+            "checks": {"is_career_engine": True},
+            "is_timing": True,
+            "topic": "timing",
+        }
+        self.assertTrue(_is_career_timing_admin_ctx(ctx))
+        self.assertFalse(
+            _should_recompute_marriage_admin(
+                ctx,
+                question_text="Mera job me promotion kab hoga",
+                topic="timing",
+            )
+        )
+
+    def test_marriage_recompute_skipped_for_travel_timing_ctx(self):
+        from ask_llm_context_debug import (
+            _sanitize_non_marriage_timing_admin_ctx,
+            _should_recompute_marriage_admin,
+        )
+
+        ctx = {
+            "slice_meta": {"slice": "travel_timing_v1", "step_audit": {"step8": {"marriage_month_year": "Jul 2039", "event_month_year": "Jul 2039"}}},
+            "is_timing": True,
+            "blocks": {"engine_trace": {"engine": "travel_timing_v1"}},
+        }
+        self.assertFalse(_should_recompute_marriage_admin(ctx, question_text="Travel kab hoga", topic="timing"))
+        cleaned = _sanitize_non_marriage_timing_admin_ctx(ctx)
+        s8 = cleaned["slice_meta"]["step_audit"]["step8"]
+        self.assertNotIn("marriage_month_year", s8)
+
+    def test_career_step_audit_slim_keeps_dasha_fields(self):
+        from ask_llm_context_debug import _slim_career_step_audit_for_db
+
+        audit = {
+            "step6": {
+                "name": "Dasha activation",
+                "status": "DONE",
+                "current_lords": "Jupiter/Rahu/Mars",
+                "current_start": "2024-01-29",
+                "current_end": "2026-06-22",
+                "why": ["Current MD lord Jupiter sits in denial h5 (-3)"],
+                "detail": "MD/AD/PD Jupiter/Rahu/Mars · 2024-01-29→2026-06-22",
+            },
+            "step2": {
+                "name": "D1 career significators",
+                "top_why": ["10L strong"],
+                "detail": "10H/10L scan",
+            },
+        }
+        slim = _slim_career_step_audit_for_db(audit)
+        self.assertEqual(slim["step6"]["current_lords"], "Jupiter/Rahu/Mars")
+        self.assertIn("10L strong", slim["step2"]["top_why"])
+
     def test_answer_path_direct_llm_bypass_flag(self):
         code, label = derive_answer_path(
             llm_called=True,
@@ -505,6 +565,96 @@ class AskLlmContextDebugTests(unittest.TestCase):
         sa = gate.get("step_audit") or {}
         self.assertIsInstance(sa.get("step6"), dict)
         self.assertIsInstance(sa.get("step7"), dict)
+
+    def test_love_timing_admin_save_roundtrip(self):
+        from event_timing._shared.step_audit import ensure_domain_timing_admin_meta
+
+        raw = {
+            "verdict": "FAVORABLE",
+            "bucket": "approach",
+            "current_window": {"start_iso": "2028-03-01", "end_iso": "2028-06-30"},
+            "dasha_running_now": {"md": "Saturn", "ad": "Mercury"},
+        }
+        meta, trace = ensure_domain_timing_admin_meta(
+            raw,
+            domain="love",
+            engine_id="love_timing_v1",
+        )
+        self.assertEqual(meta.get("slice"), "love_timing_v1")
+        self.assertEqual(trace.get("engine"), "love_timing_v1")
+
+        ctx = build_admin_llm_context(
+            question="office crush ko approach karu shubh samay chal raha hai",
+            question_type="TIMING",
+            is_timing=True,
+            checks={"slice_type": "love_timing_v1"},
+            slice_meta=meta,
+            blocks={"engine_trace": trace},
+        )
+        raw_db = serialize_llm_context_for_db(ctx)
+        self.assertIsNotNone(raw_db)
+        parsed = parse_llm_context_from_db(raw_db)
+        self.assertIsNotNone(parsed)
+        engine = (
+            (parsed.get("blocks") or {}).get("engine_trace") or {}
+        ).get("engine") or (parsed.get("slice_meta") or {}).get("slice")
+        self.assertEqual(engine, "love_timing_v1")
+
+    def test_build_admin_context_for_ask_save_love_timing(self):
+        from ask_llm_context_debug import build_admin_context_for_ask_save
+
+        ctx = build_admin_context_for_ask_save(
+            question="office me ladki pasand hai shubh samay chal raha hai approach karu",
+            result={"topic": "timing", "source": "raw_passthrough_timing"},
+        )
+        engine = (
+            (ctx.get("blocks") or {}).get("engine_trace") or {}
+        ).get("engine") or (ctx.get("slice_meta") or {}).get("slice")
+        self.assertEqual(engine, "love_timing_v1")
+
+    def test_build_admin_context_for_ask_save_mr_engine_with_chart(self):
+        from ask_llm_context_debug import build_admin_context_for_ask_save
+
+        chart = {
+            "ascendant": "Sagittarius",
+            "planets": [
+                {"name": "Moon", "sign": "Gemini", "house": 7},
+                {"name": "Venus", "sign": "Leo", "house": 9},
+                {"name": "Mars", "sign": "Cancer", "house": 8},
+                {"name": "Jupiter", "sign": "Pisces", "house": 4},
+            ],
+        }
+        q = "Kya mujhe life me true love milega?"
+        ctx = build_admin_context_for_ask_save(
+            question=q,
+            result={"topic": "static", "source": "mr_engine_then_llm"},
+            chart=chart,
+        )
+        sm = ctx.get("slice_meta") or {}
+        trace = (ctx.get("blocks") or {}).get("engine_trace") or {}
+        engine = trace.get("engine") or sm.get("slice")
+        self.assertEqual(engine, "mr_engine_v1")
+        ev = sm.get("evidence") or trace.get("evidence") or (ctx.get("engine_facts") or {}).get("evidence") or []
+        self.assertTrue(ev, "MR rebuild should populate evidence lines")
+
+    def test_recompute_mr_engine_admin_context(self):
+        from ask_llm_context_debug import recompute_mr_engine_admin_context
+
+        chart = {
+            "ascendant": "Sagittarius",
+            "planets": [
+                {"name": "Moon", "sign": "Gemini", "house": 7},
+                {"name": "Venus", "sign": "Leo", "house": 9},
+            ],
+        }
+        out = recompute_mr_engine_admin_context(
+            {"answer_source": "mr_engine_then_llm", "question": "Kya meri life me serious relationship ka yog hai?"},
+            chart,
+            question_text="Kya meri life me serious relationship ka yog hai?",
+        )
+        trace = (out.get("blocks") or {}).get("engine_trace") or {}
+        self.assertEqual(trace.get("engine"), "mr_engine_v1")
+        self.assertTrue(trace.get("evidence"))
 
 
 if __name__ == "__main__":

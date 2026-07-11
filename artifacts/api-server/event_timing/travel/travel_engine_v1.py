@@ -186,6 +186,8 @@ _WEIGHT_KARAKA = 0.10
 _DASHA_SCORE_MD = 1
 _DASHA_SCORE_AD = 5
 _DASHA_SCORE_PD = 6
+# Align with generic Kaal gate — sub-threshold running PD must not become primary answer.
+_MIN_TRAVEL_ACTIVATION = 9.0
 
 _D1_FILTER_MIN_SCORE = 12.0
 _MIN_WINDOW_GAP_DAYS = 45
@@ -1459,6 +1461,149 @@ def _format_window(start: datetime, end: datetime) -> str:
     return f"{start.strftime('%b %Y')} → {end.strftime('%b %Y')}"
 
 
+def _lords_label(md: Any, ad: Any, pd: Any) -> str:
+    parts = [str(x) for x in (md, ad, pd) if x]
+    return "/".join(parts)
+
+
+def _build_travel_kaal_audit_fields(
+    *,
+    lagna_si: int,
+    ranked: List[Dict[str, Any]],
+    current_row: Optional[Dict[str, Any]],
+    current: Optional[Dict[str, Any]],
+    current_window: Optional[Dict[str, Any]],
+    formatted_top3: List[Dict[str, Any]],
+    now: datetime,
+) -> Dict[str, Any]:
+    """Map travel engine output → generic Kaal step_audit fields (admin parity)."""
+    score_map = {str(r.get("name") or ""): float(r.get("score") or 0) for r in ranked}
+
+    dasha_running_now: Dict[str, Any] = {}
+    if isinstance(current_row, dict):
+        md, ad, pd = current_row.get("md"), current_row.get("ad"), current_row.get("pd")
+        start_dt = current_row.get("start")
+        end_dt = current_row.get("end")
+        dasha_running_now = {
+            "md": md,
+            "ad": ad,
+            "pd": pd,
+            "lords": _lords_label(md, ad, pd),
+            "start_iso": start_dt.isoformat()[:10] if hasattr(start_dt, "isoformat") else "",
+            "end_iso": end_dt.isoformat()[:10] if hasattr(end_dt, "isoformat") else "",
+            "is_active_now": True,
+        }
+
+    domain_house_lords: List[Dict[str, Any]] = []
+    for house in (3, 4, 7, 9, 12):
+        planet = _house_lord(lagna_si, house)
+        domain_house_lords.append({
+            "tag": f"{house}L",
+            "house": house,
+            "planet": planet,
+            "score": round(score_map.get(planet, 0.0), 2),
+            "label": f"{house}H travel axis",
+        })
+
+    significator_rank: List[Dict[str, Any]] = []
+    for r in ranked[:8]:
+        links = r.get("links") or r.get("significations") or []
+        link = links[0] if links else "travel significator"
+        significator_rank.append({
+            "planet": r.get("name"),
+            "score": round(float(r.get("score") or 0), 2),
+            "tag": "ranked",
+            "role": "travel_sig",
+            "link": str(link)[:80],
+        })
+
+    primary_significator: Dict[str, Any] = {}
+    if ranked:
+        top = ranked[0]
+        primary_significator = {
+            "name": top.get("name"),
+            "score": round(float(top.get("score") or 0), 2),
+            "house_tag": "ranked",
+            "roles": ["travel_sig"],
+            "link": (top.get("links") or [""])[0] if top.get("links") else "top travel planet",
+        }
+
+    timing_periods: List[Dict[str, Any]] = []
+    scored_windows = sorted(
+        [w for w in formatted_top3 if isinstance(w, dict)],
+        key=lambda w: float(w.get("score") or 0),
+        reverse=True,
+    )
+    for i, w in enumerate(scored_windows[:3]):
+        timing_periods.append({
+            "rank": i + 1,
+            "md": w.get("md"),
+            "ad": w.get("ad"),
+            "pd": w.get("pd"),
+            "lords": _lords_label(w.get("md"), w.get("ad"), w.get("pd")),
+            "start_iso": w.get("start_iso"),
+            "end_iso": w.get("end_iso"),
+            "score": w.get("score"),
+            "activation_score": w.get("score"),
+        })
+
+    current_score = float(current.get("score") or 0) if isinstance(current, dict) else 0.0
+    qualified = [
+        w for w in scored_windows
+        if float(w.get("score") or 0) >= _MIN_TRAVEL_ACTIVATION
+    ]
+    best_future = qualified[0] if qualified else (scored_windows[0] if scored_windows else None)
+    best_future_score = float(best_future.get("score") or 0) if isinstance(best_future, dict) else 0.0
+    running_now = (
+        isinstance(current, dict)
+        and current.get("start") is not None
+        and current["start"] <= now <= current["end"]
+    )
+
+    if (
+        running_now
+        and current_score >= _MIN_TRAVEL_ACTIVATION
+        and current_score >= best_future_score
+        and isinstance(current_window, dict)
+    ):
+        answer_window = dict(current_window)
+        timing_source = "current_dasha_active"
+        current_supports = True
+    elif isinstance(best_future, dict):
+        answer_window = dict(best_future)
+        timing_source = "next_dasha_scan"
+        current_supports = current_score >= _MIN_TRAVEL_ACTIVATION if running_now else False
+    elif isinstance(current_window, dict):
+        answer_window = dict(current_window)
+        timing_source = "current_dasha_active" if running_now else "no_qualified_window"
+        current_supports = current_score >= _MIN_TRAVEL_ACTIVATION if running_now else False
+    else:
+        answer_window = {}
+        timing_source = "no_qualified_window"
+        current_supports = False
+
+    primary_window = ""
+    if answer_window.get("start_iso") and answer_window.get("end_iso"):
+        primary_window = f"{answer_window['start_iso']}→{answer_window['end_iso']}"
+    elif answer_window.get("window"):
+        primary_window = str(answer_window["window"])
+
+    return {
+        "dasha_running_now": dasha_running_now,
+        "answer_window": answer_window,
+        "recommended_window": answer_window,
+        "timing_periods": timing_periods,
+        "domain_house_lords": domain_house_lords,
+        "significator_rank": significator_rank,
+        "primary_significator": primary_significator,
+        "timing_source": timing_source,
+        "current_supports": current_supports,
+        "min_current_activation": _MIN_TRAVEL_ACTIVATION,
+        "current_running_activation_score": round(current_score, 2) if running_now else None,
+        "primary_window": primary_window,
+    }
+
+
 def _data_sufficiency(kundli: dict, kp: dict) -> Tuple[bool, List[str]]:
     notes: List[str] = []
     ok = True
@@ -1710,6 +1855,8 @@ def _compute_travel_window_impl(kundli: dict,
             "kp_boost": current.get("kp_boost", 0.0),
             "kp_hits": current.get("kp_hits", []),
             "triggers": current["triggers"],
+            "score": current.get("score"),
+            "is_active_now": True,
             "double_transit": check_double_transit(
                 kundli, now, lagna_si, planets_d1, _TRAVEL_CONCERN),
         }
@@ -1838,6 +1985,28 @@ def _compute_travel_window_impl(kundli: dict,
     # verdict whenever it discusses any timing window.
     llm_directives.append("DOUBLE_TRANSIT_TIMING_RULE_APPLIED")
 
+    kaal_fields = _build_travel_kaal_audit_fields(
+        lagna_si=lagna_si,
+        ranked=ranked,
+        current_row=_current_row,
+        current=current,
+        current_window=current_window,
+        formatted_top3=formatted_top3,
+        now=now,
+    )
+    if kaal_fields.get("primary_significator", {}).get("name"):
+        ps = kaal_fields["primary_significator"]
+        factors.append(
+            f"STEP2 significators={ps.get('name')}({ps.get('score')}) "
+            f"— cite rank #1 window by default"
+        )
+    if kaal_fields.get("timing_periods"):
+        p1 = kaal_fields["timing_periods"][0]
+        factors.append(
+            f"STEP5 PRIMARY {p1.get('lords')} "
+            f"{p1.get('start_iso')}→{p1.get('end_iso')} score={p1.get('score')}"
+        )
+
     return {
         "verdict": verdict,
         "band": band,
@@ -1862,6 +2031,7 @@ def _compute_travel_window_impl(kundli: dict,
         "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE→TRIGGER",
         # Phase 2.5.11.17 — per-domain KP planet scan (audit / "kaun de raha hai")
         "kp_planet_scan": _kp_planet_scan_safe(kp, "travel", survivors),
+        **kaal_fields,
     }
 
 

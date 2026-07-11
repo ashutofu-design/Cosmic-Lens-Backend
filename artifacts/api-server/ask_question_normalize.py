@@ -134,6 +134,7 @@ _LIFE_ASTRO_TOPIC_RX = re.compile(
     r"health|sehat|tabiyat|swasth|swasthya|disease|illness|"
     r"child|bachcha|pregnancy|"
     r"property|ghar|flat|vastu|"
+    r"car|cars|bike|bikes|gaadi|gadi|vehicle|scooter|scooty|colour|color|rang|"
     r"visa|abroad|videsh|travel|"
     r"luck|bhagya|future|timing|"
     rf"{_CAREER_SCOPE_EXTRA}|"
@@ -144,7 +145,8 @@ _LIFE_ASTRO_TOPIC_RX = re.compile(
 _PERSONAL_RX = re.compile(
     r"(?ix)\b("
     r"mera|meri|mere|mujhe|mujhko|mujh|main|mein|my|mine|"
-    r"hamara|hamari|apna|apni|apne|"
+    r"hamara|hamari|hamare|apna|apni|apne|"
+    r"hum\s+dono|hum\s+ek\s+dusre|hum\s+ek\s+dusri|ek\s+dusre|dono|"
     r"will\s+i|should\s+i|am\s+i|"
     r"shaadi\s+hogi|naukri\s+lagegi"
     r")\b",
@@ -155,7 +157,7 @@ _QUESTION_SHAPE_RX = re.compile(
     r"kya|kaun|kaunsa|kaunsi|kab|kaise|kaisa|kaisi|kahan|kyun|kyu|"
     r"when|what|how|why|should|will|where|which|kis|kitna|kitni|"
     r"hoga|hogi|milega|milegi|aayega|aayegi|rahega|rahegi|"
-    r"hai|he|chal\s*rah|effect|result|prabhav|asar|"
+    r"hai|he|hain|chal\s*rah|effect|result|prabhav|asar|"
     r"possible|likely|batao|samjhao|theek|sahi|achha|accha|delay|"
     r"ban\s+sakta|ban\s+sakti|ban\s+paunga|ban\s+paungi|banna"
     r")\b",
@@ -169,7 +171,9 @@ _IMPLICIT_ASK_TOPIC_RX = re.compile(
     r"shaadi|shadi|marriage|vivah|love|pyaar|partner|bf|gf|husband|wife|pati|"
     r"career|naukri|job|business|paisa|money|wealth|finance|"
     r"health|sehat|tabiyat|swasth|swasthya|child|bachcha|pregnancy|"
-    r"property|ghar|flat|vastu|visa|abroad|videsh|travel|"
+    r"property|ghar|flat|vastu|"
+    r"car|cars|bike|bikes|gaadi|gadi|vehicle|scooter|scooty|colour|color|rang|"
+    r"visa|abroad|videsh|travel|"
     r"luck|bhagya|future|timing|"
     rf"{_CAREER_SCOPE_EXTRA}|"
     r"sun|moon|mars|mangal|mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu|"

@@ -48,18 +48,21 @@ def _window_active_now(w: dict, now: datetime) -> bool:
 
 def _find_running_dasha(kundli: dict, now: datetime) -> dict | None:
     chain = _flatten_dasha_chain(kundli if isinstance(kundli, dict) else {})
-    for w in chain:
-        if w["start"] <= now <= w["end"]:
-            return {
-                "md": w.get("md"),
-                "ad": w.get("ad"),
-                "pd": w.get("pd"),
-                "start_iso": w["start"].strftime("%Y-%m-%d"),
-                "end_iso": w["end"].strftime("%Y-%m-%d"),
-                "is_running_now": True,
-                "lords": "/".join(_lords_tuple(w)),
-            }
-    return None
+    matches = [w for w in chain if w["start"] <= now <= w["end"]]
+    if not matches:
+        return None
+    with_pd = [w for w in matches if w.get("pd")]
+    pool = with_pd if with_pd else matches
+    w = min(pool, key=lambda row: (row["end"] - row["start"]).days)
+    return {
+        "md": w.get("md"),
+        "ad": w.get("ad"),
+        "pd": w.get("pd"),
+        "start_iso": w["start"].strftime("%Y-%m-%d"),
+        "end_iso": w["end"].strftime("%Y-%m-%d"),
+        "is_running_now": True,
+        "lords": "/".join(_lords_tuple(w)),
+    }
 
 
 def _next_csl_dasha_windows(
@@ -110,7 +113,25 @@ def attach_dasha_kp_sync(
     factors = list(raw.get("factors") or [])
 
     running = _find_running_dasha(kundli, now)
-    raw["dasha_running_now"] = running
+    cw = raw.get("current_window") if isinstance(raw.get("current_window"), dict) else None
+    ts = str(raw.get("timing_source") or "")
+    if cw and ts == "current_dasha_active":
+        raw["dasha_running_now"] = {
+            "md": cw.get("md"),
+            "ad": cw.get("ad"),
+            "pd": cw.get("pd"),
+            "start_iso": cw.get("start_iso"),
+            "end_iso": cw.get("end_iso"),
+            "is_running_now": True,
+            "lords": cw.get("lords")
+            or "/".join(_lords_tuple(cw)),
+        }
+    elif running:
+        raw["dasha_running_now"] = running
+    else:
+        raw["dasha_running_now"] = None
+
+    running = raw.get("dasha_running_now") if isinstance(raw.get("dasha_running_now"), dict) else running
 
     kp_layer = raw.get("kp_layer") if isinstance(raw.get("kp_layer"), dict) else {}
     cusps = kp_layer.get("cusps") if isinstance(kp_layer.get("cusps"), dict) else {}

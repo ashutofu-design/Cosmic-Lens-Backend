@@ -32,7 +32,18 @@ _VEHICLE_SCOPE_RX = re.compile(
     r")\b",
 )
 
-_COLOUR_RX = re.compile(r"(?ix)\b(colou?r|rang|safed|kala|lal|silver|colour\s+shubh)\b")
+_COLOUR_RX = re.compile(
+    r"(?ix)"
+    r"\b("
+    r"colou?r|rang|colour\s+shubh|"
+    r"safed|kala|lal|silver|"
+    r"black|white|red|blue|green|yellow|grey|gray|maroon|cream|gold"
+    r")\b"
+    r"|"
+    r"\b(black|white|red|blue|green|safed|kala|lal)\s+(car|cars|gaadi|gadi|bike|scooter)\b"
+    r"|"
+    r"\b(car|cars|gaadi|gadi|bike|scooter)\b.{0,24}\b(black|white|red|blue|green|safed|kala|lal)\b"
+)
 _NEW_USED_RX = re.compile(
     r"(?ix)\b(brand\s+new|second[\s-]?hand|used\s+car|naya|purani\s+gaadi|"
     r"2[\s-]?wheeler|4[\s-]?wheeler|two[\s-]?wheeler|four[\s-]?wheeler|seedhe)\b",

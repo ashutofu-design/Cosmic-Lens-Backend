@@ -116,6 +116,135 @@ def _filter_property_factors(factors: list) -> list[str]:
     return out[:5]
 
 
+def _norm_lord(name: Any) -> str:
+    return str(name or "").strip().title()
+
+
+def _lords_in_window(w: dict) -> set[str]:
+    return {
+        _norm_lord(w.get("md")),
+        _norm_lord(w.get("ad")),
+        _norm_lord(w.get("pd")),
+    } - {""}
+
+
+def _window_has_planet(w: dict, planet: str) -> bool:
+    return bool(planet) and _norm_lord(planet) in _lords_in_window(w)
+
+
+def _period_score(p: dict) -> float:
+    return float(p.get("activation_score") or p.get("score") or 0)
+
+
+def _reconcile_property_answer_window(out: dict) -> dict:
+    """Rank periods by activation; answer = best Mars/Shani karaka window, not weak running PD."""
+    periods = [dict(p) for p in (out.get("timing_periods") or []) if isinstance(p, dict)]
+    if periods:
+        periods.sort(
+            key=lambda p: (_period_score(p), float(p.get("score") or 0)),
+            reverse=True,
+        )
+        for i, p in enumerate(periods[:3]):
+            p["rank"] = i + 1
+        out["timing_periods"] = periods
+
+    current = (
+        dict(out.get("current_window") or {})
+        if isinstance(out.get("current_window"), dict)
+        else {}
+    )
+    min_act = float(out.get("min_current_activation") or 9.0)
+    running_act = float(
+        out.get("current_running_activation_score")
+        or current.get("activation_score")
+        or 0
+    )
+    running_now = bool(
+        current.get("is_active_now")
+        or str(out.get("timing_source") or "") == "current_dasha_active"
+    )
+
+    primary_sig = (
+        out.get("primary_significator")
+        if isinstance(out.get("primary_significator"), dict)
+        else {}
+    )
+    sig_name = _norm_lord(primary_sig.get("name"))
+
+    verdict = str(out.get("verdict") or "")
+    weak = "LOW_PROBABILITY" in verdict.upper() or str(out.get("band") or "") == "WEAK"
+
+    best = periods[0] if periods else None
+    best_score = _period_score(best) if best else 0.0
+
+    sig_periods = [p for p in periods if sig_name and _window_has_planet(p, sig_name)]
+    best_sig = max(sig_periods, key=_period_score) if sig_periods else None
+    best_sig_score = _period_score(best_sig) if best_sig else 0.0
+    current_has_sig = bool(sig_name and current and _window_has_planet(current, sig_name))
+
+    answer: dict = {}
+    timing_source = str(out.get("timing_source") or "")
+    current_supports = bool(out.get("current_supports"))
+
+    if (
+        running_now
+        and running_act >= min_act
+        and current_has_sig
+        and not weak
+        and running_act >= best_score
+    ):
+        answer = dict(current)
+        timing_source = "current_dasha_active"
+        current_supports = True
+    elif best_sig and (weak or not current_has_sig or best_sig_score > running_act):
+        answer = dict(best_sig)
+        timing_source = "next_dasha_scan"
+        current_supports = running_act >= min_act if running_now else False
+        factors = list(out.get("factors") or [])
+        factors.insert(
+            0,
+            (
+                f"PROPERTY_ANSWER=rank #{answer.get('rank')} — TOP karaka {sig_name} "
+                f"via {answer.get('ad')}/{answer.get('pd')} "
+                f"(running PD {_norm_lord(current.get('pd'))} weak for property buy)"
+            ),
+        )
+        out["factors"] = factors[:14]
+    elif best:
+        answer = dict(best)
+        if answer.get("is_active_now") and running_now:
+            timing_source = "current_dasha_active"
+            current_supports = True
+        else:
+            timing_source = "next_dasha_scan"
+            current_supports = running_act >= min_act if running_now else False
+    elif current:
+        answer = dict(current)
+    else:
+        timing_source = "no_qualified_window"
+        current_supports = False
+
+    if answer:
+        if not answer.get("lords"):
+            answer["lords"] = "/".join(
+                x
+                for x in (
+                    _norm_lord(answer.get("md")),
+                    _norm_lord(answer.get("ad")),
+                    _norm_lord(answer.get("pd")),
+                )
+                if x
+            )
+        out["answer_window"] = answer
+        out["recommended_window"] = answer
+        if answer.get("start_iso") and answer.get("end_iso"):
+            out["primary_window"] = f"{answer['start_iso']}→{answer['end_iso']}"
+
+    out["timing_source"] = timing_source
+    out["current_supports"] = current_supports
+    return out
+
+
 def compute_property_window(
     kundli: dict,
     intel: Optional[dict] = None,
@@ -137,6 +266,40 @@ def compute_property_window(
         out["factors"] = filtered
     elif karakas:
         out["factors"] = karakas
+    try:
+        from event_timing.property.bcp_property_ages import (
+            compute_bcp_property_ages,
+            resolve_property_lagna_si,
+        )
+
+        lagna_si = resolve_property_lagna_si(kundli)
+        user_age: Optional[int] = None
+        try:
+            from ask_career.timing_registry import resolve_user_age  # type: ignore
+
+            user_age = resolve_user_age(question, birth, kundli)
+        except Exception:
+            pass
+        if user_age is not None:
+            out["user_age"] = user_age
+        if lagna_si is not None:
+            bcp = compute_bcp_property_ages(kundli, lagna_si, user_age=user_age)
+            out["bcp_property_ages"] = bcp
+            bcp_lines = []
+            try:
+                from event_timing.property.bcp_property_ages import bcp_property_admin_lines
+
+                bcp_lines = bcp_property_admin_lines(bcp)
+            except Exception:
+                pass
+            if bcp_lines:
+                factors = list(out.get("factors") or [])
+                factors[:0] = bcp_lines[:3]
+                out["factors"] = factors[:16]
+    except Exception as exc:
+        factors = list(out.get("factors") or [])
+        factors.append(f"bcp_property_ages skipped: {exc}")
+        out["factors"] = factors[:16]
     extra: list[str] = []
     if b == "dispute":
         extra.append("Property vivaad — court outcome guarantee nahi; legal + mediation parallel rakho.")
@@ -146,6 +309,21 @@ def compute_property_window(
         warnings = list(out.get("brand_safety_warnings") or [])
         warnings.extend(extra)
         out["brand_safety_warnings"] = warnings
+    out = _reconcile_property_answer_window(out)
+    try:
+        from event_timing.property.property_practicality import apply_property_practicality
+
+        out = apply_property_practicality(out, kundli, birth, question)
+    except Exception as exc:
+        factors = list(out.get("factors") or [])
+        factors.append(f"property_practicality skipped: {exc}")
+        out["factors"] = factors[:16]
+    try:
+        from event_timing._shared.step_audit import attach_timing_pipeline_audit
+
+        out = attach_timing_pipeline_audit(out, "property")
+    except Exception:
+        pass
     return out
 
 
@@ -158,25 +336,100 @@ def format_property_timing_for_prompt(v: dict, question: str = "") -> str:
     ]
     for k in (v.get("property_karakas") or [])[:2]:
         lines.append(f"  KARAK: {k}")
-    cw = v.get("current_window") or {}
-    if cw.get("start_iso") and cw.get("end_iso"):
+    bcp = v.get("bcp_property_ages") if isinstance(v.get("bcp_property_ages"), dict) else {}
+    if bcp:
+        lord = bcp.get("fourth_lord") or "?"
+        sit = bcp.get("fourth_lord_house")
+        asp = bcp.get("d1_aspect_houses") or []
+        focus = bcp.get("focus_ages") or bcp.get("future_priority_ages") or []
         lines.append(
-            f"▸ Window: {cw.get('start_iso')} → {cw.get('end_iso')} "
-            f"({cw.get('md', '?')}/{cw.get('ad', '?')})"
+            f"▸ BCP 4L: {lord} in {sit}H · aspects {','.join(str(h) for h in asp) or '—'}"
         )
-    elif (v.get("next_3_windows") or [])[:1]:
-        w = v["next_3_windows"][0]
-        if isinstance(w, dict):
+        if focus:
             lines.append(
-                f"▸ Next window: {w.get('start_iso', '?')} → {w.get('end_iso', '?')} "
-                f"({w.get('md', '?')}/{w.get('ad', '?')})"
+                f"▸ BCP focus ages (4L sit+aspect): {', '.join(str(a) for a in focus[:6])}"
+            )
+    periods = v.get("timing_periods") or []
+    if periods:
+        lines.append("▸ THREE RANKED PROPERTY PERIODS (engine locked):")
+        for p in periods[:3]:
+            if not isinstance(p, dict):
+                continue
+            rank = p.get("rank") or "?"
+            lords = p.get("lords") or "/".join(
+                x for x in (p.get("md"), p.get("ad"), p.get("pd")) if x
+            )
+            lines.append(
+                f"  #{rank} {p.get('start_iso')}→{p.get('end_iso')} "
+                f"MD/AD/PD={lords} act={p.get('activation_score')}"
+            )
+        lines.append(
+            ">>> DEFAULT ANSWER: cite rank #1 ONLY. "
+            "User 'dusra/2nd/agla window' → rank #2; 'teesra/3rd' → rank #3."
+        )
+    ans = v.get("answer_window") if isinstance(v.get("answer_window"), dict) else {}
+    cw = ans if (ans.get("start_iso") or ans.get("md")) else (v.get("current_window") or {})
+    if v.get("timing_source") == "no_qualified_window":
+        lines.append(
+            ">>> NO QUALIFIED WINDOW — activation below threshold. "
+            "Do NOT cite sub-threshold dasha periods."
+        )
+    elif not periods and cw.get("start_iso") and cw.get("end_iso"):
+        active = (
+            "ACTIVE NOW"
+            if cw.get("is_active_now") or v.get("timing_source") == "current_dasha_active"
+            else "UPCOMING"
+        )
+        lords = cw.get("lords") or "/".join(
+            x for x in (cw.get("md"), cw.get("ad"), cw.get("pd")) if x
+        )
+        lines.append(
+            f"▸ PRIMARY window ({active}): {cw.get('start_iso')} → {cw.get('end_iso')} "
+            f"MD/AD/PD={lords or '?'}"
+        )
+    elif periods and cw.get("start_iso"):
+        lords = cw.get("lords") or "/".join(
+            x for x in (cw.get("md"), cw.get("ad"), cw.get("pd")) if x
+        )
+        active = (
+            "ACTIVE NOW"
+            if cw.get("is_active_now") or v.get("timing_source") == "current_dasha_active"
+            else "UPCOMING"
+        )
+        lines.append(
+            f">>> NARRATE rank #1 ({active}) — MD/AD/PD {lords or '?'} "
+            f"({cw.get('start_iso')}→{cw.get('end_iso')})."
+        )
+        if v.get("timing_source") == "next_dasha_scan" and v.get("current_supports"):
+            run = v.get("dasha_running_now") if isinstance(v.get("dasha_running_now"), dict) else {}
+            lines.append(
+                f">>> NOTE: abhi running {run.get('lords') or 'dasha'} — "
+                "property buy ke liye rank #1 upcoming window cite karo; "
+                "current Saturn-only PD ko best timing mat bolo."
             )
     for f in (v.get("factors") or [])[:4]:
-        lines.append(f"  • {f}")
+        if isinstance(f, str) and not f.startswith("STEP"):
+            lines.append(f"  • {f}")
     dt = v.get("double_transit") or {}
     if dt.get("active") and dt.get("verdict"):
         lines.append(f"▸ Shani/Guru 4H transit: {dt.get('verdict')}")
     for g in (v.get("brand_safety_warnings") or [])[:3]:
         lines.append(f"  GUARD: {g}")
-    lines.append("RULE: sirf 4H + Mars/Shani dasha window — exact date nahi.")
+    prac = v.get("practicality") if isinstance(v.get("practicality"), dict) else {}
+    if prac:
+        mode = prac.get("purchase_timing_mode") or v.get("purchase_timing_mode") or "?"
+        label = prac.get("buy_timing_label") or v.get("buy_timing_label") or "?"
+        months = prac.get("months_until_buy_window")
+        months_txt = f" · ~{months} mahine wait" if months else ""
+        lines.append(
+            f"▸ BUY TIMING: {str(label).upper()} ({mode})"
+            f"{months_txt} · afford={prac.get('affordability', '?')} · "
+            f"age={prac.get('user_age', '?')}/{prac.get('min_purchase_age', '?')}"
+        )
+    if v.get("strategy"):
+        lines.append(f"▸ DIRECTIVE: {v['strategy']}")
+    lines.append(
+        "RULE: 4H + Mars/Shani dasha AND early-buy vs delay practicality — "
+        "delay mode mein abhi buy mat bolo; ACT_NOW mein current window cite karo."
+    )
     return "\n".join(lines)

@@ -41,6 +41,17 @@ class TestTimingDomainClarifier(unittest.TestCase):
         self.assertTrue(any("Career" in o for o in opts))
         self.assertTrue(any("Paisa" in o for o in opts))
 
+    def test_mr_promise_yog_without_kab_skips_clarifier(self):
+        q = "Kya meri life me serious relationship ka yog hai?"
+        llm = {"domain": "love", "is_timing": True}
+        self.assertFalse(needs_timing_domain_clarifier(q, None))
+        self.assertFalse(needs_timing_domain_clarifier(q, llm))
+
+    def test_true_love_milega_llm_timing_skips_clarifier(self):
+        q = "Kya mujhe life me true love milega?"
+        llm = {"domain": "love", "is_timing": True}
+        self.assertFalse(needs_timing_domain_clarifier(q, llm))
+
 
 if __name__ == "__main__":
     unittest.main()

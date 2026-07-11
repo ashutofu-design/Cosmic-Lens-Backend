@@ -143,6 +143,17 @@ export interface EngineVerificationSummary {
   recovered?: boolean;
 }
 
+export interface AnswerFidelitySummary {
+  status: "pass" | "fail" | "unknown";
+  label: string;
+  reason?: string;
+  shape?: string | null;
+  attempts?: number;
+  score?: number | null;
+  repairs?: number;
+  issues?: string[];
+}
+
 export interface AskLlmContext {
   version?: number;
   route?: string;
@@ -164,6 +175,7 @@ export interface AskLlmContext {
       admin_line?: string;
     } | null;
     engine_verification_summary?: EngineVerificationSummary | null;
+    answer_fidelity_summary?: AnswerFidelitySummary | null;
     understanding_source?: string | null;
   question_type?: string;
   is_timing?: boolean;

@@ -229,13 +229,29 @@ def is_present_health_issue_question(question: str) -> bool:
 
 def _has_real_health_intent(q: str) -> bool:
     """True when the user wants a body/health chart read — not incidental 'health'."""
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        if is_marriage_relationship_static_question(q):
+            return False
+    except Exception:
+        pass
     if re.search(
         r"(?ix)(tabiyat|sehat|swasth|swasthya|bimari|beemar|bimar|body|sharir|"
-        r"mental|stress|kharab|pain|dard|vitality|immune|hospital|doctor|"
+        r"mental|stress(?:ful)?|kharab|pain|dard|vitality|immune|hospital|doctor|"
         r"digest|heart|pain|accident|surgery|recovery|immunity|chronic|anxiety|"
         r"depression|insomnia|addiction|fertility|pregnanc)",
         q,
     ):
+        # Relationship wellness ("healthy/stressful relationship") — not body health.
+        if re.search(
+            r"(?ix)\b(relationship|rishta|partner|marriage|shaadi|pyaar|pyar|love)\b",
+            q,
+        ) and not re.search(
+            r"(?ix)\b(sehat|health|tabiyat|swasth|bimari|body|sharir|hospital|doctor)\b",
+            q,
+        ):
+            return False
         return True
     if re.search(
         r"(?ix)(meri|my|overall|chart).{0,12}\bhealth\b|"
@@ -276,6 +292,13 @@ def _is_cross_domain_non_health(q: str) -> bool:
             return True
     except Exception:
         pass
+    try:
+        from ask_children.timing_registry import is_children_timing_question  # type: ignore
+
+        if is_children_timing_question(q):
+            return True
+    except Exception:
+        pass
     if re.search(
         r"(?ix)(health\s+ke\s+liye|medical\s+expense|hospital\s+bill|health\s+insurance|"
         r"insurance\s+me\s+paisa|fd\b|bachat|saving|loan|debt|salary|promotion|naukri)",
@@ -310,8 +333,22 @@ def is_health_static_question(question: str) -> bool:
             return False
     except Exception:
         pass
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        if is_marriage_relationship_static_question(q):
+            return False
+    except Exception:
+        pass
     if is_love_emotional_dil_question(q):
         return False
+    try:
+        from ask_children.timing_registry import is_children_timing_question  # type: ignore
+
+        if is_children_timing_question(q):
+            return False
+    except Exception:
+        pass
     try:
         from ask_children.children_registry import is_children_static_question
 
@@ -370,12 +407,26 @@ def detect_health_archetype(question: str) -> str | None:
         pass
     if is_love_emotional_dil_question(q):
         return None
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        if is_marriage_relationship_static_question(q):
+            return None
+    except Exception:
+        pass
 
     hard = detect_hard_guard(q)
     if hard:
         return _HARD_GUARD_ARCH.get(hard)
 
     if _REPRO_RX.search(q):
+        try:
+            from ask_children.timing_registry import is_children_timing_question  # type: ignore
+
+            if is_children_timing_question(q):
+                return None
+        except Exception:
+            pass
         try:
             from ask_children.children_registry import is_children_static_question
 

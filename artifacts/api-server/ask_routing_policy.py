@@ -191,6 +191,7 @@ def matches_dedicated_static_engine(
         ("ask_education.education_registry", "is_education_static_question", False),
         ("ask_property.property_registry", "is_property_static_question", False),
         ("ask_vehicle.vehicle_registry", "is_vehicle_static_question", False),
+        ("ask_numerology", "is_numerology_name_question", False),
         ("ask_travel.travel_registry", "is_travel_static_question", False),
         ("ask_litigation.litigation_registry", "is_litigation_static_question", False),
         ("ask_luck.luck_registry", "is_luck_static_question", False),

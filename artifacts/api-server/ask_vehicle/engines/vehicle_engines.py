@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from chart_tone_disclaimers import CHART_TONE_HI, HEURISTIC_HI, MUHURAT_HI
 
 from ..types import EngineResult
@@ -11,6 +13,16 @@ from ._vehicle_base import (
     vehicle_snapshot,
     vehicle_strength_score,
 )
+
+_COLOUR_ALIASES = {
+    "black": ("black", "kala", "dark"),
+    "white": ("white", "safed", "silver", "cream", "pearl"),
+    "red": ("red", "lal", "maroon"),
+    "blue": ("blue", "navy"),
+    "green": ("green", "hara"),
+    "yellow": ("yellow", "gold"),
+    "grey": ("grey", "gray"),
+}
 
 
 def _themed(
@@ -38,23 +50,127 @@ def _themed(
     )
 
 
+def _normalize_colour_token(token: str) -> str:
+    t = (token or "").strip().lower()
+    for canon, aliases in _COLOUR_ALIASES.items():
+        if t == canon or t in aliases:
+            return canon
+    return t
+
+
+def _mentioned_colours(question: str) -> list[str]:
+    q = (question or "").lower()
+    found: list[str] = []
+    for canon, aliases in _COLOUR_ALIASES.items():
+        if any(re.search(rf"\b{re.escape(alias)}\b", q) for alias in (canon, *aliases)):
+            if canon not in found:
+                found.append(canon)
+    return found
+
+
+def _chart_colour_pick(kundli: dict) -> tuple[str, str, str]:
+    """Return (best, alt, colour_evidence_line)."""
+    colour_line = next((d for d in dimension_lines(kundli) if d.startswith("Colour:")), "")
+    best, alt = "white", "silver"
+    if colour_line and "best=" in colour_line:
+        try:
+            best = _normalize_colour_token(colour_line.split("best=")[1].split()[0])
+            if " alt=" in colour_line:
+                alt = _normalize_colour_token(colour_line.split(" alt=")[1].split()[0])
+        except Exception:
+            pass
+    else:
+        try:
+            from vehicle_static.vehicle_engine import compute_vehicle_facts
+
+            dim = (compute_vehicle_facts(kundli).get("dimensions") or {}).get("colour") or {}
+            best = _normalize_colour_token(str(dim.get("best") or best))
+            alt = _normalize_colour_token(str(dim.get("alt") or alt))
+            colour_line = (
+                f"Colour: best={best} alt={alt} — {dim.get('reason', '')}"
+                if dim
+                else colour_line
+            )
+        except Exception:
+            pass
+    return best, alt, colour_line
+
+
+def _colour_fit_score(choice: str, best: str, alt: str) -> int:
+    c = _normalize_colour_token(choice)
+    b = _normalize_colour_token(best)
+    a = _normalize_colour_token(alt)
+    if c == b:
+        return 3
+    if c == a:
+        return 2
+    if c in ("white", "silver") and b in ("white", "silver"):
+        return 2
+    if c in ("black", "grey") and b in ("black", "grey"):
+        return 2
+    return 1
+
+
 def run_vehicle_colour(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
-    colour = next((d for d in dimension_lines(kundli) if d.startswith("Colour:")), "")
-    best = "white/silver"
-    alt = "red"
-    if colour:
-        verdict = f"Chart colour tone: {colour.split('best=')[-1].split(' alt=')[0] if 'best=' in colour else best} palette supportive"
+    best, alt, colour_line = _chart_colour_pick(kundli)
+    mentioned = _mentioned_colours(question)
+
+    if len(mentioned) >= 2:
+        ranked = sorted(
+            mentioned,
+            key=lambda c: _colour_fit_score(c, best, alt),
+            reverse=True,
+        )
+        winner = ranked[0]
+        loser = ranked[-1]
+        verdict = (
+            f"Between {mentioned[0]} vs {mentioned[1]}: chart colour axis favours "
+            f"{winner} over {loser} — chart best={best}, alt={alt}. "
+            f"{winner.title()} zyada aligned; {loser} thoda heavy/off-tone ho sakta hai."
+        )
+        summary = [
+            "QUESTION FOCUS: do colour options compare — pick chart-aligned shade.",
+            f"LOCKED_PICK: {winner} (chart best={best}, alt={alt}).",
+            CHART_TONE_HI,
+        ]
+    elif len(mentioned) == 1:
+        pick = mentioned[0]
+        fit = _colour_fit_score(pick, best, alt)
+        if fit >= 2:
+            verdict = (
+                f"{pick.title()} colour chart ke saath aligned dikhta hai "
+                f"(chart best={best}, alt={alt})."
+            )
+        else:
+            verdict = (
+                f"{pick.title()} lena possible hai lekin chart tone {best}/{alt} zyada supportive hai — "
+                f"{pick} thoda off-axis ho sakta hai."
+            )
+        summary = [
+            "QUESTION FOCUS: single named colour vs chart palette.",
+            f"LOCKED_PICK: {best} primary, {alt} alternate.",
+            CHART_TONE_HI,
+        ]
+    elif colour_line:
+        verdict = f"Chart colour tone: {best} primary, {alt} alternate — palette supportive"
+        summary = [
+            "QUESTION FOCUS: gaadi colour — chart aesthetic tone only.",
+            f"LOCKED_PICK: {best} primary, {alt} alternate.",
+            CHART_TONE_HI,
+        ]
     else:
         verdict = f"Colour advisory: {best} primary, {alt} alternate — aesthetic/comfort axis se"
+        summary = [
+            "QUESTION FOCUS: gaadi colour — chart aesthetic tone only.",
+            CHART_TONE_HI,
+        ]
+
     return _themed(
         archetype="vehicle_colour",
         kundli=kundli,
         wants_explain=wants_explain,
         verdict=f"{verdict} | {CHART_TONE_HI}",
-        summary=[
-            "QUESTION FOCUS: gaadi colour — chart aesthetic tone only.",
-            CHART_TONE_HI,
-        ],
+        summary=summary,
     )
 
 

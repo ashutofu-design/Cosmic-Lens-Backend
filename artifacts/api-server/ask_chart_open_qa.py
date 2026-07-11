@@ -99,7 +99,7 @@ def is_native_self_chart_interpretation_question(question: str) -> bool:
         return True
     if re.search(r"(?ix)\b(mera|meri|mere)\b", q):
         return True
-    return True
+    return False
 
 
 def is_open_chart_interpretation_question(

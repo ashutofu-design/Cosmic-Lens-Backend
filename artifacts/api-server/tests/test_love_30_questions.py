@@ -99,7 +99,7 @@ class TestLove30QuestionCoverage(unittest.TestCase):
         self.assertIn("strategy", out)
         self.assertTrue(out.get("strategy"))
         ts = out.get("timing_source")
-        self.assertIn(ts, ("current_dasha_active", "next_dasha_scan", "fallback_top_score"))
+        self.assertIn(ts, ("current_dasha_active", "next_dasha_scan", "no_qualified_window"))
 
     def test_love_life_shuru_dasha_first(self):
         """Current AD/PD must be checked before jumping to a future Saturn-only window."""

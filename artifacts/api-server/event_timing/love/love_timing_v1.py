@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from event_timing._shared.generic_timing_engine import (
     DomainTimingConfig,
+    MIN_AD_PD_ACTIVATION,
     compute_generic_timing_window,
 )
 from event_timing.love.love_timing_engine_v1 import (
@@ -45,6 +46,8 @@ _LOVE_CFG = DomainTimingConfig(
         "5L", "5H", "7L", "7H", "11L", "11H",
         "Venus", "Moon", "Mars", "romance", "partnership", "fulfilment",
         "occupies 5H", "occupies 7H", "occupies 11H",
+        "aspects 5H", "aspects 7H", "aspects 11H",
+        "conjunct", "karaka",
     ),
     obstruct_tags=("6L", "8L", "12L", "6H", "8H", "12H", "conflict", "hidden"),
     double_transit_houses=[5, 7, 11],
@@ -59,7 +62,11 @@ _LOVE_CFG = DomainTimingConfig(
     llm_directives=[
         "DASHA_FIRST: pehle current AD/PD check — agar 5/7/11 + Venus/Moon weak → abhi shuru nahi.",
         "NEXT_SCAN: current weak ho to chronology se pehla strong AD/PD window batao.",
-        "KP: current dasha lords + 5/7/11 cusp sub-lords match karein to confidence badhao.",
+        f"MANDATORY: activation score < {MIN_AD_PD_ACTIVATION} wala period kabhi answer mat do — next PD/AD scan.",
+        "THREE_WINDOWS: engine 3 ranked love periods deta hai — default answer sirf rank #1.",
+        "FOLLOW_UP: user 'dusra/2nd/agla' puche → rank #2; 'teesra/3rd' → rank #3.",
+        "SIGNIFICATOR: rank-wise sabse powerful graha (5L/7L/11L + 5H/7H/11H occupant + aspect + conjunct lord) ke AD/PD mein love.",
+        "LINKAGE: 5H mein baitha, 5H ko aspect, ya 5L ke sath conjunct — sab score rank mein aate hain.",
     ],
 )
 
@@ -91,6 +98,11 @@ def compute_love_window(
             f"Current dasha mein love trigger weak — pehla strong window "
             f"{cw.get('start_iso')}→{cw.get('end_iso')} AD/PD {cw.get('ad')}/{cw.get('pd')}."
         )
+    elif ts == "no_qualified_window":
+        out["strategy"] = (
+            f"Koi bhi AD/PD window activation >= {MIN_AD_PD_ACTIVATION} nahi mili — "
+            "sub-threshold dasha period mat cite karo; defer / weak signal bolo."
+        )
     else:
         out["strategy"] = out.get("strategy") or "Chart scan — probability window only."
     return out
@@ -109,15 +121,71 @@ def format_love_timing_for_prompt(v: dict, question: str = "") -> str:
         tops = [str(r.get("name")) for r in ranked[:3] if isinstance(r, dict) and r.get("name")]
         if tops:
             lines.append(f"▸ D1 significators: {', '.join(tops)}")
+    house_lords = v.get("domain_house_lords") or []
+    sig_rank = v.get("significator_rank") if isinstance(v.get("significator_rank"), list) else []
+    if sig_rank:
+        lines.append("▸ LOVE SIGNIFICATORS (score rank — lord / occupant / aspect / conjunct):")
+        for e in sig_rank[:10]:
+            if not isinstance(e, dict) or not e.get("planet"):
+                continue
+            lines.append(
+                f"  {e.get('planet')} score={e.get('score')} · {e.get('link') or e.get('tag')}"
+            )
+    elif house_lords:
+        hl_bits = [
+            f"{hl.get('tag')}={hl.get('planet')} score={hl.get('score')}"
+            for hl in house_lords[:5]
+            if isinstance(hl, dict) and hl.get("planet")
+        ]
+        if hl_bits:
+            lines.append(f"▸ Domain house lords: {' · '.join(hl_bits)}")
+    sig = v.get("primary_significator") if isinstance(v.get("primary_significator"), dict) else {}
+    if sig.get("name"):
+        roles = ", ".join(sig.get("roles") or []) or sig.get("house_tag") or "karaka"
+        lines.append(
+            f"▸ TOP love significator: {sig.get('name')} score={sig.get('score')} "
+            f"({roles}) — {sig.get('link') or 'love via AD/PD'}"
+        )
+    periods = v.get("timing_periods") if isinstance(v.get("timing_periods"), list) else []
+    if periods:
+        lines.append("▸ THREE RANKED LOVE PERIODS (engine locked):")
+        for p in periods[:3]:
+            if not isinstance(p, dict):
+                continue
+            rank = p.get("rank") or "?"
+            lords = p.get("lords") or "/".join(
+                x for x in (p.get("md"), p.get("ad"), p.get("pd")) if x
+            )
+            via = f" · love_via={p.get('love_via')}" if p.get("love_via") else ""
+            lines.append(
+                f"  #{rank} {p.get('start_iso')}→{p.get('end_iso')} "
+                f"MD/AD/PD={lords} act={p.get('activation_score')}{via}"
+            )
+        lines.append(
+            ">>> DEFAULT ANSWER: cite rank #1 ONLY. "
+            "User 'dusra/2nd/agla window' → rank #2; 'teesra/3rd' → rank #3."
+        )
     cw = v.get("current_window") or {}
-    if cw.get("start_iso") and cw.get("end_iso"):
+    if v.get("timing_source") == "no_qualified_window":
+        lines.append(
+            f">>> NO QUALIFIED WINDOW — activation < {MIN_AD_PD_ACTIVATION}. "
+            "Do NOT cite MD/AD/PD dates. Defer timing; no hallucinated periods."
+        )
+    elif not periods and cw.get("start_iso") and cw.get("end_iso"):
         active = "ACTIVE NOW" if cw.get("is_active_now") or v.get("timing_source") == "current_dasha_active" else "UPCOMING"
+        lords = cw.get("lords") or "/".join(
+            x for x in (cw.get("md"), cw.get("ad"), cw.get("pd")) if x
+        )
         lines.append(
             f"▸ PRIMARY window ({active}): {cw.get('start_iso')} → {cw.get('end_iso')} "
-            f"MD/AD/PD={cw.get('md', '?')}/{cw.get('ad', '?')}/{cw.get('pd', '?')}"
+            f"MD/AD/PD={lords or '?'}"
+        )
+        lines.append(
+            f">>> NARRATE rank #1 — MD/AD/PD {lords or '?'} "
+            f"({cw.get('start_iso')}→{cw.get('end_iso')})."
         )
     nxt = v.get("next_child_window")
-    if isinstance(nxt, dict) and nxt.get("start_iso"):
+    if isinstance(nxt, dict) and nxt.get("start_iso") and not periods:
         lines.append(
             f"▸ NEXT scan window: {nxt.get('start_iso')} → {nxt.get('end_iso')} "
             f"AD/PD={nxt.get('ad', '?')}/{nxt.get('pd', '?')}"

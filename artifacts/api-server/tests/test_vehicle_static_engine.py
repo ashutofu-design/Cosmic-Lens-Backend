@@ -96,3 +96,43 @@ def test_vehicle_timing_not_static() -> None:
     q = "Main apni pehli car/bike kab tak khareed paunga?"
     assert not is_vehicle_static_question(q)
     assert classify_engine_family(q) == "vehicle_timing"
+
+
+def test_car_colour_buy_not_property_timing() -> None:
+    from ask_property.timing_registry import is_property_timing_question
+    from ask_scope_gate import assess_ask_scope
+
+    q = "car konsa colour best hoga buy karne me"
+    assert is_vehicle_static_question(q)
+    assert not is_property_timing_question(q)
+    scope = assess_ask_scope(q)
+    assert scope.allowed, scope.reason
+
+
+def test_car_colour_buy_scope_implicit_ask() -> None:
+    from ask_question_normalize import looks_like_implicit_ask
+
+    assert looks_like_implicit_ask("car konsa colour best hoga buy karne me")
+
+
+def test_black_vs_white_car_colour() -> None:
+    q = "mujhse black car lena chahiye ya white"
+    assert is_vehicle_static_question(q)
+    assert classify_vehicle_archetype(q) == "vehicle_colour"
+    result = run_vehicle_static_engine(_MIN_KUNDLI, q, archetype="vehicle_colour")
+    assert result.archetype == "vehicle_colour"
+    assert "LOCKED_PICK" in " ".join(result.summary or [])
+    assert len(result.evidence) >= 4
+
+
+def test_passthrough_vehicle_engine_slice_counts() -> None:
+    from ask_hard_guards import passthrough_has_domain_engine_facts
+
+    assert passthrough_has_domain_engine_facts(
+        slice_meta={
+            "slice": "vehicle_engine_v1",
+            "verdict": "Between black vs white: chart favours white",
+            "evidence": ["4H vehicle/comfort axis"],
+            "archetype": "vehicle_colour",
+        },
+    )

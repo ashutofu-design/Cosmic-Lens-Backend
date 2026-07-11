@@ -19,6 +19,42 @@ def _run_engine(engine_id: str, kundli: dict, question: str, **kwargs: Any) -> E
             wants_explain=kwargs.get("wants_explain", False),
             orchestrator_meta=kwargs.get("orchestrator_meta"),
         )
+    if eid == "loyalty_trust":
+        from .engines.loyalty_trust import run_loyalty_trust_v2
+
+        return run_loyalty_trust_v2(
+            kundli,
+            question,
+            wants_explain=kwargs.get("wants_explain", False),
+            orchestrator_meta=kwargs.get("orchestrator_meta"),
+        )
+    if eid == "compatibility":
+        from .engines.compatibility import run_compatibility_v2
+
+        return run_compatibility_v2(
+            kundli,
+            question,
+            wants_explain=kwargs.get("wants_explain", False),
+            orchestrator_meta=kwargs.get("orchestrator_meta"),
+        )
+    if eid == "breakup_risk":
+        from .engines.breakup_risk import run_breakup_risk_v2
+
+        return run_breakup_risk_v2(
+            kundli,
+            question,
+            wants_explain=kwargs.get("wants_explain", False),
+            orchestrator_meta=kwargs.get("orchestrator_meta"),
+        )
+    if eid == "patchup":
+        from .engines.patchup import run_patchup_v2
+
+        return run_patchup_v2(
+            kundli,
+            question,
+            wants_explain=kwargs.get("wants_explain", False),
+            orchestrator_meta=kwargs.get("orchestrator_meta"),
+        )
     # Other engines: v1 adapter until migrated
     return None
 

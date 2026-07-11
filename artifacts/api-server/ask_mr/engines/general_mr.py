@@ -103,15 +103,37 @@ _CHALLENGE_Q = re.compile(
     re.I,
 )
 _EMOTIONAL_COMPAT_Q = re.compile(
-    r"\b(emotional\s*compat|compatibility|compatible|dil\s*ka\s*match)\b",
-    re.I,
+    r"(?ix)\b("
+    r"emotionally\s*compat(?:ible)?|emotional\s*compat(?:ibility)?|dil\s*ka\s*match"
+    r")\b",
 )
+_MENTAL_COMPAT_Q = re.compile(
+    r"(?ix)\b("
+    r"mentally\s*compat(?:ible)?|mental\s*match|mental\s*compat(?:ibility)?|"
+    r"thinking\s*match|soch\s*match|soch\s*milt|dimag|dimaag"
+    r")\b",
+)
+_INTELLECTUAL_COMPAT_Q = re.compile(
+    r"(?ix)\b("
+    r"intellectually\s*compat(?:ible)?|intellectual\s*match|intellectual\s*compat(?:ibility)?|"
+    r"budhi|akl|samajh\s*match"
+    r")\b",
+)
+_GENERAL_COMPAT_Q = re.compile(r"\b(compatible|compatibility)\b", re.I)
 _SUPPORT_Q = re.compile(
     r"\b(support|saath\s*deg[aei]|saath\s*dega|saath\s*degi)\b",
     re.I,
 )
 _GROWTH_Q = re.compile(
     r"\b(kaam\s+karna\s+chahiye|work\s+on|improve|sudhar|focus\s+area)\b",
+    re.I,
+)
+_RELATIONSHIP_IMPACT_Q = re.compile(
+    r"(?ix)\b("
+    r"(financial|finance|paisa|money|career|naukri|job|distance|foreign|settlement)"
+    r".{0,55}\b(relationship|rishta|partner|marriage|shaadi)"
+    r"|(relationship|rishta).{0,55}\b(affect|prabhav|impact|influence)\b"
+    r")\b",
     re.I,
 )
 _COMMUNICATION_Q = re.compile(
@@ -190,7 +212,11 @@ def _question_intent(question: str) -> str:
         return "challenges"
     if _COMMUNICATION_Q.search(q):
         return "communication"
-    if _EMOTIONAL_COMPAT_Q.search(q) or _MATURITY_Q.search(q):
+    if _MENTAL_COMPAT_Q.search(q):
+        return "mental_compatibility"
+    if _INTELLECTUAL_COMPAT_Q.search(q):
+        return "intellectual_compatibility"
+    if _EMOTIONAL_COMPAT_Q.search(q) or _MATURITY_Q.search(q) or _GENERAL_COMPAT_Q.search(q):
         return "emotional_compatibility"
     if _STABILITY_Q.search(q):
         return "stability"
@@ -202,6 +228,8 @@ def _question_intent(question: str) -> str:
         return "partner_support"
     if _GROWTH_Q.search(q):
         return "growth_focus"
+    if _RELATIONSHIP_IMPACT_Q.search(q):
+        return "challenges"
     return "quality"
 
 
@@ -267,6 +295,53 @@ def _synthesize_emotional_compatibility(kundli: dict, sig) -> list[str]:
         if len(lines) >= 5:
             break
 
+    return lines[:5]
+
+
+def _synthesize_mental_compatibility(kundli: dict, sig) -> list[str]:
+    lines = _synthesize_communication(kundli, sig)[:4]
+    if not lines:
+        lines.append(
+            "Mental rapport builds through clear talk and shared routines — patience bridges thinking gaps."
+        )
+    for key in ("Saturn on 7th", "Moon under Saturn/Rahu", "Mars on 7th"):
+        picked = pick_notes(sig, [key], limit=1)
+        if picked and len(lines) < 5:
+            lines.append(f"Mental friction: {picked[0]} — different processing pace needs patience.")
+    return lines[:5]
+
+
+def _synthesize_intellectual_compatibility(kundli: dict, sig) -> list[str]:
+    k = dict(kundli or {})
+    k.setdefault("name", "You")
+    r = KundliReader(k)
+    lines: list[str] = []
+
+    merc = r.planet("Mercury") or {}
+    if merc.get("house") in (1, 3, 5, 7, 9, 11):
+        lines.append(
+            f"Mercury in house {merc.get('house')} — ideas, debate and learning pace shape intellectual match"
+            f"{lordship_clause(r, 'Mercury')}."
+        )
+    jup = r.planet("Jupiter") or {}
+    if jup.get("house") in (1, 5, 9, 11):
+        lines.append(
+            f"Jupiter in house {jup.get('house')} — shared worldview and curiosity support intellectual alignment"
+            f"{lordship_clause(r, 'Jupiter')}."
+        )
+    occ7 = r.occupants(7)
+    if "Mercury" in occ7:
+        lines.append(
+            "Mercury in 7th — partner thinks aloud; intellectual sync needs open dialogue."
+        )
+    for key in ("Saturn on 7th", "Moon under Saturn/Rahu"):
+        picked = pick_notes(sig, [key], limit=1)
+        if picked and len(lines) < 5:
+            lines.append(f"Intellectual friction: {picked[0]} — explain ideas plainly when pace differs.")
+    if not lines:
+        lines.append(
+            "Intellectual match is mixed — shared interests and respectful debate matter most."
+        )
     return lines[:5]
 
 
@@ -373,6 +448,22 @@ def run_general_mr(kundli: dict, question: str, *, wants_explain: bool = False) 
             "Emotional compatibility: caring depth is present — "
             "steady expression needed when moods dip or distance hits"
         )
+    elif intent == "mental_compatibility":
+        evidence = _synthesize_mental_compatibility(kundli, sig)
+        if not evidence:
+            evidence = ["Mental compatibility looks mixed — clear talk and patience matter most."]
+        verdict = (
+            "Mental compatibility: thinking styles differ in places — "
+            "dialogue and patience bridge the gap"
+        )
+    elif intent == "intellectual_compatibility":
+        evidence = _synthesize_intellectual_compatibility(kundli, sig)
+        if not evidence:
+            evidence = ["Intellectual compatibility looks mixed — shared curiosity and respect help most."]
+        verdict = (
+            "Intellectual compatibility: ideas can align — "
+            "explain viewpoints plainly when pace or depth differs"
+        )
     elif intent == "partner_support":
         evidence = _synthesize_partner_support(kundli, sig)
         verdict = (
@@ -428,6 +519,16 @@ def run_general_mr(kundli: dict, question: str, *, wants_explain: bool = False) 
         summary[0] = (
             "Answer emotional compatibility directly — bond depth first, "
             "then emotional friction lines, one clear-talk habit."
+        )
+    elif intent == "mental_compatibility":
+        summary[0] = (
+            "Answer mental/thinking match directly — how you process ideas, "
+            "one communication habit, one patience note if friction exists."
+        )
+    elif intent == "intellectual_compatibility":
+        summary[0] = (
+            "Answer intellectual match directly — curiosity and idea-exchange first, "
+            "one friction caveat, one practical dialogue habit."
         )
     elif intent == "partner_support":
         summary[0] = (

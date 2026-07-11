@@ -35,8 +35,12 @@ _OWN_SIGNS: Dict[str, Set[int]] = {
 }
 _PLANETS_9 = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"]
 _D1_MIN = 10.0
-_DASHA_MD, _DASHA_AD, _DASHA_PD = 1, 5, 6
+_CONJUNCT_LORD_WEIGHT: Dict[int, float] = {5: 12.0, 7: 12.0, 11: 10.0}
 _MIN_GAP_DAYS = 45
+# Mandatory: no MD/AD/PD window may be cited unless activation score >= this.
+MIN_AD_PD_ACTIVATION = 9.0
+# Dasha-level weights for window scoring (MD background · AD trigger · PD finest).
+_DASHA_MD, _DASHA_AD, _DASHA_PD = 2.0, 7.0, 9.0
 
 
 @dataclass
@@ -62,7 +66,7 @@ class DomainTimingConfig:
     brand_safety: List[str] = field(default_factory=list)
     llm_directives: List[str] = field(default_factory=list)
     # Current AD/PD must reach this activation score to answer with running dasha.
-    min_current_activation: float = 9.0
+    min_current_activation: float = MIN_AD_PD_ACTIVATION
 
 
 def _sign_idx(v: Any) -> Optional[int]:
@@ -214,6 +218,14 @@ def _step1_filter(kundli: dict, lagna_si: int, cfg: DomainTimingConfig) -> Dict[
         lord = _house_lord(lagna_si, h)
         out[lord]["d1"] += w
         out[lord]["links"].append(label)
+        out[lord]["links"].append(f"{h}L")
+        lord_house = _planet_house(planets, lord)
+        if lord_house:
+            conj_w = _CONJUNCT_LORD_WEIGHT.get(h, 10.0)
+            for pname in _planets_in_house(planets, lord_house):
+                if pname != lord:
+                    out[pname]["d1"] += conj_w
+                    out[pname]["links"].append(f"conjunct {h}L({lord})")
     for h, w, label in cfg.leak_houses:
         lord = _house_lord(lagna_si, h)
         out[lord]["d1"] += w
@@ -302,6 +314,39 @@ def _classify_lords(ranked: List[Dict[str, Any]], cfg: DomainTimingConfig) -> Tu
     return promote, obstruct
 
 
+def _duration_days(w: Dict[str, Any]) -> int:
+    start, end = w.get("start"), w.get("end")
+    if isinstance(start, datetime) and isinstance(end, datetime):
+        return max(1, (end - start).days)
+    return 999_999
+
+
+def _finest_windows_containing_now(
+    windows: List[Dict[str, Any]],
+    now: datetime,
+) -> List[Dict[str, Any]]:
+    """Among dasha rows active at `now`, keep only the narrowest (PD > AD > MD)."""
+    running = [w for w in windows if w.get("start") and w.get("end") and w["start"] <= now <= w["end"]]
+    if not running:
+        return []
+    with_pd = [w for w in running if w.get("pd")]
+    pool = with_pd if with_pd else running
+    min_days = min(_duration_days(w) for w in pool)
+    return [w for w in pool if _duration_days(w) == min_days]
+
+
+def _lords_label(w: Dict[str, Any]) -> str:
+    if w.get("lords"):
+        return str(w["lords"])
+    return "/".join(x for x in (w.get("md"), w.get("ad"), w.get("pd")) if x)
+
+
+def _enrich_window_row(w: Dict[str, Any]) -> Dict[str, Any]:
+    row = dict(w)
+    row["lords"] = _lords_label(row)
+    return row
+
+
 def _step5_windows(
     chain: List[Dict[str, Any]],
     ranked: List[Dict[str, Any]],
@@ -336,15 +381,15 @@ def _step5_windows(
                 pos += contrib * 0.5
                 triggers.append(f"{role}={lord}(NEUTRAL,+{contrib*0.5:.1f})")
         net = max(0.1, pos - neg * 0.5)
-        windows.append({
+        windows.append(_enrich_window_row({
             "md": w["md"], "ad": w["ad"], "pd": w["pd"],
             "start": w["start"], "end": w["end"],
             "start_iso": w["start"].strftime("%Y-%m-%d"),
             "end_iso": w["end"].strftime("%Y-%m-%d"),
             "score": round(net, 2),
             "triggers": triggers,
-        })
-    windows.sort(key=lambda x: (-x["score"], x["start"]))
+        }))
+    windows.sort(key=lambda x: (x["start"], -x["score"]))
     return windows
 
 
@@ -387,15 +432,209 @@ def _activation_score(
     return val
 
 
+def _score_map_from_ranked(ranked: List[Dict[str, Any]]) -> Dict[str, float]:
+    return {
+        str(r["name"]): float(r.get("score") or 0)
+        for r in ranked
+        if r.get("name")
+    }
+
+
+def _build_domain_significator_rank(
+    lagna_si: int,
+    kundli: dict,
+    cfg: DomainTimingConfig,
+    ranked: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """All love/domain triggers rank-wise: lords, occupants, aspectors, conjunct lords, karakas."""
+    planets = kundli.get("planets") or []
+    score_map = _score_map_from_ranked(ranked)
+    entries: List[Dict[str, Any]] = []
+    seen: Set[Tuple[str, str, int]] = set()
+
+    def _add(planet: str, role: str, house: int, tag: str, link: str) -> None:
+        if not planet:
+            return
+        key = (planet, role, house)
+        if key in seen:
+            return
+        seen.add(key)
+        entries.append({
+            "planet": planet,
+            "role": role,
+            "house": house,
+            "tag": tag,
+            "link": link,
+            "score": round(score_map.get(planet, 0.0), 2),
+        })
+
+    for h, _w, label in cfg.concern_houses:
+        lord = _house_lord(lagna_si, h)
+        _add(lord, f"{h}L", h, f"{h}L", f"{h}L lord — {label}")
+
+        for pname in _planets_in_house(planets, h):
+            _add(pname, "occupant", h, f"{h}H", f"occupies {h}H — {label}")
+
+        for pname in _PLANETS_9:
+            ap = _planet_house(planets, pname)
+            if ap and _aspects_house(pname, ap, h):
+                _add(pname, "aspector", h, f"aspect_{h}H", f"aspects {h}H — {label}")
+
+        lord_house = _planet_house(planets, lord)
+        if lord_house:
+            for pname in _planets_in_house(planets, lord_house):
+                if pname != lord:
+                    _add(
+                        pname, "conjunct_lord", h, f"conj_{h}L",
+                        f"conjunct {h}L ({lord}) — {label}",
+                    )
+
+    for name, _w, label in cfg.karakas:
+        _add(name, "karaka", 0, "karaka", label)
+
+    entries.sort(key=lambda x: (-x["score"], x["house"], x["planet"]))
+    return entries
+
+
+def _build_domain_house_lords(
+    lagna_si: int,
+    cfg: DomainTimingConfig,
+    ranked: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Per concern-house lord (e.g. 5L/7L/11L) with D1+divisional composite score."""
+    score_map = _score_map_from_ranked(ranked)
+    seen: Set[int] = set()
+    out: List[Dict[str, Any]] = []
+    for h, _w, label in cfg.concern_houses:
+        if h in seen:
+            continue
+        seen.add(h)
+        planet = _house_lord(lagna_si, h)
+        out.append({
+            "tag": f"{h}L",
+            "house": h,
+            "planet": planet,
+            "score": round(score_map.get(planet, 0.0), 2),
+            "label": label,
+        })
+    out.sort(key=lambda x: (-x["score"], x["house"]))
+    return out
+
+
+def _annotate_significator_on_window(
+    row: Dict[str, Any],
+    significator: Optional[str],
+) -> Dict[str, Any]:
+    """Mark whether love trigger is via AD or PD for the top significator planet."""
+    out = dict(row)
+    sig = _norm_lord(significator)
+    if not sig:
+        return out
+    ad, pd = _norm_lord(out.get("ad")), _norm_lord(out.get("pd"))
+    out["love_planet"] = significator
+    if pd == sig:
+        out["love_via"] = "PD"
+    elif ad == sig:
+        out["love_via"] = "AD"
+    else:
+        out["love_via"] = None
+    return out
+
+
+def _pick_primary_significator(
+    significator_rank: List[Dict[str, Any]],
+    ranked: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Highest-score linkage (lord / occupant / aspect / conjunct / karaka) — timing via AD/PD."""
+    by_planet: Dict[str, Dict[str, Any]] = {}
+    for entry in significator_rank:
+        planet = str(entry.get("planet") or "").strip()
+        if not planet:
+            continue
+        sc = float(entry.get("score") or 0)
+        if planet not in by_planet or sc > float(by_planet[planet].get("score") or 0):
+            by_planet[planet] = dict(entry)
+    if not by_planet:
+        for r in ranked[:6]:
+            name = str(r.get("name") or "").strip()
+            if name:
+                by_planet[name] = {"planet": name, "score": float(r.get("score") or 0), "tag": "ranked"}
+    if not by_planet:
+        return {}
+    best_name, best_entry = max(
+        by_planet.items(),
+        key=lambda x: float(x[1].get("score") or 0),
+    )
+    roles = sorted({
+        str(e.get("tag") or e.get("role") or "")
+        for e in significator_rank
+        if str(e.get("planet") or "").strip() == best_name and (e.get("tag") or e.get("role"))
+    })
+    links = [
+        str(e.get("link") or "")
+        for e in significator_rank
+        if str(e.get("planet") or "").strip() == best_name and e.get("link")
+    ]
+    return {
+        "name": best_name,
+        "score": round(float(best_entry.get("score") or 0), 2),
+        "house_tag": best_entry.get("tag") or (roles[0] if roles else None),
+        "roles": roles,
+        "link": links[0] if links else best_entry.get("link"),
+        "expected_via": "AD/PD",
+    }
+
+
+def _build_three_timing_periods(
+    windows: List[Dict[str, Any]],
+    ranked: List[Dict[str, Any]],
+    promote: Set[str],
+    now: datetime,
+    min_activation: float,
+    primary: Optional[Dict[str, Any]],
+    significator: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Up to 3 qualified windows (activation >= min), chronological, min gap apart."""
+    score_map = _score_map_from_ranked(ranked)
+    qualified: List[Dict[str, Any]] = []
+    for w in sorted(windows, key=lambda x: x.get("start") or now):
+        if not w.get("end") or w["end"] <= now:
+            continue
+        act = _activation_score(w, promote, score_map)
+        if act < min_activation:
+            continue
+        row = _enrich_window_row(w)
+        row["activation_score"] = round(act, 2)
+        row["is_active_now"] = bool(w.get("start") and w["start"] <= now <= w["end"])
+        qualified.append(_annotate_significator_on_window(row, significator))
+
+    if primary and primary.get("start"):
+        ps = primary["start"]
+        qualified.sort(key=lambda x: (0 if x.get("start") == ps else 1, x.get("start") or now))
+
+    chosen: List[Dict[str, Any]] = []
+    for w in qualified:
+        if all(abs((w["start"] - c["start"]).days) >= _MIN_GAP_DAYS for c in chosen):
+            row = dict(w)
+            row["rank"] = len(chosen) + 1
+            chosen.append(row)
+        if len(chosen) >= 3:
+            break
+    return chosen
+
+
 def pick_primary_timing_window(
     windows: List[Dict[str, Any]],
     ranked: List[Dict[str, Any]],
     promote: Set[str],
     now: datetime,
     *,
-    min_ad_pd: float = 9.0,
+    min_ad_pd: float = MIN_AD_PD_ACTIVATION,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], str, bool]:
-    """Dasha-first: current AD/PD active (score >= min) → else scan forward."""
+    """Dasha-first: current AD/PD active (score >= min) → else chronology forward scan.
+
+    Mandatory: periods with activation < min_ad_pd are never cited — scan next PD/AD.
+    """
     if not windows:
         return None, None, "none", False
 
@@ -405,7 +644,10 @@ def pick_primary_timing_window(
         if r.get("name")
     }
 
-    running = [w for w in windows if w["start"] <= now <= w["end"]]
+    def _qualified(w: Dict[str, Any]) -> bool:
+        return _activation_score(w, promote, score_map) >= min_ad_pd
+
+    running = _finest_windows_containing_now(windows, now)
     if running:
         best_run = max(
             running,
@@ -413,39 +655,34 @@ def pick_primary_timing_window(
         )
         act = _activation_score(best_run, promote, score_map)
         if act >= min_ad_pd:
-            future = sorted([w for w in windows if w["start"] > now], key=lambda x: x["start"])
-            nxt = next(
-                (w for w in future if _activation_score(w, promote, score_map) >= min_ad_pd),
-                None,
+            future = sorted(
+                [w for w in windows if w.get("start") and w["start"] > now],
+                key=lambda x: x["start"],
             )
-            row = dict(best_run)
+            nxt = next((w for w in future if _qualified(w)), None)
+            row = _enrich_window_row(best_run)
             row["is_active_now"] = True
             row["activation_score"] = round(act, 2)
-            return row, nxt, "current_dasha_active", True
+            return row, (_enrich_window_row(nxt) if nxt else None), "current_dasha_active", True
 
-    future = sorted([w for w in windows if w["end"] > now], key=lambda x: x["start"])
+    future = sorted(
+        [w for w in windows if w.get("end") and w["end"] > now],
+        key=lambda x: x["start"],
+    )
     for w in future:
+        if not _qualified(w):
+            continue
         act = _activation_score(w, promote, score_map)
-        if act >= min_ad_pd:
-            row = dict(w)
-            row["is_active_now"] = w["start"] <= now <= w["end"]
-            row["activation_score"] = round(act, 2)
-            nxt = next(
-                (
-                    x
-                    for x in future
-                    if x["start"] > w["start"]
-                    and _activation_score(x, promote, score_map) >= min_ad_pd
-                ),
-                None,
-            )
-            return row, nxt, "next_dasha_scan", False
+        row = _enrich_window_row(w)
+        row["is_active_now"] = w["start"] <= now <= w["end"]
+        row["activation_score"] = round(act, 2)
+        nxt = next(
+            (x for x in future if x["start"] > w["start"] and _qualified(x)),
+            None,
+        )
+        return row, (_enrich_window_row(nxt) if nxt else None), "next_dasha_scan", False
 
-    top = _pick_top(windows, 1)
-    fallback = dict(top[0]) if top else None
-    if fallback:
-        fallback["is_active_now"] = fallback["start"] <= now <= fallback["end"]
-    return fallback, None, "fallback_top_score", False
+    return None, None, "no_qualified_window", False
 
 
 def _verdict(score: float, cfg: DomainTimingConfig) -> Tuple[str, str]:
@@ -514,14 +751,70 @@ def compute_generic_timing_window(
         windows, ranked, promote, now,
         min_ad_pd=cfg.min_current_activation,
     )
-    top3: List[Dict[str, Any]] = []
-    if primary:
-        top3.append(primary)
-    if next_win:
-        top3.append(next_win)
-    for w in _pick_top(windows, 3):
-        if all(w.get("start") != x.get("start") for x in top3) and len(top3) < 3:
-            top3.append(w)
+
+    domain_house_lords = _build_domain_house_lords(lagna_si, cfg, ranked)
+    significator_rank = _build_domain_significator_rank(lagna_si, kundli, cfg, ranked)
+    primary_significator = _pick_primary_significator(significator_rank, ranked)
+    sig_name = primary_significator.get("name") if primary_significator else None
+
+    timing_periods = _build_three_timing_periods(
+        windows, ranked, promote, now, cfg.min_current_activation,
+        primary, sig_name,
+    )
+    if timing_periods:
+        primary = timing_periods[0]
+        next_win = timing_periods[1] if len(timing_periods) > 1 else next_win
+
+    top3: List[Dict[str, Any]] = list(timing_periods)
+    if not top3:
+        if primary:
+            top3.append(primary)
+        if next_win:
+            top3.append(next_win)
+        future_only = sorted(
+            [w for w in windows if w.get("start") and w["start"] > now],
+            key=lambda x: x["start"],
+        )
+        for w in future_only:
+            if len(top3) >= 3:
+                break
+            act = _activation_score(w, promote, score_map)
+            if act < cfg.min_current_activation:
+                continue
+            if all(w.get("start") != x.get("start") for x in top3):
+                row = _enrich_window_row(w)
+                row["activation_score"] = round(act, 2)
+                top3.append(_annotate_significator_on_window(row, sig_name))
+
+    if significator_rank:
+        sig_bits = [
+            f"{e['planet']}({e['score']})={e.get('tag') or e.get('role')}"
+            for e in significator_rank[:8]
+        ]
+        factors.append(f"STEP2 significators={' · '.join(sig_bits)}")
+    elif domain_house_lords:
+        lord_bits = [
+            f"{hl['tag']}={hl['planet']}({hl['score']})"
+            for hl in domain_house_lords[:5]
+        ]
+        factors.append(f"STEP2 domain_lords={' · '.join(lord_bits)}")
+    if primary_significator:
+        factors.append(
+            f"STEP3 TOP_SIGNIFICATOR={primary_significator.get('name')} "
+            f"score={primary_significator.get('score')} "
+            f"roles={','.join(primary_significator.get('roles') or []) or primary_significator.get('house_tag') or 'karaka'} "
+            f"link={primary_significator.get('link') or '—'} "
+            "→ love via this planet AD/PD"
+        )
+    if timing_periods:
+        period_bits = [
+            f"#{p.get('rank')} {p.get('start_iso')}→{p.get('end_iso')} "
+            f"{p.get('lords') or ''} act={p.get('activation_score')}"
+            + (f" love_via={p.get('love_via')}" if p.get("love_via") else "")
+            for p in timing_periods
+        ]
+        factors.append(f"STEP3 PERIODS={' | '.join(period_bits)}")
+
     factors.append(f"STEP5 windows_found={len(windows)} source={timing_source}")
     if timing_source == "current_dasha_active" and primary:
         factors.append(
@@ -535,8 +828,13 @@ def compute_generic_timing_window(
             f"first active {primary.get('start_iso')}→{primary.get('end_iso')} "
             f"AD/PD={primary.get('ad')}/{primary.get('pd')} score={primary.get('activation_score')}"
         )
+    elif timing_source == "no_qualified_window":
+        factors.append(
+            f"STEP5 PRIMARY=NONE — no AD/PD/PD window scored >= {cfg.min_current_activation}; "
+            "do not cite sub-threshold dasha periods"
+        )
     elif primary:
-        factors.append("STEP5 PRIMARY=fallback highest-score window")
+        factors.append("STEP5 PRIMARY=qualified window")
 
     dt_result: Dict[str, Any] = {}
     if check_double_transit and cfg.double_transit_houses:
@@ -555,10 +853,13 @@ def compute_generic_timing_window(
         except Exception as exc:
             factors.append(f"STEP6 double_transit skipped: {exc}")
 
-    top_score = primary.get("score", 0) if primary else (top3[0]["score"] if top3 else 5.0)
+    top_score = primary.get("score", 0) if primary else 5.0
     if dt_result.get("active") and primary:
         top_score *= 0.85
-    verdict, band = _verdict(top_score, cfg)
+    if not primary:
+        verdict, band = cfg.defer_label, "WEAK"
+    else:
+        verdict, band = _verdict(top_score, cfg)
 
     payload = {
         "verdict": verdict,
@@ -567,6 +868,10 @@ def compute_generic_timing_window(
         "domain": cfg.domain,
         "current_window": primary,
         "next_3_windows": top3,
+        "timing_periods": timing_periods,
+        "domain_house_lords": domain_house_lords,
+        "significator_rank": significator_rank,
+        "primary_significator": primary_significator,
         "next_child_window": next_win,
         "timing_source": timing_source,
         "current_supports": current_supports,

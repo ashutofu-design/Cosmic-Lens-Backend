@@ -2,10 +2,11 @@ import type { ReactNode } from "react";
 import type { AskQuestionItem } from "./api";
 import { formatInr } from "./api";
 import {
-  ASTRO_MODULE_LABELS,
+  OBS_DEBUGGER_VERSION,
   orderScorecardEntries,
   resolveAskObservability,
   type ObservabilityEvidence,
+  type ObservabilityRule,
 } from "./askObservability";
 
 function Section({
@@ -38,44 +39,11 @@ function PipelineList({ steps }: { steps: { label: string; value: string }[] }) 
       {steps.map((step, i) => (
         <li key={`${step.label}-${i}`}>
           <span className="obs-pipeline-label">{step.label}</span>
-          <span className="obs-pipeline-value">{step.value}</span>
+          <span className="obs-pipeline-value obs-pipeline-pre">{step.value}</span>
           {i < steps.length - 1 ? <span className="obs-pipeline-arrow">↓</span> : null}
         </li>
       ))}
     </ol>
-  );
-}
-
-function AstroChecks({ checks }: { checks: Record<string, string[]> }) {
-  const preferredOrder = ["d1", "d9", "dasha", "transit", "kp", "ashtakavarga", "jaimini", "bcp"];
-  const entries = Object.entries(checks || {}).filter(([, lines]) => lines.length > 0);
-  entries.sort(([a], [b]) => {
-    const ai = preferredOrder.indexOf(a.toLowerCase());
-    const bi = preferredOrder.indexOf(b.toLowerCase());
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-  });
-
-  if (entries.length === 0) {
-    return (
-      <p className="detail-muted">
-        No per-module checks saved — re-ask after API deploy for full astrology audit.
-      </p>
-    );
-  }
-
-  return (
-    <div className="obs-astro-checks">
-      {entries.map(([mod, lines]) => (
-        <div key={mod} className="obs-subblock">
-          <strong>{ASTRO_MODULE_LABELS[mod.toLowerCase()] || `${mod.toUpperCase()} — what was checked`}</strong>
-          <ul className="obs-rules-list">
-            {lines.map((line, i) => (
-              <li key={`${mod}-${i}`}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -100,7 +68,9 @@ function EvidenceColumn({
               <span>
                 {icon} {e.label}
               </span>
-              {e.weight !== 0 ? <span className="obs-weight">{e.weight > 0 ? `+${e.weight}` : e.weight}</span> : null}
+              {e.weight !== 0 ? (
+                <span className="obs-weight">{e.weight > 0 ? `+${e.weight}` : e.weight}</span>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -109,12 +79,76 @@ function EvidenceColumn({
   );
 }
 
-function formatFactorList(items: (string | ObservabilityEvidence)[] | undefined): string[] {
-  if (!items?.length) return [];
-  return items.map((item) => {
-    if (typeof item === "string") return item;
-    return item.label || "—";
-  });
+function formatRulesFired(fired: ObservabilityRule[]): string {
+  if (!fired.length) {
+    return "— (no COM rules saved — legacy row or re-ask after deploy)";
+  }
+  return fired
+    .map((r) => {
+      const mark = r.polarity === "negative" ? "❌" : "✅";
+      const extra = r.note || r.module || "";
+      const weight =
+        r.weight != null ? ` (${r.weight > 0 ? "+" : ""}${r.weight})` : "";
+      return `${r.rule_id || "?"} ${mark}${extra ? ` — ${extra}` : ""}${weight}`;
+    })
+    .join("\n");
+}
+
+function formatRulesIgnored(ignored: ObservabilityRule[]): string {
+  if (!ignored.length) return "";
+  return ignored
+    .map((r) => `${r.rule_id || "?"}\nReason: ${r.reason || "not applicable"}`)
+    .join("\n\n");
+}
+
+function buildEngineExecutionSteps(
+  exec: ReturnType<typeof resolveAskObservability>["engine_execution"],
+): { label: string; value: string }[] {
+  const modules = exec?.modules || [];
+  const modLines =
+    modules.length > 0
+      ? modules.map((m) => `${m.loaded ? "✅" : "❌"} ${m.module}`).join("\n")
+      : "—";
+
+  const steps: { label: string; value: string }[] = [
+    { label: "Modules Loaded", value: modLines },
+    { label: "Rules Fired", value: formatRulesFired(exec?.fired || []) },
+  ];
+
+  const ignoredText = formatRulesIgnored(exec?.ignored || []);
+  if (ignoredText) {
+    steps.push({ label: "Rules Ignored", value: ignoredText });
+  }
+
+  steps.push(
+    { label: "Final Score", value: String(exec?.final_score ?? "—") },
+    { label: "Verdict", value: String(exec?.verdict || exec?.verdict_level || "—") },
+  );
+
+  return steps;
+}
+
+function buildConflictSteps(
+  conflict: ReturnType<typeof resolveAskObservability>["conflict_resolution"],
+): { label: string; value: string }[] {
+  const modules = conflict?.modules || [];
+  const steps: { label: string; value: string }[] = [];
+
+  if (modules.length) {
+    steps.push({
+      label: "Module polarity",
+      value: modules.map((m) => `${m.module}\n${m.polarity}`).join("\n\n"),
+    });
+  } else {
+    steps.push({ label: "Module polarity", value: "—" });
+  }
+
+  steps.push(
+    { label: "Conflict", value: conflict?.conflict || conflict?.final_result || "None" },
+    { label: "Reason", value: conflict?.reason || "—" },
+  );
+
+  return steps;
 }
 
 function formatMs(ms: number | null | undefined): string {
@@ -129,158 +163,72 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
   const conflict = obs.conflict_resolution || {};
   const scorecard = obs.scorecard || {};
   const scoreEntries = orderScorecardEntries(scorecard);
-  const routing = obs.routing_decision || {};
-  const engineVerdict = obs.engine_verdict || {};
-  const astro = obs.astrology_checks || {};
   const perf = obs.performance || {};
   const trace = obs.final_trace || [];
   const hallSummary = obs.hallucination_summary;
-  const modulesSkipped = exec.modules_skipped || (exec.modules || []).filter((m) => !m.loaded).map((m) => m.module);
 
   return (
     <div className="obs-debugger">
       <div className="obs-debugger-header">
-        <h3>Answer Details</h3>
+        <div className="obs-debugger-title-row">
+          <h3>Developer debugger</h3>
+          <span className="obs-version-badge">v{OBS_DEBUGGER_VERSION}</span>
+        </div>
         <p className="detail-muted">
-          Production pipeline: Question → DNA → Routing → Engine → Rules → Evidence → Narrator → Answer
+          Question → DNA → Engine → Modules → Rules → Evidence → Score → Verdict → Narrator → Answer
+        </p>
+        <p className="obs-telemetry detail-muted">
+          {perf.model || row.llm_model ? `Model ${perf.model || row.llm_model}` : null}
+          {row.total_tokens != null
+            ? ` · ${(perf.prompt_tokens ?? row.prompt_tokens ?? 0).toLocaleString("en-IN")} in / ${(perf.completion_tokens ?? row.completion_tokens ?? 0).toLocaleString("en-IN")} out`
+            : null}
+          {row.cost_inr != null ? ` · ${formatInr(row.cost_inr)}` : null}
+          {perf.response_time_ms != null || exec.execution_time_ms != null
+            ? ` · ${formatMs(perf.response_time_ms ?? exec.execution_time_ms)}`
+            : null}
         </p>
       </div>
 
-      {obs.routing_warning || routing.routing_warning ? (
-        <div className="obs-routing-warning">
-          {obs.routing_warning || routing.routing_warning}
+      {obs.routing_warning ? (
+        <div className="obs-routing-warning">{obs.routing_warning}</div>
+      ) : null}
+
+      {!obs.has_v2_rules && !obs.has_step_audit ? (
+        <div className="obs-routing-warning obs-legacy-hint">
+          Legacy row — limited engine audit. Re-ask this question after API deploy for full COM rules,
+          narrator JSON, and hallucination checks.
         </div>
       ) : null}
 
-      <Section title="1. User Question">
-        <PipelineList steps={obs.user_question || []} />
-      </Section>
-
-      <Section title="2. Question DNA" stars={1}>
+      <Section title="1. Question DNA" stars={1}>
         <PipelineList steps={obs.question_dna_pipeline || []} />
       </Section>
 
-      <Section title="3. Routing Decision">
-        <p>
-          <strong>Kyun ye engine select hua</strong>
+      <Section title="2. Engine Execution" stars={5}>
+        <p className="detail-muted obs-engine-name">
+          Engine: <code>{exec.engine_name || "—"}</code>
+          {exec.engine_version ? ` · v${exec.engine_version}` : null}
         </p>
-        <p>
-          <code>{routing.selected_engine || "—"}</code>
-        </p>
-        <p className="detail-muted">{routing.why_selected || "—"}</p>
-        <div className="obs-subblock">
-          <strong>Kyun doosre engines reject hue</strong>
-          {(routing.rejected_engines || []).length > 0 ? (
-            <ul className="obs-rules-list">
-              {(routing.rejected_engines || []).map((r, i) => (
-                <li key={`rej-${i}`}>{r}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="detail-muted">No explicit rejections logged.</p>
-          )}
-        </div>
+        <PipelineList steps={buildEngineExecutionSteps(exec)} />
       </Section>
 
-      <Section title="4. Engine Execution" stars={1}>
-        <p>
-          <strong>Engine Name:</strong> {exec.engine_name || routing.selected_engine || "—"}
-          {exec.engine_version ? (
-            <span className="detail-muted"> · v{exec.engine_version}</span>
-          ) : null}
-        </p>
-        <div className="obs-subblock">
-          <strong>Modules loaded</strong>
-          <ul className="obs-checklist">
-            {(exec.modules || []).map((m) => (
-              <li key={m.module}>
-                {m.loaded ? "✅" : "❌"} {m.module}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="obs-subblock">
-          <strong>Modules skipped</strong>
-          {modulesSkipped.length > 0 ? (
-            <ul className="obs-checklist">
-              {modulesSkipped.map((mod) => (
-                <li key={mod}>⏭ {mod}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="detail-muted">None — all catalog modules ran or N/A.</p>
-          )}
-        </div>
-        <p>
-          <strong>Execution time:</strong> {formatMs(exec.execution_time_ms ?? perf.response_time_ms)}
-        </p>
-      </Section>
-
-      <Section title="5. Astrology Checks" stars={3}>
-        <AstroChecks checks={astro} />
-      </Section>
-
-      <Section title="6. Rules Fired" stars={5}>
-        {(exec.fired || []).length === 0 ? (
-          <p className="detail-muted">
-            No COM/TRUST rule IDs saved (mr_engine_v1 / legacy row). Planet evidence + astrology checks
-            sections below show what the engine actually evaluated.
-          </p>
-        ) : (
-          <ul className="obs-rules-list">
-            {(exec.fired || []).map((r, i) => (
-              <li key={`${r.rule_id}-${i}`}>
-                <code>{r.rule_id}</code>{" "}
-                {r.polarity === "negative" ? "❌" : "✅"}{" "}
-                {r.note || r.module}
-                {r.weight != null ? ` (${r.weight > 0 ? "+" : ""}${r.weight})` : ""}
-              </li>
-            ))}
-          </ul>
-        )}
-        {(exec.ignored || []).length > 0 ? (
-          <div className="obs-subblock">
-            <strong>Skip reason</strong>
-            <ul className="obs-rules-list">
-              {(exec.ignored || []).map((r, i) => (
-                <li key={`${r.rule_id}-${i}`}>
-                  <code>{r.rule_id}</code>
-                  {r.reason ? <span className="detail-muted"> — {r.reason}</span> : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </Section>
-
-      <Section title="7. Planet Evidence" stars={5}>
-        <div className="obs-evidence-cols obs-evidence-cols-3">
+      <Section title="3. Planet Evidence" stars={5}>
+        <div className="obs-evidence-cols">
           <EvidenceColumn title="Positive" items={evidence.positive || []} icon="✅" />
           <EvidenceColumn title="Negative" items={evidence.negative || []} icon="❌" />
-          <EvidenceColumn title="Neutral" items={evidence.neutral || []} icon="○" />
         </div>
-      </Section>
-
-      <Section title="8. Conflict Resolution" stars={3}>
-        <div className="obs-conflict-pairs">
-          <div>
-            <span className="detail-muted">D1 vs D9</span>
-            <div>{conflict.d1_vs_d9 || "—"}</div>
+        {(evidence.neutral || []).length > 0 ? (
+          <div className="obs-subblock">
+            <EvidenceColumn title="Neutral" items={evidence.neutral || []} icon="○" />
           </div>
-          <div>
-            <span className="detail-muted">Dasha vs Transit</span>
-            <div>{conflict.dasha_vs_transit || "—"}</div>
-          </div>
-        </div>
-        <p className="obs-conflict-final">
-          <strong>Final conflict result:</strong> {conflict.final_result || conflict.conflict || "—"}
-        </p>
-        {conflict.reason && conflict.reason !== "—" ? (
-          <p className="detail-muted">{conflict.reason}</p>
         ) : null}
       </Section>
 
-      <Section title="9. Scorecard" stars={5}>
+      <Section title="4. Conflict Resolution" stars={3}>
+        <PipelineList steps={buildConflictSteps(conflict)} />
+      </Section>
+
+      <Section title="5. Scorecard" stars={5}>
         {scoreEntries.length === 0 ? (
           <p className="detail-muted">No scorecard saved.</p>
         ) : (
@@ -295,68 +243,21 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         )}
       </Section>
 
-      <Section title="10. Final Engine Verdict" stars={4}>
-        <div className="obs-score-verdict">
-          <div>
-            <span className="detail-muted">Verdict</span>
-            <div className="obs-big-value">{engineVerdict.verdict || exec.verdict || "—"}</div>
-          </div>
-          <div>
-            <span className="detail-muted">Confidence</span>
-            <div className="obs-big-value">{engineVerdict.confidence ?? exec.final_score ?? "—"}</div>
-          </div>
-          <div>
-            <span className="detail-muted">Timing</span>
-            <div className="obs-big-value obs-big-value-sm">{engineVerdict.timing || "—"}</div>
-          </div>
-        </div>
-        <div className="obs-subblock">
-          <strong>Strongest factors</strong>
-          <ul className="obs-rules-list">
-            {formatFactorList(engineVerdict.strongest).map((f, i) => (
-              <li key={`str-${i}`}>✅ {f}</li>
-            ))}
-            {formatFactorList(engineVerdict.strongest).length === 0 ? (
-              <li className="detail-muted">—</li>
-            ) : null}
-          </ul>
-        </div>
-        <div className="obs-subblock">
-          <strong>Weakest factors</strong>
-          <ul className="obs-rules-list">
-            {formatFactorList(engineVerdict.weakest).map((f, i) => (
-              <li key={`weak-${i}`}>❌ {f}</li>
-            ))}
-            {formatFactorList(engineVerdict.weakest).length === 0 ? (
-              <li className="detail-muted">—</li>
-            ) : null}
-          </ul>
-        </div>
-        {(engineVerdict.warnings || []).length > 0 ? (
-          <div className="obs-subblock">
-            <strong>Warnings</strong>
-            <ul className="obs-rules-list">
-              {(engineVerdict.warnings || []).map((w, i) => (
-                <li key={`warn-${i}`}>⚠ {w}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </Section>
-
-      <Section title="11. Narrator Input (LLM JSON)" stars={5}>
+      <Section title="6. Narrator Input" stars={5}>
         {obs.narrator_input ? (
           <pre className="obs-json">{JSON.stringify(obs.narrator_input, null, 2)}</pre>
         ) : (
-          <p className="detail-muted">Not saved — re-ask after deploy to capture exact ENGINE_JSON sent to LLM.</p>
+          <p className="detail-muted">
+            Not saved — exact JSON sent to LLM missing. Re-ask after deploy.
+          </p>
         )}
       </Section>
 
-      <Section title="12. Narrator Output" stars={4}>
+      <Section title="7. Narrator Output">
         <pre className="obs-answer-preview">{obs.narrator_output || row.answer_text || "—"}</pre>
       </Section>
 
-      <Section title="13. Hallucination Check" stars={5}>
+      <Section title="8. Hallucination Check" stars={5}>
         {hallSummary ? (
           <ul className="obs-hallucination-summary">
             <li className={hallSummary.engine_facts_used?.ok ? "obs-ok" : "obs-bad"}>
@@ -401,7 +302,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
                   <td>{h.field}</td>
                   <td>{h.engine}</td>
                   <td>{h.narrator}</td>
-                  <td>{h.ok ? "✅" : "❌"}</td>
+                  <td>{h.ok ? "✅" : "❌ Hallucination"}</td>
                 </tr>
               ))}
             </tbody>
@@ -409,43 +310,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         )}
       </Section>
 
-      <Section title="14. Performance" stars={2} defaultOpen={false}>
-        <PipelineList
-          steps={[
-            {
-              label: "Tokens",
-              value:
-                perf.total_tokens != null || row.total_tokens != null
-                  ? `${(perf.prompt_tokens ?? row.prompt_tokens ?? 0).toLocaleString("en-IN")} in · ${(perf.completion_tokens ?? row.completion_tokens ?? 0).toLocaleString("en-IN")} out${(perf.cached_tokens ?? row.cached_tokens) ? ` · ${perf.cached_tokens ?? row.cached_tokens} cached` : ""}`
-                  : "—",
-            },
-            {
-              label: "Cost",
-              value:
-                perf.cost_inr != null || row.cost_inr != null
-                  ? `${formatInr(perf.cost_inr ?? row.cost_inr ?? 0)}${perf.cost_usd != null || row.cost_usd != null ? ` ($${(perf.cost_usd ?? row.cost_usd ?? 0).toFixed(4)})` : ""}`
-                  : "—",
-            },
-            {
-              label: "Response time",
-              value: formatMs(perf.response_time_ms ?? exec.execution_time_ms),
-            },
-            {
-              label: "Cache",
-              value:
-                perf.cache_hit === true || (perf.cached_tokens ?? row.cached_tokens)
-                  ? "Hit"
-                  : perf.cache_hit === false || perf.total_tokens || row.total_tokens
-                    ? "Miss"
-                    : "—",
-            },
-            { label: "Model", value: String(perf.model || row.llm_model || "—") },
-            { label: "LLM called", value: perf.llm_called === false ? "no" : "yes" },
-          ]}
-        />
-      </Section>
-
-      <Section title="15. Final Trace" stars={4} defaultOpen={false}>
+      <Section title="9. Final Trace" stars={4} defaultOpen>
         <PipelineList steps={trace} />
       </Section>
     </div>

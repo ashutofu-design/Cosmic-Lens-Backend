@@ -407,6 +407,116 @@ def _fmt_dasha_date(dt: Optional[datetime]) -> Optional[str]:
     return dt.strftime("%Y-%m")
 
 
+_PROMO_WINDOWS_TOP_N = 3
+
+
+def _promo_window_key(w: dict) -> tuple[str, str, str]:
+    return (
+        str(w.get("lords") or "").strip(),
+        str(w.get("start") or w.get("start_label") or "").strip(),
+        str(w.get("end") or w.get("end_label") or "").strip(),
+    )
+
+
+def _promo_window_row(
+    *,
+    md: Any = None,
+    ad: Any = None,
+    pd: Any = None,
+    lords: Any = None,
+    start: Any = None,
+    end: Any = None,
+    score: Any = None,
+    reason: Any = None,
+    timing_source: Any = None,
+    bcp_aligned: bool = False,
+) -> dict:
+    lords_s = str(lords or "").strip() or "/".join(x for x in (md, ad, pd) if x)
+    return {
+        "md": md,
+        "ad": ad,
+        "pd": pd,
+        "lords": lords_s or None,
+        "start": start,
+        "end": end,
+        "score": score,
+        "reason": reason,
+        "timing_source": timing_source,
+        "bcp_aligned": bcp_aligned,
+    }
+
+
+def _merge_promotion_windows_top3(
+    ranked: list[dict],
+    chain: list[dict],
+    core: set[str],
+    today: datetime,
+    *,
+    bcp_ages: Optional[set] = None,
+) -> list[dict]:
+    """Up to 3 future promotion windows — #1 is PRIMARY (answer)."""
+    out: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    bcp_ages = bcp_ages or set()
+
+    def _push(row: dict) -> None:
+        if len(out) >= _PROMO_WINDOWS_TOP_N:
+            return
+        key = _promo_window_key(row)
+        if not key[0] or key in seen:
+            return
+        seen.add(key)
+        out.append(row)
+
+    for w in ranked:
+        end_raw = w.get("end")
+        if isinstance(end_raw, datetime) and end_raw < today:
+            continue
+        _push(_promo_window_row(
+            md=w.get("md"),
+            ad=w.get("ad"),
+            pd=w.get("pd"),
+            lords=w.get("lords"),
+            start=w.get("start_label"),
+            end=w.get("end_label"),
+            score=w.get("score"),
+            reason=" · ".join(w.get("detail") or []) if isinstance(w.get("detail"), list) else w.get("detail"),
+            timing_source="ranked_window",
+            bcp_aligned=bool(bcp_ages),
+        ))
+
+    if len(out) < _PROMO_WINDOWS_TOP_N:
+        for chunk in chain:
+            if chunk.get("end") and chunk["end"] < today:
+                continue
+            ad = str(chunk.get("ad") or "")
+            pd = str(chunk.get("pd") or "")
+            if not (ad in core or pd in core or ad in _BENEFIC_PROMO or pd in _BENEFIC_PROMO):
+                continue
+            sc, det, _ = _score_promo_chunk(
+                chunk.get("md", ""), ad, pd, core,
+            )
+            _push(_promo_window_row(
+                md=chunk.get("md"),
+                ad=ad,
+                pd=pd,
+                lords="/".join(x for x in (chunk.get("md"), ad, pd) if x),
+                start=_fmt_dasha_date(chunk["start"]),
+                end=_fmt_dasha_date(chunk["end"]),
+                score=sc,
+                reason=" · ".join(det or []) or f"AD/PD watch {ad}/{pd}",
+                timing_source="dasha_scan",
+                bcp_aligned=bool(bcp_ages),
+            ))
+            if len(out) >= _PROMO_WINDOWS_TOP_N:
+                break
+
+    for i, row in enumerate(out):
+        row["rank"] = i + 1
+        row["band"] = "PRIMARY" if i == 0 else "BACKUP"
+    return out
+
+
 def _flatten_promotion_dasha_chain(kundli: dict) -> list[dict]:
     """MD·AD·PD flat chain for promotion scan."""
     out: list[dict] = []
@@ -529,13 +639,12 @@ def assess_promotion_timing(
 ) -> dict:
     """Step 5 — AD/PD-first dasha; skip current if unsupported → next window."""
     level = str(promise.get("promotion_promise_level") or "low")
-    if level == "low":
-        return {
-            "status": "deferred_low_promise",
-            "message": "Promotion promise weak — pehle performance/build; timing secondary.",
-            "windows": [],
-            "step5_dasha": {"status": "deferred"},
-        }
+    deferred_low = level == "low"
+    low_message = (
+        "Promotion promise weak — pehle performance/build; timing secondary."
+        if deferred_low
+        else ""
+    )
 
     core = _promo_core_set(promise)
     md, ad, pd = _dasha_lords(kundli)
@@ -599,21 +708,64 @@ def assess_promotion_timing(
             timing_source = "next_dasha"
             break
 
+    if not recommended:
+        for w in ranked:
+            if w.get("end") and w["end"] >= today:
+                recommended = w
+                timing_source = "next_dasha_candidate"
+                break
+
+    if not recommended:
+        for chunk in chain:
+            if chunk.get("end") and chunk["end"] < today:
+                continue
+            ad = str(chunk.get("ad") or "")
+            pd = str(chunk.get("pd") or "")
+            if not (ad in core or pd in core or ad in _BENEFIC_PROMO or pd in _BENEFIC_PROMO):
+                continue
+            sc, det, _ = _score_promo_chunk(
+                chunk.get("md", ""), ad, pd, core,
+            )
+            recommended = {
+                **chunk,
+                "score": sc,
+                "detail": det,
+                "lords": "/".join(
+                    x for x in (chunk.get("md"), chunk.get("ad"), chunk.get("pd")) if x
+                ),
+                "start_label": _fmt_dasha_date(chunk["start"]),
+                "end_label": _fmt_dasha_date(chunk["end"]),
+            }
+            timing_source = "upcoming_watch"
+            break
+
+    if not recommended:
+        seen_ad: set[str] = set()
+        for chunk in chain:
+            if chunk.get("end") and chunk["end"] < today:
+                continue
+            ad = str(chunk.get("ad") or "")
+            if not ad or ad not in core or ad in seen_ad:
+                continue
+            seen_ad.add(ad)
+            sc, det, _ = _score_promo_chunk(
+                chunk.get("md", ""), ad, str(chunk.get("pd") or ""), core,
+            )
+            recommended = {
+                **chunk,
+                "score": sc,
+                "detail": det or [f"Next career AD {ad} (10L/11L/6L/AmK axis)"],
+                "lords": "/".join(
+                    x for x in (chunk.get("md"), ad, chunk.get("pd")) if x
+                ),
+                "start_label": _fmt_dasha_date(chunk["start"]),
+                "end_label": _fmt_dasha_date(chunk["end"]),
+            }
+            timing_source = "next_career_ad"
+            break
+
     bcp_ages = set((bcp or {}).get("future_priority_ages") or [])
-    windows_out: list[dict] = []
-    for w in ranked[:5]:
-        row = {
-            "md": w.get("md"),
-            "ad": w.get("ad"),
-            "pd": w.get("pd"),
-            "lords": w.get("lords"),
-            "start": w.get("start_label"),
-            "end": w.get("end_label"),
-            "score": w.get("score"),
-            "reason": " · ".join(w.get("detail") or []),
-            "bcp_aligned": bool(bcp_ages),
-        }
-        windows_out.append(row)
+    windows_out = _merge_promotion_windows_top3(ranked, chain, core, today, bcp_ages=bcp_ages)
 
     step5 = {
         "status": "ready",
@@ -627,7 +779,20 @@ def assess_promotion_timing(
         "recommended_window": None,
     }
 
-    if recommended:
+    if windows_out:
+        w0 = windows_out[0]
+        step5["recommended_window"] = {
+            "lords": w0.get("lords"),
+            "md": w0.get("md"),
+            "ad": w0.get("ad"),
+            "pd": w0.get("pd"),
+            "start": w0.get("start"),
+            "end": w0.get("end"),
+            "score": w0.get("score"),
+            "reason": w0.get("reason"),
+            "timing_source": w0.get("timing_source") or timing_source,
+        }
+    elif recommended:
         step5["recommended_window"] = {
             "lords": recommended.get("lords"),
             "md": recommended.get("md"),
@@ -652,11 +817,40 @@ def assess_promotion_timing(
             f"{recommended.get('lords')} ({recommended.get('start_label')}→{recommended.get('end_label')}). "
             f"Isi period ko timing batao; abhi mat bolo."
         )
+    elif timing_source in ("next_dasha_candidate", "upcoming_watch", "next_career_ad") and recommended:
+        directive = (
+            f"Promotion timeline (candidate — AD/PD watch): "
+            f"{recommended.get('lords')} ({recommended.get('start_label')}→{recommended.get('end_label')}). "
+            f"Current weak — is upcoming window ko primary timing batao."
+        )
     elif skip_current_reason:
         directive = skip_current_reason + " Abhi koi strong future AD/PD window scan mein nahi mili."
+    if windows_out:
+        primary = windows_out[0]
+        directive = (
+            f"PRIMARY promotion window (#1 ONLY — user ko yahi batao): "
+            f"{primary.get('lords')} ({primary.get('start')}→{primary.get('end')})."
+        )
+        if len(windows_out) > 1:
+            backup_lines = [
+                f"#{w.get('rank')}: {w.get('lords')} {w.get('start')}→{w.get('end')}"
+                for w in windows_out[1:]
+            ]
+            directive += (
+                " Backup windows (admin reference — user ko mat bolo unless puche): "
+                + " | ".join(backup_lines)
+            )
+    if deferred_low and low_message:
+        directive = (directive + " " if directive else "") + low_message
+
+    status = "ready" if recommended else "no_window_found"
+    if deferred_low and recommended:
+        status = "deferred_low_promise"
 
     return {
-        "status": "ready" if recommended else "no_window_found",
+        "status": status,
+        "message": low_message or None,
+        "deferred_low_promise": deferred_low,
         "current_lords": current_lords,
         "active_now": current_supports,
         "current_supports": current_supports,
@@ -788,11 +982,19 @@ def format_promotion_block_for_prompt(result: dict, question: str = "") -> str:
     rec = timing.get("recommended_window") or step5.get("recommended_window")
     if rec:
         lines.append(
-            f"    TIMING WINDOW ({rec.get('timing_source', timing.get('timing_source'))}): "
+            f"    PRIMARY TIMING (#1 — answer yahi): "
             f"{rec.get('lords')} {rec.get('start')}→{rec.get('end')}"
         )
         if rec.get("reason"):
             lines.append(f"    Why: {rec['reason']}")
+    win_list = timing.get("windows") if isinstance(timing.get("windows"), list) else []
+    for w in win_list[1:3]:
+        if not isinstance(w, dict):
+            continue
+        lines.append(
+            f"    Backup #{w.get('rank', '?')}: {w.get('lords')} "
+            f"{w.get('start')}→{w.get('end')} (admin only — user ko mat bolo)"
+        )
     if step5.get("skip_current_reason"):
         lines.append(f"    ⚠ {step5['skip_current_reason']}")
 
@@ -819,4 +1021,12 @@ def format_promotion_block_for_prompt(result: dict, question: str = "") -> str:
     lines.append(
         "RULE: Agar current dasha support NAHI → sirf NEXT window batao; abhi mat bolo."
     )
+    try:
+        from event_timing._shared.timing_window_pick import locked_window_instruction
+
+        lock = locked_window_instruction(result, question)
+        if lock:
+            lines.append(lock)
+    except Exception:
+        pass
     return "\n".join(lines)

@@ -32,6 +32,17 @@ class TestCosmoNarrator(unittest.TestCase):
         self.assertIn("The Big Picture", prompt)
         self.assertIn("Ab kya karein", prompt)
 
+    def test_batch_concise_prompt_is_short_form(self):
+        prompt = build_mr_engine_narrator_system_prompt(
+            chart_text="VERDICT: test",
+            archetype="general_mr",
+            concise=True,
+        )
+        self.assertIn("batch test", prompt.lower())
+        self.assertNotIn("The Big Picture", prompt)
+        self.assertIn("35", prompt)
+        self.assertIn("90", prompt)
+
     def test_enforce_preserves_markdown(self):
         md = (
             "**The Big Picture**\n"

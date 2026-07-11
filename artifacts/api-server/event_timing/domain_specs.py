@@ -61,7 +61,7 @@ DOMAIN_TIMING_SPECS: dict[str, dict[str, Any]] = {
             "STATIC: love_static_engine_v1 for non-kab love Qs",
             "MILAN: milan_engine_v1 when two charts + match Q",
         ],
-        "dasha_targets": ["5L", "7L", "Venus"],
+        "dasha_targets": ["5L", "7L", "11L", "Venus"],
         "transits": ["Venus transit", "Jupiter on 5H/7H"],
         "buckets": [
             "timing", "reconciliation", "one_sided", "commitment", "breakup",
@@ -154,7 +154,8 @@ DOMAIN_TIMING_SPECS: dict[str, dict[str, Any]] = {
         "divisionals": ["D4"],
         "kp_cusps": [4],
         "pipeline_steps": [
-            "STEP1 4H promise + 4L",
+            "STEP1 BCP D1 4L placement + aspects (focus ages)",
+            "STEP2 Active dasha + 4H/11H activation",
             "STEP2 Mangal (bhumi/construction) + Shani (immovable) karaka",
             "STEP5 dasha 4L/Mars/Saturn AD-PD",
             "STEP6 Shani/Guru transit on 4H",

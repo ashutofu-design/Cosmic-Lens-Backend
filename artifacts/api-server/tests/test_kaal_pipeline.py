@@ -23,6 +23,37 @@ def test_parse_iso_month_year():
     assert human_month_year("2036-10") == "October 2036"
 
 
+def test_expand_to_kaal_skips_step0a_for_travel():
+    payload = {"verdict": "FAVOURABLE", "bucket": "general", "domain": "travel"}
+    out = expand_to_kaal_pipeline(payload, "travel")
+    assert "step0a" not in (out.get("step_audit") or {})
+
+
+def test_generic_kaal_omits_kp_and_transit_verify():
+    payload = {
+        "verdict": "LOVE_WINDOW_SENSITIVE",
+        "band": "MEDIUM",
+        "bucket": "timing",
+        "domain": "love",
+        "current_window": {
+            "md": "Saturn",
+            "ad": "Saturn",
+            "start_iso": "2026-06-27",
+            "end_iso": "2026-12-18",
+        },
+        "factors": ["STEP6 double_transit=STRONG"],
+        "double_transit": {"verdict": "STRONG", "active": True},
+    }
+    out = expand_to_kaal_pipeline(attach_timing_pipeline_audit(payload, "love"), "love")
+    sa = out.get("step_audit") or {}
+    assert "step0a" not in sa
+    assert "step3" in sa
+    assert "step7" not in sa
+    assert "step8" in sa
+    assert "step3" in (out.get("step_order") or [])
+    assert "step7" not in (out.get("step_order") or [])
+
+
 def test_expand_to_kaal_adds_step8_month_year():
     payload = {
         "verdict": "FAVOURABLE",
@@ -41,7 +72,8 @@ def test_expand_to_kaal_adds_step8_month_year():
     out = expand_to_kaal_pipeline(attach_timing_pipeline_audit(payload, "travel"), "travel")
     s8 = out["step_audit"]["step8"]
     assert s8.get("event_month_year") == "October 2026"
-    assert s8.get("event_year") == 2036
+    assert "marriage_month_year" not in s8
+    assert s8.get("event_year") == 2026
     assert s8.get("event_month") == "October"
     assert out.get("pipeline_format") == "kaal_v1"
 

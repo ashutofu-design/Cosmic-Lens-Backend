@@ -89,7 +89,18 @@ _DEVANAGARI_CAREER_RX = re.compile(
     r"(?:नौकरी|काम|करियर|पेशा|प्रमोशन|पदोन्नति|तबादला|वेतन|सरकारी|नौकरी)"
 )
 
-_DEVANAGARI_TIMING_RX = re.compile(r"(?:कब|किस\s+साल|कितने\s+साल|कितना\s+समय)")
+_DEVANAGARI_TIMING_RX = re.compile(r"(?:कब|किस\s+साल|कितने\s+साल|कितना\s+समय|बाद)")
+
+_PROMOTION_TIMING_FOLLOWUP_RX = re.compile(
+    r"(?ix)(?:"
+    r"\bke\s+baad\b.*\b(promotion|tarakki|naukri|job|career)\b|"
+    r"\b(promotion|tarakki)\b.*\bke\s+baad\b|"
+    r"\baur\s+koi\b.*\b(promotion|tarakki|mauka|window|chance)\b|"
+    r"\bagar\b.{0,50}\b(nahi|na|nhi|not)\b|"
+    r"\b(ho\s+sakta|ho\s+sakti|milega|milegi)\b.{0,30}\b(promotion|tarakki)\b|"
+    r"\b(promotion|tarakki)\b.{0,30}\b(ho\s+sakta|ho\s+sakti|milega|milegi)\b"
+    r")"
+)
 
 _AGE_IN_QUESTION_RX = re.compile(
     r"(?ix)\b("
@@ -313,6 +324,24 @@ def is_career_timing_question(
         dom = str(llm_intent.get("domain") or "").strip().lower()
         if dom == "career" and bool(llm_intent.get("is_timing")):
             return True
+
+    try:
+        from event_timing._shared.timing_window_pick import (
+            detect_later_timing_window_question,
+            detect_next_timing_window_question,
+        )
+
+        if career_scope_match(q) and re.search(
+            r"(?ix)\b(promotion|tarakki|salary\s+hike|increment|appraisal)\b", q
+        ):
+            if (
+                detect_next_timing_window_question(q)
+                or detect_later_timing_window_question(q)
+                or _PROMOTION_TIMING_FOLLOWUP_RX.search(q)
+            ):
+                return True
+    except Exception:
+        pass
 
     has_timing = bool(TIMING_RX.search(q)) or bool(_CAREER_EVENT_RX.search(q))
     if not has_timing and _DEVANAGARI_TIMING_RX.search(q):

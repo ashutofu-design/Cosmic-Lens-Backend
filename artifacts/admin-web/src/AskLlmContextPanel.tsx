@@ -1,4 +1,4 @@
-import type { AskLlmContext, AskQuestionItem, EngineVerificationSummary } from "./api";
+import type { AskLlmContext, AskQuestionItem, AnswerFidelitySummary, EngineVerificationSummary } from "./api";
 import { resolveEngineDisplayFromContext } from "./engineDisplay";
 
 function fmtCheckValue(v: unknown): string {
@@ -408,6 +408,77 @@ export function EngineVerificationBadge({
   );
 }
 
+export function resolveAnswerFidelitySummary(
+  ctx: AskLlmContext | null,
+): AnswerFidelitySummary | null {
+  if (!ctx) return null;
+  const direct = ctx.answer_fidelity_summary;
+  if (direct && typeof direct === "object" && direct.label) {
+    return direct;
+  }
+  const checks = ctx.checks as Record<string, unknown> | undefined;
+  const raw = checks?.answer_fidelity;
+  if (!raw || typeof raw !== "object") {
+    if (ctx.llm_called === false) return null;
+    return {
+      status: "unknown",
+      label: "Not verified",
+      reason: "Re-ask after deploy for answer fidelity check",
+    };
+  }
+  const af = raw as Record<string, unknown>;
+  if (af.skipped) return null;
+  const ok = Boolean(af.ok);
+  const issues = Array.isArray(af.issues) ? af.issues.map(String) : [];
+  const repairs = Array.isArray(af.repairs) ? af.repairs : [];
+  const shape = String(af.shape || "");
+  if (ok) {
+    return {
+      status: "pass",
+      label: "Answer matched",
+      reason: `shape=${shape}` + (repairs.length ? ` · repairs=${repairs.length}` : ""),
+      shape: shape || null,
+      attempts: typeof af.attempts === "number" ? af.attempts : undefined,
+      score: typeof af.score === "number" ? af.score : null,
+      repairs: repairs.length,
+    };
+  }
+  return {
+    status: "fail",
+    label: "Answer mismatch",
+    reason: issues.slice(0, 4).join(", ") || "checks failed",
+    shape: shape || null,
+    attempts: typeof af.attempts === "number" ? af.attempts : undefined,
+    score: typeof af.score === "number" ? af.score : null,
+    repairs: repairs.length,
+    issues,
+  };
+}
+
+export function AnswerFidelityBadge({
+  summary,
+}: {
+  summary: AnswerFidelitySummary | null;
+}) {
+  if (!summary) {
+    return null;
+  }
+  const statusClass =
+    summary.status === "pass"
+      ? "correct"
+      : summary.status === "fail"
+        ? "wrong"
+        : "unknown";
+  return (
+    <span
+      className={`engine-verify-badge engine-verify-${statusClass} answer-fidelity-badge`}
+      title={summary.reason || undefined}
+    >
+      {summary.label}
+    </span>
+  );
+}
+
 export function EngineVerificationPanel({
   ctx,
   defaultOpen,
@@ -473,6 +544,15 @@ export function EngineVerificationPanel({
           {summary.recovered ? (
             <p className="engine-verify-recovered-note">
               System detected a wrong first pick and rerouted before answering.
+            </p>
+          ) : null}
+          {ctx?.answer_fidelity_summary ? (
+            <p>
+              <strong>Answer fidelity:</strong>{" "}
+              <AnswerFidelityBadge summary={resolveAnswerFidelitySummary(ctx)} />
+              {ctx.answer_fidelity_summary.reason ? (
+                <span className="detail-muted"> — {ctx.answer_fidelity_summary.reason}</span>
+              ) : null}
             </p>
           ) : null}
         </div>
@@ -658,27 +738,166 @@ function formatStep7TransitDetail(step: Record<string, unknown>): string {
   return body;
 }
 
+function isMarriageTimingEngine(engine?: string): boolean {
+  return engine === "marriage_timing_m17" || engine === "marriage_timing_v1";
+}
+
+function isCareerTimingEngine(engine?: string): boolean {
+  return engine === "career_timing_v1" || engine === "career_engine_v1";
+}
+
+function formatCareerStepDetail(
+  key: string,
+  step: Record<string, unknown>,
+  stepAudit: Record<string, Record<string, unknown>>,
+): string {
+  if (key === "step2") {
+    const why = Array.isArray(step.top_why) ? step.top_why.map(String).join(" · ") : "";
+    const score =
+      step.tenth_house_score != null ? `10H score ${String(step.tenth_house_score)}` : "";
+    const detail = typeof step.detail === "string" ? step.detail.trim() : "";
+    return [why, score, detail].filter(Boolean).join(" · ") || "10H/10L scan";
+  }
+  if (key === "step3") {
+    const detail = typeof step.detail === "string" ? step.detail.trim() : "";
+    if (detail) return detail;
+    const d9 = step.d9_score != null ? `D9 ${String(step.d9_score)}` : "";
+    const d10 = step.d10_score != null ? `D10 ${String(step.d10_score)}` : "";
+    return [d9, d10].filter(Boolean).join(" · ") || "D9+D10 verify";
+  }
+  if (key === "step5") {
+    const lines: string[] = [];
+    if (step.layer_score != null) lines.push(`layer score ${String(step.layer_score)}`);
+    if (typeof step.detail === "string" && step.detail.trim()) lines.push(step.detail.trim());
+    const layers = Array.isArray(step.top_layers) ? step.top_layers : [];
+    for (const row of layers.slice(0, 4)) {
+      const r = asRecord(row);
+      if (!r) continue;
+      lines.push(`${String(r.layer || "?")}: ${String(r.score ?? "?")}`);
+    }
+    return lines.join("\n") || "natal rank";
+  }
+  if (key === "step6") {
+    const parts: string[] = [];
+    if (step.current_lords) parts.push(`MD/AD/PD ${String(step.current_lords)}`);
+    if (step.current_start && step.current_end) {
+      parts.push(`${String(step.current_start)} → ${String(step.current_end)}`);
+    }
+    if (step.dasha_score != null) parts.push(`T1 score ${String(step.dasha_score)}`);
+    const why = Array.isArray(step.why) ? step.why.slice(0, 3).map(String) : [];
+    if (why.length) parts.push(why.join(" · "));
+    if (typeof step.detail === "string" && step.detail.trim()) parts.push(step.detail.trim());
+    return parts.join(" · ") || "dasha activation";
+  }
+  if (key === "step7") {
+    const why = Array.isArray(step.why) ? step.why.map(String) : [];
+    if (why.length) return why.join("\n");
+    return typeof step.detail === "string" ? step.detail.trim() : "transit scan";
+  }
+  if (key === "step8") {
+    const detail = typeof step.detail === "string" ? step.detail.trim() : "";
+    if (detail.includes("\n")) return detail;
+    return formatCareerStep8Oneline(String(step.name || "Window merge"), step);
+  }
+  if (key === "step9") {
+    const parts = [
+      step.verdict ? `verdict ${String(step.verdict)}` : "",
+      step.score != null ? `score ${String(step.score)}` : "",
+      typeof step.strategy === "string" ? step.strategy.slice(0, 200) : "",
+      typeof step.detail === "string" ? step.detail.trim() : "",
+    ].filter(Boolean);
+    return parts.join(" · ") || "verdict lock";
+  }
+  if (typeof step.detail === "string" && step.detail.trim()) {
+    return step.detail.trim();
+  }
+  return String(step.name || key);
+}
+
+function careerPipelineStepKeys(
+  trace: EngineTrace | undefined,
+  careerPromotion: boolean,
+): string[] {
+  const fromTrace = trace?.step_order?.filter((k) => k !== "step0" && k !== "step0a");
+  if (fromTrace?.length) {
+    return fromTrace.filter((k) => !careerPromotion || !omitCareerPromotionPipelineStep(k));
+  }
+  return careerPromotion
+    ? ["step2", "step3", "step5", "step6", "step7", "step8", "step9"]
+    : ["step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8", "step9"];
+}
+
+function formatCareerStep8Oneline(
+  name: string,
+  step: Record<string, unknown>,
+): string {
+  const periods = Array.isArray(step.promotion_periods)
+    ? step.promotion_periods.map(String).filter((p) => p.trim())
+    : [];
+  if (periods.length) {
+    return `${name}\n${periods.join("\n")}`;
+  }
+  const parts = [name];
+  const timeline = String(step.promotion_timeline || step.answer_window || "").trim();
+  if (timeline) parts.push(timeline);
+  const nextAd = step.next_ad || step.next_pd;
+  if (nextAd) parts.push(`next ${step.next_pd ? "PD" : "AD"} ${String(nextAd)}`);
+  if (step.next_start && step.next_end) {
+    parts.push(`${String(step.next_start)}→${String(step.next_end)}`);
+  } else if (step.next_start) {
+    parts.push(String(step.next_start));
+  }
+  return parts.join(" · ");
+}
+
 function stepOneLiner(
   stepKey: string,
   step: Record<string, unknown>,
   engine?: string,
 ): string {
   const name = String(step.name || stepKey);
-  if (engine === "career_timing_v1" && typeof step.detail === "string" && step.detail) {
-    return `${name} · ${step.detail}`;
+  if (isCareerTimingEngine(engine)) {
+    if (stepKey === "step8") {
+      return formatCareerStep8Oneline(name, step);
+    }
+    if (typeof step.detail === "string" && step.detail.trim()) {
+      return `${name} · ${step.detail.trim()}`;
+    }
+    return name;
   }
-  if (engine?.endsWith("_timing_v1") && typeof step.detail === "string" && step.detail) {
-    return `${name} · ${step.detail}`;
+  if (engine?.endsWith("_timing_v1") && typeof step.detail === "string" && step.detail.trim()) {
+    return `${name} · ${step.detail.trim()}`;
   }
   if (stepKey === "step1" && (step.current_end || step.current_start)) {
     const lords = step.current_lords ? String(step.current_lords) : "—";
     const end = step.current_end ? String(step.current_end) : "?";
     return `${name} · MD/AD/PD ${lords} · kab tak ${end}`;
   }
-  if (stepKey === "step2") {
-    return `${name} · ${fmtCheckValue(step.detail)} · ${step.status || "—"}`;
+  if (stepKey === "step2" && !isMarriageTimingEngine(engine)) {
+    const lords = Array.isArray(step.house_lord_scores)
+      ? step.house_lord_scores
+          .map((hl) => {
+            const r = asRecord(hl);
+            if (!r?.tag) return "";
+            const active = r.active_in_running_dasha ? " ACTIVE" : "";
+            return `${r.tag}=${r.planet}(${r.score})${active}`;
+          })
+          .filter(Boolean)
+          .join(" · ")
+      : "";
+    const base = `${name} · ${fmtCheckValue(step.detail)} · ${step.status || "—"}`;
+    return lords ? `${base} · ${lords}` : base;
   }
-  if (stepKey === "step4") {
+  if (stepKey === "step3" && !isMarriageTimingEngine(engine)) {
+    const sig = asRecord(step.primary_significator);
+    const periods = Array.isArray(step.timing_periods) ? step.timing_periods.length : 0;
+    const topName = sig?.name ? String(sig.name) : "—";
+    const topScore = sig?.score != null ? String(sig.score) : "?";
+    const roles = Array.isArray(sig?.roles) ? sig.roles.join(",") : String(sig?.house_tag || "karaka");
+    const rankN = Array.isArray(step.significator_rank) ? step.significator_rank.length : 0;
+    return `${name} · TOP ${topName}(${roles}) score ${topScore} · ${rankN} linkages · ${periods} windows`;
+  }
+  if (stepKey === "step4" && !isMarriageTimingEngine(engine)) {
     return `${name} · ${fmtCheckValue(step.detail)}`;
   }
   if (stepKey === "step0") {
@@ -686,6 +905,24 @@ function stepOneLiner(
     const verdict = r?.verdict ? String(r.verdict) : "";
     const age = step.user_age != null ? `age ${step.user_age}` : "";
     return [name, verdict, age].filter(Boolean).join(" · ");
+  }
+  if (stepKey === "step0a" && !isMarriageTimingEngine(engine)) {
+    const focus = Array.isArray(step.focus_ages) ? step.focus_ages.join(", ") : "";
+    return `${name}${focus ? ` · focus ${focus}` : ""}${typeof step.detail === "string" && step.detail ? ` · ${step.detail}` : ""}`;
+  }
+  if (!isMarriageTimingEngine(engine)) {
+    if (stepKey === "step8") {
+      const period = String(step.event_month_year || step.primary_window || "").trim();
+      const parts = [name];
+      if (period) parts.push(period);
+      if (step.verdict) parts.push(`verdict ${String(step.verdict)}`);
+      if (typeof step.detail === "string" && step.detail.trim()) parts.push(step.detail.trim());
+      return parts.join(" · ");
+    }
+    if (typeof step.detail === "string" && step.detail.trim()) {
+      return `${name} · ${step.detail.trim()}`;
+    }
+    return name;
   }
   if (stepKey === "step0a") {
     const focus = Array.isArray(step.focus_ages) ? step.focus_ages.join(", ") : "";
@@ -963,6 +1200,9 @@ function formatKaalStep8Final(
     | undefined;
   if (!s8) return "— (not saved)";
   const dom = String(domain || s8.domain || trace?.domain || "").toLowerCase();
+  if (isCareerTimingEngine(trace?.engine) || dom === "career") {
+    return formatCareerStep8Oneline(String(s8.name || "Step 8 — Window merge"), s8);
+  }
   const eventKab =
     dom === "marriage"
       ? "Marriage kab"
@@ -972,19 +1212,19 @@ function formatKaalStep8Final(
   const lines: string[] = [];
   const monthYear = String(
     s8.event_month_year
-      || s8.marriage_month_year
       || s8.primary_window
-      || s8.marriage_period
       || trace?.primary_window
       || "",
   ).trim();
-  const year = s8.event_year ?? s8.marriage_year;
-  const month = s8.event_month ?? s8.marriage_month;
+  const year = s8.event_year;
+  const month = s8.event_month;
   if (year) lines.push(`Saal: ${year}`);
   if (month) lines.push(`Mahina: ${month}`);
   if (monthYear) lines.push(`${eventKab}: ${monthYear}`);
-  if (dom !== "marriage") {
-    return lines.length ? lines.join("\n") : formatMarriageStep8Final(stepAudit, trace);
+  if (!isMarriageTimingEngine(trace?.engine) && dom !== "marriage") {
+    return lines.length
+      ? lines.join("\n")
+      : (typeof s8.detail === "string" && s8.detail.trim() ? s8.detail.trim() : "— (not saved)");
   }
   return formatMarriageStep8Final(stepAudit, trace);
 }
@@ -1346,12 +1586,123 @@ function omitCareerPromotionPipelineStep(key: string): boolean {
   return key === "step0a" || key === "step1" || key === "step4";
 }
 
-function hasKaalFinalStep(stepAudit: Record<string, Record<string, unknown>>): boolean {
+function hasKaalFinalStep(
+  stepAudit: Record<string, Record<string, unknown>>,
+  engineId?: string,
+): boolean {
   const s8 = stepAudit.step8;
+  if (!s8) return false;
+  if (isCareerTimingEngine(engineId)) {
+    return Boolean(
+      s8.next_ad
+        || s8.next_pd
+        || s8.next_start
+        || s8.promotion_timeline
+        || (Array.isArray(s8.promotion_periods) && s8.promotion_periods.length)
+        || (typeof s8.detail === "string" && s8.detail.trim()),
+    );
+  }
+  if (!isMarriageTimingEngine(engineId)) {
+    return Boolean(
+      s8.event_month_year || s8.primary_window || s8.final_prediction
+        || (typeof s8.detail === "string" && s8.detail.trim()),
+    );
+  }
   return Boolean(
-    s8 &&
-      (s8.event_month_year || s8.marriage_month_year || s8.primary_window || s8.final_prediction),
+    s8.event_month_year || s8.marriage_month_year || s8.primary_window || s8.final_prediction,
   );
+}
+
+function isPropertyBcpStep1(step: Record<string, unknown> | undefined): boolean {
+  if (!step) return false;
+  const name = String(step.name || "");
+  return (
+    name.includes("BCP") ||
+    name.includes("4L") ||
+    Boolean(step.fourth_lord || step.d1_bcp_ages)
+  );
+}
+
+function propertyUsesBcpStep1(
+  stepAudit: Record<string, Record<string, unknown>>,
+  engineId: string,
+): boolean {
+  return engineId === "property_timing_v1" || isPropertyBcpStep1(stepAudit.step1);
+}
+
+function runningDashaAuditStep(
+  stepAudit: Record<string, Record<string, unknown>>,
+  engineId: string,
+): Record<string, unknown> | undefined {
+  if (propertyUsesBcpStep1(stepAudit, engineId) && stepAudit.step2) {
+    return stepAudit.step2;
+  }
+  return stepAudit.step1;
+}
+
+function resolvePropertyBcpStep1(
+  stepAudit: Record<string, Record<string, unknown>>,
+  sliceMeta?: Record<string, unknown>,
+  engineFacts?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (isPropertyBcpStep1(stepAudit.step1)) {
+    return stepAudit.step1;
+  }
+  const bags = [sliceMeta, engineFacts];
+  for (const bag of bags) {
+    if (!bag || typeof bag !== "object") continue;
+    const bcp = bag.bcp_property_ages;
+    if (!bcp || typeof bcp !== "object") continue;
+    const row = bcp as Record<string, unknown>;
+    const lord = row.fourth_lord || "?";
+    const sit = row.fourth_lord_house ?? "?";
+    const asp = Array.isArray(row.d1_aspect_houses)
+      ? (row.d1_aspect_houses as unknown[]).map(String).join(",")
+      : "—";
+    const d1a = Array.isArray(row.d1_bcp_ages)
+      ? (row.d1_bcp_ages as unknown[]).map(String).join(",")
+      : "";
+    const focus = Array.isArray(row.focus_ages)
+      ? (row.focus_ages as unknown[]).map(String).join(",")
+      : "";
+    return {
+      name: "BCP — D1 4L placement + aspects (property ages)",
+      fourth_lord: lord,
+      fourth_lord_house: sit,
+      d1_aspect_houses: row.d1_aspect_houses,
+      d1_bcp_ages: row.d1_bcp_ages,
+      d9_bcp_ages: row.d9_bcp_ages,
+      focus_ages: row.focus_ages,
+      detail: `D1 4L ${lord} in ${sit}H · aspects ${asp}${d1a ? ` · D1 future ${d1a}` : ""}${focus ? ` · focus ${focus}` : ""}`,
+      recomputed_from_chart: true,
+    };
+  }
+  return stepAudit.step1;
+}
+
+function formatPropertyBcpStep1(step: Record<string, unknown>): string {
+  const name = String(step.name || "BCP — D1 4L placement + aspects");
+  const lord = step.fourth_lord || "?";
+  const sit = step.fourth_lord_house ?? "?";
+  const asp = Array.isArray(step.d1_aspect_houses)
+    ? (step.d1_aspect_houses as unknown[]).map(String).join(",")
+    : "—";
+  const d1a = Array.isArray(step.d1_bcp_ages)
+    ? (step.d1_bcp_ages as unknown[]).map(String).join(",")
+    : "";
+  const d9a = Array.isArray(step.d9_bcp_ages)
+    ? (step.d9_bcp_ages as unknown[]).map(String).join(",")
+    : "";
+  const focus = Array.isArray(step.focus_ages)
+    ? (step.focus_ages as unknown[]).map(String).join(",")
+    : "";
+  const parts = [`4L ${lord} in ${sit}H`, `aspects ${asp}`];
+  if (d1a) parts.push(`D1 ages ${d1a}`);
+  if (d9a) parts.push(`D9 ages ${d9a}`);
+  if (focus) parts.push(`focus ${focus}`);
+  const base = `${name} · ${parts.join(" · ")}`;
+  const rule = typeof step.rule === "string" && step.rule.trim() ? step.rule.trim() : "";
+  return rule ? `${base}\n${rule}` : base;
 }
 
 function isNewDashaStep1(step: Record<string, unknown> | undefined): boolean {
@@ -1368,6 +1719,36 @@ function formatRunningDashaDetail(
   stepAudit: Record<string, Record<string, unknown>>,
   timingAudit: EngineTrace["timing_audit"],
 ): string {
+  const s6 = stepAudit.step6;
+  if (s6?.current_lords) {
+    const parts = [`lords ${String(s6.current_lords)}`];
+    if (s6.current_start && s6.current_end) {
+      parts.push(`${String(s6.current_start)} → ${String(s6.current_end)}`);
+    } else if (s6.current_end) {
+      parts.push(`kab tak ${String(s6.current_end)}`);
+    }
+    const why = Array.isArray(s6.why) ? s6.why.slice(0, 2).map(String) : [];
+    if (why.length) parts.push(why.join(" · "));
+    return parts.join(" · ");
+  }
+
+  const dt = (trace as { dasha_trace?: Record<string, unknown> } | undefined)?.dasha_trace;
+  if (dt?.current_lords) {
+    const parts = [`lords ${String(dt.current_lords)}`];
+    if (dt.current_start && dt.current_end) {
+      parts.push(`${String(dt.current_start)} → ${String(dt.current_end)}`);
+    } else if (dt.current_end) {
+      parts.push(`kab tak ${String(dt.current_end)}`);
+    }
+    return parts.join(" · ");
+  }
+
+  const checks = timingAudit?.checks;
+  if (Array.isArray(checks)) {
+    const dashaCheck = checks.find((c) => c.name === "dasha_trace");
+    if (dashaCheck?.detail) return String(dashaCheck.detail);
+  }
+
   const rd = trace?.running_dasha;
   if (rd?.lords || rd?.end || rd?.md) {
     const md = rd.md || "?";
@@ -1380,17 +1761,17 @@ function formatRunningDashaDetail(
     return parts.join(" · ");
   }
 
-  const s1 = stepAudit.step1;
-  if (isNewDashaStep1(s1)) {
-    const md = fmtCheckValue(s1.md);
-    const ad = fmtCheckValue(s1.ad);
-    const pd = fmtCheckValue(s1.pd);
-    const lords = s1.current_lords ? String(s1.current_lords) : `${md}/${ad}/${pd}`;
+  const dashaStep = runningDashaAuditStep(stepAudit, String(trace?.engine || ""));
+  if (isNewDashaStep1(dashaStep)) {
+    const md = fmtCheckValue(dashaStep.md);
+    const ad = fmtCheckValue(dashaStep.ad);
+    const pd = fmtCheckValue(dashaStep.pd);
+    const lords = dashaStep.current_lords ? String(dashaStep.current_lords) : `${md}/${ad}/${pd}`;
     const parts = [`MD ${md} · AD ${ad} · PD ${pd}`, `lords ${lords}`];
-    if (s1.current_start && s1.current_end) {
-      parts.push(`${s1.current_start} → ${s1.current_end}`);
+    if (dashaStep.current_start && dashaStep.current_end) {
+      parts.push(`${dashaStep.current_start} → ${dashaStep.current_end}`);
     }
-    if (s1.current_end) parts.push(`kab tak ${s1.current_end}`);
+    if (dashaStep.current_end) parts.push(`kab tak ${dashaStep.current_end}`);
     return parts.join(" · ");
   }
 
@@ -2059,28 +2440,39 @@ export function EngineTracePanel({
       | EngineTrace["timing_audit"]
       | undefined;
     if (stepAudit || timingAudit) {
+      const checks = (ctx.checks || {}) as Record<string, unknown>;
       trace = {
-        engine: String(sliceMeta.slice || "marriage_timing_m17"),
+        engine: String(
+          sliceMeta.slice ||
+            checks.slice_type ||
+            (blocks.career_engine_trace as EngineTrace | undefined)?.engine ||
+            "timing_engine_v1",
+        ),
         step_audit: stepAudit,
         timing_audit: timingAudit,
         primary_window: summaryWindowFromMeta(sliceMeta, engineFacts),
+        dasha_trace: sliceMeta.dasha_trace as EngineTrace["dasha_trace"],
       };
     }
   }
   const stepOrder =
     trace?.step_order?.length
       ? trace.step_order.filter((k) => !k.startsWith("step0"))
-      : ["step1", "step2", "step3", "step4", "step5", "step6"];
+      : ["step1", "step2", "step4", "step5", "step6"];
   const stepAudit = stepAuditFromMarriageContext(ctx, trace, sliceMeta, engineFacts);
   if (trace && !trace.step_audit && Object.keys(stepAudit).length > 0) {
     trace = { ...trace, step_audit: stepAudit };
   }
   const timingAudit = trace?.timing_audit;
-  const engineId = String(trace?.engine || "");
+  const engineId = String(trace?.engine || sliceMeta.slice || "");
   const marriageM17 = isMarriageM17Trace(engineId, ctx);
   const loveStatic = isLoveStaticTrace(ctx, engineId);
   const kaalTiming = isKaalTimingEngine(engineId);
   const careerPromotion = isCareerPromotionPipeline(trace, stepAudit);
+  const propertyBcp = propertyUsesBcpStep1(stepAudit, engineId);
+  const propertyBcpStep = propertyBcp
+    ? resolvePropertyBcpStep1(stepAudit, sliceMeta, engineFacts)
+    : undefined;
   const kaalDomain = String(trace?.domain || engineId.replace("_timing_v1", "").replace("_timing_m17", ""));
   const marriageStepOrder = [
     "step3",
@@ -2104,7 +2496,9 @@ export function EngineTracePanel({
     (trace && (trace.step_audit || trace.timing_audit)) ||
       (marriageM17 && marriageStepOrder.some((k) => stepAudit[k])),
   );
-  const dashaFirst = isDashaFirstTimingEngine(engineId);
+  const careerTiming =
+    isCareerTimingEngine(engineId) || String(sliceMeta.slice || "") === "career_timing_v1";
+  const dashaFirst = isDashaFirstTimingEngine(engineId) && !careerTiming;
   const marriageStep0 = marriageM17 ? marriageStep0FromContext(ctx, stepAudit) : undefined;
   const marriageStep0Fmt = formatMarriageEarlyLateStep(marriageStep0);
   const marriageEvidence =
@@ -2125,14 +2519,16 @@ export function EngineTracePanel({
     ? "Marriage timing — Steps 1–8 (early/late → BCP → shadi planets → dasha)"
     : loveStatic
       ? "Love STATIC — DCR chart slice + LLM (no Kaal timing)"
-      : kaalTiming && hasKaalFinalStep(stepAudit)
-        ? `Vivah Kaal Pipeline — ${kaalDomain || engineId.replace("_timing_v1", "")} (step 8 = saal/mahina)`
-        : dashaFirst
-          ? `Kaal Pipeline — ${engineId.replace("_timing_v1", "")} (dasha-first)`
-          : engineId === "career_timing_v1"
-            ? "Kaal Pipeline — career"
-            : engineId === "marriage_timing_m17"
-              ? "Marriage engine checks (M17)"
+      : engineId === "career_timing_v1"
+        ? `Kaal Pipeline — career${careerPromotion ? " (promotion)" : ""}`
+        : engineId === "marriage_timing_m17" || engineId === "marriage_timing_v1"
+          ? hasKaalFinalStep(stepAudit, engineId)
+            ? "Marriage Kaal Pipeline (step 8 = saal/mahina)"
+            : "Marriage engine checks (M17)"
+          : kaalTiming && hasKaalFinalStep(stepAudit, engineId)
+            ? `Kaal Pipeline — ${kaalDomain || engineId.replace("_timing_v1", "")} (Steps 0–6 + 8)`
+            : dashaFirst
+              ? `Kaal Pipeline — ${engineId.replace("_timing_v1", "")} (dasha-first)`
               : "Timing engine checks";
 
   const requestMeta = [
@@ -2240,6 +2636,37 @@ export function EngineTracePanel({
             hero: false,
           })),
       ]
+    : careerTiming
+    ? [
+        ...(stepAudit.step0
+          ? [
+              {
+                n: 1,
+                title: String(stepAudit.step0.name || "User demand"),
+                detail: formatCareerStepDetail("step0", stepAudit.step0, stepAudit),
+                hero: true,
+              },
+            ]
+          : []),
+        {
+          n: 0,
+          title: "Active dasha — abhi kya chal raha hai",
+          detail: formatRunningDashaDetail(trace, stepAudit, timingAudit),
+          hero: !stepAudit.step0,
+        },
+        ...careerPipelineStepKeys(trace, careerPromotion)
+          .map((key) => {
+            const step = stepAudit[key];
+            if (!step) return null;
+            return {
+              n: 0,
+              title: String(step.name || key),
+              detail: formatCareerStepDetail(key, step, stepAudit),
+              hero: false,
+            };
+          })
+          .filter(Boolean) as { n: number; title: string; detail: string; hero: boolean }[],
+      ].map((item, idx) => ({ ...item, n: idx + 1 }))
     : dashaFirst
     ? [
         ...(stepAudit.step0
@@ -2252,7 +2679,7 @@ export function EngineTracePanel({
               },
             ]
           : []),
-        ...(stepAudit.step0a && !careerPromotion
+        ...(stepAudit.step0a && marriageM17
           ? [
               {
                 n: stepAudit.step0 ? 2 : 1,
@@ -2262,20 +2689,43 @@ export function EngineTracePanel({
               },
             ]
           : []),
+        ...(propertyBcp && propertyBcpStep
+          ? [
+              {
+                n: (stepAudit.step0 ? 1 : 0) + (stepAudit.step0a ? 1 : 0) + 1,
+                title: String(
+                  propertyBcpStep.name || "BCP — D1 4L placement + aspects (property ages)",
+                ),
+                detail: formatPropertyBcpStep1(propertyBcpStep),
+                hero: false,
+              },
+            ]
+          : []),
         {
-          n: (stepAudit.step0 ? 1 : 0) + (stepAudit.step0a ? 1 : 0) + 1,
+          n:
+            (stepAudit.step0 ? 1 : 0) +
+            (stepAudit.step0a ? 1 : 0) +
+            (propertyBcp && propertyBcpStep ? 1 : 0) +
+            1,
           title: "Active dasha — abhi kya chal raha hai",
           detail: formatRunningDashaDetail(trace, stepAudit, timingAudit),
-          hero: !stepAudit.step0,
+          hero: !stepAudit.step0 && !propertyBcp,
         },
         ...stepOrder
-          .filter((key) => key !== "step1" && !["step0", "step0a", "step7", "step8"].includes(key))
+          .filter((key) => {
+            if (key === "step1") return false;
+            if (propertyBcp && key === "step2") return false;
+            return !["step0", "step0a", "step7", "step8"].includes(key);
+          })
           .filter((key) => !careerPromotion || !omitCareerPromotionPipelineStep(key))
           .map((key, idx) => {
             const step = stepAudit[key];
             if (!step) return null;
             const baseN =
-              (stepAudit.step0 ? 1 : 0) + (stepAudit.step0a ? 1 : 0) + 1;
+              (stepAudit.step0 ? 1 : 0) +
+              (stepAudit.step0a ? 1 : 0) +
+              (propertyBcp && propertyBcpStep ? 1 : 0) +
+              1;
             return {
               n: baseN + idx + 1,
               title: String(step.name || key),
@@ -2284,7 +2734,7 @@ export function EngineTracePanel({
             };
           })
           .filter(Boolean) as { n: number; title: string; detail: string; hero: boolean }[],
-        ...(stepAudit.step7
+        ...(marriageM17 && stepAudit.step7
           ? [
               {
                 n: 99,
@@ -2294,7 +2744,7 @@ export function EngineTracePanel({
               },
             ]
           : []),
-        ...(hasKaalFinalStep(stepAudit)
+        ...(hasKaalFinalStep(stepAudit, engineId)
           ? [
               {
                 n: 100,
@@ -2323,11 +2773,17 @@ export function EngineTracePanel({
     : false;
   const stepCardsOrder = marriageM17
     ? marriageStepCardsOrder
-    : dashaFirst
-      ? stepOrder
-          .filter((k) => k !== "step1")
-          .filter((k) => !careerPromotion || !omitCareerPromotionPipelineStep(k))
-      : stepOrder;
+    : careerTiming
+      ? ["step0", ...careerPipelineStepKeys(trace, careerPromotion)]
+      : dashaFirst
+        ? stepOrder
+            .filter((k) => {
+              if (k === "step1" && !propertyBcp) return false;
+              if (propertyBcp && k === "step2") return false;
+              return true;
+            })
+            .filter((k) => !careerPromotion || !omitCareerPromotionPipelineStep(k))
+        : stepOrder;
 
   return (
     <details
@@ -2341,9 +2797,11 @@ export function EngineTracePanel({
             : "Marriage timing — Steps 1–2 (engine trace incomplete)"
           : loveStatic
             ? `Love STATIC — ${ctx.question || row.question_text || "question"}`
+          : careerTiming
+            ? `Kaal Pipeline — career${careerPromotion ? " (promotion)" : ""} — full trace`
           : dashaFirst
-            ? hasKaalFinalStep(stepAudit)
-              ? `Kaal Pipeline — ${kaalDomain || "timing"} (Steps 0–8)`
+            ? hasKaalFinalStep(stepAudit, engineId)
+              ? `Kaal Pipeline — ${kaalDomain || "timing"} (Steps 0–6 + 8)`
               : "Kaal Pipeline — step 1 = running dasha"
             : "Engine pipeline — step by step"}
         {hasTrace || marriageHasFullTrace
@@ -2381,7 +2839,7 @@ export function EngineTracePanel({
           </div>
         ) : null}
 
-        {dashaFirst ? (
+        {dashaFirst || careerTiming ? (
           <details className="engine-request-meta">
             <summary>Question, intent &amp; LLM (admin meta)</summary>
             <ol className="engine-pipeline-overview engine-pipeline-meta">
@@ -2469,7 +2927,11 @@ export function EngineTracePanel({
                   <details key={key} className="engine-step-card">
                     <summary>
                       <span className="engine-step-key">{stepLabel}</span>
-                      <span className="engine-step-oneline">{stepOneLiner(key, step, engineId)}</span>
+                      <span className="engine-step-oneline">
+                        {careerTiming
+                          ? formatCareerStepDetail(key, step, stepAudit)
+                          : stepOneLiner(key, step, engineId)}
+                      </span>
                       <span className={`engine-step-status status-${status.toLowerCase()}`}>
                         {status}
                       </span>
@@ -2491,7 +2953,9 @@ export function EngineTracePanel({
                               months: step.months,
                               by_month: step.by_month,
                               detail: formatStep7TransitDetail(step),
-                              per_dasha_lines: formatMarriageStep7PerDashaLines(stepAudit),
+                              ...(isMarriageTimingEngine(engineId)
+                                ? { per_dasha_lines: formatMarriageStep7PerDashaLines(stepAudit) }
+                                : {}),
                             }
                           : key === "step3" && Array.isArray(step.marriage_giving_planets)
                             ? {
@@ -2526,11 +2990,19 @@ export function EngineTracePanel({
                   {timingAudit.primary_dasha ? (
                     <p className="detail-muted">
                       <strong>Primary dasha:</strong>{" "}
-                      {fmtCheckValue(timingAudit.primary_dasha.md)}-
-                      {fmtCheckValue(timingAudit.primary_dasha.ad)}-
-                      {fmtCheckValue(timingAudit.primary_dasha.pd)}{" "}
-                      {fmtCheckValue(timingAudit.primary_dasha.start_iso)} →{" "}
-                      {fmtCheckValue(timingAudit.primary_dasha.end_iso)}
+                      {fmtCheckValue(timingAudit.primary_dasha.lords) !== "—"
+                        ? fmtCheckValue(timingAudit.primary_dasha.lords)
+                        : `${fmtCheckValue(timingAudit.primary_dasha.md)}-${fmtCheckValue(
+                            timingAudit.primary_dasha.ad,
+                          )}-${fmtCheckValue(timingAudit.primary_dasha.pd)}`}{" "}
+                      {fmtCheckValue(
+                        timingAudit.primary_dasha.start_iso
+                          || timingAudit.primary_dasha.start,
+                      )}{" "}
+                      →{" "}
+                      {fmtCheckValue(
+                        timingAudit.primary_dasha.end_iso || timingAudit.primary_dasha.end,
+                      )}
                     </p>
                   ) : null}
                   {Array.isArray(timingAudit.checks) && timingAudit.checks.length > 0 ? (

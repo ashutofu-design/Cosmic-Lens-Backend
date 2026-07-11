@@ -1,0 +1,15 @@
+# Love live test suite — one question per line (# = comment)
+# EXPECT: love_timing_v1 | engine+LLM | Kaal step8 saal/mahina
+Mera pyaar kab milega?
+Patchup kab hoga?
+Relationship kab start hogi?
+
+# EXPECT: love_static / mr_engine_v1 | static loyalty — NO kab timing
+Kya mera partner loyal hai?
+Kya mujhe dhokha milega?
+
+# EXPECT: mr_engine_v1 / partner nature — static, NO love_timing
+Mere partner ka nature kaisa hoga?
+
+# EXPECT: marriage_timing_m17 — NOT love (marriage override)
+Love marriage kab hogi?

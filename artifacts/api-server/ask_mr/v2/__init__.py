@@ -2,12 +2,18 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from .adapter import v2_to_engine_result
+from .engine_runner import run_engine_from_spec
+from .manifest import get_engine_manifest
 from .orchestrator import orchestrate
+from .registry import FROZEN_ENGINE_IDS
 from .schema import EngineOutputV2
+from .specs import get_engine_spec
 
-V2_ENGINES = frozenset({"commitment"})
+# All 20 frozen relationship engines share the same reference template.
+V2_ENGINES = FROZEN_ENGINE_IDS
 
 
 def v2_enabled_for(engine_id: str) -> bool:
@@ -23,15 +29,16 @@ def run_engine_v2(
     *,
     session_id: str = "",
     wants_explain: bool = False,
+    orchestrator_meta: dict[str, Any] | None = None,
 ) -> EngineOutputV2 | None:
-    eid = (engine_id or "").strip().lower()
-    if eid == "commitment":
-        from .engines.commitment import run_commitment_v2
-
-        return run_commitment_v2(
-            kundli,
-            question,
-            session_id=session_id,
-            wants_explain=wants_explain,
-        )
-    return None
+    spec = get_engine_spec(engine_id)
+    if spec is None:
+        return None
+    return run_engine_from_spec(
+        spec,
+        kundli,
+        question,
+        session_id=session_id,
+        wants_explain=wants_explain,
+        orchestrator_meta=orchestrator_meta,
+    )

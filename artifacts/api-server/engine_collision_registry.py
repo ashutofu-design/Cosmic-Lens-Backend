@@ -39,7 +39,8 @@ DOMAIN_MUTEX_CLEAR: dict[str, frozenset[str]] = {
 }
 
 _LOVE_CTX_RX = re.compile(
-    r"(?ix)\b(pyaar|pyar|prem|mohabbat|ishq|love|pasand|rishta|partner|crush|"
+    r"(?ix)\b(pyaar|pyar|prem|mohabbat|ishq|love|pasand|rishta|relationship|"
+    r"compatible|compatibility|partner|crush|"
     r"shaadi|shadi|marriage|boyfriend|girlfriend|husband|wife|bf\b|gf\b)\b"
 )
 
@@ -53,6 +54,13 @@ def should_suppress_health_for_question(question: str, *, llm_domain: str) -> bo
     q = (question or "").strip()
     if not q:
         return False
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        if is_marriage_relationship_static_question(q):
+            return True
+    except Exception:
+        pass
     try:
         from chart_fact_answer import is_domain_life_area_interpretation_question
 
@@ -90,6 +98,13 @@ def should_force_mr_for_question(question: str, *, llm_domain: str) -> bool:
     if not q:
         return False
     try:
+        from ask_intent_fidelity import is_partner_relationship_question
+
+        if is_partner_relationship_question(q):
+            return True
+    except Exception:
+        pass
+    try:
         from chart_fact_answer import is_domain_life_area_interpretation_question
         from ask_chart_open_qa import is_native_self_chart_interpretation_question
 
@@ -113,8 +128,18 @@ def should_force_mr_for_question(question: str, *, llm_domain: str) -> bool:
     except Exception:
         pass
     if is_love_relationship_context(q) and re.search(
-        r"(?ix)\b(kya\s+wo\s+bhi|utna\s+hi\s+pyaar|dil\s+se)\b",
+        r"(?ix)\b(kya\s+wo\s+bhi|utna\s+hi\s+pyaar|dil\s+se|pyaar\s+karta)\b",
         q,
     ):
         return is_mr_q
+    # MR static must beat health regex when LLM domain is mislabeled (general/health).
+    if is_mr_q:
+        try:
+            from ask_health.health_registry import _has_real_health_intent
+
+            if _has_real_health_intent(q):
+                return False
+        except Exception:
+            pass
+        return True
     return False

@@ -340,6 +340,19 @@ def resolve_career_archetype(
 
 
 
+    try:
+        from ask_career.timing_registry import is_career_timing_question
+
+        if is_career_timing_question(
+            question,
+            {"domain": "career", "is_timing": True},
+        ):
+            return rule, "promotion_timing_not_static_milestone"
+    except Exception:
+        pass
+
+
+
     if is_milestone_question(question, interpretation):
 
         if llm and llm != "career_milestones":

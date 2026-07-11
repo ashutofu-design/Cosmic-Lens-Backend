@@ -15,6 +15,7 @@ Question DNA
   → Conflict Resolver
   → Scorecard
   → Verdict + Explanation Layer
+  → Engine Capability Manifest + Health metadata
   → JSON Output (EngineOutputV2)
   → Narrator
 ```
@@ -42,11 +43,11 @@ relationship_future, relationship_decisions, relationship_verification, relation
 
 | Component | Module |
 |-----------|--------|
+| Engine manifest / health | `manifest.py` |
 | Module matrix | `registry.py` |
 | ModuleLoader | `module_loader.py` + `modules/*` |
 | Rule engine | `rules/priority.py`, `rules/evaluator.py`, `rules/conflict_resolver.py` |
 | Contradiction | `contradiction.py` |
-| Engine memory | `memory.py` |
 | Explanation | `explanation.py` |
 | Scorecard | `scorecard.py` |
 | JSON schema | `schema.py` |
@@ -56,7 +57,16 @@ relationship_future, relationship_decisions, relationship_verification, relation
 
 ## Remedies invariant
 
-**Never emit a remedy without `target_affliction` evidence** from D1/D9/AV/BCP.
+1. **Never emit a remedy without `target_affliction` evidence** from D1/D9/AV/BCP.
+2. **Never recommend gemstones unless multiple modules confirm.**
+3. **Never prescribe expensive remedies.** Prefer behavior, prayer, mantra,
+   charity, discipline, and lifestyle.
+
+## Deferred from Phase 1
+
+Engine Memory / Previous Rules Cache is intentionally not part of Phase 1.
+Reason: cache invalidation, user context, birth-data update, and transit changes.
+Add later with explicit Redis/session invalidation rules.
 
 ## Reference implementation order
 

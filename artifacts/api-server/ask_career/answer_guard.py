@@ -209,6 +209,22 @@ def verify_career_timing_answer(
             if not _DASHA_WORD_RX.search(text):
                 issues.append("dasha_not_cited_in_answer")
 
+    try:
+        from ask_career.timing_reply import window_dates_present_in_text
+
+        aw = meta.get("answer_window") if isinstance(meta.get("answer_window"), dict) else {}
+        start = aw.get("start")
+        end = aw.get("end")
+        if not start and meta.get("primary_window"):
+            pw = str(meta.get("primary_window") or "")
+            if "→" in pw:
+                bits = [b.strip() for b in pw.split("→", 1)]
+                start, end = bits[0][:7], bits[1][:7] if len(bits) > 1 else ""
+        if (start or end) and not window_dates_present_in_text(text, start, end):
+            issues.append("primary_window_missing")
+    except Exception:
+        pass
+
     return (len(issues) == 0, issues)
 
 
@@ -234,6 +250,10 @@ def guard_career_timing_answer(
     dasha = meta.get("dasha_trace") or {}
     timing_ev = meta.get("timing_evidence") or meta.get("evidence") or []
     ev_lines = "\n".join(f"- {e}" for e in timing_ev[:6])
+    locked_window = str(meta.get("locked_answer_window") or meta.get("primary_window") or "").strip()
+    aw = meta.get("answer_window") if isinstance(meta.get("answer_window"), dict) else {}
+    if aw.get("start") or aw.get("end"):
+        locked_window = locked_window or f"{aw.get('start')} → {aw.get('end')}"
     lang_note = (
         "Reply in Hinglish (Roman)."
         if (reply_lang or "").lower() in ("hn", "hi-en")
@@ -243,6 +263,7 @@ def guard_career_timing_answer(
 {question}
 
 ENGINE VERDICT (do NOT change): {verdict}
+LOCKED ANSWER WINDOW (user ko YAHIN period bolo — doosra mat banao): {locked_window or '—'}
 LOCKED STRATEGY (embed meaning, natural words):
 {strategy}
 
@@ -256,7 +277,8 @@ DRAFT (fix issues {issues}):
 {answer}
 
 {lang_note}
-Rewrite in 2-3 sentences. Must match VERDICT. If red_avoid → say wait/defer, NOT favourable switch.
+Rewrite in 2-3 sentences. Must match VERDICT. LOCKED ANSWER WINDOW dates must appear naturally.
+If red_avoid → say wait/defer, NOT favourable switch.
 Mention current dasha lord if given. No template labels."""
 
     try:
@@ -279,6 +301,30 @@ Mention current dasha lord if given. No template labels."""
         guard_meta["repaired"] = True
         guard_meta["ok_after_repair"] = ok2
         guard_meta["issues_after_repair"] = issues2
+        if not ok2:
+            try:
+                from ask_career.timing_reply import compose_promotion_timing_reply
+
+                verdict_stub = {
+                    "bucket": meta.get("archetype") or meta_check.get("checks", {}).get("bucket"),
+                    "primary_window": meta.get("primary_window"),
+                    "promotion_engine": {"timing": {"windows": []}},
+                    "timing_window": {
+                        "next_career": {
+                            "start": aw.get("start"),
+                            "end": aw.get("end"),
+                            "lords": aw.get("lords"),
+                        }
+                    },
+                }
+                if str(verdict_stub.get("bucket") or "") == "promotion":
+                    locked = compose_promotion_timing_reply(
+                        verdict_stub, question, lang=reply_lang,
+                    )
+                    if locked:
+                        fixed = locked
+            except Exception:
+                pass
         return (fixed if fixed else answer), guard_meta
     except Exception:
         return answer, guard_meta

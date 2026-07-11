@@ -68,21 +68,29 @@ def _question_dna_pipeline(
     ) or _dig(checks, sm, key="orchestrator_secondary") or "—"
 
     is_timing = dna_item.get("timing") if "timing" in dna_item else ctx.get("is_timing")
-    timing_label = "Timing" if is_timing else "Non-Timing"
 
     steps = [
+        _pipeline_step("Question", question_text or ctx.get("question") or "—"),
+        _pipeline_step(
+            "Language Detection",
+            dna_item.get("language") or li.get("language") or li.get("reply_lang") or "—",
+        ),
+        _pipeline_step(
+            "Normalized Question",
+            ctx.get("question_normalized") or ctx.get("question") or question_text or "—",
+        ),
         _pipeline_step("Domain", domain),
         _pipeline_step("Bucket", bucket),
         _pipeline_step("Intent", dna_item.get("intent") or li.get("intent") or li.get("question_intent") or "—"),
         _pipeline_step("Subject", dna_item.get("subject") or li.get("subject") or "—"),
         _pipeline_step("Target", dna_item.get("target") or li.get("target") or "—"),
         _pipeline_step("Question Type", dna_item.get("question_type") or ctx.get("question_type") or "—"),
-        _pipeline_step("Timing / Non-Timing", timing_label),
+        _pipeline_step("Timing?", is_timing),
         _pipeline_step("Emotion", dna_item.get("emotion") or li.get("emotion") or "—"),
         _pipeline_step("Risk", dna_item.get("risk") or li.get("risk") or "—"),
         _pipeline_step("Primary Engine", archetype),
         _pipeline_step("Secondary Engine", secondary),
-        _pipeline_step("DNA Confidence", dna_item.get("confidence") or li.get("confidence") or "—"),
+        _pipeline_step("Confidence", dna_item.get("confidence") or li.get("confidence") or "—"),
     ]
     return steps
 
@@ -460,19 +468,26 @@ def _engine_verdict_extras(ctx: dict[str, Any], evidence: dict[str, list[dict[st
 
 def _structured_final_trace(ctx: dict[str, Any], question_text: str, answer_text: str) -> list[dict[str, str]]:
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
     ni = _narrator_input(ctx)
     rules = _rules_sections(ctx)
+    modules = _modules_loaded(ctx)
+    loaded = [m["module"] for m in modules if m.get("loaded")]
+    evidence = _planet_evidence(ctx)
+    ev_count = (
+        len(evidence.get("positive") or [])
+        + len(evidence.get("negative") or [])
+        + len(evidence.get("neutral") or [])
+    )
+    dna_bucket = li.get("bucket") or li.get("mr_bucket") or "—"
+    dna_engine = sm.get("archetype") or li.get("mr_archetype") or "—"
     steps = [
         ("Question", question_text or ctx.get("question") or "—"),
-        ("DNA", str((ctx.get("llm_intent") or {}).get("domain") or "—")),
-        ("Routing", str(sm.get("archetype") or "—")),
-        ("Engine", str(sm.get("slice") or "—")),
-        ("Modules", str(len(_modules_loaded(ctx)))),
-        ("Rules", str(len(rules.get("fired") or []))),
-        ("Evidence", str(
-            len((ctx.get("engine_facts") or {}).get("evidence_positive") or [])
-            + len((ctx.get("engine_facts") or {}).get("evidence_negative") or [])
-        )),
+        ("DNA", f"{dna_bucket} → {dna_engine}"),
+        ("Engine", str(sm.get("archetype") or li.get("mr_archetype") or "—")),
+        ("Modules", ", ".join(loaded) if loaded else "—"),
+        ("Rules Fired", str(len(rules.get("fired") or []))),
+        ("Evidence", str(ev_count)),
         ("Score", str(rules.get("final_score") or "—")),
         ("Verdict", str(rules.get("verdict") or "—")),
         ("Narrator JSON", "saved" if ni else "—"),
@@ -596,10 +611,9 @@ def build_observability_debug(
     trace_labels = [
         "Question",
         "DNA",
-        "Routing",
         "Engine",
         "Modules",
-        "Rules",
+        "Rules Fired",
         "Evidence",
         "Score",
         "Verdict",

@@ -24,6 +24,22 @@ _SETTLEMENT_TIMING_RX = re.compile(
 )
 
 
+def llm_says_travel_timing(llm_intent: Optional[dict] = None) -> bool:
+    """True when LLM/admin routing says travel domain + timing."""
+    if not isinstance(llm_intent, dict):
+        return False
+    dom = str(
+        llm_intent.get("domain")
+        or llm_intent.get("routed_domain")
+        or ""
+    ).strip().lower()
+    if dom != "travel":
+        return False
+    return bool(
+        llm_intent.get("is_timing") or llm_intent.get("routed_timing")
+    )
+
+
 def is_travel_timing_question(
     question: str,
     llm_intent: Optional[dict] = None,
@@ -31,6 +47,8 @@ def is_travel_timing_question(
     q = (question or "").strip()
     if not q:
         return False
+    if llm_says_travel_timing(llm_intent):
+        return True
     if isinstance(llm_intent, dict):
         if llm_intent.get("domain") == "travel" and llm_intent.get("is_timing"):
             return True

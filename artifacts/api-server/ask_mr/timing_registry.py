@@ -16,7 +16,9 @@ _EXPLICIT_TIMING_RX = re.compile(
     r"kab|kab\s+tak|when|when\s+will|"
     r"kis\s+(?:saal|year|mahine|month|din|date)|"
     r"muhurat|timing|dasha|antardasha|mahadasha|transit|gochar|"
-    r"kitne\s+saal|date\s+of"
+    r"kitne\s+saal|date\s+of|"
+    r"samay|shubh\s*samay|abhi|chal\s+raha|chalega|"
+    r"shubh\s+(?:phase|period|window|time)"
     r")\b"
 )
 
@@ -39,6 +41,26 @@ def has_explicit_timing_anchor(question: str) -> bool:
     q = prepare_ask_question(question or "")
     if not q:
         return False
+    try:
+        from ask_love.timing_registry import is_love_static_loyalty_question
+
+        if is_love_static_loyalty_question(q):
+            return False
+    except Exception:
+        pass
+    # Chart yog / house analysis ("7th house me yog hai") — not WHEN unless kab/when present.
+    if re.search(
+        r"(?ix)\b("
+        r"yog\s+hai|ka\s+yog|house\s+me|ghar\s+me|"
+        r"\d(?:st|nd|rd|th)\s+house|"
+        r"sat(?:urn)?\s+mahadasha|rahu|ketu|moon\s+\d"
+        r")\b",
+        q,
+    ) and not re.search(
+        r"(?ix)\b(kab|kab\s+tak|when|kis\s+(?:saal|year|mahine|month)|kitne\s+(?:saal|mahine))\b",
+        q,
+    ):
+        return False
     return bool(_EXPLICIT_TIMING_RX.search(q))
 
 
@@ -46,9 +68,51 @@ def question_requests_timing(
     question: str,
     llm_intent: Optional[dict[str, Any]] = None,
 ) -> bool:
-    """Hard rule: timing only when kab/when/muhurat/dasha-style anchor is in the question."""
-    _ = llm_intent
-    return has_explicit_timing_anchor(question or "")
+    """Timing only when kab/when anchor in text, or LLM timing + explicit anchor."""
+    q = question or ""
+    try:
+        if mr_static_overrides_llm_timing(q, llm_intent):
+            return False
+    except Exception:
+        pass
+    if has_explicit_timing_anchor(q):
+        return True
+    if not isinstance(llm_intent, dict) or not llm_intent.get("is_timing"):
+        return False
+    try:
+        from ask_love.timing_registry import llm_says_love_timing
+
+        if llm_says_love_timing(llm_intent):
+            return has_explicit_timing_anchor(q)
+    except Exception:
+        pass
+    try:
+        from ask_travel.timing_registry import llm_says_travel_timing
+
+        if llm_says_travel_timing(llm_intent):
+            return has_explicit_timing_anchor(q)
+    except Exception:
+        pass
+    try:
+        from ask_property.timing_registry import llm_says_property_timing
+
+        if llm_says_property_timing(llm_intent):
+            return has_explicit_timing_anchor(q)
+    except Exception:
+        pass
+    try:
+        from ask_children.timing_registry import llm_says_children_timing
+
+        if llm_says_children_timing(llm_intent):
+            return has_explicit_timing_anchor(q)
+    except Exception:
+        pass
+    dom = str(
+        llm_intent.get("domain") or llm_intent.get("routed_domain") or ""
+    ).strip().lower()
+    if dom in ("love", "travel", "property", "children"):
+        return has_explicit_timing_anchor(q)
+    return False
 
 
 def clear_timing_without_when_anchor(

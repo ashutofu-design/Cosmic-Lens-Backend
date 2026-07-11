@@ -26,7 +26,7 @@ _VAGUE_LIFE_RX = re.compile(
 _DOMAIN_ANCHOR_RX = re.compile(
     r"(?ix)\b("
     r"job|naukri|career|promotion|office|transfer|business|kaam|"
-    r"shaadi|shadi|vivah|marriage|rishta|biwi|pati|patni|pyaar|love|"
+    r"shaadi|shadi|vivah|marriage|rishta|relationship|biwi|pati|patni|pyaar|love|"
     r"paisa|money|loan|emi|debt|karz|profit|wealth|dhan|"
     r"ghar|flat|plot|property|registry|possession|"
     r"videsh|abroad|visa|travel|settle|"
@@ -115,10 +115,20 @@ def needs_timing_domain_clarifier(
     if not q:
         return False
 
-    is_timing = bool(_TIMING_RX.search(q))
-    if isinstance(llm_intent, dict) and llm_intent.get("is_timing"):
-        is_timing = True
-    if not is_timing:
+    try:
+        from ask_mr.timing_registry import (
+            has_explicit_timing_anchor,
+            mr_static_overrides_llm_timing,
+        )
+
+        if mr_static_overrides_llm_timing(q, llm_intent):
+            return False
+        explicit_timing = bool(_TIMING_RX.search(q)) or bool(has_explicit_timing_anchor(q))
+    except Exception:
+        explicit_timing = bool(_TIMING_RX.search(q))
+
+    # Clarifier only when user actually asked kab/when — not LLM "yog/milega" mis-timing.
+    if not explicit_timing:
         return False
 
     if has_mapped_timing_domain(q, llm_intent):

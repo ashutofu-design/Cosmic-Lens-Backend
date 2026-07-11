@@ -123,15 +123,205 @@ export const SCORECARD_ORDER = [
 ] as const;
 
 export const ASTRO_MODULE_LABELS: Record<string, string> = {
-  d1: "D1 — what was checked",
-  d9: "D9 — what was checked",
-  dasha: "Dasha — what was checked",
-  transit: "Transit — what was checked",
-  kp: "KP — what was checked",
-  jaimini: "Jaimini — what was checked",
-  ashtakavarga: "Ashtakavarga — what was checked",
-  bcp: "BCP — what was checked",
+  d1: "D1 me kya check hua",
+  d9: "D9 me kya check hua",
+  dasha: "Dasha me kya check hua",
+  transit: "Transit me kya check hua",
+  kp: "KP me kya check hua",
+  jaimini: "Jaimini me kya check hua",
+  ashtakavarga: "Ashtakavarga me kya check hua",
+  bcp: "BCP me kya check hua",
 };
+
+function stepAuditFromContext(
+  ctx: AskLlmContext | null,
+): Record<string, Record<string, unknown>> {
+  if (!ctx) return {};
+  const sm = (ctx.slice_meta || {}) as Record<string, unknown>;
+  const ef = (ctx.engine_facts || {}) as Record<string, unknown>;
+  const blocks = (ctx.blocks || {}) as Record<string, unknown>;
+  const trace = (blocks.engine_trace || {}) as Record<string, unknown>;
+  return (
+    (sm.step_audit as Record<string, Record<string, unknown>>) ||
+    (ef.step_audit as Record<string, Record<string, unknown>>) ||
+    (trace.step_audit as Record<string, Record<string, unknown>>) ||
+    {}
+  );
+}
+
+function linesMatching(pool: string[], pattern: RegExp): string[] {
+  return pool.filter((line) => pattern.test(line.toLowerCase()));
+}
+
+function parseEvidenceLines(lines: unknown[], polarity: string): ObservabilityEvidence[] {
+  return (lines || []).slice(0, 20).map((raw) => {
+    const s = String(raw).trim();
+    let weight = 0;
+    const m = s.match(/([+-]?\d+)\s*$/);
+    if (m) weight = Number(m[1]);
+    else if (polarity === "positive") weight = 10;
+    else if (polarity === "negative") weight = -5;
+    const label = s.replace(/\s*[+-]?\d+\s*$/, "").trim();
+    return { label: label.slice(0, 200), weight, polarity };
+  }).filter((e) => e.label);
+}
+
+function enrichObservability(
+  obs: AskObservability,
+  ctx: AskLlmContext | null,
+  row: AskQuestionItem,
+): AskObservability {
+  const stepAudit = stepAuditFromContext(ctx);
+  const step3 = (stepAudit.step3 || {}) as Record<string, unknown>;
+  const step4 = (stepAudit.step4 || {}) as Record<string, unknown>;
+  const step5 = (stepAudit.step5 || {}) as Record<string, unknown>;
+  const step6 = (stepAudit.step6 || {}) as Record<string, unknown>;
+  const step7 = (stepAudit.step7 || {}) as Record<string, unknown>;
+  const step8 = (stepAudit.step8 || {}) as Record<string, unknown>;
+  const step9 = (stepAudit.step9 || {}) as Record<string, unknown>;
+  const sm = (ctx?.slice_meta || {}) as Record<string, unknown>;
+  const checks = (ctx?.checks || {}) as Record<string, unknown>;
+  const smChecks = (sm.checks || {}) as Record<string, unknown>;
+  const ef = (ctx?.engine_facts || {}) as Record<string, unknown>;
+
+  const allEvidence = [
+    ...((ef.evidence_positive || sm.evidence_positive || []) as string[]),
+    ...((ef.evidence_negative || sm.evidence_negative || []) as string[]),
+    ...((ef.evidence_neutral || sm.evidence_neutral || []) as string[]),
+    ...((ef.evidence || sm.evidence || []) as string[]),
+    ...((step5.positive || []) as string[]),
+    ...((step5.negative || []) as string[]),
+  ];
+
+  const astro: Record<string, string[]> = { ...(obs.astrology_checks || {}) };
+  const putAstro = (key: string, lines: unknown[]) => {
+    const arr = (lines || []).map(String).map((s) => s.trim()).filter(Boolean);
+    if (arr.length && !(astro[key]?.length)) astro[key] = arr.slice(0, 10);
+  };
+  putAstro("d1", (step3.d1 as unknown[]) || []);
+  putAstro("d9", (step3.d9 as unknown[]) || []);
+  putAstro("dasha", (step3.dasha as unknown[]) || []);
+  putAstro("transit", (step3.transit as unknown[]) || []);
+  putAstro("kp", (step3.kp as unknown[]) || []);
+  putAstro("ashtakavarga", (step3.bcp as unknown[]) || (step3.ashtakavarga as unknown[]) || []);
+  if (!astro.d1?.length) putAstro("d1", linesMatching(allEvidence, /\bd1\b|lagna|7th|7h|house 7|seventh|7l|partnership/));
+  if (!astro.d9?.length) putAstro("d9", linesMatching(allEvidence, /\bd9\b|navamsa|navamsha/));
+  if (!astro.dasha?.length) putAstro("dasha", linesMatching(allEvidence, /dasha|mahadasha|antardasha|punahoo|saturn-moon/));
+  if (!astro.transit?.length) putAstro("transit", linesMatching(allEvidence, /transit|gochar/));
+  if (!astro.kp?.length) putAstro("kp", linesMatching(allEvidence, /\bkp\b|cuspal|sub-lord/));
+  if (typeof step3.detail === "string" && step3.detail.trim() && !astro.d1?.length) {
+    putAstro("d1", [step3.detail.trim()]);
+  }
+
+  const firedRaw =
+    (obs.engine_execution?.fired?.length ? obs.engine_execution.fired : null) ||
+    (step4.fired as ObservabilityRule[]) ||
+    (checks.rules_fired as ObservabilityRule[]) ||
+    (smChecks.rules_fired as ObservabilityRule[]) ||
+    [];
+
+  const posLines = [
+    ...((ef.evidence_positive || sm.evidence_positive || []) as string[]),
+    ...((step5.positive || []) as string[]),
+  ];
+  const negLines = [
+    ...((ef.evidence_negative || sm.evidence_negative || []) as string[]),
+    ...((step5.negative || []) as string[]),
+  ];
+  const neuLines = [
+    ...((ef.evidence_neutral || sm.evidence_neutral || []) as string[]),
+  ];
+
+  const planetEvidence = {
+    positive: (obs.planet_evidence?.positive?.length
+      ? obs.planet_evidence.positive
+      : parseEvidenceLines(posLines, "positive")),
+    negative: (obs.planet_evidence?.negative?.length
+      ? obs.planet_evidence.negative
+      : parseEvidenceLines(negLines, "negative")),
+    neutral: (obs.planet_evidence?.neutral?.length
+      ? obs.planet_evidence.neutral
+      : parseEvidenceLines(neuLines, "neutral")),
+  };
+
+  const scoreFromStep7 = (step7.scorecard || {}) as Record<string, number>;
+  const scoreFromChecks = (checks.scorecard || smChecks.scorecard || {}) as Record<string, number>;
+  const scorecard =
+    obs.scorecard && Object.keys(obs.scorecard).length > 0
+      ? obs.scorecard
+      : Object.fromEntries(
+          Object.entries({ ...scoreFromChecks, ...scoreFromStep7 }).filter(([k]) => k !== "primary").map(([k, v]) => [k, Number(v)]),
+        );
+
+  const narratorInput =
+    obs.narrator_input ||
+    (step9.narrator_input as Record<string, unknown>) ||
+    (checks.narrator_input as Record<string, unknown>) ||
+    null;
+
+  const engineVerdict = { ...(obs.engine_verdict || {}) };
+  if (!engineVerdict.verdict) {
+    engineVerdict.verdict = String(step8.verdict || sm.verdict || ef.verdict || row.verdict_summary || "—");
+  }
+  if (!engineVerdict.strongest?.length) {
+    engineVerdict.strongest = posLines.slice(0, 3);
+  }
+  if (!engineVerdict.weakest?.length) {
+    engineVerdict.weakest = negLines.slice(0, 2);
+  }
+  if (typeof step7.detail === "string" && step7.detail.trim() && !engineVerdict.timing) {
+    engineVerdict.timing = step7.detail.trim().slice(0, 200);
+  }
+
+  const conflict = { ...(obs.conflict_resolution || {}) };
+  if (step6.summary && !conflict.final_result) {
+    conflict.final_result = String(step6.summary);
+  }
+  if (step6.pattern && !conflict.reason) {
+    conflict.reason = String(step6.pattern);
+  }
+  if (step6.detected != null) {
+    conflict.conflict = step6.detected ? "Minor" : "None";
+  }
+
+  const exec = { ...(obs.engine_execution || {}) };
+  if (!exec.engine_name || exec.engine_name === "—") {
+    const step1 = stepAudit.step1 as Record<string, unknown> | undefined;
+    exec.engine_name = String(
+      step1?.engine || sm.archetype || ef.archetype || exec.engine_name || "—",
+    );
+  }
+  if (!exec.fired?.length && firedRaw.length) {
+    exec.fired = firedRaw;
+  }
+  if (!exec.verdict) {
+    exec.verdict = String(engineVerdict.verdict || "—");
+  }
+
+  const hallSummary = obs.hallucination_summary || {
+    engine_facts_used: {
+      ok: posLines.length + negLines.length > 0,
+      detail: `${posLines.length + negLines.length} evidence · ${firedRaw.length} rules`,
+    },
+    extra_llm_assumptions: { ok: true, items: [] as string[] },
+    missing_engine_evidence: { ok: true, items: [] as string[] },
+  };
+
+  return {
+    ...obs,
+    astrology_checks: astro,
+    engine_execution: exec,
+    planet_evidence: planetEvidence,
+    scorecard,
+    engine_verdict: engineVerdict,
+    conflict_resolution: conflict,
+    narrator_input: narratorInput,
+    narrator_output: obs.narrator_output || row.answer_text,
+    hallucination_summary: hallSummary,
+    has_v2_rules: Boolean(exec.fired?.length),
+    has_step_audit: Boolean(Object.keys(stepAudit).length),
+  };
+}
 
 export function orderScorecardEntries(
   scorecard: Record<string, number>,
@@ -280,7 +470,10 @@ function buildFallbackObservability(
 
 export function resolveAskObservability(row: AskQuestionItem): AskObservability {
   const ctx = parseAskLlmContext(row);
-  const obs = (ctx as AskLlmContext & { observability?: AskObservability })?.observability;
-  if (obs && typeof obs === "object") return obs;
-  return buildFallbackObservability(ctx, row);
+  const raw = (ctx as AskLlmContext & { observability?: AskObservability })?.observability;
+  const base =
+    raw && typeof raw === "object"
+      ? raw
+      : buildFallbackObservability(ctx, row);
+  return enrichObservability(base, ctx, row);
 }

@@ -335,15 +335,56 @@ def _astrology_checks(ctx: dict[str, Any]) -> dict[str, list[str]]:
     step3 = step_audit.get("step3") if isinstance(step_audit, dict) else {}
     if not isinstance(step3, dict):
         step3 = {}
-    return {
-        "d1": list(step3.get("d1") or [])[:10],
-        "d9": list(step3.get("d9") or [])[:10],
-        "dasha": list(step3.get("dasha") or [])[:8],
-        "transit": list(step3.get("transit") or [])[:8],
-        "kp": list(step3.get("kp") or [])[:8],
-        "jaimini": list(step3.get("jaimini") or [])[:6],
-        "ashtakavarga": list(step3.get("bcp") or step3.get("ashtakavarga") or [])[:6],
+
+    def _lines(key: str, *pools: Any) -> list[str]:
+        out: list[str] = []
+        raw = step3.get(key) if isinstance(step3, dict) else None
+        if isinstance(raw, list):
+            out.extend(str(x).strip() for x in raw if str(x).strip())
+        return out[:10]
+
+    evidence_pool: list[str] = []
+    for pool in (
+        ef.get("evidence_positive") or [],
+        ef.get("evidence_negative") or [],
+        ef.get("evidence_neutral") or [],
+        ef.get("evidence") or [],
+        sm.get("evidence_positive") or [],
+        sm.get("evidence_negative") or [],
+        sm.get("evidence_neutral") or [],
+        sm.get("evidence") or [],
+    ):
+        if isinstance(pool, list):
+            evidence_pool.extend(str(x).strip() for x in pool if str(x).strip())
+
+    def _match_evidence(rx: str) -> list[str]:
+        import re as _re
+
+        pat = _re.compile(rx, _re.I)
+        return [s for s in evidence_pool if pat.search(s)][:8]
+
+    out = {
+        "d1": _lines("d1"),
+        "d9": _lines("d9"),
+        "dasha": _lines("dasha"),
+        "transit": _lines("transit"),
+        "kp": _lines("kp"),
+        "jaimini": _lines("jaimini"),
+        "ashtakavarga": _lines("bcp") or _lines("ashtakavarga"),
     }
+    if not out["d1"]:
+        out["d1"] = _match_evidence(r"\bd1\b|lagna|7th|7h|house 7|seventh|7l|partnership")
+    if not out["d9"]:
+        out["d9"] = _match_evidence(r"\bd9\b|navamsa|navamsha")
+    if not out["dasha"]:
+        out["dasha"] = _match_evidence(r"dasha|mahadasha|antardasha|punahoo|saturn-moon")
+    if not out["transit"]:
+        out["transit"] = _match_evidence(r"transit|gochar")
+    if not out["kp"]:
+        out["kp"] = _match_evidence(r"\bkp\b|cuspal|sub-lord")
+    if not out["d1"] and isinstance(step3.get("detail"), str) and step3["detail"].strip():
+        out["d1"] = [step3["detail"].strip()[:300]]
+    return out
 
 
 def _performance_section(ctx: dict[str, Any], row_meta: dict[str, Any] | None = None) -> dict[str, Any]:

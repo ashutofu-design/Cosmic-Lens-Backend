@@ -162,14 +162,14 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
 
       <Section title="3. Routing Decision">
         <p>
-          <strong>Why this engine was selected</strong>
+          <strong>Kyun ye engine select hua</strong>
         </p>
         <p>
           <code>{routing.selected_engine || "—"}</code>
         </p>
         <p className="detail-muted">{routing.why_selected || "—"}</p>
         <div className="obs-subblock">
-          <strong>Why other engines were rejected</strong>
+          <strong>Kyun doosre engines reject hue</strong>
           {(routing.rejected_engines || []).length > 0 ? (
             <ul className="obs-rules-list">
               {(routing.rejected_engines || []).map((r, i) => (
@@ -222,7 +222,10 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
 
       <Section title="6. Rules Fired" stars={5}>
         {(exec.fired || []).length === 0 ? (
-          <p className="detail-muted">No v2 rules saved for this row.</p>
+          <p className="detail-muted">
+            No COM/TRUST rule IDs saved (mr_engine_v1 / legacy row). Planet evidence + astrology checks
+            sections below show what the engine actually evaluated.
+          </p>
         ) : (
           <ul className="obs-rules-list">
             {(exec.fired || []).map((r, i) => (

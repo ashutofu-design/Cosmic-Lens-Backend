@@ -2002,6 +2002,21 @@ code {
 }
 
 /* ── Developer observability debugger ─────────────────────────── */
+.ask-detail-legacy-debug {
+  margin-top: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 12px 12px;
+  opacity: 0.85;
+}
+
+.ask-detail-legacy-debug > summary {
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .obs-debugger {
   margin-top: 20px;
   display: flex;

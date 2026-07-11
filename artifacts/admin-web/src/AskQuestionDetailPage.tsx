@@ -144,14 +144,17 @@ export function AskQuestionDetailPage({
 
       <AskObservabilityDebugger row={row} />
 
-      <div className="ask-detail-context">
-        <EngineTracePanel ctx={ctx || bootstrapAskLlmContextFromRow(row)} row={row} />
-        <AskLlmContextPanel
-          row={row}
-          panelId={`ask-llm-context-${row.id}`}
-          defaultOpen={false}
-        />
-      </div>
+      <details className="ask-detail-legacy-debug">
+        <summary>Legacy raw trace (advanced — deprecated)</summary>
+        <div className="ask-detail-context">
+          <EngineTracePanel ctx={ctx || bootstrapAskLlmContextFromRow(row)} row={row} />
+          <AskLlmContextPanel
+            row={row}
+            panelId={`ask-llm-context-${row.id}`}
+            defaultOpen={false}
+          />
+        </div>
+      </details>
     </section>
   );
 }

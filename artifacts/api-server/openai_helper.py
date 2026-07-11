@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Emotional attachment engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "emotional_attachment"
+        and os.environ.get("ASK_EMOTIONAL_ATTACHMENT_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.emotional_attachment_narrator import (
+            engine_result_to_emotional_attachment_json,
+            render_emotional_attachment_template_answer,
+        )
+
+        _ea_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _ea_dna = _llm_intent_admin.get("question_dna")
+        _ea_json = engine_result_to_emotional_attachment_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_ea_dna if isinstance(_ea_dna, dict) else None,
+        )
+        _ea_checks = dict(_mr_engine_result.checks or {})
+        _ea_checks["narrator_input"] = _ea_json
+        _ea_checks["question"] = question or ""
+        _mr_engine_result.checks = _ea_checks
+        _ea_text = render_emotional_attachment_template_answer(_ea_json, question or "", lang=eff_lang)
+        _out_ea = {
+            "text": _ea_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_ea_json.get("confidence") or 48) / 100.0)),
+            "source": "emotional_attachment_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_ea = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "emotional_attachment",
+            "skip_llm": True,
+            "narrator_input": _ea_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_ea,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_ea,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="emotional_attachment_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── Communication engine — deterministic template narrator ──
     if (
         _is_mr_static

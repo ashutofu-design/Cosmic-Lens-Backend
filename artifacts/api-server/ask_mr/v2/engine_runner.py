@@ -91,6 +91,11 @@ def _default_checks(
         checks["toxicity_level"] = level
     elif eid == "communication":
         checks["communication_level"] = level
+    elif eid == "emotional_attachment":
+        checks.update({
+            "attachment_level": level,
+            "emotional_attachment_level": level,
+        })
     elif eid == "relationship_remedies":
         checks["remedy_scope"] = level
     return checks

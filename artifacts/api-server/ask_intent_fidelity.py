@@ -519,6 +519,62 @@ def communication_angle_label(angle: str | None) -> str:
     return _COMMUNICATION_ANGLE_LABELS.get(key, "Communication / baat cheet")
 
 
+_EMOTIONAL_ATTACHMENT_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("emotional_needs", re.compile(r"(?ix)\b(emotional\s+needs|needs\s+poori|emotional\s+need|zarurat)\b")),
+    ("attachment_style", re.compile(r"(?ix)\b(attachment\s+style|attach\s+style|lagav\s+pattern|attach\s+hona)\b")),
+    ("bond_depth", re.compile(r"(?ix)\b(emotional\s+bond|bond\s+strong|gehra\s+pyaar|gehra\s+dil|deep\s+bond|gehra\s+lag|feelings\s+gehra)\b")),
+    ("fear_of_loss", re.compile(r"(?ix)\b(fear\s+of\s+loss|insecurity|abandon|kho\s+dunga|juda\s+hone\s+ka\s+dar|loss[\s-]fear)\b")),
+    ("clinginess", re.compile(r"(?ix)\b(clingy|chipak|possessive|zyada\s+attached|obsessive)\b")),
+    ("emotional_distance", re.compile(r"(?ix)\b(emotional\s+distance|emotionally\s+distant|distant|withdraw|door\s+rehta)\b")),
+    ("mood_sensitivity", re.compile(r"(?ix)\b(mood\s+swings?|mood\s+change|mood\s+se|sensitive\s+mood)\b")),
+    ("vulnerability", re.compile(r"(?ix)\b(vulnerable|vulnerability|khulna|open\s+up)\b")),
+    ("reassurance", re.compile(r"(?ix)\b(reassurance|reassure|tasalli|validation)\b")),
+    ("emotional_security", re.compile(r"(?ix)\b(emotionally\s+secure|emotional\s+security|emotionally\s+safe|safe\s+feel)\b")),
+    ("emotional_intensity", re.compile(r"(?ix)\b(emotional\s+intensity|intense\s+feeling|intensity|dil\s+se)\b")),
+    ("emotional_capacity", re.compile(r"(?ix)\b(emotional\s+capacity|capacity\s+for\s+deep|deep\s+attach)\b")),
+    ("general_attachment", re.compile(r"(?ix)\b(emotional|attachment|attach|feelings|dil\s+lag|lagav|bonding)\b")),
+]
+
+_EMOTIONAL_ATTACHMENT_ANGLE_LABELS: dict[str, str] = {
+    "general_attachment": "General emotional bonding / lagav",
+    "attachment_style": "Attachment style / lagav pattern",
+    "emotional_needs": "Emotional needs fulfilment",
+    "bond_depth": "Emotional bond depth / gehra lagav",
+    "emotional_security": "Emotionally secure / safe feel",
+    "fear_of_loss": "Fear of loss / insecurity",
+    "mood_sensitivity": "Mood sensitivity affecting closeness",
+    "clinginess": "Clingy / possessive bonding pull",
+    "emotional_distance": "Emotional distance / withdrawal",
+    "vulnerability": "Vulnerability / khulna",
+    "reassurance": "Reassurance / validation need",
+    "emotional_intensity": "Emotional intensity",
+    "emotional_capacity": "Capacity for deep bonding",
+}
+
+
+def infer_emotional_attachment_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(emotional|attachment|attach|feelings|dil\s+lag|lagav|bond|bonding|needs|"
+        r"secure|safe\s+feel|anxious|vulnerable|mood|clingy|cling|possessive|distance|distant|"
+        r"withdraw|reassurance|intensity|insecurity|gehra|vulnerability|capacity|style|pattern|"
+        r"fear|loss|swings?)\b",
+        q,
+    ):
+        return None
+    for name, rx in _EMOTIONAL_ATTACHMENT_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_attachment"
+
+
+def emotional_attachment_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _EMOTIONAL_ATTACHMENT_ANGLE_LABELS.get(key, "Emotional bonding / lagav")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

@@ -62,6 +62,7 @@ def format_engine_rich_plain(
         infer_emotional_attachment_angle,
         infer_family_approval_angle,
         infer_long_distance_angle,
+        infer_one_sided_love_angle,
         infer_toxicity_angle,
         infer_loyalty_angle,
         infer_partner_commitment_angle,
@@ -214,6 +215,17 @@ def format_engine_rich_plain(
 
             data = engine_result_to_toxicity_json(result, question=q)
             big = render_toxicity_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "one_sided_love" or infer_one_sided_love_angle(q):
+        try:
+            from ask_mr.one_sided_love_narrator import (
+                engine_result_to_one_sided_love_json,
+                render_one_sided_love_template_answer,
+            )
+
+            data = engine_result_to_one_sided_love_json(result, question=q)
+            big = render_one_sided_love_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
     else:
@@ -590,6 +602,35 @@ def narrate_mr_engine_llm(
             )
         else:
             return render_toxicity_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "one_sided_love":
+        from ask_mr.one_sided_love_narrator import (
+            engine_result_to_one_sided_love_json,
+            one_sided_love_engine_narrator_payload,
+            render_one_sided_love_template_answer,
+            validate_one_sided_love_narrator_output,
+        )
+
+        _os_dna = None
+        if isinstance(llm_intent, dict):
+            _os_dna = llm_intent.get("question_dna")
+        narrator_json = engine_result_to_one_sided_love_json(
+            engine_result,
+            question=question or "",
+            question_dna=_os_dna if isinstance(_os_dna, dict) else None,
+        )
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_ONE_SIDED_LOVE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = one_sided_love_engine_narrator_payload(
+                engine_result,
+                wants_explain=wants_explain,
+                question=question or "",
+                question_dna=_os_dna if isinstance(_os_dna, dict) else None,
+            )
+        else:
+            return render_one_sided_love_template_answer(narrator_json, question or "", lang=eff_lang)
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -799,6 +840,18 @@ def narrate_mr_engine_llm(
                     from ask_mr.toxicity_narrator import render_toxicity_template_answer
 
                     return render_toxicity_template_answer(
+                        narrator_json, question or "", lang=eff_lang
+                    )
+            if arch == "one_sided_love" and narrator_json:
+                ok, issues = validate_one_sided_love_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] one_sided_love validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.one_sided_love_narrator import render_one_sided_love_template_answer
+
+                    return render_one_sided_love_template_answer(
                         narrator_json, question or "", lang=eff_lang
                     )
             return polished or None

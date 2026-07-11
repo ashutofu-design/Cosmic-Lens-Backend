@@ -727,6 +727,62 @@ def toxicity_angle_label(angle: str | None) -> str:
     return _TOXICITY_ANGLE_LABELS.get(key, "Toxicity / red-flag pattern")
 
 
+_ONE_SIDED_LOVE_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("proposal", re.compile(r"(?ix)\b(proposal|propose)\b")),
+    ("crush", re.compile(r"(?ix)\b(crush)\b")),
+    ("ek_tarfa", re.compile(r"(?ix)\b(ek\s*tarfa|one\s*sided|ektarafa)\b")),
+    (
+        "reciprocity",
+        re.compile(
+            r"(?ix)\b(kya\s+wo\s+bhi|love\s+me\s+back|utna\s+hi\s+pya?ar|jitna\s+main|"
+            r"reciproc\w*|mutual\s+love)\b"
+        ),
+    ),
+    (
+        "partner_loves_back",
+        re.compile(r"(?ix)\b(pya?ar\s+kart\w*|pasand\s+kart\w*|love\s+me\b|mujhse\s+pya?ar)\b"),
+    ),
+    ("unrequited", re.compile(r"(?ix)\b(unrequited|pya?ar\s+nahi|respond\s+nahi|return\s+nahi)\b")),
+    (
+        "effort_imbalance",
+        re.compile(r"(?ix)\b(meri\s+taraf|effort\s+outweigh|zyada\s+effort|zyada\s+pya?ar)\b"),
+    ),
+    ("general_one_sided", re.compile(r"(?ix)\b(pya?ar|pyaar|feelings|attraction)\b")),
+]
+
+_ONE_SIDED_LOVE_ANGLE_LABELS: dict[str, str] = {
+    "general_one_sided": "General one-sided love / reciprocity",
+    "reciprocity": "Reciprocity / mutual love check",
+    "partner_loves_back": "Does partner love me back",
+    "crush": "Crush reciprocity",
+    "proposal": "Proposal / confess outcome",
+    "ek_tarfa": "Ek tarfa pyar pattern",
+    "unrequited": "Unrequited love pattern",
+    "effort_imbalance": "Effort imbalance / one-sided investment",
+}
+
+
+def infer_one_sided_love_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(one\s*sided|ek\s*tarfa|crush|proposal|propose|reciproc\w*|mutual|love\s+me\s+back|"
+        r"kya\s+wo|pya?ar|pyaar|unrequited|tarfa|pasand\s+kart|pasand)\b",
+        q,
+    ):
+        return None
+    for name, rx in _ONE_SIDED_LOVE_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_one_sided"
+
+
+def one_sided_love_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _ONE_SIDED_LOVE_ANGLE_LABELS.get(key, "One-sided love / reciprocity")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

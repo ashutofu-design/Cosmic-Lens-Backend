@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── One-sided love engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "one_sided_love"
+        and os.environ.get("ASK_ONE_SIDED_LOVE_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.one_sided_love_narrator import (
+            engine_result_to_one_sided_love_json,
+            render_one_sided_love_template_answer,
+        )
+
+        _os_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _os_dna = _llm_intent_admin.get("question_dna")
+        _os_json = engine_result_to_one_sided_love_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_os_dna if isinstance(_os_dna, dict) else None,
+        )
+        _os_checks = dict(_mr_engine_result.checks or {})
+        _os_checks["narrator_input"] = _os_json
+        _os_checks["question"] = question or ""
+        _mr_engine_result.checks = _os_checks
+        _os_text = render_one_sided_love_template_answer(_os_json, question or "", lang=eff_lang)
+        _out_os = {
+            "text": _os_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_os_json.get("confidence") or 48) / 100.0)),
+            "source": "one_sided_love_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_os = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "one_sided_love",
+            "skip_llm": True,
+            "narrator_input": _os_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_os,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_os,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="one_sided_love_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── Toxicity engine — deterministic template narrator ──
     if (
         _is_mr_static

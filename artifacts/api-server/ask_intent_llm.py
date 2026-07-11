@@ -303,7 +303,7 @@ best-fitting archetype id; otherwise null. Allowed ids and meaning:
    - spouse_wealth: partner's wealth / financial status / saving habits
    - spouse_appearance: partner's physical look (height, face, eyes, complexion, voice, aura)
    - children_parenting: spouse parenting style, bond with children, family values
-   - karmic_marriage: soulmate, past life, karmic debt, spiritual growth via marriage
+   - karmic_marriage: Soulmate & Karmic Connection — soulmate, past life, karmic debt, spiritual growth via partnership
    - lifestyle_marriage: luxury/travel/social/home/abroad settlement after marriage
    - dating_courtship: true love, dating, flirting, red/green flags, friend-to-lover
    - secret_relationship: secret/hidden/parallel affair
@@ -321,7 +321,7 @@ values or life-goals fit, "hum compatible hain", thinking/personality match
    - commitment: serious vs casual intent, time-pass check, long-term commitment readiness, \
 "shaadi karega/karegi?" (static intent, NOT kab/when)
    - communication: baat-cheet, misunderstandings, silence, arguments, samajh payega
-   - relationship_future: NON-TIMING future outlook — bond grow/weak, aage kya hoga (no kab/when)
+   - relationship_future: Relationship Outcome / Long-term Stability — NON-TIMING outlook (bond grow/weak, aage kya hoga; no kab/when)
    - relationship_decisions: stay/leave, continue or not, overall suitability decision
    - toxicity: toxic dynamic, abuse/manipulation/control/red-flag toxicity (NOT breakup timing)
    - relationship_remedies: upay/mantra/puja for love/relationship/marriage issues

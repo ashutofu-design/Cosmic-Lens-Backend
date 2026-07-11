@@ -27,6 +27,42 @@ _LANG_LABELS = {
     "en": "English",
 }
 
+_DNA_DOMAIN_LABELS: dict[str, str] = {
+    "love": "Relationship",
+    "marriage": "Marriage",
+    "career": "Career",
+    "finance": "Finance",
+    "health": "Health",
+    "family": "Family",
+    "education": "Education",
+    "travel": "Travel",
+    "legal": "Legal",
+    "spiritual": "Spiritual",
+    "general": "General",
+}
+
+_DNA_SUBJECT_LABELS: dict[str, str] = {
+    "self": "Self",
+    "partner": "Partner",
+    "spouse": "Spouse",
+    "family_member": "Family Member",
+    "other_person": "Other Person",
+    "subject_person": "Subject Person",
+}
+
+_DNA_TARGET_LABELS: dict[str, str] = {
+    "self": "Self",
+    "self_relationship": "Self (Relationship)",
+    "subject_person": "Subject Person",
+    "event": "Event",
+    "situation": "Situation",
+}
+
+_DNA_ENGINE_ARCHETYPE_LABELS: dict[str, str] = {
+    "karmic_marriage": "Soulmate & Karmic Connection",
+    "relationship_future": "Relationship Outcome / Long-term Stability",
+}
+
 
 def _norm_module(name: Any) -> str:
     key = str(name or "").strip().lower()
@@ -71,6 +107,37 @@ def _infer_language_label(question: str) -> str:
     return "English"
 
 
+def _dna_display_label(labels: dict[str, str], key: Any) -> str:
+    k = str(key or "").strip().lower()
+    if not k:
+        return "—"
+    return labels.get(k, k.replace("_", " "))
+
+
+def _format_dna_question_type(value: Any) -> str:
+    s = str(value or "").strip()
+    if not s or s in ("—", "unknown"):
+        return "—"
+    return s.replace("_", " ")
+
+
+def _format_dna_bucket_match(item: dict[str, Any]) -> str:
+    bmc = str(item.get("bucket_match_confidence") or "").strip()
+    if not bmc:
+        return "—"
+    score = item.get("bucket_match_score")
+    if isinstance(score, (int, float)):
+        return f"{bmc.upper()} ({int(round(float(score) * 100))}%)"
+    return bmc.upper()
+
+
+def _format_dna_modules(item: dict[str, Any], li: dict[str, Any]) -> str:
+    mods = item.get("required_modules") or li.get("required_modules")
+    if isinstance(mods, list) and mods:
+        return ", ".join(str(m).strip().upper() for m in mods if str(m).strip())
+    return "—"
+
+
 def _ensure_question_dna(ctx: dict[str, Any], question_text: str) -> dict[str, Any]:
     dna = ctx.get("question_dna")
     if not (isinstance(dna, dict) and isinstance(dna.get("questions"), list) and dna["questions"]):
@@ -82,34 +149,28 @@ def _ensure_question_dna(ctx: dict[str, Any], question_text: str) -> dict[str, A
 
     q = (question_text or ctx.get("question") or "").strip()
     try:
+        from ask_question_dna import extract_question_dna, question_dna_enabled
+
+        if question_dna_enabled() and q:
+            extracted = extract_question_dna(q, client=None)
+            if isinstance(extracted, dict) and extracted.get("questions"):
+                return extracted
+    except Exception:
+        pass
+
+    try:
         from ask_question_dna import validate_question_dna_item
 
         item = validate_question_dna_item({}, original_question=q)
     except Exception:
-        item = {"normalized_question": q, "domain": "love", "bucket": "general", "confidence": 0.0}
+        item = {
+            "normalized_question": q,
+            "domain": "love",
+            "bucket": "unknown_relationship_intent",
+            "confidence": 0.0,
+        }
 
     item["language"] = item.get("language") or _infer_language_label(q)
-    ql = q.lower()
-    if _COMMITMENT_Q_RX.search(ql):
-        item["domain"] = item.get("domain") or "love"
-        item["bucket"] = "commitment"
-        item["intent"] = item.get("intent") or "Partner Seriousness / Timepass"
-        item["subject"] = "partner" if "partner" in ql else (item.get("subject") or "self")
-        item["target"] = item.get("target") or "self_relationship"
-        item["emotion"] = item.get("emotion") or "concern"
-        item["risk"] = item.get("risk") or "medium"
-        item["question_type"] = item.get("question_type") or "static"
-        item["timing"] = False
-        if float(item.get("confidence") or 0) < 0.5:
-            item["confidence"] = 0.85
-    try:
-        from ask_mr.classifier import classify_mr_archetype
-
-        arch = classify_mr_archetype(q)
-        if arch and str(item.get("bucket") or "") in ("", "unknown", "general", "general_mr"):
-            item["bucket"] = arch
-    except Exception:
-        pass
     return {"questions": [item], "source": "observability_infer", "latency_ms": 0}
 
 
@@ -212,56 +273,95 @@ def _question_dna_pipeline(
     ctx: dict[str, Any],
     question_text: str,
 ) -> list[dict[str, str]]:
-    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
-    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
-    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
-    dna = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else {}
-    dna_item = {}
-    if isinstance(dna.get("questions"), list) and dna["questions"]:
-        dna_item = dna["questions"][0] if isinstance(dna["questions"][0], dict) else {}
+    """Mirror mobile DNA Check copy format — same labels and field order."""
+    try:
+        from relationship_dna_taxonomy import LOVE_BUCKET_LABELS
+    except Exception:
+        LOVE_BUCKET_LABELS = {}
 
-    domain = dna_item.get("domain") or li.get("domain") or li.get("routed_domain") or "—"
-    bucket = dna_item.get("bucket") or li.get("bucket") or li.get("mr_bucket") or "—"
-    archetype = (
-        sm.get("archetype")
-        or ctx.get("routed_archetype")
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    dna = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else {}
+    dna_item: dict[str, Any] = {}
+    questions = dna.get("questions") if isinstance(dna.get("questions"), list) else []
+    if questions and isinstance(questions[0], dict):
+        dna_item = questions[0]
+
+    domain = str(
+        dna_item.get("domain") or li.get("domain") or li.get("routed_domain") or ""
+    ).strip().lower()
+    bucket = str(
+        dna_item.get("bucket") or li.get("bucket") or li.get("mr_bucket") or ""
+    ).strip().lower()
+    subject = str(dna_item.get("subject") or li.get("subject") or "").strip().lower()
+    target = str(dna_item.get("target") or li.get("target") or "").strip().lower()
+    engine_arch = str(
+        dna_item.get("engine_archetype")
+        or li.get("dna_engine_archetype")
         or li.get("mr_archetype")
         or li.get("routed_archetype")
+        or ""
+    ).strip().lower()
+
+    normalized = (
+        str(dna_item.get("normalized_question") or "").strip()
+        or str(ctx.get("question_normalized") or "").strip()
+        or str(ctx.get("question") or question_text or "").strip()
         or "—"
     )
-    secondary = (
-        _dig(checks, sm, key="secondary_engine")
-        or (li.get("orchestrator") or {}).get("secondary_engine")
-        if isinstance(li.get("orchestrator"), dict)
-        else None
-    ) or _dig(checks, sm, key="orchestrator_secondary") or "—"
+    domain_display = (
+        f"{_dna_display_label(_DNA_DOMAIN_LABELS, domain)} ({domain})"
+        if domain
+        else "—"
+    )
+    bucket_display = (
+        f"{_dna_display_label(LOVE_BUCKET_LABELS, bucket)} ({bucket})"
+        if bucket
+        else "—"
+    )
+    subject_display = (
+        f"{_dna_display_label(_DNA_SUBJECT_LABELS, subject)} ({subject})"
+        if subject
+        else "—"
+    )
+    target_display = (
+        f"{_dna_display_label(_DNA_TARGET_LABELS, target)} ({target})"
+        if target
+        else "—"
+    )
+    engine_display = _dna_display_label(_DNA_ENGINE_ARCHETYPE_LABELS, engine_arch)
 
     is_timing = dna_item.get("timing") if "timing" in dna_item else ctx.get("is_timing")
+    tense = str(dna_item.get("tense") or "").strip().lower()
+    time_context = tense if tense and tense != "unspecified" else "—"
+    multi_q = len(questions) > 1 if questions else False
 
-    steps = [
-        _pipeline_step("Question", question_text or ctx.get("question") or "—"),
+    return [
+        _pipeline_step("Normalized", normalized),
+        _pipeline_step("Domain", domain_display),
+        _pipeline_step("Bucket", bucket_display),
         _pipeline_step(
-            "Language Detection",
-            dna_item.get("language") or li.get("language") or li.get("reply_lang") or "—",
+            "Intent",
+            dna_item.get("intent") or li.get("intent") or li.get("question_intent") or "—",
         ),
+        _pipeline_step("Subject", subject_display),
+        _pipeline_step("Target", target_display),
         _pipeline_step(
-            "Normalized Question",
-            ctx.get("question_normalized") or ctx.get("question") or question_text or "—",
+            "Question Type",
+            _format_dna_question_type(
+                dna_item.get("question_type") or ctx.get("question_type")
+            ),
         ),
-        _pipeline_step("Domain", domain),
-        _pipeline_step("Bucket", bucket),
-        _pipeline_step("Intent", dna_item.get("intent") or li.get("intent") or li.get("question_intent") or "—"),
-        _pipeline_step("Subject", dna_item.get("subject") or li.get("subject") or "—"),
-        _pipeline_step("Target", dna_item.get("target") or li.get("target") or "—"),
-        _pipeline_step("Question Type", dna_item.get("question_type") or ctx.get("question_type") or "—"),
-        _pipeline_step("Timing?", is_timing),
-        _pipeline_step("Emotion", dna_item.get("emotion") or li.get("emotion") or "—"),
+        _pipeline_step("Timing Required", is_timing if is_timing is not None else "—"),
+        _pipeline_step("Time Context", time_context),
+        _pipeline_step("Follow-up", dna_item.get("is_followup") if "is_followup" in dna_item else "—"),
+        _pipeline_step("Multiple Questions", multi_q),
+        _pipeline_step("Emotion", _format_dna_question_type(dna_item.get("emotion") or li.get("emotion"))),
         _pipeline_step("Risk", dna_item.get("risk") or li.get("risk") or "—"),
-        _pipeline_step("Primary Engine", archetype),
-        _pipeline_step("Secondary Engine", secondary),
+        _pipeline_step("Engine Archetype", engine_display),
+        _pipeline_step("Modules", _format_dna_modules(dna_item, li)),
         _pipeline_step("Confidence", _format_confidence(dna_item.get("confidence") or li.get("confidence"))),
+        _pipeline_step("Bucket Match", _format_dna_bucket_match(dna_item)),
     ]
-    return steps
 
 
 def _dna_engine_archetype(ctx: dict[str, Any]) -> str:

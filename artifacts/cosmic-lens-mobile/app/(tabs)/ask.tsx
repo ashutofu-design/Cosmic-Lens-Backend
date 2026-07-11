@@ -291,14 +291,19 @@ const DNA_BUCKET_LABEL: Record<string, string> = {
   breakup_separation: "Breakup & Separation",
   reconciliation_ex: "Reconciliation & Ex",
   marriage_potential: "Marriage Potential",
-  relationship_future: "Relationship Future (Non-Timing)",
+  relationship_future: "Relationship Outcome / Long-term Stability",
   relationship_decisions: "Relationship Decisions",
-  spiritual_karmic: "Spiritual / Karmic Connection",
+  spiritual_karmic: "Soulmate & Karmic Connection",
   relationship_remedies: "Relationship Remedies",
   unknown_relationship_intent: "Unknown (Audit)",
   general_mr: "Marriage General",
   govt_job: "Government Job",
   career_milestones: "Career Milestones",
+};
+
+const DNA_ENGINE_ARCHETYPE_LABEL: Record<string, string> = {
+  karmic_marriage: "Soulmate & Karmic Connection",
+  relationship_future: "Relationship Outcome / Long-term Stability",
 };
 
 const DNA_SUBJECT_LABEL: Record<string, string> = {
@@ -426,7 +431,7 @@ function formatDnaSubForCopy(sub: DnaCopySub, splitLabel?: string): string {
   if (sub.is_followup && sub.followup_of) add("Follow-up Of", sub.followup_of);
   add("Emotion", sub.emotion ? String(sub.emotion).replace(/_/g, " ") : "—");
   add("Risk", sub.risk ? String(sub.risk) : "—");
-  add("Engine Archetype", sub.engine_archetype || "—");
+  add("Engine Archetype", dnaDisplayLabel(DNA_ENGINE_ARCHETYPE_LABEL, sub.engine_archetype));
   add(
     "Modules",
     Array.isArray(sub.required_modules) && sub.required_modules.length > 0
@@ -2542,7 +2547,7 @@ export default function AskScreen() {
                         />
                         <DnaFieldRow
                           label="Engine Archetype"
-                          value={sub.engine_archetype || "—"}
+                          value={dnaDisplayLabel(DNA_ENGINE_ARCHETYPE_LABEL, sub.engine_archetype)}
                           textColor={C.text}
                           mutedColor={C.textMuted}
                         />

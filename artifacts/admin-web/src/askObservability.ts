@@ -173,14 +173,105 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.3.0";
+export const OBS_DEBUGGER_VERSION = "2.4.0";
 
-function inferDnaField(
-  value: string | undefined,
-  fallback: string,
+const DNA_DOMAIN_LABEL: Record<string, string> = {
+  love: "Relationship",
+  marriage: "Marriage",
+  career: "Career",
+  finance: "Finance",
+  health: "Health",
+  family: "Family",
+  education: "Education",
+  travel: "Travel",
+  legal: "Legal",
+  spiritual: "Spiritual",
+  general: "General",
+};
+
+const DNA_BUCKET_LABEL: Record<string, string> = {
+  relationship_promise: "Relationship Promise",
+  love_feelings: "Love & Feelings",
+  partner_nature: "Partner Nature",
+  compatibility: "Compatibility",
+  commitment: "Commitment",
+  trust_loyalty: "Trust & Loyalty",
+  communication: "Communication",
+  emotional_bonding: "Emotional Bonding",
+  physical_intimacy: "Physical & Intimacy",
+  third_person_infidelity: "Third Person / Infidelity",
+  dating_courtship: "Dating & Courtship",
+  long_distance: "Long Distance",
+  family_social_acceptance: "Family & Social Acceptance",
+  relationship_challenges: "Relationship Challenges",
+  toxicity_red_flags: "Toxicity & Red Flags",
+  breakup_separation: "Breakup & Separation",
+  reconciliation_ex: "Reconciliation & Ex",
+  marriage_potential: "Marriage Potential",
+  relationship_future: "Relationship Outcome / Long-term Stability",
+  relationship_decisions: "Relationship Decisions",
+  spiritual_karmic: "Soulmate & Karmic Connection",
+  relationship_remedies: "Relationship Remedies",
+  unknown_relationship_intent: "Unknown (Audit)",
+  general_mr: "Marriage General",
+};
+
+const DNA_ENGINE_ARCHETYPE_LABEL: Record<string, string> = {
+  karmic_marriage: "Soulmate & Karmic Connection",
+  relationship_future: "Relationship Outcome / Long-term Stability",
+};
+
+const DNA_SUBJECT_LABEL: Record<string, string> = {
+  self: "Self",
+  partner: "Partner",
+  spouse: "Spouse",
+  family_member: "Family Member",
+  other_person: "Other Person",
+  subject_person: "Subject Person",
+};
+
+const DNA_TARGET_LABEL: Record<string, string> = {
+  self: "Self",
+  self_relationship: "Self (Relationship)",
+  subject_person: "Subject Person",
+  event: "Event",
+  situation: "Situation",
+};
+
+function dnaDisplayLabel(map: Record<string, string>, key?: string | null): string {
+  if (!key) return "—";
+  return map[key] || key.replace(/_/g, " ");
+}
+
+function dnaYesNo(v?: boolean | null): string {
+  if (v === true) return "Yes";
+  if (v === false) return "No";
+  return "—";
+}
+
+function dnaConfPct(v?: number | null): string {
+  if (typeof v !== "number" || Number.isNaN(v)) return "—";
+  const pct = v <= 1 ? v * 100 : v;
+  return `${Math.round(pct)}%`;
+}
+
+function dnaQuestionType(v?: string | null): string {
+  const s = String(v || "").trim();
+  if (!s || s === "—" || s === "unknown") return "—";
+  return s.replace(/_/g, " ");
+}
+
+function dnaBucketMatch(
+  confidence?: string | null,
+  score?: number | null,
 ): string {
-  const v = String(value || "").trim();
-  return v && v !== "—" && v !== "unknown" ? v : fallback;
+  const bmc = String(confidence || "").trim();
+  if (!bmc) return "—";
+  if (typeof score === "number" && !Number.isNaN(score)) {
+    const pct = score <= 1 ? score * 100 : score;
+    return `${bmc.toUpperCase()} (${Math.round(pct)}%)`;
+  }
+  return bmc.toUpperCase();
 }
 
 export function buildFullDnaPipeline(
@@ -188,83 +279,95 @@ export function buildFullDnaPipeline(
   row: AskQuestionItem,
 ): ObservabilityPipelineStep[] {
   const li = (ctx?.llm_intent || {}) as Record<string, unknown>;
-  const sm = (ctx?.slice_meta || {}) as Record<string, unknown>;
-  const checks = (ctx?.checks || {}) as Record<string, unknown>;
   const dnaFromCtx = (ctx as AskLlmContext & { question_dna?: { questions?: unknown[] } })?.question_dna;
   const dnaFromIntent = li.question_dna as { questions?: unknown[] } | undefined;
   const dna = dnaFromCtx || dnaFromIntent;
+  const questions = Array.isArray(dna?.questions) ? dna!.questions : [];
   const dnaItem = (
-    Array.isArray(dna?.questions) && dna.questions[0] && typeof dna.questions[0] === "object"
-      ? dna.questions[0]
-      : {}
+    questions[0] && typeof questions[0] === "object" ? questions[0] : {}
   ) as Record<string, unknown>;
-  const orch = li.orchestrator as Record<string, unknown> | undefined;
-  const isTiming = dnaItem.timing ?? ctx?.is_timing;
-  const secondary =
-    checks.secondary_engine ||
-    checks.orchestrator_secondary ||
-    orch?.secondary_engine ||
+
+  const domain = String(dnaItem.domain || li.domain || li.routed_domain || "").trim().toLowerCase();
+  const bucket = String(dnaItem.bucket || li.bucket || li.mr_bucket || "").trim().toLowerCase();
+  const subject = String(dnaItem.subject || li.subject || "").trim().toLowerCase();
+  const target = String(dnaItem.target || li.target || "").trim().toLowerCase();
+  const engineArch = String(
+    dnaItem.engine_archetype || li.dna_engine_archetype || li.mr_archetype || li.routed_archetype || "",
+  ).trim().toLowerCase();
+
+  const normalized =
+    String(dnaItem.normalized_question || "").trim() ||
+    String(ctx?.question_normalized || ctx?.question || row.question_text || "").trim() ||
     "—";
 
-  const q = row.question_text || ctx?.question || "";
-  const ql = q.toLowerCase();
-  const commitmentQ = /commitment|timepass|time\s*pass|genuine|serious|long[\s-]?term|pakka/.test(ql);
+  const domainDisplay = domain
+    ? `${dnaDisplayLabel(DNA_DOMAIN_LABEL, domain)} (${domain})`
+    : "—";
+  const bucketDisplay = bucket
+    ? `${dnaDisplayLabel(DNA_BUCKET_LABEL, bucket)} (${bucket})`
+    : "—";
+  const subjectDisplay = subject
+    ? `${dnaDisplayLabel(DNA_SUBJECT_LABEL, subject)} (${subject})`
+    : "—";
+  const targetDisplay = target
+    ? `${dnaDisplayLabel(DNA_TARGET_LABEL, target)} (${target})`
+    : "—";
+
+  const tense = String(dnaItem.tense || "").trim().toLowerCase();
+  const timeContext = tense && tense !== "unspecified" ? tense : "—";
+  const timingVal = dnaItem.timing ?? ctx?.is_timing;
+  const mods = (dnaItem.required_modules || li.required_modules) as unknown;
+  const modules =
+    Array.isArray(mods) && mods.length > 0
+      ? mods.map((m) => String(m).trim().toUpperCase()).filter(Boolean).join(", ")
+      : "—";
 
   return [
-    { label: "Question", value: q || "—" },
-    {
-      label: "Language Detection",
-      value: inferDnaField(
-        String(dnaItem.language || li.language || li.reply_lang || ""),
-        /[\u0900-\u097F]/.test(q) ? "Hindi (Devanagari)" : /\b(kya|mera|partner|hai)\b/i.test(q) ? "Hindi (Roman)" : "English",
-      ),
-    },
-    {
-      label: "Normalized Question",
-      value: String(ctx?.question_normalized || ctx?.question || row.question_text || "—"),
-    },
-    {
-      label: "Domain",
-      value: inferDnaField(String(dnaItem.domain || li.domain || li.routed_domain || ""), commitmentQ ? "love" : "—"),
-    },
-    {
-      label: "Bucket",
-      value: inferDnaField(String(dnaItem.bucket || li.bucket || li.mr_bucket || row.topic || ""), commitmentQ ? "commitment" : "—"),
-    },
+    { label: "Normalized", value: normalized },
+    { label: "Domain", value: domainDisplay },
+    { label: "Bucket", value: bucketDisplay },
     {
       label: "Intent",
-      value: inferDnaField(String(dnaItem.intent || li.intent || li.question_intent || ""), commitmentQ ? "Partner Seriousness / Timepass" : "—"),
+      value: String(dnaItem.intent || li.intent || li.question_intent || "—"),
     },
-    { label: "Subject", value: inferDnaField(String(dnaItem.subject || li.subject || ""), /partner/i.test(q) ? "partner" : "self") },
-    { label: "Target", value: inferDnaField(String(dnaItem.target || li.target || ""), commitmentQ ? "self_relationship" : "—") },
+    { label: "Subject", value: subjectDisplay },
+    { label: "Target", value: targetDisplay },
     {
       label: "Question Type",
-      value: inferDnaField(String(dnaItem.question_type || ctx?.question_type || ""), "static"),
+      value: dnaQuestionType(String(dnaItem.question_type || ctx?.question_type || "")),
     },
-    { label: "Timing?", value: isTiming ? "yes" : "no" },
-    { label: "Emotion", value: inferDnaField(String(dnaItem.emotion || li.emotion || ""), commitmentQ ? "concern" : "neutral") },
-    { label: "Risk", value: inferDnaField(String(dnaItem.risk || li.risk || ""), "medium") },
+    { label: "Timing Required", value: dnaYesNo(timingVal as boolean | null | undefined) },
+    { label: "Time Context", value: timeContext },
+    { label: "Follow-up", value: dnaYesNo(dnaItem.is_followup as boolean | null | undefined) },
+    { label: "Multiple Questions", value: questions.length > 1 ? "Yes" : "No" },
     {
-      label: "Primary Engine",
-      value: String(
-        dnaItem.engine_archetype ||
-          sm.archetype ||
-          li.dna_engine_archetype ||
-          li.mr_archetype ||
-          li.routed_archetype ||
-          (commitmentQ ? "commitment" : "—"),
-      ),
+      label: "Emotion",
+      value: dnaQuestionType(String(dnaItem.emotion || li.emotion || "")),
     },
-    { label: "Secondary Engine", value: String(secondary) },
+    { label: "Risk", value: String(dnaItem.risk || li.risk || "—") },
+    {
+      label: "Engine Archetype",
+      value: dnaDisplayLabel(DNA_ENGINE_ARCHETYPE_LABEL, engineArch),
+    },
+    { label: "Modules", value: modules },
     {
       label: "Confidence",
-      value: (() => {
-        const raw = dnaItem.confidence ?? li.confidence ?? checks.primary_score;
-        if (raw == null || raw === "") return commitmentQ ? "85%" : "—";
-        const num = Number(raw);
-        if (!Number.isNaN(num)) return num <= 1 ? `${Math.round(num * 100)}%` : `${Math.round(num)}%`;
-        return String(raw);
-      })(),
+      value: dnaConfPct(
+        typeof dnaItem.confidence === "number"
+          ? dnaItem.confidence
+          : typeof li.confidence === "number"
+            ? (li.confidence as number)
+            : null,
+      ),
+    },
+    {
+      label: "Bucket Match",
+      value: dnaBucketMatch(
+        String(dnaItem.bucket_match_confidence || ""),
+        typeof dnaItem.bucket_match_score === "number"
+          ? dnaItem.bucket_match_score
+          : null,
+      ),
     },
   ];
 }

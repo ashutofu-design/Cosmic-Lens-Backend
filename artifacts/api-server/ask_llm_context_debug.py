@@ -2652,6 +2652,7 @@ def build_admin_llm_context(
         or _blocks_in.get("engine_trace")
     )
     _intent = llm_intent if isinstance(llm_intent, dict) else {}
+    _preserved_dna = _intent.get("question_dna")
     try:
         from ask_question_understand import ensure_question_understanding
 
@@ -2669,6 +2670,21 @@ def build_admin_llm_context(
                 _intent = {**_intent, "question_summary": summarize_question_one_line(question, _intent)}
             except Exception:
                 pass
+    if _preserved_dna and not _intent.get("question_dna"):
+        _intent["question_dna"] = _preserved_dna
+    if not _intent.get("question_dna"):
+        try:
+            from ask_question_dna import extract_question_dna, question_dna_enabled
+
+            if question_dna_enabled():
+                _dna_backfill = extract_question_dna(
+                    question_normalized or question or "",
+                    client=None,
+                )
+                if isinstance(_dna_backfill, dict) and _dna_backfill.get("questions"):
+                    _intent["question_dna"] = _dna_backfill
+        except Exception:
+            pass
     llm_intent = _intent or llm_intent
     _raw = str(
         question_raw or (_intent.get("question_raw") if isinstance(_intent, dict) else "") or question or ""
@@ -3505,6 +3521,7 @@ def refresh_stored_llm_context_understanding(ctx: dict[str, Any]) -> dict[str, A
         or ""
     ).strip()
     intent = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    preserved_dna = ctx.get("question_dna") or intent.get("question_dna")
     if not q and isinstance(intent, dict):
         q = str(intent.get("question_normalized") or intent.get("question_echo") or "").strip()
     if not q:
@@ -3516,8 +3533,12 @@ def refresh_stored_llm_context_understanding(ctx: dict[str, Any]) -> dict[str, A
         refreshed = ensure_question_understanding(q, dict(intent), force_llm=False, question_raw=raw)
     except Exception:
         return ctx
+    if preserved_dna and not refreshed.get("question_dna"):
+        refreshed["question_dna"] = preserved_dna
     out = dict(ctx)
     out["llm_intent"] = refreshed
+    if preserved_dna and not out.get("question_dna"):
+        out["question_dna"] = preserved_dna
     for key in (
         "question_meaning",
         "question_scope",

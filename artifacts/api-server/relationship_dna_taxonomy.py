@@ -62,9 +62,9 @@ LOVE_BUCKET_LABELS: dict[str, str] = {
     "breakup_separation": "Breakup & Separation",
     "reconciliation_ex": "Reconciliation & Ex",
     "marriage_potential": "Marriage Potential",
-    "relationship_future": "Relationship Future (Non-Timing)",
+    "relationship_future": "Relationship Outcome / Long-term Stability",
     "relationship_decisions": "Relationship Decisions",
-    "spiritual_karmic": "Spiritual / Karmic Connection",
+    "spiritual_karmic": "Soulmate & Karmic Connection",
     "relationship_remedies": "Relationship Remedies",
     LOVE_BUCKET_UNKNOWN: "Unknown (Audit)",
 }

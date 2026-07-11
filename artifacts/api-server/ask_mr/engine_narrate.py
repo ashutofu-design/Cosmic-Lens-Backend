@@ -928,15 +928,33 @@ def narrate_mr_engine_llm(
     word_budget = int(getattr(engine_result, "word_budget", None) or 85)
     if concise:
         word_budget = min(word_budget, 70)
-    system_prompt = build_mr_engine_narrator_system_prompt(
-        chart_text=chart_text,
-        reply_lang=eff_lang,
-        wants_explain=wants_explain,
-        archetype=arch,
-        word_budget=word_budget,
-        user_intent=intent,
-        concise=concise,
+    from ask_mr.engine_presenter import (
+        build_engine_presenter_system_prompt,
+        use_engine_presenter_mode,
+        validate_presenter_output,
     )
+
+    use_presenter = narrator_json is not None and use_engine_presenter_mode(arch)
+    if use_presenter:
+        system_prompt = build_engine_presenter_system_prompt(
+            engine=arch,
+            narrator_json=narrator_json,
+            lang=eff_lang,
+            wants_explain=wants_explain,
+            concise=concise,
+            question=question or "",
+            user_intent=intent,
+        )
+    else:
+        system_prompt = build_mr_engine_narrator_system_prompt(
+            chart_text=chart_text,
+            reply_lang=eff_lang,
+            wants_explain=wants_explain,
+            archetype=arch,
+            word_budget=word_budget,
+            user_intent=intent,
+            concise=concise,
+        )
     user_payload = build_mr_narrator_user_lang_block(eff_lang) + (question or "")
     model = os.environ.get(
         "RAW_PASSTHROUGH_MODEL",
@@ -978,7 +996,17 @@ def narrate_mr_engine_llm(
                     text = re.sub(r"\s{2,}", " ", text).strip()
             polished = polish_mr_confident_tone(text)
             if arch == "commitment" and narrator_json:
-                ok, issues = validate_commitment_narrator_output(polished or "", narrator_json)
+                if use_presenter:
+                    ok, issues = validate_presenter_output(
+                        polished or "",
+                        narrator_json,
+                        arch,
+                    )
+                else:
+                    ok, issues = validate_commitment_narrator_output(
+                        polished or "",
+                        narrator_json,
+                    )
                 if not ok:
                     print(
                         f"[engine_narrate] commitment validation failed {issues} — using locked template",

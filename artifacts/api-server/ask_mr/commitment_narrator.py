@@ -183,7 +183,7 @@ def _build_direct_answer(level: str, *, timepass_q: bool, genuine_q: bool) -> st
         if timepass_q and genuine_q:
             tail = (
                 "Is stage par unhe fully serious ya long-term committed nahi maana ja sakta — "
-                "genuine long-term intent abhi weak dikhta hai."
+                "genuine long-term intent abhi weak dikhta hai; timepass pattern zyada dikhta hai."
             )
         elif timepass_q:
             tail = "Is stage par unhe sirf timepass ya casual intent zyada maana ja sakta hai, fully serious nahi."

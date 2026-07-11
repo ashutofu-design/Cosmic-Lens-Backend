@@ -73,6 +73,10 @@ def _infer_language_label(question: str) -> str:
 
 def _ensure_question_dna(ctx: dict[str, Any], question_text: str) -> dict[str, Any]:
     dna = ctx.get("question_dna")
+    if not (isinstance(dna, dict) and isinstance(dna.get("questions"), list) and dna["questions"]):
+        li = ctx.get("llm_intent")
+        if isinstance(li, dict):
+            dna = li.get("question_dna")
     if isinstance(dna, dict) and isinstance(dna.get("questions"), list) and dna["questions"]:
         return dna
 
@@ -260,15 +264,35 @@ def _question_dna_pipeline(
     return steps
 
 
-def _routing_warning(question_text: str, archetype: str) -> str | None:
+def _dna_engine_archetype(ctx: dict[str, Any]) -> str:
+    dna = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else {}
+    items = dna.get("questions") if isinstance(dna.get("questions"), list) else []
+    if items and isinstance(items[0], dict):
+        return str(items[0].get("engine_archetype") or items[0].get("bucket") or "").strip()
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    return str(li.get("dna_engine_archetype") or li.get("mr_bucket") or li.get("bucket") or "").strip()
+
+
+def _routing_warning(question_text: str, archetype: str, dna_engine: str = "") -> str | None:
     q = (question_text or "").strip()
     arch = (archetype or "").strip().lower()
+    dna = (dna_engine or "").strip().lower()
     if not q or not arch:
         return None
+    if dna and dna != arch:
+        return (
+            f"DNA engine_archetype={dna} but executed engine={arch}. "
+            "Routing mismatch — execution should match DNA."
+        )
     if _COMMITMENT_Q_RX.search(q) and arch in _LOYALTY_ARCH:
         return (
             "Question looks commitment/timepass-focused but primary engine is "
             f"{arch}. Expected primary: commitment (loyalty may be secondary)."
+        )
+    if _COMMITMENT_Q_RX.search(q) and arch == "partner_nature":
+        return (
+            "Question looks commitment-focused but executed partner_nature. "
+            "Expected primary: commitment."
         )
     return None
 
@@ -762,8 +786,11 @@ def _routing_decision(ctx: dict[str, Any], question_text: str) -> dict[str, Any]
         reason_parts.append(f"Primary engine {selected} from intent routing.")
 
     rejected: list[str] = []
-    warning = _routing_warning(question_text, archetype)
-    if warning:
+    dna_engine = _dna_engine_archetype(ctx)
+    warning = _routing_warning(question_text, archetype, dna_engine)
+    if warning and "partner_nature" in warning:
+        rejected.append("partner_nature — commitment/future-planning signals in question")
+    elif warning and "loyalty" in warning:
         rejected.append("loyalty_trust — commitment/timepass signals in raw question")
     try:
         from ask_mr.classifier import classify_mr_archetype
@@ -1105,7 +1132,7 @@ def build_observability_debug(
         "user_question": _user_question_section(ctx, question_text),
         "question_dna_pipeline": _question_dna_pipeline(ctx, question_text),
         "routing_decision": routing,
-        "routing_warning": _routing_warning(question_text, archetype),
+        "routing_warning": _routing_warning(question_text, archetype, _dna_engine_archetype(ctx)),
         "engine_health": engine_health,
         "rule_decisions": decision_table,
         "engine_execution": {

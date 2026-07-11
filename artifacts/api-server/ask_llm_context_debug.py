@@ -2773,6 +2773,10 @@ def build_admin_llm_context(
         "understanding_line": understanding_line,
         "understanding_detail": understanding_detail or None,
         "llm_intent": llm_intent or None,
+        "question_dna": (
+            (_intent.get("question_dna") if isinstance(_intent, dict) else None)
+            or None
+        ),
         "llm_called": bool(llm_called),
         "answer_path": answer_path,
         "answer_path_label": answer_path_label,

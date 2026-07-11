@@ -190,7 +190,9 @@ export function buildFullDnaPipeline(
   const li = (ctx?.llm_intent || {}) as Record<string, unknown>;
   const sm = (ctx?.slice_meta || {}) as Record<string, unknown>;
   const checks = (ctx?.checks || {}) as Record<string, unknown>;
-  const dna = (ctx as AskLlmContext & { question_dna?: { questions?: unknown[] } })?.question_dna;
+  const dnaFromCtx = (ctx as AskLlmContext & { question_dna?: { questions?: unknown[] } })?.question_dna;
+  const dnaFromIntent = li.question_dna as { questions?: unknown[] } | undefined;
+  const dna = dnaFromCtx || dnaFromIntent;
   const dnaItem = (
     Array.isArray(dna?.questions) && dna.questions[0] && typeof dna.questions[0] === "object"
       ? dna.questions[0]
@@ -244,7 +246,14 @@ export function buildFullDnaPipeline(
     { label: "Risk", value: inferDnaField(String(dnaItem.risk || li.risk || ""), "medium") },
     {
       label: "Primary Engine",
-      value: String(sm.archetype || li.mr_archetype || li.routed_archetype || (commitmentQ ? "commitment" : "—")),
+      value: String(
+        dnaItem.engine_archetype ||
+          sm.archetype ||
+          li.dna_engine_archetype ||
+          li.mr_archetype ||
+          li.routed_archetype ||
+          (commitmentQ ? "commitment" : "—"),
+      ),
     },
     { label: "Secondary Engine", value: String(secondary) },
     {

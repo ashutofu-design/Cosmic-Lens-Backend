@@ -332,11 +332,26 @@ def classify_mr_archetype(question: str) -> str:
         r"(?ix)\b("
         r"commitment|committed|serious\s*relationship|casual\s*relationship|time\s*pass|timepass|"
         r"genuinely|genuine\s*intent|long[\s-]*term\s*intent|shaadi\s*karega|shaadi\s*karegi|"
-        r"ready\s+for\s+commit|life\s*partner\s*view"
+        r"ready\s+for\s+commit|life\s*partner\s*view|"
+        r"serious\s*planning|future\s*planning|planning\s*kart|future\s*ko\s*lekar|serious\s+about"
         r")\b",
         q,
     ) and not re.search(
         r"(?ix)\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|beimaan)\b",
+        q,
+    ):
+        return "commitment"
+
+    # Partner future / seriousness planning (before partner_nature catch-all)
+    if re.search(
+        r"(?ix)\b(partner|spouse|pati|patni|boyfriend|girlfriend|bf|gf|husband|wife)\b",
+        q,
+    ) and re.search(
+        r"(?ix)\b(serious|planning|future\s*ko|long[\s-]*term|genuine|commit|time\s*pass|timepass)\b",
+        q,
+    ) and not re.search(
+        r"(?ix)\b(cheat|cheating|dhokha|betray|nature|personality|swabhav|temper|"
+        r"introvert|expressive|kaisa|kaisi|dominant|cooperative)\b",
         q,
     ):
         return "commitment"

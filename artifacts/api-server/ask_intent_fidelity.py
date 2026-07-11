@@ -169,6 +169,7 @@ _PARTNER_COMMITMENT_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("casual_relationship", re.compile(r"(?ix)\bcasual\b.{0,25}\b(relationship|rishta)\b")),
     ("long_term_intent", re.compile(r"(?ix)\blong[\s-]*term\b")),
     ("future_together", re.compile(r"(?ix)\b(future|aage|kal).{0,30}\b(saath|sath|with\s+me)\b")),
+    ("future_planning", re.compile(r"(?ix)\b(future\s*ko\s*lekar|future\s*planning|serious\s*planning|planning\s*kart)\b")),
     ("life_partner_view", re.compile(r"(?ix)\b(life\s*partner|jeevan\s*sathi)\b")),
     ("loyalty_intent", re.compile(r"(?ix)\b(loyal|exclusive|faithful|wafad|vafad)\b")),
     ("time_pass", re.compile(r"(?ix)\b(time\s*pass|waqt\s*pass)\b")),
@@ -184,6 +185,7 @@ _PARTNER_COMMITMENT_LABELS: dict[str, str] = {
     "casual_relationship": "Partner casual / time-pass relationship me hai ya nahi",
     "long_term_intent": "Partner long-term relationship chahta hai ya nahi",
     "future_together": "Partner future user ke saath dekhta hai ya nahi",
+    "future_planning": "Partner future ko lekar serious planning karta hai ya nahi",
     "life_partner_view": "Partner user ko life partner maanta hai ya nahi",
     "loyalty_intent": "Partner loyal / exclusive rehna chahta hai ya nahi",
     "time_pass": "Partner sirf time pass kar raha hai ya nahi",
@@ -677,27 +679,63 @@ def _domain_supported(question: str, domain: str) -> bool:
 
 
 def enforce_commitment_archetype_from_question(question: str, out: dict[str, Any]) -> bool:
-    """Raw question wins over LLM summary for commitment vs loyalty_trust misroutes."""
+    """Raw question + DNA bucket win over partner_nature misroutes for commitment Qs."""
     q = (question or "").strip()
     if not q:
         return False
+
+    reason = ""
     try:
         from ask_mr.classifier import classify_mr_archetype
 
-        classified = classify_mr_archetype(q)
+        if classify_mr_archetype(q) == "commitment":
+            reason = "commitment_classifier"
     except Exception:
+        pass
+
+    if not reason and infer_partner_commitment_angle(q):
+        if re.search(
+            r"(?ix)\b(serious|planning|future|commit|long[\s-]*term|genuine|time\s*pass|casual)\b",
+            q,
+        ):
+            reason = "commitment_angle"
+
+    if not reason:
+        bucket = str(out.get("bucket") or out.get("mr_bucket") or "").strip().lower()
+        if bucket == "commitment":
+            reason = "dna_bucket"
+
+    if not reason and re.search(r"(?ix)\b(partner|spouse|pati|patni|bf|gf)\b", q):
+        if re.search(r"(?ix)\b(serious|planning|future|commit|long[\s-]*term|genuine|timepass|time\s*pass)\b", q):
+            if not re.search(
+                r"(?ix)\b(nature|personality|swabhav|temper|kaisa|kaisi|introvert|expressive|dominant)\b",
+                q,
+            ):
+                reason = "commitment_keyword_partner"
+
+    if not reason:
         return False
-    if classified != "commitment":
-        return False
+
     current = str(out.get("mr_archetype") or "").strip().lower()
     if current == "commitment":
         return False
-    if current and current not in ("loyalty_trust", "loyalty", "trust"):
+
+    overridable = {
+        "",
+        "loyalty_trust",
+        "loyalty",
+        "trust",
+        "partner_nature",
+        "general_mr",
+        "relationship_future",
+    }
+    if current and current not in overridable:
         return False
+
     out["mr_archetype"] = "commitment"
     out["domain"] = out.get("domain") or "love"
     out["is_timing"] = False
-    out["routing_override"] = "commitment_classifier_raw_question"
+    out["routing_override"] = reason
     return True
 
 

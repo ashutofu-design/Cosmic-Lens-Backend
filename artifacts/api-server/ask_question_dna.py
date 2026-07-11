@@ -148,6 +148,164 @@ def question_dna_enabled() -> bool:
     return (os.environ.get("ASK_QUESTION_DNA") or "1").strip() != "0"
 
 
+def question_dna_routing_enabled() -> bool:
+    """When ON, validated DNA overrides legacy classify/route for engine dispatch."""
+    if not question_dna_enabled():
+        return False
+    return (
+        os.environ.get("ASK_DNA_ROUTING")
+        or os.environ.get("ASK_QUESTION_DNA_ROUTING")
+        or "1"
+    ).strip() != "0"
+
+
+_DOMAIN_ARCHETYPE_KEY: dict[str, str] = {
+    "marriage": "mr_archetype",
+    "love": "mr_archetype",
+    "career": "career_archetype",
+    "finance": "finance_archetype",
+    "health": "health_archetype",
+    "education": "education_archetype",
+    "children": "children_archetype",
+    "property": "property_archetype",
+    "travel": "travel_archetype",
+    "litigation": "litigation_archetype",
+}
+
+
+def dna_primary_item(dna: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(dna, dict):
+        return {}
+    items = dna.get("questions")
+    if isinstance(items, list) and items and isinstance(items[0], dict):
+        return items[0]
+    return {}
+
+
+def resolve_engine_archetype_from_dna_item(item: dict[str, Any]) -> str | None:
+    domain = str(item.get("domain") or "").strip().lower()
+    bucket = str(item.get("bucket") or "").strip().lower()
+    if not domain or not bucket:
+        return None
+    if domain == "love":
+        arch = str(item.get("engine_archetype") or "").strip().lower()
+        return arch or map_love_bucket_to_mr(bucket)
+    if domain in _DOMAIN_ARCHETYPE_KEY:
+        return bucket
+    return None
+
+
+def dna_item_trusted_for_routing(
+    item: dict[str, Any],
+    *,
+    dna_source: str = "",
+    min_confidence: float = 0.55,
+) -> bool:
+    if not item:
+        return False
+    src = str(dna_source or "").strip().lower()
+    if src.startswith("dna_fallback"):
+        return False
+    if int(item.get("coercions") or 0) > 2:
+        return False
+    bucket = str(item.get("bucket") or "").strip().lower()
+    if bucket in ("", "general", LOVE_BUCKET_UNKNOWN):
+        return False
+    conf = float(item.get("confidence") or 0)
+    bmc = str(item.get("bucket_match_confidence") or "").lower()
+    if conf >= min_confidence:
+        return True
+    if bmc == "high":
+        return True
+    if bmc == "medium" and conf >= 0.45:
+        return True
+    return False
+
+
+def apply_question_dna_to_routing(
+    question: str,
+    admin: dict[str, Any],
+    dna: dict[str, Any],
+    *,
+    llm_intent: dict[str, Any] | None = None,
+    min_confidence: float = 0.55,
+) -> bool:
+    """Apply DNA bucket/domain/timing as routing source of truth when trusted."""
+    admin["question_dna"] = dna
+    if not question_dna_routing_enabled():
+        return False
+
+    item = dna_primary_item(dna)
+    dna_source = str(dna.get("source") or "")
+    if not dna_item_trusted_for_routing(
+        item,
+        dna_source=dna_source,
+        min_confidence=min_confidence,
+    ):
+        return False
+
+    domain = str(item.get("domain") or "").strip().lower()
+    bucket = str(item.get("bucket") or "").strip().lower()
+    timing = bool(item.get("timing"))
+    archetype = resolve_engine_archetype_from_dna_item(item)
+    prev_arch = str(
+        admin.get("mr_archetype") or admin.get("routed_archetype") or ""
+    ).strip().lower()
+
+    admin["domain"] = domain
+    admin["routed_domain"] = domain
+    admin["bucket"] = bucket
+    admin["mr_bucket"] = bucket
+    if item.get("intent"):
+        admin["intent"] = item.get("intent")
+    for key in ("subject", "target", "emotion", "risk"):
+        if item.get(key):
+            admin[key] = item.get(key)
+    if item.get("question_type"):
+        admin["question_type_dna"] = item.get("question_type")
+    admin["is_timing"] = timing
+    admin["routed_timing"] = timing
+    admin["dna_confidence"] = item.get("confidence")
+    admin["dna_bucket_match"] = item.get("bucket_match_confidence")
+    if item.get("required_modules"):
+        admin["required_modules"] = item.get("required_modules")
+
+    if archetype:
+        admin["dna_engine_archetype"] = archetype
+        arch_key = _DOMAIN_ARCHETYPE_KEY.get(domain)
+        if arch_key:
+            admin[arch_key] = archetype
+        if domain in ("love", "marriage"):
+            admin["mr_archetype"] = archetype
+        admin["routed_archetype"] = archetype
+
+    admin["routing_override"] = "question_dna"
+    admin["dna_routing_applied"] = True
+    admin["intent_source"] = "question_dna"
+
+    if isinstance(llm_intent, dict):
+        llm_intent["domain"] = domain
+        llm_intent["is_timing"] = timing
+        llm_intent["bucket"] = bucket
+        if archetype:
+            arch_key = _DOMAIN_ARCHETYPE_KEY.get(domain)
+            if arch_key:
+                llm_intent[arch_key] = archetype
+            if domain in ("love", "marriage"):
+                llm_intent["mr_archetype"] = archetype
+        llm_intent["source"] = "question_dna"
+        llm_intent["routing_override"] = "question_dna"
+
+    if prev_arch and archetype and prev_arch != archetype:
+        print(
+            f"[question_dna] ROUTING_OVERRIDE q={(question or '')[:72]!r} "
+            f"prev={prev_arch} dna={archetype} domain={domain} "
+            f"bucket={bucket} conf={item.get('confidence')}",
+            flush=True,
+        )
+    return True
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # DETERMINISTIC MODULE ROUTER — the LLM never picks chart modules.
 # ─────────────────────────────────────────────────────────────────────────────

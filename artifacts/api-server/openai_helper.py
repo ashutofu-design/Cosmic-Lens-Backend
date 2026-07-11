@@ -5594,6 +5594,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         except Exception as _upe:
             print(f"[raw_passthrough] user profile hint skipped: {_upe}", flush=True)
 
+    _question_dna_payload: dict | None = None
+    try:
+        from ask_question_dna import extract_question_dna, question_dna_enabled
+
+        if question_dna_enabled():
+            _question_dna_payload = extract_question_dna(
+                question or "",
+                history=history,
+                client=client,
+            )
+            if isinstance(_llm_intent_admin, dict):
+                _llm_intent_admin["question_dna"] = _question_dna_payload
+            elif _question_dna_payload:
+                _llm_intent_admin = {"question_dna": _question_dna_payload}
+            print(
+                f"[raw_passthrough] QUESTION_DNA extracted "
+                f"source={(_question_dna_payload or {}).get('source')} "
+                f"latency_ms={(_question_dna_payload or {}).get('latency_ms')}",
+                flush=True,
+            )
+    except Exception as _dna_extract_exc:
+        print(f"[raw_passthrough] question_dna extract skipped: {_dna_extract_exc}", flush=True)
+
     # ── Route: Engine (timing) vs Cosmo LLM (narrative) ──────────────
     _resolved_route = "narrative"
     try:
@@ -5663,6 +5686,101 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 f"source={_intent_source}",
                 flush=True,
             )
+            try:
+                from ask_intent_fidelity import enforce_commitment_archetype_from_question
+
+                _route_patch: dict[str, Any] = {}
+                if isinstance(_llm_intent_admin, dict):
+                    _route_patch.update(_llm_intent_admin)
+                if isinstance(_llm_intent, dict):
+                    _route_patch.update({k: v for k, v in _llm_intent.items() if v is not None})
+                _qd = (_llm_intent_admin or {}).get("question_dna") if isinstance(_llm_intent_admin, dict) else None
+                if isinstance(_qd, dict) and isinstance(_qd.get("questions"), list) and _qd["questions"]:
+                    _q0 = _qd["questions"][0]
+                    if isinstance(_q0, dict):
+                        if _q0.get("bucket"):
+                            _route_patch.setdefault("bucket", _q0["bucket"])
+                            _route_patch.setdefault("mr_bucket", _q0["bucket"])
+                        if _q0.get("engine_archetype"):
+                            _route_patch.setdefault("dna_engine_archetype", _q0["engine_archetype"])
+                if enforce_commitment_archetype_from_question(
+                    _user_turn_question or question or "",
+                    _route_patch,
+                ):
+                    _mr_archetype_override = _route_patch.get("mr_archetype")
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin.update(_route_patch)
+                    if isinstance(_llm_intent, dict):
+                        _llm_intent["mr_archetype"] = _mr_archetype_override
+                        _llm_intent["routing_override"] = _route_patch.get("routing_override")
+                    print(
+                        f"[raw_passthrough] COMMITMENT_ROUTING_OVERRIDE "
+                        f"archetype={_mr_archetype_override} "
+                        f"reason={_route_patch.get('routing_override')}",
+                        flush=True,
+                    )
+            except Exception as _cro_exc:
+                print(f"[raw_passthrough] commitment routing override skipped: {_cro_exc}", flush=True)
+            try:
+                from ask_question_dna import apply_question_dna_to_routing
+
+                _dna_admin = _llm_intent_admin if isinstance(_llm_intent_admin, dict) else {}
+                _dna_payload = (
+                    _question_dna_payload
+                    or _dna_admin.get("question_dna")
+                    or {}
+                )
+                if apply_question_dna_to_routing(
+                    _user_turn_question or question or "",
+                    _dna_admin,
+                    _dna_payload if isinstance(_dna_payload, dict) else {},
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+                ):
+                    _llm_intent_admin = _dna_admin
+                    _intent_source = "question_dna"
+                    _mr_archetype_override = _dna_admin.get("mr_archetype")
+                    _career_archetype_override = (
+                        _dna_admin.get("career_archetype") or _career_archetype_override
+                    )
+                    _finance_archetype_override = (
+                        _dna_admin.get("finance_archetype") or _finance_archetype_override
+                    )
+                    _health_archetype_override = (
+                        _dna_admin.get("health_archetype") or _health_archetype_override
+                    )
+                    _education_archetype_override = (
+                        _dna_admin.get("education_archetype") or _education_archetype_override
+                    )
+                    _children_archetype_override = (
+                        _dna_admin.get("children_archetype") or _children_archetype_override
+                    )
+                    _property_archetype_override = (
+                        _dna_admin.get("property_archetype") or _property_archetype_override
+                    )
+                    _travel_archetype_override = (
+                        _dna_admin.get("travel_archetype") or _travel_archetype_override
+                    )
+                    _litigation_archetype_override = (
+                        _dna_admin.get("litigation_archetype") or _litigation_archetype_override
+                    )
+                    if _llm_intent is None:
+                        _llm_intent = {
+                            "domain": _dna_admin.get("domain"),
+                            "is_timing": bool(_dna_admin.get("is_timing")),
+                            "mr_archetype": _dna_admin.get("mr_archetype"),
+                            "source": "question_dna",
+                        }
+                    print(
+                        f"[raw_passthrough] DNA_ROUTING "
+                        f"domain={_dna_admin.get('routed_domain')} "
+                        f"archetype={_dna_admin.get('routed_archetype')} "
+                        f"timing={_dna_admin.get('routed_timing')} "
+                        f"bucket={_dna_admin.get('bucket')} "
+                        f"conf={_dna_admin.get('dna_confidence')}",
+                        flush=True,
+                    )
+            except Exception as _dna_route_exc:
+                print(f"[raw_passthrough] DNA routing apply skipped: {_dna_route_exc}", flush=True)
         except Exception as _lie:
             print(f"[raw_passthrough] route_from_understanding skipped: {_lie}", flush=True)
     else:
@@ -5684,6 +5802,40 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
         except Exception as _uq_exc:
             print(f"[raw_passthrough] question_understand skipped: {_uq_exc}", flush=True)
+        try:
+            from ask_question_dna import apply_question_dna_to_routing
+
+            _dna_admin = _llm_intent_admin if isinstance(_llm_intent_admin, dict) else {}
+            _dna_payload = (
+                _question_dna_payload
+                or _dna_admin.get("question_dna")
+                or {}
+            )
+            if apply_question_dna_to_routing(
+                _user_turn_question or question or "",
+                _dna_admin,
+                _dna_payload if isinstance(_dna_payload, dict) else {},
+                llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+            ):
+                _llm_intent_admin = _dna_admin
+                _intent_source = "question_dna"
+                _mr_archetype_override = _dna_admin.get("mr_archetype")
+                if _llm_intent is None:
+                    _llm_intent = {
+                        "domain": _dna_admin.get("domain"),
+                        "is_timing": bool(_dna_admin.get("is_timing")),
+                        "mr_archetype": _dna_admin.get("mr_archetype"),
+                        "source": "question_dna",
+                    }
+                print(
+                    f"[raw_passthrough] DNA_ROUTING (no_llm_intent) "
+                    f"domain={_dna_admin.get('routed_domain')} "
+                    f"archetype={_dna_admin.get('routed_archetype')} "
+                    f"bucket={_dna_admin.get('bucket')}",
+                    flush=True,
+                )
+        except Exception as _dna_route_exc:
+            print(f"[raw_passthrough] DNA routing apply skipped: {_dna_route_exc}", flush=True)
 
     if not isinstance(_llm_intent_admin, dict):
         _llm_intent_admin = (
@@ -7839,6 +7991,49 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         wants_explain=wants_explain,
                         archetype=_mr_archetype_override,
                     )
+                    _executed_arch = str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower()
+                    _dna_arch = ""
+                    if isinstance(_llm_intent_admin, dict):
+                        _qd = _llm_intent_admin.get("question_dna")
+                        if isinstance(_qd, dict) and isinstance(_qd.get("questions"), list) and _qd["questions"]:
+                            _q0 = _qd["questions"][0]
+                            if isinstance(_q0, dict):
+                                _dna_arch = str(
+                                    _q0.get("engine_archetype") or _q0.get("bucket") or ""
+                                ).strip().lower()
+                        _dna_arch = _dna_arch or str(
+                            _llm_intent_admin.get("dna_engine_archetype")
+                            or _llm_intent_admin.get("mr_archetype")
+                            or ""
+                        ).strip().lower()
+                    if _dna_arch and _executed_arch and _dna_arch != _executed_arch:
+                        print(
+                            f"[raw_passthrough] DNA_EXECUTION_MISMATCH "
+                            f"dna={_dna_arch} executed={_executed_arch} "
+                            f"override={_mr_archetype_override!r}",
+                            flush=True,
+                        )
+                        if _dna_arch != str(_mr_archetype_override or "").strip().lower():
+                            try:
+                                from ask_mr import run_mr_static_engine as _rmse_retry
+
+                                _mr_engine_result = _rmse_retry(
+                                    kundli if isinstance(kundli, dict) else {},
+                                    question or "",
+                                    birth=birth,
+                                    wants_explain=wants_explain,
+                                    archetype=_dna_arch,
+                                )
+                                _mr_archetype_override = _dna_arch
+                                print(
+                                    f"[raw_passthrough] DNA_EXECUTION_MISMATCH recovered -> {_dna_arch}",
+                                    flush=True,
+                                )
+                            except Exception as _dna_rec_exc:
+                                print(
+                                    f"[raw_passthrough] DNA mismatch recovery failed: {_dna_rec_exc}",
+                                    flush=True,
+                                )
                     try:
                         from ask_engine_verification import verify_engine_output
 

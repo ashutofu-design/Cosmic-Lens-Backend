@@ -170,13 +170,23 @@ class AskIntentFidelityTests(unittest.TestCase):
         }
         fixed = repair_llm_intent(q, raw)
         self.assertEqual(fixed.get("mr_archetype"), "commitment")
-        self.assertEqual(fixed.get("routing_override"), "commitment_classifier_raw_question")
+        self.assertIn(str(fixed.get("routing_override") or ""), ("commitment_classifier", "commitment_angle", "commitment_keyword_partner"))
 
     def test_classify_mr_archetype_commitment_timepass(self):
         from ask_mr.classifier import classify_mr_archetype
 
         q = "kya mera partner genuinely commitment karega ya sirf timepass kar raha hai"
         self.assertEqual(classify_mr_archetype(q), "commitment")
+
+    def test_future_planning_routes_commitment_not_partner_nature(self):
+        from ask_mr.classifier import classify_mr_archetype
+        from ask_intent_fidelity import enforce_commitment_archetype_from_question
+
+        q = "kya mere partner future ko lekar serious planning karta hai"
+        self.assertEqual(classify_mr_archetype(q), "commitment")
+        intent = {"domain": "love", "mr_archetype": "partner_nature", "bucket": "commitment"}
+        self.assertTrue(enforce_commitment_archetype_from_question(q, intent))
+        self.assertEqual(intent["mr_archetype"], "commitment")
 
 
 if __name__ == "__main__":

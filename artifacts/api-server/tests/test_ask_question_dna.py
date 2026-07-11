@@ -201,6 +201,55 @@ class ModuleRouterTests(unittest.TestCase):
         self.assertIn("D7", mods)
 
 
+class DnaRoutingTests(unittest.TestCase):
+    def test_commitment_question_routes_via_dna(self):
+        from ask_question_dna import apply_question_dna_to_routing, validate_question_dna_item
+
+        q = "kya mere partner future ko lekar serious planning karta hai"
+        item = validate_question_dna_item({
+            "domain": "love",
+            "bucket": "commitment",
+            "intent": "Partner Seriousness / Future Planning",
+            "subject": "partner",
+            "target": "self_relationship",
+            "question_type": "static",
+            "timing": False,
+            "confidence": 0.95,
+        })
+        dna = {"questions": [item], "source": "llm", "latency_ms": 120}
+        admin = {
+            "domain": "love",
+            "mr_archetype": "partner_nature",
+            "routed_archetype": "partner_nature",
+        }
+        llm_intent = {"domain": "love", "mr_archetype": "partner_nature", "is_timing": False}
+
+        applied = apply_question_dna_to_routing(q, admin, dna, llm_intent=llm_intent)
+        self.assertTrue(applied)
+        self.assertEqual(admin["bucket"], "commitment")
+        self.assertEqual(admin["mr_archetype"], "commitment")
+        self.assertEqual(admin["routed_archetype"], "commitment")
+        self.assertEqual(admin["dna_engine_archetype"], "commitment")
+        self.assertEqual(admin["routing_override"], "question_dna")
+        self.assertEqual(llm_intent["mr_archetype"], "commitment")
+        self.assertFalse(llm_intent["is_timing"])
+
+    def test_low_confidence_dna_does_not_override(self):
+        from ask_question_dna import apply_question_dna_to_routing, validate_question_dna_item
+
+        item = validate_question_dna_item({
+            "domain": "love",
+            "bucket": "commitment",
+            "confidence": 0.2,
+        })
+        dna = {"questions": [item], "source": "llm", "latency_ms": 50}
+        admin = {"mr_archetype": "partner_nature"}
+
+        applied = apply_question_dna_to_routing("some q", admin, dna)
+        self.assertFalse(applied)
+        self.assertEqual(admin["mr_archetype"], "partner_nature")
+
+
 class FallbackTests(unittest.TestCase):
     def test_fallback_shape(self):
         fb = _fallback_dna("koi sawaal", "no_client")

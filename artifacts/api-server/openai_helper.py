@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Chemistry engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "chemistry"
+        and os.environ.get("ASK_CHEMISTRY_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.chemistry_narrator import (
+            engine_result_to_chemistry_json,
+            render_chemistry_template_answer,
+        )
+
+        _chem_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _chem_dna = _llm_intent_admin.get("question_dna")
+        _chem_json = engine_result_to_chemistry_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_chem_dna if isinstance(_chem_dna, dict) else None,
+        )
+        _chem_checks = dict(_mr_engine_result.checks or {})
+        _chem_checks["narrator_input"] = _chem_json
+        _chem_checks["question"] = question or ""
+        _mr_engine_result.checks = _chem_checks
+        _chem_text = render_chemistry_template_answer(_chem_json, question or "", lang=eff_lang)
+        _out_chem = {
+            "text": _chem_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_chem_json.get("confidence") or 48) / 100.0)),
+            "source": "chemistry_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_chem = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "chemistry",
+            "skip_llm": True,
+            "narrator_input": _chem_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_chem,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_chem,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="chemistry_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── One-sided love engine — deterministic template narrator ──
     if (
         _is_mr_static

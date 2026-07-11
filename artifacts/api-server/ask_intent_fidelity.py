@@ -783,6 +783,79 @@ def one_sided_love_angle_label(angle: str | None) -> str:
     return _ONE_SIDED_LOVE_ANGLE_LABELS.get(key, "One-sided love / reciprocity")
 
 
+_CHEMISTRY_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "physical_attraction",
+        re.compile(
+            r"(?ix)\b(physical|sharirik|body)\b.{0,35}\b(attraction|chemistry|pull|spark)\b|"
+            r"\b(attraction|chemistry|pull|spark)\b.{0,35}\b(physical|sharirik|body)\b"
+        ),
+    ),
+    (
+        "spark_strength",
+        re.compile(
+            r"(?ix)\b(strong|weak|kam|zyada|high|low)\b.{0,35}\b(chemistry|spark|attraction|pull)\b|"
+            r"\b(chemistry|spark|attraction|pull)\b.{0,35}\b(strong|weak|kam|zyada|high|low)\b"
+        ),
+    ),
+    (
+        "attraction_level",
+        re.compile(
+            r"(?ix)\b(attraction|chemistry|pull)\s+level\b|"
+            r"\blevel\b.{0,20}\b(attraction|chemistry|pull)\b"
+        ),
+    ),
+    (
+        "native_attraction",
+        re.compile(
+            r"(?ix)\b(mera|meri|mera\s+chart|meri\s+chart|native|personal)\b.{0,30}\b"
+            r"(attraction|chemistry|spark|pull|romantic)\b"
+        ),
+    ),
+    (
+        "dyad_chemistry",
+        re.compile(
+            r"(?ix)\b(hum\s+dono\s+ke\s+beech|ham\s+dono\s+ke\s+beech|hamari|humari|hamare|humare|"
+            r"dono\s+ke\s+beech|between\s+us)\b"
+        ),
+    ),
+    ("passion_intensity", re.compile(r"(?ix)\b(passion|passionate|intense|intensity)\b")),
+    ("romance_spark", re.compile(r"(?ix)\b(romance|romantic)\b")),
+    ("general_chemistry", re.compile(r"(?ix)\b(chemistry|attraction|spark|passion|romance|romantic|pull)\b")),
+]
+
+_CHEMISTRY_ANGLE_LABELS: dict[str, str] = {
+    "general_chemistry": "General chemistry / attraction pattern",
+    "dyad_chemistry": "Couple chemistry between two people",
+    "physical_attraction": "Physical attraction / pull",
+    "passion_intensity": "Passion / intensity level",
+    "romance_spark": "Romance / spark in relationship",
+    "spark_strength": "Spark / chemistry strength",
+    "native_attraction": "Native personal attraction pattern",
+    "attraction_level": "Attraction / chemistry level",
+}
+
+
+def infer_chemistry_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(chemistry|attraction|spark|passion|romance|romantic|intense|physical|pull|sharirik)\b",
+        q,
+    ):
+        return None
+    for name, rx in _CHEMISTRY_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_chemistry"
+
+
+def chemistry_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _CHEMISTRY_ANGLE_LABELS.get(key, "Chemistry / attraction")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

@@ -62,6 +62,7 @@ def format_engine_rich_plain(
         infer_emotional_attachment_angle,
         infer_family_approval_angle,
         infer_long_distance_angle,
+        infer_chemistry_angle,
         infer_one_sided_love_angle,
         infer_toxicity_angle,
         infer_loyalty_angle,
@@ -215,6 +216,17 @@ def format_engine_rich_plain(
 
             data = engine_result_to_toxicity_json(result, question=q)
             big = render_toxicity_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "chemistry" or infer_chemistry_angle(q):
+        try:
+            from ask_mr.chemistry_narrator import (
+                engine_result_to_chemistry_json,
+                render_chemistry_template_answer,
+            )
+
+            data = engine_result_to_chemistry_json(result, question=q)
+            big = render_chemistry_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
     elif arch == "one_sided_love" or infer_one_sided_love_angle(q):
@@ -602,6 +614,35 @@ def narrate_mr_engine_llm(
             )
         else:
             return render_toxicity_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "chemistry":
+        from ask_mr.chemistry_narrator import (
+            engine_result_to_chemistry_json,
+            chemistry_engine_narrator_payload,
+            render_chemistry_template_answer,
+            validate_chemistry_narrator_output,
+        )
+
+        _chem_dna = None
+        if isinstance(llm_intent, dict):
+            _chem_dna = llm_intent.get("question_dna")
+        narrator_json = engine_result_to_chemistry_json(
+            engine_result,
+            question=question or "",
+            question_dna=_chem_dna if isinstance(_chem_dna, dict) else None,
+        )
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_CHEMISTRY_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = chemistry_engine_narrator_payload(
+                engine_result,
+                wants_explain=wants_explain,
+                question=question or "",
+                question_dna=_chem_dna if isinstance(_chem_dna, dict) else None,
+            )
+        else:
+            return render_chemistry_template_answer(narrator_json, question or "", lang=eff_lang)
     elif arch == "one_sided_love":
         from ask_mr.one_sided_love_narrator import (
             engine_result_to_one_sided_love_json,
@@ -840,6 +881,18 @@ def narrate_mr_engine_llm(
                     from ask_mr.toxicity_narrator import render_toxicity_template_answer
 
                     return render_toxicity_template_answer(
+                        narrator_json, question or "", lang=eff_lang
+                    )
+            if arch == "chemistry" and narrator_json:
+                ok, issues = validate_chemistry_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] chemistry validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.chemistry_narrator import render_chemistry_template_answer
+
+                    return render_chemistry_template_answer(
                         narrator_json, question or "", lang=eff_lang
                     )
             if arch == "one_sided_love" and narrator_json:

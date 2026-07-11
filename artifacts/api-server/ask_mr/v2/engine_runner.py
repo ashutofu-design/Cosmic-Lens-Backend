@@ -102,6 +102,11 @@ def _default_checks(
             "one_sided_level": level,
             "oslove_level": level,
         })
+    elif eid == "chemistry":
+        checks.update({
+            "chemistry_level": level,
+            "chem_level": level,
+        })
     elif eid == "communication":
         checks["communication_level"] = level
     elif eid == "emotional_attachment":

@@ -49,6 +49,7 @@ def _commitment_headline(level: str, intent: str, ctx: dict[str, Any]) -> str:
         "long_term_intent": "Long-term commitment intent",
         "future_together": "Future together intent",
         "life_partner_view": "Life-partner view",
+        "marriage_serious": "Marriage seriousness intent",
         "genuine_intent": "Genuine investment intent",
         "effort_and_maintain": "Effort & maintain intent",
         "trust_blockers": "Trust blockers to commitment",

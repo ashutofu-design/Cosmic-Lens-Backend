@@ -191,6 +191,33 @@ class CommitmentNarratorTests(unittest.TestCase):
         self.assertIn("timepass", text.lower())
         self.assertRegex(text, r"(?i)final verdict\s+Low")
 
+    def test_distinct_openings_per_commitment_angle(self):
+        from ask_mr.commitment_narrator import _build_angle_direct_answer
+
+        q1 = "kya mere partner future ko lekar serious planning karta hai"
+        q2 = "kya mera partner sirf timepass kar raha hai"
+        q3 = "kya mera partner shaadi ko seriously leta hai"
+        a1 = _build_angle_direct_answer("mixed", "future_planning", question=q1)
+        a2 = _build_angle_direct_answer("mixed", "time_pass", question=q2)
+        a3 = _build_angle_direct_answer("mixed", "marriage_serious", question=q3)
+        self.assertIn("future", a1.lower())
+        self.assertIn("planning", a1.lower())
+        self.assertIn("timepass", a2.lower())
+        self.assertIn("shaadi", a3.lower())
+        self.assertNotEqual(a1[:40], a2[:40])
+        self.assertNotEqual(a1[:40], a3[:40])
+        self.assertNotEqual(a2[:40], a3[:40])
+
+    def test_json_includes_answer_focus_fields(self):
+        data = engine_result_to_commitment_json(
+            self.result,
+            question="kya mere partner future ko lekar serious planning karta hai",
+        )
+        self.assertEqual(data.get("answer_focus"), "future_planning")
+        self.assertEqual(data.get("commitment_angle"), "future_planning")
+        self.assertIn("original_question", data)
+        self.assertIn("future", (data.get("direct_answer") or "").lower())
+
     def test_adapter_passes_timing_meta(self):
         checks = self.result.checks or {}
         self.assertIn("timing", checks)

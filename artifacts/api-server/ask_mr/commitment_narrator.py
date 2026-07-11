@@ -293,6 +293,228 @@ def _build_direct_answer(level: str, *, timepass_q: bool, genuine_q: bool) -> st
     )
 
 
+_ANGLE_OPENINGS: dict[str, dict[str, str]] = {
+    "future_planning": {
+        "ready": (
+            "Haan, chart ke hisaab se partner future ko lekar serious planning karta hai — "
+            "long-term direction clear aur stable dikhti hai."
+        ),
+        "cautious": (
+            "Partner future ke baare me sochta hai, lekin planning abhi cautious phase me hai — "
+            "intent hai par pace slow ya hesitant dikh sakta hai."
+        ),
+        "mixed": (
+            "Haan, partner future ke baare me sochta hai, lekin uski planning abhi fully stable nahi hai — "
+            "long-term intention hai, par delay aur hesitation ke sanket bhi dikhte hain."
+        ),
+        "low": (
+            "Abhi chart ke hisaab se partner ki future planning weak ya inconsistent dikhti hai — "
+            "long-term serious planning ka strong support kam hai."
+        ),
+    },
+    "time_pass": {
+        "ready": (
+            "Chart me sirf timepass ka strong indication nahi milta — "
+            "partner genuinely invested dikh raha hai, casual intent dominant nahi."
+        ),
+        "cautious": (
+            "Sirf timepass ka clear signal nahi, lekin commitment abhi cautious phase me hai — "
+            "words aur actions dono verify karna zaruri hai."
+        ),
+        "mixed": (
+            "Chart me sirf timepass ka strong indication nahi milta. "
+            "Lekin commitment ko lekar mixed signals hain, isliye sirf words nahi, consistent actions bhi dekhein."
+        ),
+        "low": (
+            "Chart ke hisaab se casual / timepass intent zyada dikhta hai — "
+            "genuine long-term commitment ka support abhi kam hai."
+        ),
+    },
+    "marriage_serious": {
+        "ready": (
+            "Haan, chart ke hisaab se partner shaadi ko seriously leta hai — "
+            "marriage intent ko strong backing milti hai."
+        ),
+        "cautious": (
+            "Partner me shaadi ke prati interest dikh raha hai, lekin abhi cautious phase me hai — "
+            "intent hai par final clarity develop ho rahi hai."
+        ),
+        "mixed": (
+            "Shaadi ke prati interest dikh raha hai, lekin chart ke hisaab se commitment ko practical roop dene me "
+            "kuch challenges aur delay ke yog bhi hain."
+        ),
+        "low": (
+            "Abhi chart ke hisaab se shaadi / marriage ke prati serious intent weak dikhta hai — "
+            "long-term marriage commitment ka support kam hai."
+        ),
+    },
+    "genuine_intent": {
+        "ready": "Chart ke hisaab se partner genuinely invested hai — long-term intent strong dikhta hai.",
+        "cautious": "Partner genuinely interested hai, lekin commitment abhi fully settle nahi hua — pace slow hai.",
+        "mixed": "Genuine interest hai, lekin consistency aur long-term follow-through abhi mixed phase me hai.",
+        "low": "Abhi chart genuine long-term investment ko weak dikhata hai — casual ya distant intent zyada hai.",
+    },
+    "serious_relationship": {
+        "ready": "Haan, partner serious long-term relationship chahta hai — chart is intent ko support karta hai.",
+        "cautious": "Serious relationship ka interest hai, par abhi hesitant / slow-moving phase dikh raha hai.",
+        "mixed": "Serious relationship ka intent hai, lekin friction ya distance commitment ko test kar raha hai.",
+        "low": "Abhi serious long-term relationship intent weak dikhta hai — casual ya non-committal tone zyada hai.",
+    },
+    "long_term_intent": {
+        "ready": "Partner long-term relationship chahta hai — chart long-term intent ko backing deta hai.",
+        "cautious": "Long-term intent hai, lekin abhi cautious phase me clarity develop ho rahi hai.",
+        "mixed": "Long-term intent dikhta hai, par consistency aur stability abhi fully establish nahi hui.",
+        "low": "Long-term intent abhi weak dikhta hai — short-term ya casual approach zyada possible hai.",
+    },
+    "future_together": {
+        "ready": "Haan, partner future aapke saath dekhta hai — long-term togetherness ko chart support karta hai.",
+        "cautious": "Future saath ka intent hai, lekin abhi planning / clarity cautious phase me hai.",
+        "mixed": "Future saath ka thought hai, par practical planning aur consistency abhi mixed signals de rahi hai.",
+        "low": "Abhi future together ka strong intent kam dikhta hai — distance ya hesitation zyada hai.",
+    },
+    "commitment_ready": {
+        "ready": "Haan, chart ke hisaab se partner commitment ke liye ready hai — serious intent strong hai.",
+        "cautious": "Commitment readiness dikh rahi hai, lekin abhi final clarity / pace cautious phase me hai.",
+        "mixed": "Commitment readiness mixed hai — interest hai par friction ya delay test kar raha hai.",
+        "low": "Abhi commitment readiness weak dikhti hai — serious long-term ready phase nahi dikh raha.",
+    },
+    "loyalty_intent": {
+        "ready": "Partner loyal / exclusive rehne ka intent strong dikhta hai.",
+        "cautious": "Loyalty ka intent hai, par abhi trust / consistency cautious phase me verify honi chahiye.",
+        "mixed": "Loyalty ke supportive aur challenging dono signals hain — actions se verify karein.",
+        "low": "Exclusive / loyal intent abhi weak dikhta hai — trust layer challenging hai.",
+    },
+    "effort_and_maintain": {
+        "ready": "Partner relationship me effort aur responsibility lene ke strong signals dikhate hain.",
+        "cautious": "Effort dikh raha hai, lekin consistency abhi developing phase me hai.",
+        "mixed": "Effort ke signs hain, par long-term maintain / responsibility abhi mixed phase me hai.",
+        "low": "Relationship maintain karne ka consistent effort abhi kam dikhta hai.",
+    },
+    "public_acceptance": {
+        "ready": "Partner relationship ko public / family ke saamne accept karne ke supportive signals dikhate hain.",
+        "cautious": "Public acceptance possible hai, par abhi hesitant ya slow phase dikh sakta hai.",
+        "mixed": "Public / official acceptance ke mixed signals hain — openness aur hesitation dono dikh sakte hain.",
+        "low": "Abhi public / family acceptance weak dikhti hai — secret ya distant approach zyada possible hai.",
+    },
+}
+
+
+def _resolve_commitment_angle(question: str, checks: dict[str, Any]) -> str:
+    from ask_intent_fidelity import infer_partner_commitment_angle
+
+    angle = str(checks.get("commitment_angle") or "").strip().lower()
+    if not angle or angle == "general_commitment":
+        angle = str(infer_partner_commitment_angle(question) or "general_commitment").strip().lower()
+    return angle or "general_commitment"
+
+
+def _build_angle_direct_answer(
+    level: str,
+    angle: str,
+    *,
+    question: str = "",
+    timepass_q: bool = False,
+    genuine_q: bool = False,
+) -> str:
+    """Opening paragraph anchored to user intent — not generic verdict boilerplate."""
+    lv = (level or "mixed").strip().lower()
+    ang = (angle or "general_commitment").strip().lower()
+    openings = _ANGLE_OPENINGS.get(ang) or {}
+    if lv in openings:
+        return openings[lv]
+    return _build_direct_answer(lv, timepass_q=timepass_q, genuine_q=genuine_q)
+
+
+def _is_timing_question(question: str, checks: dict[str, Any]) -> bool:
+    if str(checks.get("mode") or "").strip().lower() == "timing":
+        return True
+    return bool(re.search(r"(?ix)\b(kab|when|kitne\s+saal|kis\s+saal|timing|muhurat|date|month|year)\b", question or ""))
+
+
+def _dasha_timing_support(checks: dict[str, Any], rules_fired: list[Any]) -> str:
+    """positive | negative | mixed | unknown from dasha rules/evidence."""
+    for rule in rules_fired:
+        if not isinstance(rule, dict):
+            continue
+        blob = " ".join(
+            str(rule.get(k) or "")
+            for k in ("note", "evidence", "label", "module")
+        ).lower()
+        if "dasha" not in blob:
+            continue
+        pol = str(rule.get("polarity") or "").strip().lower()
+        if pol == "positive":
+            return "positive"
+        if pol == "negative":
+            return "negative"
+        if pol == "mixed":
+            return "mixed"
+    timing = checks.get("timing") if isinstance(checks.get("timing"), dict) else {}
+    for line in timing.get("trigger_planets") or []:
+        if "dasha" in str(line).lower():
+            return "mixed"
+    return "unknown"
+
+
+def _build_timing_answer(
+    *,
+    question: str,
+    checks: dict[str, Any],
+    result: EngineResult,
+    level: str,
+    angle: str,
+) -> dict[str, str]:
+    """Dasha-aware timing block for relationship commitment questions."""
+    window = _extract_timing_window(result, checks)
+    dasha = _dasha_timing_support(checks, list(checks.get("rules_fired") or []))
+    lv = (level or "mixed").strip().lower()
+
+    if dasha == "positive":
+        lead = "Current dasha (MD/AD) commitment ko support karti hai."
+        if window:
+            detail = f"Is phase me {window} supportive window dikhta hai — clarity ya planning aage badh sakti hai."
+        else:
+            detail = "Is dasha phase me serious commitment conversations / planning ke liye better support hai."
+    elif dasha == "negative":
+        lead = "Current dasha abhi delay, test, ya distance dikha rahi hai."
+        if window:
+            detail = (
+                f"Zyada supportive commitment phase {window} ke around dikh sakta hai — "
+                f"tab long-term planning zyada settle ho sakti hai."
+            )
+        else:
+            detail = (
+                "Aane wali benefic dasha phase me commitment signals zyada clear hone ke yog hain — "
+                "tab planning / clarity better align ho sakti hai."
+            )
+    elif dasha == "mixed":
+        lead = "Current dasha mixed signals de rahi hai — commitment effort se grow karega."
+        detail = (
+            f"Better alignment {window} ke around dikh sakta hai."
+            if window
+            else "Consistent actions ke saath next supportive dasha phase me clarity improve ho sakti hai."
+        )
+    else:
+        lead = "Timing layer mixed ya limited signals de rahi hai."
+        detail = (
+            f"Commitment clarity ke liye {window} supportive phase dikhta hai."
+            if window
+            else "Abhi exact strong timing window limited hai — dasha change ke baad clarity improve ho sakti hai."
+        )
+
+    if ang_focus := _ANGLE_OPENINGS.get(angle, {}).get(lv):
+        context = ang_focus.split("—")[0].strip().rstrip(".")
+        summary = f"{context}. {lead} {detail}"
+    else:
+        summary = f"{lead} {detail}"
+
+    return {
+        "window": window or "",
+        "dasha_support": dasha,
+        "summary": summary.strip(),
+    }
+
+
 def _build_verdict_line(verdict_label: str) -> str:
     return f"Final Verdict: {verdict_label} commitment."
 
@@ -473,9 +695,14 @@ def render_commitment_template_answer(
     weakest_rids = list(data.get("weakest_rule_ids") or [])
 
     angle, timepass_q, genuine_q = _question_angles(question, data.get("_checks") or {})
+    focus_angle = str(data.get("answer_focus") or data.get("commitment_angle") or angle)
 
-    p1 = str(data.get("direct_answer") or "").strip() or _build_direct_answer(
-        level, timepass_q=timepass_q, genuine_q=genuine_q
+    p1 = str(data.get("direct_answer") or "").strip() or _build_angle_direct_answer(
+        level,
+        focus_angle,
+        question=question,
+        timepass_q=timepass_q,
+        genuine_q=genuine_q,
     )
     p2 = f"{_USER_SECTION['why_verdict']} {_build_reason_summary(strongest, weakest, verdict)}"
     p3 = _join_effect_lines(
@@ -497,8 +724,11 @@ def render_commitment_template_answer(
     if scorecard_user:
         meaning = f"{meaning} {scorecard_user}"
     parts = [p1, p2, p3, p4, f"{_USER_SECTION['meaning']} {meaning}"]
-    if timing and str(timing.get("window") or "").strip():
-        parts.append(f"Timing: {str(timing.get('window')).strip()}.")
+    timing = data.get("timing") if isinstance(data.get("timing"), dict) else None
+    if timing:
+        t_summary = str(timing.get("summary") or timing.get("window") or "").strip()
+        if t_summary:
+            parts.append(f"Timing: {t_summary}")
     parts.append(f"{_USER_SECTION['focus']} {_build_practical_guidance(strongest, weakest)}")
     parts.append(
         _build_confidence_explanation(score, conf_label, strongest, weakest, scorecard)
@@ -630,12 +860,19 @@ def validate_commitment_narrator_output(text: str, data: dict[str, Any]) -> tupl
     return len(issues) == 0, issues
 
 
-def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
+def engine_result_to_commitment_json(
+    result: EngineResult,
+    question: str = "",
+) -> dict[str, Any]:
     """Compact narrator JSON — engine evidence only (no chart / no humanize drift)."""
     checks = result.checks or {}
     explanation = checks.get("explanation") or {}
     if not isinstance(explanation, dict):
         explanation = {}
+
+    q = (question or str(checks.get("question") or "")).strip()
+    angle = _resolve_commitment_angle(q, checks)
+    checks = {**checks, "commitment_angle": angle, "question": q}
 
     level = str(
         checks.get("commitment_level") or checks.get("level") or ""
@@ -708,12 +945,26 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
 
     timing_window = _extract_timing_window(result, checks)
     timing_block: dict[str, str] | None = None
-    if timing_window:
-        timing_block = {"window": timing_window}
+    is_timing_q = _is_timing_question(q, checks)
+    if is_timing_q or timing_window or checks.get("mode") == "timing":
+        timing_block = _build_timing_answer(
+            question=q,
+            checks=checks,
+            result=result,
+            level=level,
+            angle=angle,
+        )
+    elif timing_window:
+        timing_block = {"window": timing_window, "dasha_support": "unknown", "summary": timing_window}
 
-    angle = str(checks.get("commitment_angle") or "general_commitment")
-    _, timepass_q, genuine_q = _question_angles("", {**checks, "commitment_angle": angle})
-    direct_answer = _build_direct_answer(level, timepass_q=timepass_q, genuine_q=genuine_q)
+    _, timepass_q, genuine_q = _question_angles(q, checks)
+    direct_answer = _build_angle_direct_answer(
+        level,
+        angle,
+        question=q,
+        timepass_q=timepass_q,
+        genuine_q=genuine_q,
+    )
     reason_summary = _build_reason_summary(strongest[:3], weakest[:3], verdict_label)
     practical = _build_practical_guidance(strongest, weakest)
     meaning_note = _build_meaning_note(level, warnings)
@@ -727,6 +978,12 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
 
     payload: dict[str, Any] = {
         "question_type": "commitment",
+        "original_question": q,
+        "commitment_angle": angle,
+        "answer_focus": angle,
+        "primary_user_concern": angle,
+        "opening_style": angle,
+        "is_timing_question": is_timing_q,
         "final_verdict": verdict_label,
         "commitment_level": verdict_label,
         "direct_answer": direct_answer,
@@ -762,6 +1019,7 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
     }
     if timing_block:
         payload["timing"] = timing_block
+    payload["_checks"] = checks
     payload["_meta"] = {
         "commitment_angle": angle,
         "headline": (result.verdict or "").strip(),
@@ -769,7 +1027,7 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
     }
     payload["locked_template"] = render_commitment_template_answer(
         {k: v for k, v in payload.items()},
-        question=str(checks.get("question") or ""),
+        question=q,
     )
     return payload
 
@@ -781,7 +1039,9 @@ def commitment_narrator_payload(
     question: str = "",
 ) -> str:
     """Facts block for LLM — ENGINE_JSON + LOCKED_TEMPLATE (minimal rephrase only)."""
-    data = engine_result_to_commitment_json(result)
+    q = (question or str((result.checks or {}).get("question") or "")).strip()
+    data = engine_result_to_commitment_json(result, question=q)
+    data.pop("_checks", None)
     meta = data.pop("_meta", {})
     locked = data.pop("locked_template", "")
     json_block = json.dumps(data, indent=2, ensure_ascii=False)
@@ -795,13 +1055,16 @@ def commitment_narrator_payload(
         json_block,
         "",
         f"QUESTION_ANGLE: {meta.get('commitment_angle', 'general_commitment')}",
+        f"ANSWER_FOCUS: {data.get('answer_focus', meta.get('commitment_angle', 'general_commitment'))}",
+        f"ORIGINAL_QUESTION: {data.get('original_question', q)}",
         f"VERDICT_HEADLINE: {meta.get('headline', '')}",
         "",
         "LOCKED_TEMPLATE (mandatory structure — rephrase lightly in Hinglish, do NOT add/remove facts):",
         locked,
         "",
         "OUTPUT RULES (production — zero freedom):",
-        "STEP 1: Direct answer — use direct_answer from JSON; verdict Low → NEVER say 'mushkil hai' / 'ho sakta hai'.",
+        "STEP 1: Direct answer — use direct_answer from JSON; it is already anchored to ANSWER_FOCUS / original question.",
+        "STEP 1b: Do NOT replace the opening with a generic verdict paragraph.",
         "STEP 2: Kyun ye verdict aaya — use reason_summary.",
         "STEP 3: Mukhya sanket — use strongest_effects[] ONLY (real-life effects, NO planet jargon).",
         "STEP 4: Dhyan dene layak challenges — use weakest_effects[] ONLY.",

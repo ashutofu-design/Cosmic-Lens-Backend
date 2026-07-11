@@ -73,7 +73,7 @@ def format_engine_rich_plain(
                 render_commitment_template_answer,
             )
 
-            data = engine_result_to_commitment_json(result)
+            data = engine_result_to_commitment_json(result, question=q)
             big = render_commitment_template_answer(data, q, lang=lang)
         except Exception:
             from ask_mr.commitment_reply import format_partner_commitment_user_reply
@@ -187,7 +187,7 @@ def narrate_mr_engine_llm(
             validate_commitment_narrator_output,
         )
 
-        narrator_json = engine_result_to_commitment_json(engine_result)
+        narrator_json = engine_result_to_commitment_json(engine_result, question=question or "")
         _checks = dict(engine_result.checks or {})
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""

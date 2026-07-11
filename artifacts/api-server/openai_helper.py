@@ -9095,7 +9095,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             render_commitment_template_answer,
         )
 
-        _commit_json = engine_result_to_commitment_json(_mr_engine_result)
+        _commit_json = engine_result_to_commitment_json(_mr_engine_result, question=question or "")
         _commit_checks = dict(_mr_engine_result.checks or {})
         _commit_checks["narrator_input"] = _commit_json
         _commit_checks["question"] = question or ""

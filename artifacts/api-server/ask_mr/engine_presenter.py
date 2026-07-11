@@ -413,3 +413,74 @@ def validate_presenter_output(
             issues.extend(sub)
 
     return len(issues) == 0, issues
+
+
+def present_secret_answer_llm(
+    narrator_json: dict[str, Any],
+    *,
+    question: str,
+    lang: str = "hn",
+    llm_intent: dict[str, Any] | None = None,
+) -> str | None:
+    """Thin presenter call for secret — used when full narrate path fails or returns template stitch."""
+    from openai_helper import _get_client
+
+    client = _get_client()
+    if not client or not isinstance(narrator_json, dict):
+        return None
+
+    intent = ""
+    if isinstance(llm_intent, dict):
+        intent = str(llm_intent.get("user_intent") or llm_intent.get("intent") or "").strip()
+
+    system_prompt = build_engine_presenter_system_prompt(
+        engine="secret_relationship",
+        narrator_json=narrator_json,
+        lang=lang,
+        wants_explain=False,
+        concise=False,
+        question=question or "",
+        user_intent=intent,
+    )
+    user_payload = (question or str(narrator_json.get("original_question") or "")).strip()
+    model = os.environ.get(
+        "RAW_PASSTHROUGH_MODEL",
+        os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
+    )
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_payload},
+            ],
+            max_tokens=480,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+    except Exception as exc:
+        print(f"[engine_presenter] secret direct presenter failed: {exc}", flush=True)
+        return None
+    if not text:
+        return None
+
+    from ask_mr.narrator import polish_mr_confident_tone
+
+    polished = polish_mr_confident_tone(text)
+    ok, issues = validate_presenter_output(polished, narrator_json, "secret_relationship")
+    if ok or presenter_has_only_soft_issues(issues):
+        return polished
+    hard = [
+        i for i in issues
+        if i in _PRESENTER_HARD_ISSUES or i.startswith("astro_jargon:")
+    ]
+    if polished and not hard:
+        print(
+            f"[engine_presenter] secret direct presenter accepted with issues {issues}",
+            flush=True,
+        )
+        return polished
+    print(
+        f"[engine_presenter] secret direct presenter rejected {issues}",
+        flush=True,
+    )
+    return None

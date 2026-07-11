@@ -12,6 +12,7 @@ from ask_intent_fidelity import infer_secret_angle
 from ask_mr.secret_templates import OPENING_TEMPLATES, detect_secret_answer_focus, effects_from_evidence, get_opening
 from ask_mr.secret_narrator import (
     engine_result_to_secret_json,
+    looks_like_secret_template_stitch,
     render_secret_template_answer,
     secret_narrator_payload,
     validate_secret_narrator_output,
@@ -89,6 +90,29 @@ class SecretNarratorTests(unittest.TestCase):
         parsed = json.loads(payload.split("ENGINE_JSON:", 1)[1].split("ANSWER_FOCUS:", 1)[0].strip())
         self.assertNotIn("ascendant", json.dumps(parsed).lower())
 
+    def test_third_person_conversational(self):
+        data = engine_result_to_secret_json(
+            self.result,
+            question="kya mera partner kisi aur me interested he",
+        )
+        data["secret_level"] = "likely"
+        data["secrecy_level"] = "likely"
+        data["final_verdict"] = "Likely"
+        text = render_secret_template_answer(data, "kya mera partner kisi aur me interested he")
+        self.assertRegex(text, r"(?i)seedhi baat|chart ke hisaab se")
+        self.assertNotRegex(text, r"(?i)isi wajah se final verdict|likely matlab|parallel attention trust ko test")
+
+    def test_template_stitch_detector(self):
+        old = (
+            "Partner kisi aur me interest ke likely indicators active hain — parallel attention trust ko test karti hai.\n\n"
+            "Chart me secrecy-risk indicators zyada active hain. Isi wajah se final verdict Likely hai."
+        )
+        self.assertTrue(looks_like_secret_template_stitch(old))
+        new = (
+            "Seedhi baat — chart ke hisaab se partner ke kisi aur me interest ke signals kaafi active dikh rahe hain."
+        )
+        self.assertFalse(looks_like_secret_template_stitch(new))
+
     def test_render_no_chart_jargon(self):
         data = engine_result_to_secret_json(self.result, question=SECRET_Q)
         data["weakest"] = ["D1 relationship axis shows friction"]
@@ -121,7 +145,7 @@ class SecretGoldenTests(unittest.TestCase):
             text = render_secret_template_answer(data, q)
             self.assertNotIn("Asli wajah seedhi hai", text)
             self.assertNotIn("Jo mukhya sanket", text)
-            self.assertNotRegex(text, r"(?i)\bd1\b|relationship\s+axis")
+            self.assertNotRegex(text, r"(?i)\bd1\b|relationship\s+axis|isi wajah se final verdict|likely matlab")
             self.assertRegex(text, r"(?i)confidence")
 
     def test_each_angle_has_levels(self):

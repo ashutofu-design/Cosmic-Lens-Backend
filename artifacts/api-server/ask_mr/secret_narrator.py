@@ -89,26 +89,152 @@ def _build_reason_summary(strongest: list[str], weakest: list[str], verdict: str
     return f"Chart ke signals limited ya mixed hain — isi wajah se final verdict {verdict} hai."
 
 
-def _plain_effect_clause(items: list[str], *, fallback: str, limit: int = 2) -> str:
-    effects = effects_from_evidence(items, limit=limit)
-    if not effects:
-        return fallback
-    if len(effects) == 1:
-        return effects[0]
-    return f"{effects[0]} Saath hi {effects[1]}"
+def _secret_direct_answer(angle: str, level: str, verdict: str, question: str) -> str:
+    ang = (angle or "general_secrecy").strip().lower()
+    lv = (level or "possible").strip().lower()
+    v = (verdict or "Possible").strip()
+
+    by_angle: dict[str, dict[str, str]] = {
+        "third_person_risk": {
+            "low": (
+                "Seedhi baat — abhi partner ke kisi aur me interest ke strong signals dominant "
+                "nahi dikh rahe. Verdict Low hai, matlab attention mostly aapki taraf dikhti hai."
+            ),
+            "possible": (
+                "Abhi pakka nahi keh sakte, par partner ke kisi aur me interest ke kuch signals "
+                "chart me dikh rahe hain. Verdict Possible hai — pattern verify karna zaruri hai."
+            ),
+            "likely": (
+                "Seedhi baat — chart ke hisaab se partner ke kisi aur me interest ke signals "
+                "kaafi active dikh rahe hain. Ye pakka proof nahi, par verdict Likely hai — "
+                "isko lightly mat lena."
+            ),
+            "high": (
+                "Chart me partner ke kisi aur me interest ke high-risk signals active hain. "
+                "Ye final proof nahi, par verdict High hai — transparency check zaruri hai."
+            ),
+        },
+        "secret_affair": {
+            "likely": (
+                "Chart me secret affair / chakkar ke kaafi active patterns dikh rahe hain. "
+                "Verdict Likely hai — hidden attention trust ko test karega."
+            ),
+        },
+        "chupke_rishta": {
+            "likely": (
+                "Chupke ya hidden rishta ke kaafi active signals chart me dikh rahe hain. "
+                "Verdict Likely hai — secrecy pattern trust ko affect kar sakta hai."
+            ),
+        },
+    }
+    custom = (by_angle.get(ang) or {}).get(lv)
+    if custom:
+        return custom
+
+    raw = get_opening(ang, lv)
+    raw = re.sub(r"\s*—\s*", ". ", raw).strip()
+    raw = re.sub(
+        r"(?i)\blikely indicators active hain\b",
+        "kaafi active signals dikh rahe hain",
+        raw,
+    )
+    if raw and not re.match(r"(?i)^(seedhi|haan|nahi|abhi|chart)", raw):
+        raw = f"Seedhi baat — {raw[0].lower()}{raw[1:]}"
+    return raw or f"Chart ke signals ke hisaab se verdict {v} hai."
 
 
-def _human_effect_sentence(effects: list[str], *, fallback: str) -> str:
-    cleaned = [str(x).strip() for x in effects if str(x).strip()]
-    if not cleaned:
-        return fallback
-    if len(cleaned) == 1:
-        return cleaned[0]
-    return f"{cleaned[0]} Saath hi {cleaned[1]}"
+def _secret_why_human(
+    strongest: list[str],
+    weakest: list[str],
+    strongest_fx: list[str],
+    weakest_fx: list[str],
+    verdict: str,
+    level: str,
+) -> str:
+    n_pos = len([x for x in strongest if str(x).strip()])
+    n_neg = len([x for x in weakest if str(x).strip()])
+
+    if n_neg and not n_pos:
+        line = (
+            "Assessment isliye aaya kyunki zyada tar signals secrecy / hidden attention "
+            "ki taraf ja rahe hain — transparency supportive signs abhi kam hain."
+        )
+    elif n_neg and n_pos:
+        line = (
+            "Chart me transparency-ke kuch supportive signs bhi milte hain, lekin secrecy-risk "
+            "wale signals zyada weight le rahe hain."
+        )
+    elif n_pos:
+        line = "Chart me transparency supportive signals zyada dominant dikh rahe hain."
+    else:
+        line = "Chart ke signals mixed ya limited hain — isliye verdict carefully balanced hai."
+
+    for fx in weakest_fx[:1]:
+        bit = str(fx).strip().rstrip(".")
+        if bit and "limited" not in bit.lower() and bit.lower() not in line.lower():
+            line = f"{line} {bit}."
+            break
+    return line
+
+
+def _secret_advice_human(angle: str, level: str) -> str:
+    ang = (angle or "general_secrecy").strip().lower()
+    lv = (level or "possible").strip().lower()
+
+    by_angle: dict[str, dict[str, str]] = {
+        "third_person_risk": {
+            "likely": (
+                "Partner ke behaviour me kisi aur ki taraf dhyaan jaa raha hai ya nahi — "
+                "ye calmly observe karo. Abhi transparency sensitive hai; gussa ya jhat se "
+                "accusation ki jagah facts jama karke phir baat karna behtar rahega."
+            ),
+            "possible": (
+                "Abhi evidence incomplete hai — words se zyada repeated behaviour pattern dekho. "
+                "Assumptions se bacho, calm approach rakho."
+            ),
+            "high": (
+                "Pattern kaafi strong dikhta hai — serious conversation + clear boundaries "
+                "sensible hain. Emotional peak me turant final decision avoid karo."
+            ),
+        },
+    }
+    custom = (by_angle.get(ang) or {}).get(lv)
+    if custom:
+        return custom
+
+    by_level: dict[str, str] = {
+        "low": (
+            "Abhi strong secrecy pattern dominant nahi dikhta — phir bhi healthy transparency "
+            "banaye rakhna helpful rahega."
+        ),
+        "possible": (
+            "Abhi suspicion ke liye evidence incomplete hai — words se zyada repeated behaviour "
+            "pattern dekho, assumptions se bacho."
+        ),
+        "likely": (
+            "Is phase me blind trust risky ho sakta hai — transparency abhi thodi sensitive hai. "
+            "Calm rehkar pattern note karo; accusation se pehle facts jama karke phir baat karo."
+        ),
+        "high": (
+            "Pattern kaafi strong dikhta hai — serious baat + clear boundaries set karna sensible "
+            "hai. Emotional peak me turant final decision avoid karo."
+        ),
+    }
+    return by_level.get(lv) or get_practical(ang, lv)
+
+
+_TEMPLATE_STITCH_RX = re.compile(
+    r"(?i)(isi wajah se final verdict|likely matlab|likely indicators active|"
+    r"transparency abhi sensitive zone me hai — repeated|parallel attention trust ko test)"
+)
+
+
+def looks_like_secret_template_stitch(text: str) -> bool:
+    return bool(_TEMPLATE_STITCH_RX.search(text or ""))
 
 
 def render_secret_human_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
-    """Plain Hinglish paragraphs — same facts as template, no section labels."""
+    """Plain Hinglish paragraphs — conversational, same locked facts."""
     verdict = str(data.get("final_verdict") or "Possible")
     level = str(data.get("secret_level") or data.get("secrecy_level") or verdict).strip().lower()
     angle = str(data.get("answer_focus") or data.get("secret_angle") or "general_secrecy")
@@ -119,33 +245,17 @@ def render_secret_human_answer(data: dict[str, Any], question: str = "", *, lang
     score = int(data.get("confidence") or 0)
     conf_label = str(data.get("confidence_label") or "Medium")
     scorecard = data.get("scorecard") if isinstance(data.get("scorecard"), dict) else {}
+    q = (question or str(data.get("original_question") or "")).strip()
 
-    opening = str(data.get("direct_answer") or "").strip() or get_opening(angle, level)
-    reason = str(data.get("reason_summary") or "").strip() or _build_reason_summary(
-        strongest, weakest, verdict
-    )
-    support = _human_effect_sentence(
-        strongest_fx,
-        fallback="Transparency ke supportive signs abhi limited hain.",
-    )
-    challenge = _human_effect_sentence(
-        weakest_fx,
-        fallback="Secrecy ya parallel-attention ke kuch signals active hain.",
-    )
-    meaning = str(data.get("meaning_note") or "").strip() or get_meaning(angle, level)
-    transparency = str(data.get("transparency_outlook") or "").strip() or get_transparency_outlook(level)
-    focus = str(data.get("practical_guidance") or "").strip() or get_practical(angle, level)
     confidence = str(data.get("confidence_explanation") or "").strip() or _build_confidence_explanation(
         score, conf_label, strongest, weakest, scorecard, topic="secrecy"
     )
-
-    why_para = reason
-    if support and "limited" not in support.lower():
-        why_para = f"{reason} {support}"
-    caution_para = " ".join(
-        part for part in (challenge, meaning, transparency, focus) if part
-    ).strip()
-    parts = [opening, why_para, caution_para, confidence]
+    parts = [
+        _secret_direct_answer(angle, level, verdict, q),
+        _secret_why_human(strongest, weakest, strongest_fx, weakest_fx, verdict, level),
+        _secret_advice_human(angle, level),
+        confidence,
+    ]
     return "\n\n".join(re.sub(r"\s{2,}", " ", p).strip() for p in parts if p)
 
 
@@ -178,6 +288,24 @@ def render_secret_labeled_answer(data: dict[str, Any], question: str = "", *, la
 def render_secret_template_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
     """User-facing secret answer — always plain paragraphs (no section labels)."""
     return render_secret_human_answer(data, question, lang=lang)
+
+
+def validate_secret_presenter_output(text: str, data: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Light validation for presenter LLM — verdict lock only, no section-label requirements."""
+    issues: list[str] = []
+    t = (text or "").strip()
+    if not t:
+        return False, ["empty"]
+    level = str(data.get("secret_level") or data.get("secrecy_level") or "").strip().lower()
+    if level == "high" and re.search(r"(?i)\b(no\s+secret|transparent\s+mostly|low\s+risk)\b", t):
+        issues.append("contradiction_high_secrecy")
+    if level == "low" and re.search(r"(?i)\b(high-risk\s+secret|parallel\s+attention\s+active)\b", t):
+        issues.append("contradiction_low_secrecy")
+    if _BANNED_NARRATOR_PHRASES.search(t):
+        issues.append("banned_phrase")
+    if re.search(r"(?i)\b(d1|d9|relationship\s+axis)\b", t):
+        issues.append("chart_jargon_leak")
+    return len(issues) == 0, issues
 
 
 def validate_secret_narrator_output(text: str, data: dict[str, Any]) -> tuple[bool, list[str]]:

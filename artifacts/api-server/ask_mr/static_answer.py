@@ -28,6 +28,11 @@ def try_human_presenter_mr_answer(
     q = (question or "").strip()
     if not q:
         return None
+
+    llm_used = False
+    narrated: str | None = None
+    narrator_json: dict | None = None
+
     try:
         from ask_mr.engine_narrate import narrate_mr_engine_llm
 
@@ -38,28 +43,66 @@ def try_human_presenter_mr_answer(
             llm_intent=llm_intent,
             wants_explain=False,
         )
+        llm_used = bool(narrated and str(narrated).strip())
     except Exception as exc:
         print(f"[static_answer] human presenter failed: {exc}", flush=True)
-        return None
+
+    checks = dict(getattr(engine_result, "checks", None) or {})
+    narrator_json = checks.get("narrator_input") if isinstance(checks.get("narrator_input"), dict) else None
+
+    if arch == "secret_relationship":
+        from ask_mr.secret_narrator import (
+            engine_result_to_secret_json,
+            looks_like_secret_template_stitch,
+            render_secret_human_answer,
+        )
+        from ask_mr.engine_presenter import present_secret_answer_llm
+
+        if not isinstance(narrator_json, dict):
+            _dna = None
+            if isinstance(llm_intent, dict):
+                _dna = llm_intent.get("question_dna")
+            narrator_json = engine_result_to_secret_json(
+                engine_result,
+                question=q,
+                question_dna=_dna if isinstance(_dna, dict) else None,
+            )
+
+        need_llm = not narrated or looks_like_secret_template_stitch(str(narrated))
+        if need_llm:
+            direct = present_secret_answer_llm(
+                narrator_json,
+                question=q,
+                lang=lang,
+                llm_intent=llm_intent,
+            )
+            if direct:
+                narrated = direct
+                llm_used = True
+
+        if not narrated or looks_like_secret_template_stitch(str(narrated)):
+            narrated = render_secret_human_answer(narrator_json, q, lang=lang)
+            llm_used = False
+
     if not (narrated and str(narrated).strip()):
         return None
 
-    checks = dict(getattr(engine_result, "checks", None) or {})
-    narrator_json = checks.get("narrator_input")
     conf = 0.5
     if isinstance(narrator_json, dict):
         try:
             conf = max(0.15, min(1.0, float(narrator_json.get("confidence") or 48) / 100.0))
         except (TypeError, ValueError):
             pass
+
+    source = f"{arch}_engine_presenter" if llm_used else f"{arch}_engine_human_compose"
     return {
         "text": str(narrated).strip(),
         "topic": "marriage",
         "confidence": conf,
-        "source": f"{arch}_engine_presenter",
+        "source": source,
         "engine_tag": "ans-engine",
         "follow_ups": [],
-        "llm_called": True,
+        "llm_called": llm_used,
         "_presenter_archetype": arch,
         "_narrator_json": narrator_json,
     }

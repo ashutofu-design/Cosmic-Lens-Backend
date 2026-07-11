@@ -9120,13 +9120,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _hp_arch = str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower()
             _hp_json = _human_presenter.pop("_narrator_json", None)
             _human_presenter.pop("_presenter_archetype", None)
+            _hp_llm_called = bool(_human_presenter.pop("llm_called", True))
+            _hp_source = str(_human_presenter.get("source") or f"{_hp_arch}_engine_presenter")
             _pt_checks_hp = {
                 "slice_type": "mr_engine_v1",
                 "resolved_route": _resolved_route,
                 "is_mr_static": True,
                 "archetype": _hp_arch,
-                "skip_llm": False,
-                "presenter_mode": True,
+                "skip_llm": not _hp_llm_called,
+                "presenter_mode": _hp_llm_called,
+                "human_compose": not _hp_llm_called,
                 "narrator_input": _hp_json,
                 "dasha_included": False,
             }
@@ -9138,8 +9141,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 checks=_pt_checks_hp,
                 chart_text=chart_text,
                 slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-                llm_called=True,
-                skip_reason=f"{_hp_arch}_engine_presenter",
+                llm_called=_hp_llm_called,
+                skip_reason=_hp_source,
                 intent_source=_intent_source,
                 llm_intent=_llm_intent_admin,
             )

@@ -83,8 +83,12 @@ _EFFECT_RULES: list[tuple[re.Pattern[str], str]] = [
         "Commitment lane me delay ya hesitation ka pattern dikh raha hai.",
     ),
     (
+        re.compile(r"\bmoon\b.*(afflict|instab|friction|weak)|moon.*emotional", re.I),
+        "Emotional consistency me utar-chadhav dikh sakta hai.",
+    ),
+    (
         re.compile(r"\bmoon\b", re.I),
-        "Emotional ups-downs commitment consistency ko affect kar sakte hain.",
+        "Emotional consistency me utar-chadhav commitment pace ko affect kar sakti hai.",
     ),
     (
         re.compile(r"\bmercury\b", re.I),
@@ -112,6 +116,24 @@ _EFFECT_RULES: list[tuple[re.Pattern[str], str]] = [
     ),
 ]
 
+_COM_RULE_EFFECTS: dict[str, str] = {
+    "COM-001": "Partnership axis structurally strong hai — long-term pairing ko backing milti hai.",
+    "COM-002": "Long-term stability ko support milne me challenge dikh raha hai.",
+    "COM-003": "Commitment structure ko strengthen karne me extra challenge dikh raha hai.",
+    "COM-004": "Relationship me warmth aur affection ko support milta hai.",
+    "COM-005": "Affection layer me friction ya inconsistency dikh sakti hai.",
+    "COM-006": "Long-term faith aur growth orientation commitment ko support karta hai.",
+    "COM-007": "Long-term faith aur promise layer me weakness dikh rahi hai.",
+}
+
+_USER_SECTION = {
+    "why_verdict": "Kyun ye verdict aaya:",
+    "positive": "Is verdict ko support karne wale mukhya sanket:",
+    "challenges": "Dhyan dene layak challenges:",
+    "meaning": "Iska practical matlab:",
+    "focus": "Aapko kis baat par dhyan dena chahiye:",
+}
+
 _TIMING_RX = re.compile(
     r"(?i)(late\s+20\d{2}|early\s+20\d{2}|mid\s+20\d{2}|"
     r"20\d{2}\s*(?:ke\s+)?(?:end|start|mid)|"
@@ -119,8 +141,11 @@ _TIMING_RX = re.compile(
 )
 
 
-def _evidence_to_effect(raw: str) -> str:
+def _evidence_to_effect(raw: str, *, rule_id: str = "") -> str:
     """Translate engine evidence → real-life commitment effect (no planet jargon)."""
+    rid = (rule_id or "").strip().upper()
+    if rid in _COM_RULE_EFFECTS:
+        return _COM_RULE_EFFECTS[rid]
     s = (raw or "").strip()
     if not s:
         return ""
@@ -135,10 +160,12 @@ def _evidence_to_effect(raw: str) -> str:
     return "Chart me ek commitment-related factor active hai."
 
 
-def _effects_from_evidence(items: list[str], *, limit: int = 3) -> list[str]:
+def _effects_from_evidence(items: list[str], *, limit: int = 3, rule_ids: list[str] | None = None) -> list[str]:
     out: list[str] = []
-    for raw in items:
-        eff = _evidence_to_effect(str(raw))
+    rids = rule_ids or []
+    for i, raw in enumerate(items):
+        rid = rids[i] if i < len(rids) else ""
+        eff = _evidence_to_effect(str(raw), rule_id=rid)
         if eff and eff not in out:
             out.append(eff)
         if len(out) >= limit:
@@ -177,8 +204,10 @@ def _evidence_from_rules(
     *,
     polarity: str,
     limit: int = 3,
-) -> list[str]:
+) -> tuple[list[str], list[str]]:
+    """Return (evidence lines, parallel rule_ids)."""
     out: list[str] = []
+    rids: list[str] = []
     for rule in rules_fired:
         if not isinstance(rule, dict):
             continue
@@ -186,11 +215,24 @@ def _evidence_from_rules(
             continue
         note = str(rule.get("note") or rule.get("evidence") or rule.get("label") or "").strip()
         line = _compact_evidence_line(note)
+        rid = str(rule.get("rule_id") or rule.get("id") or "").strip()
         if line and line not in out:
             out.append(line)
+            rids.append(rid)
         if len(out) >= limit:
             break
-    return out
+    return out, rids
+
+
+def _confidence_label_from_score(score: int) -> str:
+    """User-facing certainty bands."""
+    if score <= 35:
+        return "Low"
+    if score <= 65:
+        return "Medium"
+    if score <= 85:
+        return "High"
+    return "Very High"
 
 
 def _resolve_confidence(level: str, checks: dict[str, Any], scorecard: dict[str, Any]) -> tuple[int, str]:
@@ -206,10 +248,7 @@ def _resolve_confidence(level: str, checks: dict[str, Any], scorecard: dict[str,
         score = 0
     if score <= 0:
         score = _LEVEL_SCORE_FALLBACK.get(level, 55)
-    certainty = str(checks.get("confidence_certainty") or "").strip().title()
-    if certainty not in ("High", "Medium", "Low"):
-        certainty = "High" if score >= 78 else ("Medium" if score >= 52 else "Low")
-    return score, certainty
+    return score, _confidence_label_from_score(score)
 
 
 def _question_angles(question: str, checks: dict[str, Any]) -> tuple[str, bool, bool]:
@@ -264,8 +303,9 @@ def _join_effect_lines(
     prefix: str,
     fallback: str,
     limit: int = 3,
+    rule_ids: list[str] | None = None,
 ) -> str:
-    effects = _effects_from_evidence(items, limit=limit)
+    effects = _effects_from_evidence(items, limit=limit, rule_ids=rule_ids)
     if not effects:
         return fallback
     if len(effects) == 1:
@@ -282,21 +322,21 @@ def _build_meaning_note(level: str, warnings: list[str]) -> str:
         return "Ye cheating ka direct indication nahi hai — chart commitment hesitation dikha raha hai."
     if lv == "low":
         return (
-            "Iska practical matlab: abhi partner ki taraf se long-term serious commitment ka "
+            "Abhi partner ki taraf se long-term serious commitment ka "
             "support kam hai — ye rejection nahi, lekin readiness weak dikh rahi hai."
         )
     if lv == "ready":
         return (
-            "Iska practical matlab: chart long-term serious intent ko backing deta hai — "
+            "Chart long-term serious intent ko backing deta hai — "
             "consistency ke saath verdict aur strong hota hai."
         )
     if lv == "cautious":
         return (
-            "Iska practical matlab: interest hai lekin full stability abhi develop ho rahi hai — "
+            "Interest hai lekin full stability abhi develop ho rahi hai — "
             "process slow ya hesitant phase me hai."
         )
     return (
-        "Iska practical matlab: interest hai lekin long-term consistency abhi fully establish nahi — "
+        "Interest hai lekin long-term consistency abhi fully establish nahi — "
         "mixed phase me decision evidence aur repeated behaviour se lena better hai."
     )
 
@@ -306,12 +346,12 @@ def _build_practical_guidance(strongest: list[str], weakest: list[str]) -> str:
     blob = " ".join(weakest + strongest).lower()
     if "7th" in blob or "dusthana" in blob or "stability" in blob:
         return (
-            "Engine ke challenging stability signals ke hisaab se partner ke consistent actions "
+            "Stability ke challenging signals ke hisaab se partner ke consistent actions "
             "aur long-term planning ko words se zyada verify karein."
         )
     if "saturn" in blob or "delay" in blob or "hesitation" in blob:
         return (
-            "Engine delay/hesitation signal de raha hai — slow progress possible hai, "
+            "Delay ya hesitation ke signals hain — slow progress possible hai, "
             "lekin regular effort aur planning pattern dekhein."
         )
     if "venus" in blob and any(x in blob for x in ("afflict", "debil", "combust", "friction")):
@@ -319,18 +359,46 @@ def _build_practical_guidance(strongest: list[str], weakest: list[str]) -> str:
             "Affection layer me friction signal hai — warmth ko sirf words se nahi, "
             "repeated behaviour se match karein."
         )
+    if "moon" in blob:
+        return (
+            "Emotional consistency ke ups-downs dikh rahe hain — partner ke mood aur "
+            "behaviour pattern ko kuch hafton tak observe karein."
+        )
     if "jupiter" in blob:
         return (
             "Long-term faith signals supportive hain — lekin partner ke behaviour se "
             "future planning match honi chahiye."
         )
     return (
-        "Engine mixed signals de raha hai — partner ke consistent behaviour aur "
+        "Chart mixed signals de raha hai — partner ke consistent behaviour aur "
         "long-term planning ko observe karein, sirf promises par depend mat karein."
     )
 
 
+def _build_scorecard_user_note(scorecard: dict[str, Any]) -> str:
+    """Natural language only — no raw numbers for end users."""
+    if not scorecard:
+        return ""
+    commit = scorecard.get("commitment")
+    trust = scorecard.get("trust")
+    comm = scorecard.get("communication")
+    try:
+        commit_i = int(commit) if commit is not None else None
+        trust_i = int(trust) if trust is not None else None
+        comm_i = int(comm) if comm is not None else None
+    except (TypeError, ValueError):
+        return ""
+    if comm_i is not None and commit_i is not None and comm_i < commit_i - 5:
+        return "Communication ke indicators commitment ke comparison me kam supportive dikhte hain."
+    if trust_i is not None and commit_i is not None and trust_i < commit_i - 5:
+        return "Trust ke indicators commitment ke comparison me thode kam supportive dikhte hain."
+    if commit_i is not None and commit_i < 50:
+        return "Long-term commitment ke indicators abhi developing phase me dikhte hain."
+    return ""
+
+
 def _build_scorecard_note(scorecard: dict[str, Any]) -> str:
+    """Admin/debugger only — includes numeric scorecard."""
     if not scorecard:
         return ""
     commit = scorecard.get("commitment")
@@ -343,21 +411,8 @@ def _build_scorecard_note(scorecard: dict[str, Any]) -> str:
         header += f", Trust {trust}"
     if comm is not None:
         header += f", Communication {comm}"
-    header += "."
-    notes: list[str] = []
-    if comm is not None and int(comm) < 50:
-        notes.append(
-            f"Communication score ({comm}) relatively kam hai — day-to-day alignment abhi fully strong nahi."
-        )
-    elif trust is not None and int(trust) < 50:
-        notes.append(
-            f"Trust score ({trust}) moderate hai — reliability signals abhi poori tarah establish nahi."
-        )
-    elif int(commit) < 50:
-        notes.append(
-            f"Commitment score ({commit}) moderate hai — long-term intent abhi developing phase me hai."
-        )
-    return header + (" " + notes[0] if notes else "")
+    user_note = _build_scorecard_user_note(scorecard)
+    return header + "." + (f" {user_note}" if user_note else "")
 
 
 def _build_confidence_explanation(
@@ -379,15 +434,22 @@ def _build_confidence_explanation(
         reasons.append("chart mixed signals de raha hai")
 
     comm = scorecard.get("communication")
-    if comm is not None and int(comm) < 50:
-        reasons.append(f"communication score ({comm}) relatively kam hai")
+    commit = scorecard.get("commitment")
+    if comm is not None and commit is not None:
+        try:
+            if int(comm) < int(commit) - 5:
+                reasons.append("communication ke indicators commitment ke comparison me kam supportive hain")
+        except (TypeError, ValueError):
+            pass
 
-    if score < 55 and conf_label == "Medium":
-        reasons.append("primary score mid-range par hai")
-    elif score >= 78:
-        reasons.append("primary score strong range me hai")
+    if 36 <= score <= 65 and conf_label == "Medium":
+        reasons.append("score mid-range par hai")
+    elif score >= 86:
+        reasons.append("score bahut strong range me hai")
+    elif score >= 66:
+        reasons.append("score strong range me hai")
 
-    reason_text = " aur ".join(reasons) if reasons else "engine signals balanced hain"
+    reason_text = " aur ".join(reasons) if reasons else "chart signals balanced hain"
     return f"Confidence {conf_label} ({score}%) hai kyunki {reason_text}."
 
 
@@ -397,7 +459,7 @@ def render_commitment_template_answer(
     *,
     lang: str = "hn",
 ) -> str:
-    """Deterministic production answer — fixed 9-step flow, effect-based, zero generic advice."""
+    """Deterministic production answer — natural Hinglish flow, effect-based."""
     verdict = str(data.get("final_verdict") or data.get("verdict") or "Mixed")
     level = verdict.strip().lower()
     strongest = list(data.get("strongest") or data.get("strongest_factor") or [])
@@ -407,34 +469,37 @@ def render_commitment_template_answer(
     conf_label = str(data.get("confidence_label") or "Medium")
     timing = data.get("timing") if isinstance(data.get("timing"), dict) else None
     scorecard = data.get("scorecard") if isinstance(data.get("scorecard"), dict) else {}
+    strongest_rids = list(data.get("strongest_rule_ids") or [])
+    weakest_rids = list(data.get("weakest_rule_ids") or [])
 
     angle, timepass_q, genuine_q = _question_angles(question, data.get("_checks") or {})
 
     p1 = str(data.get("direct_answer") or "").strip() or _build_direct_answer(
         level, timepass_q=timepass_q, genuine_q=genuine_q
     )
-    p2 = str(data.get("verdict_line") or _build_verdict_line(verdict))
+    p2 = f"{_USER_SECTION['why_verdict']} {_build_reason_summary(strongest, weakest, verdict)}"
     p3 = _join_effect_lines(
         strongest,
-        prefix="Strongest Reasons:",
-        fallback="Strongest Reasons: chart me commitment-supporting factors mile hain.",
+        prefix=_USER_SECTION["positive"],
+        fallback=f"{_USER_SECTION['positive']} chart me commitment-supporting indicators mile hain.",
         limit=3,
+        rule_ids=strongest_rids,
     )
     p4 = _join_effect_lines(
         weakest,
-        prefix="Biggest Challenges:",
-        fallback="Biggest Challenges: chart me commitment-challenging factors bhi mile hain.",
+        prefix=_USER_SECTION["challenges"],
+        fallback=f"{_USER_SECTION['challenges']} chart me commitment-challenging indicators bhi mile hain.",
         limit=3,
+        rule_ids=weakest_rids,
     )
-    p5 = _build_reason_summary(strongest, weakest, verdict)
-    p6 = _build_meaning_note(level, warnings)
-    parts = [p1, p2, p3, p4, p5, p6]
-    scorecard_note = _build_scorecard_note(scorecard)
-    if scorecard_note:
-        parts.append(scorecard_note)
+    meaning = _build_meaning_note(level, warnings)
+    scorecard_user = _build_scorecard_user_note(scorecard)
+    if scorecard_user:
+        meaning = f"{meaning} {scorecard_user}"
+    parts = [p1, p2, p3, p4, f"{_USER_SECTION['meaning']} {meaning}"]
     if timing and str(timing.get("window") or "").strip():
         parts.append(f"Timing: {str(timing.get('window')).strip()}.")
-    parts.append(f"Practical guidance: {_build_practical_guidance(strongest, weakest)}")
+    parts.append(f"{_USER_SECTION['focus']} {_build_practical_guidance(strongest, weakest)}")
     parts.append(
         _build_confidence_explanation(score, conf_label, strongest, weakest, scorecard)
     )
@@ -449,24 +514,82 @@ def _build_reason_summary(strongest: list[str], weakest: list[str], verdict: str
     n_pos = len([x for x in strongest if str(x).strip()])
     n_neg = len([x for x in weakest if str(x).strip()])
     if n_pos and n_neg:
-        pos_word = "factor" if n_pos == 1 else "factors"
-        neg_word = "factor" if n_neg == 1 else "factors"
+        pos_h = "do strong" if n_pos >= 2 else "ek strong"
+        neg_h = "do challenging" if n_neg >= 2 else "ek challenging"
         return (
-            f"Engine ke hisaab se {n_pos} commitment-supporting {pos_word} "
-            f"aur {n_neg} commitment-challenging {neg_word} mile hain. "
-            f"Isi wajah se final verdict '{verdict}' hai."
+            f"Chart ke analysis ke hisaab se {pos_h} aur {neg_h} commitment indicators mile hain. "
+            f"Isi wajah se final verdict {verdict} hai."
         )
     if n_pos:
         return (
-            f"Engine ke hisaab se {n_pos} commitment-supporting factor mile hain. "
-            f"Isi wajah se final verdict '{verdict}' hai."
+            f"Chart ke analysis ke hisaab se commitment-supporting indicators zyada dikhte hain. "
+            f"Isi wajah se final verdict {verdict} hai."
         )
     if n_neg:
         return (
-            f"Engine ke hisaab se {n_neg} commitment-challenging factor mile hain. "
-            f"Isi wajah se final verdict '{verdict}' hai."
+            f"Chart ke analysis ke hisaab se commitment-challenging indicators zyada dikhte hain. "
+            f"Isi wajah se final verdict {verdict} hai."
         )
-    return f"Engine signals mixed hain — isi wajah se final verdict '{verdict}' hai."
+    return f"Chart ke signals mixed hain — isi wajah se final verdict {verdict} hai."
+
+
+def _all_engine_evidence(result: EngineResult, rules_fired: list[Any]) -> list[tuple[str, str, str]]:
+    """(line, polarity, rule_id) from rules + engine evidence pools."""
+    seen: set[str] = set()
+    out: list[tuple[str, str, str]] = []
+    for rule in rules_fired:
+        if not isinstance(rule, dict):
+            continue
+        note = str(rule.get("note") or rule.get("evidence") or rule.get("label") or "").strip()
+        line = _compact_evidence_line(note)
+        if not line or line in seen:
+            continue
+        seen.add(line)
+        out.append((
+            line,
+            str(rule.get("polarity") or "neutral").strip().lower(),
+            str(rule.get("rule_id") or rule.get("id") or "").strip(),
+        ))
+    for line in list(result.evidence_positive or []) + list(result.evidence_negative or []) + list(result.evidence or []):
+        compact = _compact_evidence_line(str(line))
+        if compact and compact not in seen:
+            seen.add(compact)
+            pol = "negative" if compact in {_compact_evidence_line(str(x)) for x in (result.evidence_negative or [])} else "positive"
+            out.append((compact, pol, ""))
+    return out
+
+
+def _promote_moon_to_weakest(weakest: list[str], result: EngineResult) -> list[str]:
+    """If Moon evidence exists but was not narrated, surface it in challenges."""
+    if any("moon" in str(x).lower() for x in weakest):
+        return weakest
+    for pool in (result.evidence_negative or [], result.evidence or [], result.evidence_positive or []):
+        for line in pool:
+            if "moon" in str(line).lower():
+                compact = _compact_evidence_line(str(line))
+                if compact and compact not in weakest:
+                    return weakest + [compact]
+    return weakest
+
+
+def _build_ignored_evidence(
+    all_evidence: list[tuple[str, str, str]],
+    used_strongest: list[str],
+    used_weakest: list[str],
+) -> list[dict[str, str]]:
+    used = set(used_strongest + used_weakest)
+    ignored: list[dict[str, str]] = []
+    for line, polarity, rid in all_evidence:
+        if line in used:
+            continue
+        ignored.append({
+            "evidence": line,
+            "polarity": polarity,
+            "rule_id": rid or "",
+            "effect": _evidence_to_effect(line, rule_id=rid),
+            "reason": "Lower priority than top commitment factors selected for user answer.",
+        })
+    return ignored[:6]
 
 
 def validate_commitment_narrator_output(text: str, data: dict[str, Any]) -> tuple[bool, list[str]]:
@@ -488,9 +611,9 @@ def validate_commitment_narrator_output(text: str, data: dict[str, Any]) -> tupl
         if banned in tl:
             issues.append(f"banned_{banned.replace(' ', '_')}")
 
-    if "strongest reasons" not in tl and "strongest" not in tl:
-        issues.append("missing_strongest_section")
-    if "biggest challenges" not in tl and "weakest" not in tl and "challenges" not in tl:
+    if "strongest reasons" not in tl and "mukhya sanket" not in tl:
+        issues.append("missing_positive_section")
+    if "dhyan dene layak" not in tl and "challenges" not in tl:
         issues.append("missing_challenges_section")
 
     score = int(data.get("confidence") or 0)
@@ -499,6 +622,10 @@ def validate_commitment_narrator_output(text: str, data: dict[str, Any]) -> tupl
         issues.append("confidence_line")
     if "kyunki" not in tl and "because" not in tl:
         issues.append("confidence_explanation_missing")
+    if re.search(r"(?i)\bengine ke hisaab\b", t):
+        issues.append("engine_phrase_in_user_text")
+    if re.search(r"(?i)scorecard:\s*commitment\s+\d+", t):
+        issues.append("scorecard_numbers_in_user_text")
 
     return len(issues) == 0, issues
 
@@ -521,8 +648,8 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
     score, conf_label = _resolve_confidence(level, checks, scorecard)
 
     rules_fired = list(checks.get("rules_fired") or [])
-    strongest = _evidence_from_rules(rules_fired, polarity="positive", limit=3)
-    weakest = _evidence_from_rules(rules_fired, polarity="negative", limit=2)
+    strongest, strongest_rids = _evidence_from_rules(rules_fired, polarity="positive", limit=3)
+    weakest, weakest_rids = _evidence_from_rules(rules_fired, polarity="negative", limit=3)
 
     if not strongest:
         sf = str(explanation.get("strongest_factor") or "").strip()
@@ -547,10 +674,15 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
             if line and line not in weakest:
                 weakest.append(line)
     if not weakest:
-        for item in (result.evidence_negative or [])[:2]:
+        for item in (result.evidence_negative or [])[:3]:
             line = _compact_evidence_line(str(item))
             if line and line not in weakest:
                 weakest.append(line)
+                weakest_rids.append("")
+
+    weakest = _promote_moon_to_weakest(weakest[:3], result)[:3]
+    all_evidence = _all_engine_evidence(result, rules_fired)
+    ignored_evidence = _build_ignored_evidence(all_evidence, strongest[:3], weakest[:3])
 
     reasons: list[str] = []
     for item in explanation.get("why") or []:
@@ -585,9 +717,10 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
     reason_summary = _build_reason_summary(strongest[:3], weakest[:3], verdict_label)
     practical = _build_practical_guidance(strongest, weakest)
     meaning_note = _build_meaning_note(level, warnings)
-    strongest_effects = _effects_from_evidence(strongest, limit=3)
-    weakest_effects = _effects_from_evidence(weakest, limit=3)
+    strongest_effects = _effects_from_evidence(strongest, limit=3, rule_ids=strongest_rids)
+    weakest_effects = _effects_from_evidence(weakest, limit=3, rule_ids=weakest_rids)
     scorecard_note = _build_scorecard_note(scorecard)
+    scorecard_user_note = _build_scorecard_user_note(scorecard)
     confidence_explanation = _build_confidence_explanation(
         score, conf_label, strongest, weakest, scorecard
     )
@@ -599,15 +732,19 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
         "direct_answer": direct_answer,
         "verdict_line": _build_verdict_line(verdict_label),
         "strongest": strongest[:3],
-        "weakest": weakest[:2],
+        "weakest": weakest[:3],
+        "strongest_rule_ids": strongest_rids[:3],
+        "weakest_rule_ids": weakest_rids[:3],
         "strongest_effects": strongest_effects,
         "weakest_effects": weakest_effects,
+        "ignored_evidence": ignored_evidence,
         "reason": reasons[:4],
         "reason_summary": reason_summary,
         "meaning_note": meaning_note,
         "practical_guidance": practical,
         "scorecard": {k: int(v) for k, v in scorecard.items() if isinstance(v, (int, float))},
         "scorecard_note": scorecard_note,
+        "scorecard_user_note": scorecard_user_note,
         "confidence": score,
         "confidence_label": conf_label,
         "confidence_explanation": confidence_explanation,
@@ -620,7 +757,7 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
         # backward-compatible keys for admin / tests
         "verdict": verdict_label,
         "strongest_factor": strongest[:3],
-        "weakest_factor": weakest[:2],
+        "weakest_factor": weakest[:3],
         "warnings": warnings[:3],
     }
     if timing_block:
@@ -665,16 +802,14 @@ def commitment_narrator_payload(
         "",
         "OUTPUT RULES (production — zero freedom):",
         "STEP 1: Direct answer — use direct_answer from JSON; verdict Low → NEVER say 'mushkil hai' / 'ho sakta hai'.",
-        "STEP 2: Final Verdict — use verdict_line.",
-        "STEP 3: Strongest Reasons — use strongest_effects[] ONLY (real-life effects, NO planet jargon).",
-        "STEP 4: Biggest Challenges — use weakest_effects[] ONLY.",
-        "STEP 5: Reason — use reason_summary.",
-        "STEP 6: Practical meaning — use meaning_note.",
-        "STEP 7: Scorecard — use scorecard_note if non-empty.",
-        "STEP 8: Timing — ONLY if timing.window exists.",
-        "STEP 9: Practical guidance — use practical_guidance ONLY.",
+        "STEP 2: Kyun ye verdict aaya — use reason_summary.",
+        "STEP 3: Mukhya sanket — use strongest_effects[] ONLY (real-life effects, NO planet jargon).",
+        "STEP 4: Dhyan dene layak challenges — use weakest_effects[] ONLY.",
+        "STEP 5: Practical meaning — use meaning_note + scorecard_user_note if present.",
+        "STEP 6: Timing — ONLY if timing.window exists.",
+        "STEP 7: Focus line — use practical_guidance ONLY.",
         "FINAL LINE: confidence_explanation from JSON — exact score + kyunki reason.",
-        "BANNED: any word in forbidden_phrases[]; clarity; patience; boundaries; feelings samjho.",
+        "BANNED: scorecard numbers in user text; 'Engine ke hisaab'; clarity; patience; boundaries.",
         "BANNED: planet/house/lord jargon in user-facing text. Translate to effects only.",
         "BANNED: new sentences not derived from LOCKED_TEMPLATE.",
         "Never change step order. Never contradict final_verdict.",
@@ -738,15 +873,13 @@ Final line: Confidence: {label} ({score}%).
     else:
         structure = """
 STRUCTURE (default — follow LOCKED_TEMPLATE paragraph order exactly):
-P1: direct_answer (verdict-locked, no hedging).
-P2: verdict_line (Final Verdict: …).
-P3: Strongest Reasons — only strongest_effects[].
-P4: Biggest Challenges — only weakest_effects[].
-P5: reason_summary.
-P6: meaning_note (practical meaning).
-P7 (if scorecard_note): scorecard sentence.
-P8 (only if timing.window): timing sentence.
-P9: practical_guidance only.
+P1: direct_answer (seedha jawab, verdict-locked).
+P2: Kyun ye verdict aaya — reason_summary.
+P3: Mukhya sanket — only strongest_effects[].
+P4: Dhyan dene layak challenges — only weakest_effects[].
+P5: Iska practical matlab — meaning_note + scorecard_user_note (no raw numbers).
+P6 (only if timing.window): timing sentence.
+P7: Aapko kis baat par dhyan dena chahiye — practical_guidance only.
 Final line: confidence_explanation — exact from JSON.
 NO planet jargon. NO generic relationship advice. NO new factors.
 """.strip()

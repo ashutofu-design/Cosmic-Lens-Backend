@@ -83,7 +83,7 @@ class CommitmentNarratorTests(unittest.TestCase):
         self.assertIn("ENGINE_JSON", prompt)
         self.assertIn("commitment", prompt.lower())
         self.assertIn("LOCKED_TEMPLATE", payload)
-        self.assertIn("Confidence:", prompt)
+        self.assertIn("confidence_explanation", prompt)
         self.assertNotIn("The Big Picture", prompt)
         self.assertIn("ENGINE LOCK", prompt)
 
@@ -104,26 +104,79 @@ class CommitmentNarratorTests(unittest.TestCase):
     def test_confidence_never_zero(self):
         data = engine_result_to_commitment_json(self.result)
         self.assertGreater(data["confidence"], 0)
-        self.assertIn("Confidence:", data.get("locked_template", ""))
+        self.assertRegex(data.get("locked_template", ""), r"Confidence\s+\w+\s*\(\d+%\)")
 
     def test_locked_template_has_evidence(self):
         data = engine_result_to_commitment_json(self.result)
         template = data.get("locked_template") or ""
-        self.assertIn("Strongest astrology evidence", template)
-        self.assertIn("Weakest astrology evidence", template)
-        self.assertIn("Practical guidance", template)
-        self.assertRegex(template, r"Confidence:\s*\w+\s*\(\d+%\)")
+        self.assertIn("mukhya sanket", template.lower())
+        self.assertIn("dhyan dene layak", template.lower())
+        self.assertIn("Aapko kis baat par dhyan dena chahiye", template)
+        self.assertRegex(template, r"Confidence\s+\w+\s*\(\d+%\)")
+        self.assertIn("kyunki", template.lower())
+
+    def test_confidence_band_medium_at_49(self):
+        from ask_mr.commitment_narrator import _confidence_label_from_score
+
+        self.assertEqual(_confidence_label_from_score(49), "Medium")
+        self.assertEqual(_confidence_label_from_score(35), "Low")
+        self.assertEqual(_confidence_label_from_score(36), "Medium")
+        self.assertEqual(_confidence_label_from_score(66), "High")
+        self.assertEqual(_confidence_label_from_score(86), "Very High")
+
+    def test_template_no_scorecard_numbers(self):
+        data = engine_result_to_commitment_json(self.result)
+        template = (data.get("locked_template") or "").lower()
+        self.assertNotRegex(template, r"scorecard:\s*commitment\s+\d+")
+        self.assertNotIn("engine ke hisaab", template)
+
+    def test_ignored_evidence_in_json(self):
+        data = engine_result_to_commitment_json(self.result)
+        self.assertIn("ignored_evidence", data)
+        self.assertIsInstance(data["ignored_evidence"], list)
+
+    def test_scorecard_in_json(self):
+        data = engine_result_to_commitment_json(self.result)
+        self.assertIn("scorecard", data)
+        self.assertIn("scorecard_user_note", data)
+        self.assertIn("confidence_explanation", data)
+        self.assertIn("strongest_effects", data)
+        self.assertGreater(len(data["strongest_effects"]), 0)
+
+    def test_effects_not_planet_jargon(self):
+        data = engine_result_to_commitment_json(self.result)
+        for eff in data.get("strongest_effects") or []:
+            low = eff.lower()
+            self.assertNotIn("7th lord", low)
+            self.assertNotRegex(low, r"venus\s+strong|jupiter\s+strong")
+
+    def test_template_no_banned_clarity(self):
+        data = engine_result_to_commitment_json(self.result)
+        template = (data.get("locked_template") or "").lower()
+        self.assertNotIn("clarity", template)
+        self.assertNotIn("patience rakho", template)
+        self.assertNotIn("boundaries", template)
 
     def test_validate_rejects_contradiction(self):
         data = engine_result_to_commitment_json(self.result)
         data["final_verdict"] = "Low"
         bad = (
             "genuine commitment level low hai. kehna mushkil hai ki serious hain ya sirf timepass. "
-            "Confidence: Medium (0%)."
+            "Confidence Medium (0%) hai kyunki mixed signals."
         )
         ok, issues = validate_commitment_narrator_output(bad, data)
         self.assertFalse(ok)
         self.assertTrue(issues)
+
+    def test_validate_rejects_clarity_hallucination(self):
+        data = engine_result_to_commitment_json(self.result)
+        good = data.get("locked_template") or ""
+        ok, issues = validate_commitment_narrator_output(good, data)
+        self.assertTrue(ok, msg=str(issues))
+        bad = good + " Clarity chahiye partner se."
+        ok2, issues2 = validate_commitment_narrator_output(bad, data)
+        self.assertFalse(ok2)
+        self.assertIn("banned_clarity", issues2)
 
     def test_render_template_low_verdict_no_hedge(self):
         data = engine_result_to_commitment_json(self.result)
@@ -131,9 +184,12 @@ class CommitmentNarratorTests(unittest.TestCase):
         data["commitment_level"] = "Low"
         data["direct_answer"] = _build_direct_answer("low", timepass_q=True, genuine_q=True)
         data.pop("verdict_line", None)
+        data.pop("meaning_note", None)
+        data.pop("reason_summary", None)
         text = render_commitment_template_answer(data, "kya partner timepass kar raha hai")
         self.assertNotRegex(text, r"(?i)kehna mushkil|ho sakta hai")
         self.assertIn("timepass", text.lower())
+        self.assertRegex(text, r"(?i)final verdict\s+Low")
 
     def test_adapter_passes_timing_meta(self):
         checks = self.result.checks or {}

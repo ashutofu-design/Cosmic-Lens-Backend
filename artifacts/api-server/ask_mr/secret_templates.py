@@ -90,12 +90,20 @@ TRANSPARENCY_TEMPLATES: dict[str, str] = {
     "high": "Transparency abhi high-risk zone me hai — consistent openness ke bina trust weak rehta hai.",
 }
 
+_CHART_JARGON_RX = re.compile(
+    r"(?i)\b(d[19]|d\d+|relationship\s+axis|axis|house|lord|lagna|nakshatra|"
+    r"venus|mars|moon|sun|rahu|ketu|jupiter|saturn|mercury|dasha|transit|7th|12th|5th)\b"
+)
+
 SECRET_EFFECT_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"third[\s-]?person|parallel\s+attention|hidden\s+ties", re.I), "Hidden / parallel attention secrecy ko amplify kar sakta hai."),
-    (re.compile(r"12th.*5th|5th.*12th|hidden[\s-]?link", re.I), "12th-5th hidden-link theme secret attention ko support kar sakta hai."),
-    (re.compile(r"rahu.*7th|nodes?\s+on\s+7th", re.I), "Rahu / nodes on 7th secrecy + blur boundaries la sakte hain."),
-    (re.compile(r"venus.*dusthana|venus\s+in\s+12", re.I), "Venus in hidden-house tone secret romance signals ko colour karta hai."),
+    (re.compile(r"kisi\s+aur|someone\s+else|interested|flirt|dusre", re.I), "Partner ka attention kisi aur direction me shift hone ke signals hain."),
+    (re.compile(r"\bd1\b|relationship\s+axis|d9\b", re.I), "Rishte ki foundation me friction ya tension ke signals hain."),
+    (re.compile(r"12th.*5th|5th.*12th|hidden[\s-]?link", re.I), "Hidden-link pattern secret attention ko support kar sakta hai."),
+    (re.compile(r"rahu.*7th|nodes?\s+on\s+7th|moon.*7|7th.*moon", re.I), "Emotional bond me secrecy ya blurred boundaries ke signals hain."),
+    (re.compile(r"venus.*dusthana|venus\s+in\s+12|venus.*hidden", re.I), "Hidden-romance tone secret attention signals ko colour karta hai."),
     (re.compile(r"\bdasha\b|\btransit\b", re.I), "Current timing phase secrecy signals ko colour karti hai."),
+    (re.compile(r"secrecy|secret|hidden|chupke|parallel", re.I), "Secrecy ya parallel-attention ke signals chart me active hain."),
 ]
 
 
@@ -158,6 +166,8 @@ def secret_evidence_to_effect(raw: str) -> str:
         if rx.search(s):
             return effect
     cleaned = re.sub(r"\s{2,}", " ", s)
+    if _CHART_JARGON_RX.search(cleaned):
+        return "Chart me secrecy ya attention-split ke signals active hain."
     return cleaned[:120].rstrip(".") + "." if len(cleaned) > 12 else "Chart me secrecy-related factor active hai."
 
 

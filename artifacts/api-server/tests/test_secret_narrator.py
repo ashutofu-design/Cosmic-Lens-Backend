@@ -9,7 +9,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_intent_fidelity import infer_secret_angle
-from ask_mr.secret_templates import OPENING_TEMPLATES, detect_secret_answer_focus, get_opening
+from ask_mr.secret_templates import OPENING_TEMPLATES, detect_secret_answer_focus, effects_from_evidence, get_opening
 from ask_mr.secret_narrator import (
     engine_result_to_secret_json,
     render_secret_template_answer,
@@ -89,6 +89,13 @@ class SecretNarratorTests(unittest.TestCase):
         parsed = json.loads(payload.split("ENGINE_JSON:", 1)[1].split("ANSWER_FOCUS:", 1)[0].strip())
         self.assertNotIn("ascendant", json.dumps(parsed).lower())
 
+    def test_render_no_chart_jargon(self):
+        data = engine_result_to_secret_json(self.result, question=SECRET_Q)
+        data["weakest"] = ["D1 relationship axis shows friction"]
+        data["weakest_effects"] = effects_from_evidence(data["weakest"], limit=2)
+        text = render_secret_template_answer(data, SECRET_Q)
+        self.assertNotRegex(text, r"(?i)\bd1\b|relationship\s+axis")
+
 
 class SecretGoldenTests(unittest.TestCase):
     def test_golden_angles(self):
@@ -99,6 +106,13 @@ class SecretGoldenTests(unittest.TestCase):
                 failures.append(f"{q!r}: expected {exp}, got {got}")
         self.assertEqual(failures, [], msg="\n".join(failures))
 
+    def test_d1_evidence_humanized(self):
+        from ask_mr.secret_templates import secret_evidence_to_effect
+
+        eff = secret_evidence_to_effect("D1 relationship axis shows friction")
+        self.assertNotIn("D1", eff)
+        self.assertNotIn("axis", eff.lower())
+
     def test_render_golden_batch(self):
         os.environ["ASK_MR_ENGINE_V2"] = "1"
         for q, _ in GOLDEN_QUESTIONS[:8]:
@@ -107,6 +121,7 @@ class SecretGoldenTests(unittest.TestCase):
             text = render_secret_template_answer(data, q)
             self.assertNotIn("Asli wajah seedhi hai", text)
             self.assertNotIn("Jo mukhya sanket", text)
+            self.assertNotRegex(text, r"(?i)\bd1\b|relationship\s+axis")
             self.assertRegex(text, r"(?i)confidence")
 
     def test_each_angle_has_levels(self):

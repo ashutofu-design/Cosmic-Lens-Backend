@@ -1099,6 +1099,14 @@ def narrate_mr_engine_llm(
                 else:
                     ok, issues = validate_secret_narrator_output(polished or "", narrator_json)
                 if not ok:
+                    from ask_mr.engine_presenter import presenter_has_only_soft_issues
+
+                    if use_presenter and polished and presenter_has_only_soft_issues(issues):
+                        print(
+                            f"[engine_narrate] secret presenter soft-fail accepted {issues}",
+                            flush=True,
+                        )
+                        return polished
                     print(
                         f"[engine_narrate] secret validation failed {issues} — using locked template",
                         flush=True,

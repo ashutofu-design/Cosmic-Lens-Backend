@@ -19,6 +19,8 @@ _ASTRO_JARGON_RX = re.compile(
     r"|\bkarak\b"
     r"|\blagna\b"
     r"|\bkundli\b"
+    r"|\bd[19]\b"
+    r"|\brelationship\s+axis\b"
 )
 
 _ENGINE_USE_LLM_ENV: dict[str, str] = {
@@ -68,6 +70,27 @@ _PRESENTER_SOFT_ISSUES = frozenset({
     "missing_focus_section",
     "confidence_line",
 })
+
+_PRESENTER_HARD_ISSUES = frozenset({
+    "empty",
+    "cosmo_markdown_banned",
+    "banned_phrase",
+    "contradiction_high_secrecy",
+    "contradiction_low_secrecy",
+    "chart_jargon_leak",
+})
+
+
+def presenter_has_only_soft_issues(issues: list[str]) -> bool:
+    """True when validation failed only on format/label rules, not fact lock."""
+    if not issues:
+        return False
+    for issue in issues:
+        if issue in _PRESENTER_HARD_ISSUES:
+            return False
+        if issue.startswith("astro_jargon:"):
+            return False
+    return True
 
 
 def _engine_presenter_env_key(engine: str) -> str:
@@ -127,6 +150,17 @@ def _commitment_presenter_fields(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _generic_presenter_fields(engine: str, data: dict[str, Any]) -> dict[str, Any]:
+    from ask_mr.secret_templates import effects_from_evidence
+
+    strongest_raw = list(data.get("strongest_effects") or data.get("strongest") or [])
+    weakest_raw = list(data.get("weakest_effects") or data.get("weakest") or [])
+    if (engine or "").strip().lower() == "secret_relationship":
+        strongest_fx = effects_from_evidence(strongest_raw, limit=3)
+        weakest_fx = effects_from_evidence(weakest_raw, limit=3)
+    else:
+        strongest_fx = strongest_raw
+        weakest_fx = weakest_raw
+
     fields: dict[str, Any] = {
         "engine": engine,
         "original_question": data.get("original_question", ""),
@@ -134,12 +168,8 @@ def _generic_presenter_fields(engine: str, data: dict[str, Any]) -> dict[str, An
         "final_verdict": data.get("final_verdict") or data.get("verdict", ""),
         "direct_answer": data.get("direct_answer", ""),
         "reason_summary": data.get("reason_summary", ""),
-        "strongest_effects": list(
-            data.get("strongest_effects") or data.get("strongest") or []
-        ),
-        "weakest_effects": list(
-            data.get("weakest_effects") or data.get("weakest") or []
-        ),
+        "strongest_effects": strongest_fx,
+        "weakest_effects": weakest_fx,
         "meaning_note": data.get("meaning_note", ""),
         "practical_guidance": data.get("practical_guidance", ""),
         "confidence": data.get("confidence"),
@@ -213,6 +243,20 @@ NOT allowed:
 """.strip()
 
 
+def _secret_section_skeleton() -> str:
+    return """
+STRUCTURE (secrecy / third-person interest — natural Hinglish, NO labels):
+P1 — User ke exact sawal ka seedha jawab: direct_answer se shuru karo; tone final_verdict se locked.
+P2 — Kyun: reason_summary + strongest_effects[] ko 1–2 flowing sentences me weave karo.
+P3 — Risk: weakest_effects[] + meaning_note + transparency_outlook — real-life language, no chart jargon.
+P4 — practical_guidance ek caring next step ke taur par.
+Final sentence: confidence_explanation from JSON — copy score + reason exactly.
+
+Write like a trusted friend explaining chart truth — NOT a stitched template.
+No "— lekin", no bullets, no D1/D9/house/planet/lord names. Same facts, warmer flow.
+""".strip()
+
+
 def _generic_section_skeleton(engine: str) -> str:
     return f"""
 STRUCTURE (human conversation for {engine} — plain paragraphs, NO robotic labels):
@@ -270,6 +314,8 @@ def build_engine_presenter_system_prompt(
     skeleton = (
         _COMMITMENT_SECTION_SKELETON
         if eng == "commitment"
+        else _secret_section_skeleton()
+        if eng == "secret_relationship"
         else _generic_section_skeleton(eng)
     )
 
@@ -355,9 +401,9 @@ def validate_presenter_output(
 
         engine_validators[eng] = validate_patchup_narrator_output
     elif eng == "secret_relationship":
-        from ask_mr.secret_narrator import validate_secret_narrator_output
+        from ask_mr.secret_narrator import validate_secret_presenter_output
 
-        engine_validators[eng] = validate_secret_narrator_output
+        engine_validators[eng] = validate_secret_presenter_output
 
     validator = engine_validators.get(eng)
     if validator:

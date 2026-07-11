@@ -98,13 +98,24 @@ def _plain_effect_clause(items: list[str], *, fallback: str, limit: int = 2) -> 
     return f"{effects[0]} Saath hi {effects[1]}"
 
 
+def _human_effect_sentence(effects: list[str], *, fallback: str) -> str:
+    cleaned = [str(x).strip() for x in effects if str(x).strip()]
+    if not cleaned:
+        return fallback
+    if len(cleaned) == 1:
+        return cleaned[0]
+    return f"{cleaned[0]} Saath hi {cleaned[1]}"
+
+
 def render_secret_human_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
     """Plain Hinglish paragraphs — same facts as template, no section labels."""
     verdict = str(data.get("final_verdict") or "Possible")
     level = str(data.get("secret_level") or data.get("secrecy_level") or verdict).strip().lower()
     angle = str(data.get("answer_focus") or data.get("secret_angle") or "general_secrecy")
-    strongest = list(data.get("strongest") or data.get("strongest_effects") or [])
-    weakest = list(data.get("weakest") or data.get("weakest_effects") or [])
+    strongest = list(data.get("strongest") or [])
+    weakest = list(data.get("weakest") or [])
+    strongest_fx = list(data.get("strongest_effects") or []) or effects_from_evidence(strongest, limit=2)
+    weakest_fx = list(data.get("weakest_effects") or []) or effects_from_evidence(weakest, limit=2)
     score = int(data.get("confidence") or 0)
     conf_label = str(data.get("confidence_label") or "Medium")
     scorecard = data.get("scorecard") if isinstance(data.get("scorecard"), dict) else {}
@@ -113,12 +124,12 @@ def render_secret_human_answer(data: dict[str, Any], question: str = "", *, lang
     reason = str(data.get("reason_summary") or "").strip() or _build_reason_summary(
         strongest, weakest, verdict
     )
-    support = _plain_effect_clause(
-        strongest,
+    support = _human_effect_sentence(
+        strongest_fx,
         fallback="Transparency ke supportive signs abhi limited hain.",
     )
-    challenge = _plain_effect_clause(
-        weakest,
+    challenge = _human_effect_sentence(
+        weakest_fx,
         fallback="Secrecy ya parallel-attention ke kuch signals active hain.",
     )
     meaning = str(data.get("meaning_note") or "").strip() or get_meaning(angle, level)
@@ -128,12 +139,14 @@ def render_secret_human_answer(data: dict[str, Any], question: str = "", *, lang
         score, conf_label, strongest, weakest, scorecard, topic="secrecy"
     )
 
-    body = (
-        f"{reason} {support} — lekin {challenge.lower()} "
-        f"{meaning} {transparency} {focus}"
-    )
-    body = re.sub(r"\s{2,}", " ", body).strip()
-    return "\n\n".join([opening, body, confidence])
+    why_para = reason
+    if support and "limited" not in support.lower():
+        why_para = f"{reason} {support}"
+    caution_para = " ".join(
+        part for part in (challenge, meaning, transparency, focus) if part
+    ).strip()
+    parts = [opening, why_para, caution_para, confidence]
+    return "\n\n".join(re.sub(r"\s{2,}", " ", p).strip() for p in parts if p)
 
 
 def render_secret_labeled_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
@@ -245,8 +258,8 @@ def engine_result_to_secret_json(
         "practical_guidance": get_practical(angle, level),
         "strongest": strongest[:3],
         "weakest": weakest[:3],
-        "strongest_effects": strongest[:3],
-        "weakest_effects": weakest[:3],
+        "strongest_effects": effects_from_evidence(strongest[:3], limit=3),
+        "weakest_effects": effects_from_evidence(weakest[:3], limit=3),
         "strongest_rule_ids": strongest_rids[:3],
         "weakest_rule_ids": weakest_rids[:3],
         "confidence": score,

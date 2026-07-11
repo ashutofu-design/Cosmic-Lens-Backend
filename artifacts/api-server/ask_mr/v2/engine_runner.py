@@ -119,6 +119,12 @@ def _default_checks(
             "karmic_marriage_level": level,
             "karm_level": level,
         })
+    elif eid == "relationship_future":
+        checks.update({
+            "future_level": level,
+            "relationship_future_level": level,
+            "rfut_level": level,
+        })
     elif eid == "communication":
         checks["communication_level"] = level
     elif eid == "emotional_attachment":

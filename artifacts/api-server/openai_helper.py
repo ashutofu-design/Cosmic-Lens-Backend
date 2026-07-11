@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Relationship future engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "relationship_future"
+        and os.environ.get("ASK_RELATIONSHIP_FUTURE_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.relationship_future_narrator import (
+            engine_result_to_relationship_future_json,
+            render_relationship_future_template_answer,
+        )
+
+        _rfut_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _rfut_dna = _llm_intent_admin.get("question_dna")
+        _rfut_json = engine_result_to_relationship_future_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_rfut_dna if isinstance(_rfut_dna, dict) else None,
+        )
+        _rfut_checks = dict(_mr_engine_result.checks or {})
+        _rfut_checks["narrator_input"] = _rfut_json
+        _rfut_checks["question"] = question or ""
+        _mr_engine_result.checks = _rfut_checks
+        _rfut_text = render_relationship_future_template_answer(_rfut_json, question or "", lang=eff_lang)
+        _out_rfut = {
+            "text": _rfut_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_rfut_json.get("confidence") or 48) / 100.0)),
+            "source": "relationship_future_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_rfut = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "relationship_future",
+            "skip_llm": True,
+            "narrator_input": _rfut_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_rfut,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_rfut,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="relationship_future_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── Karmic marriage engine — deterministic template narrator ──
     if (
         _is_mr_static

@@ -962,6 +962,80 @@ def karmic_marriage_angle_label(angle: str | None) -> str:
     return _KARMIC_MARRIAGE_ANGLE_LABELS.get(key, "Karmic marriage / spiritual bond")
 
 
+_RELATIONSHIP_FUTURE_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "personal_growth_impact",
+        re.compile(r"(?ix)\b(meri\s+growth|personal\s+growth|growth\s+ke\s+liye)\b"),
+    ),
+    (
+        "growth_outlook",
+        re.compile(r"(?ix)\b(grow|badheg\w*|strong|mazboot|deepen|closeness)\b"),
+    ),
+    ("weak_outlook", re.compile(r"(?ix)\b(weak|kamzor|khatam|end|kharab|decline)\b")),
+    ("relationship_mature", re.compile(r"(?ix)\b(mature|lasting|adult[\s-]*level)\b")),
+    (
+        "long_term_stability",
+        re.compile(r"(?ix)\b(long[\s-]*term|tik\s*pa|sustain|chalega|continue)\b"),
+    ),
+    (
+        "bond_direction",
+        re.compile(
+            r"(?ix)\b(aage\s+kya|direction|aage\s+kaise|rishta\s+aage\s+kaise|bond\s+direction)\b"
+        ),
+    ),
+    (
+        "sustain_outlook",
+        re.compile(r"(?ix)\b(survive|tik\s*payega)\b"),
+    ),
+    (
+        "general_future",
+        re.compile(
+            r"(?ix)\b(relationship\s+future|relationship\s+ka\s+future|hamare\s+relationship|"
+            r"rishta\s+ka\s+future|future\s+kaisa|future\s+of\s+relationship)\b"
+        ),
+    ),
+]
+
+_RELATIONSHIP_FUTURE_ANGLE_LABELS: dict[str, str] = {
+    "general_future": "General relationship future outlook",
+    "growth_outlook": "Growth / strengthen outlook",
+    "weak_outlook": "Weakness / decline risk outlook",
+    "long_term_stability": "Long-term stability / sustain",
+    "bond_direction": "Bond direction / aage kya",
+    "relationship_mature": "Maturity / deepening theme",
+    "personal_growth_impact": "Personal growth impact of relationship",
+    "sustain_outlook": "Sustain / continue outlook",
+}
+
+_TIMING_TRIGGER_RX = re.compile(r"(?ix)\b(kab|when|timing|kab\s+tak|date|month|year|kitne\s+saal)\b")
+
+
+def infer_relationship_future_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if _TIMING_TRIGGER_RX.search(q) and not re.search(
+        r"(?ix)\b(future|aage|grow|long[\s-]*term|outlook|chalega|weak|sustain|mature|rishta)\b",
+        q,
+    ):
+        return None
+    if not re.search(
+        r"(?ix)\b(relationship|rishta|bond|future|aage|grow|long[\s-]*term|chalega|weak|"
+        r"sustain|outlook|mature|direction|badheg|closeness)\b",
+        q,
+    ):
+        return None
+    for name, rx in _RELATIONSHIP_FUTURE_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_future"
+
+
+def relationship_future_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _RELATIONSHIP_FUTURE_ANGLE_LABELS.get(key, "Relationship future outlook")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

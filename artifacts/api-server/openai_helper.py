@@ -6983,6 +6983,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _resolver_flags,
                     _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                     _engine_route,
+                    question=question or "",
                 )
                 if _gk_force_note:
                     _is_education_static = _resolver_flags["education"]
@@ -7006,6 +7007,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                     engine_route=_engine_route,
                     flags=_resolver_flags,
+                    question=question or "",
                 )
                 if not _gk_route.ok and isinstance(_llm_intent_admin, dict):
                     _llm_intent_admin["gatekeeper_routing"] = _gk_route.to_dict()
@@ -9153,6 +9155,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                 slice_meta=dcr_love_meta,
                 chart_text=chart_text or "",
+                question=question or "",
             )
             if not _gk_pre.ok:
                 _recovered = try_recover_engine_from_dna(
@@ -9170,6 +9173,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                         slice_meta=dcr_love_meta,
                         chart_text=chart_text or "",
+                        question=question or "",
                     )
                     print(
                         "[raw_passthrough] EXECUTION_GATEKEEPER recovered DNA engine "
@@ -11611,6 +11615,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     slice_meta=dcr_love_meta,
                     narrator_json=_nj_final,
                     admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    question=question or "",
                 )
                 if not _gk_final.ok:
                     if isinstance(_llm_intent_admin, dict):

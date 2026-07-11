@@ -118,7 +118,40 @@ def _primary_item(admin: dict[str, Any] | None) -> dict[str, Any]:
     return {}
 
 
-def dna_expectation(admin: dict[str, Any] | None) -> DnaExpectation:
+def _legacy_engine_facts_block(chart_text: str) -> bool:
+    ct = chart_text or ""
+    return "VERDICT:" in ct and "ARCHETYPE:" in ct
+
+
+def _question_health_archetype(question: str) -> str | None:
+    try:
+        from ask_health.health_registry import (
+            classify_health_archetype,
+            is_health_static_question,
+        )
+
+        q = (question or "").strip()
+        if not q or not is_health_static_question(q):
+            return None
+        return classify_health_archetype(q)
+    except Exception:
+        return None
+
+
+def _question_health_expectation(question: str) -> DnaExpectation | None:
+    arch = _question_health_archetype(question)
+    if not arch:
+        return None
+    return DnaExpectation(
+        trusted=True,
+        domain="health",
+        archetype=arch,
+        bucket=arch,
+        source="question_regex",
+    )
+
+
+def dna_expectation(admin: dict[str, Any] | None, *, question: str = "") -> DnaExpectation:
     if not isinstance(admin, dict):
         return DnaExpectation(False, "", "", "")
     item = _primary_item(admin)
@@ -159,24 +192,32 @@ def dna_expectation(admin: dict[str, Any] | None) -> DnaExpectation:
         archetype = bucket
     if not trusted and admin.get("dna_routing_applied") and (archetype or bucket):
         trusted = True
-    return DnaExpectation(
+    exp = DnaExpectation(
         trusted=trusted,
         domain=domain,
         archetype=archetype,
         bucket=bucket,
         source=str((admin.get("question_dna") or {}).get("source") or ""),
     )
+    if exp.trusted and exp.engine_key:
+        return exp
+    qexp = _question_health_expectation(question)
+    if qexp:
+        return qexp
+    return exp
 
 
 def enforce_dna_routing_flags(
     flags: dict[str, bool],
     admin: dict[str, Any] | None,
     route: Any | None = None,
+    *,
+    question: str = "",
 ) -> tuple[dict[str, bool], str | None]:
     """When trusted DNA domain disagrees with resolver winner, force primary engine."""
     if not gatekeeper_enabled():
         return flags, None
-    exp = dna_expectation(admin)
+    exp = dna_expectation(admin, question=question)
     if not exp.trusted or not exp.engine_key:
         return flags, None
     primary = exp.engine_key
@@ -254,10 +295,11 @@ def check_routing_gate(
     *,
     engine_route: Any | None = None,
     flags: dict[str, bool] | None = None,
+    question: str = "",
 ) -> GatekeeperResult:
     if not gatekeeper_enabled():
         return GatekeeperResult(True, "routing", "disabled", "gate_off")
-    exp = dna_expectation(admin)
+    exp = dna_expectation(admin, question=question)
     if not exp.trusted or not exp.engine_key:
         return GatekeeperResult(True, "routing", "dna_not_trusted", "skip")
     winner = None
@@ -295,11 +337,12 @@ def check_engine_output_gate(
     admin: dict[str, Any] | None,
     *,
     slice_meta: dict[str, Any] | None,
+    question: str = "",
 ) -> GatekeeperResult:
     if not gatekeeper_enabled():
         return GatekeeperResult(True, "engine", "disabled", "gate_off")
     meta = slice_meta if isinstance(slice_meta, dict) else {}
-    exp = dna_expectation(admin)
+    exp = dna_expectation(admin, question=question)
     executed = str(meta.get("archetype") or "").strip().lower()
     slice_id = str(meta.get("slice") or "").strip()
     failed: list[str] = []
@@ -419,6 +462,7 @@ def check_final_answer_gate(
     slice_meta: dict[str, Any] | None,
     narrator_json: dict[str, Any] | None = None,
     admin: dict[str, Any] | None = None,
+    question: str = "",
 ) -> GatekeeperResult:
     if not gatekeeper_enabled():
         return GatekeeperResult(True, "final", "disabled", "gate_off")
@@ -433,7 +477,7 @@ def check_final_answer_gate(
     meta = slice_meta if isinstance(slice_meta, dict) else {}
     nj = narrator_json or _narrator_json(meta)
     engine_verdict = str(meta.get("verdict") or "").strip()
-    exp = dna_expectation(admin)
+    exp = dna_expectation(admin, question=question)
 
     # Rule 5 — banned hedging / obvious hallucination tone
     if _HALLUCINATION_RX.search(text):
@@ -461,20 +505,20 @@ def check_final_answer_gate(
             rule="rule_7_health_leak_in_career_answer",
         )
 
-    # Rule 8 — verdict alignment
+    # Rule 8 — verdict alignment (soft: skip when answer is gatekeeper block text)
+    if "execution_gatekeeper" in str(meta.get("source") or ""):
+        return GatekeeperResult(True, "final", "ok", "blocked_message_ok")
     ref_verdict = str(
         (nj or {}).get("final_verdict")
         or (nj or {}).get("direct_answer")
         or engine_verdict
         or ""
     ).strip()
-    if ref_verdict and len(ref_verdict) > 12:
-        # Use first meaningful chunk for fuzzy match
-        chunk = ref_verdict[:48].lower()
+    if ref_verdict and len(ref_verdict) > 12 and sl_dom == "health":
+        chunk = ref_verdict[:32].lower()
         if chunk and chunk not in text.lower():
-            # Allow partial — first 4 words
-            words = [w for w in re.split(r"\s+", chunk) if len(w) > 2][:4]
-            if words and not any(w in text.lower() for w in words[:2]):
+            words = [w for w in re.split(r"\s+", chunk) if len(w) > 3][:2]
+            if words and not any(w in text.lower() for w in words):
                 return GatekeeperResult(
                     ok=False,
                     stage="final",
@@ -552,8 +596,9 @@ def run_post_engine_gate(
     *,
     slice_meta: dict[str, Any] | None,
     chart_text: str = "",
+    question: str = "",
 ) -> GatekeeperResult:
-    eng = check_engine_output_gate(admin, slice_meta=slice_meta)
+    eng = check_engine_output_gate(admin, slice_meta=slice_meta, question=question)
     if not eng.ok:
         return eng
     meta = slice_meta if isinstance(slice_meta, dict) else {}
@@ -562,9 +607,19 @@ def run_post_engine_gate(
     if skip_llm or template:
         return GatekeeperResult(True, "engine", "ok", "post_engine_template_ok")
     nj = _narrator_json(meta) or extract_narrator_json_from_chart_text(chart_text)
-    nar = check_narrator_json_gate(nj)
-    if not nar.ok:
-        return nar
+    if nj:
+        nar = check_narrator_json_gate(nj)
+        if not nar.ok:
+            return nar
+    elif _legacy_engine_facts_block(chart_text) and _evidence_count(meta) > 0:
+        return GatekeeperResult(True, "engine", "ok", "legacy_engine_facts_ok")
+    else:
+        return GatekeeperResult(
+            ok=False,
+            stage="engine",
+            reason="missing_narrator_json",
+            rule="rule_3_narrator_json_missing",
+        )
     return GatekeeperResult(True, "engine", "ok", "post_engine_ok")
 
 
@@ -576,10 +631,22 @@ def try_recover_engine_from_dna(
     wants_explain: bool = False,
 ) -> tuple[dict[str, Any], str] | None:
     """One-shot recovery: re-run the DNA-locked engine when wrong engine executed."""
-    exp = dna_expectation(admin)
-    if not exp.trusted or not exp.engine_key:
-        return None
     q = (question or "").strip()
+    exp = dna_expectation(admin, question=q)
+    if not exp.engine_key:
+        qexp = _question_health_expectation(q)
+        if qexp:
+            exp = qexp
+    if not exp.archetype and exp.engine_key == "health":
+        exp = DnaExpectation(
+            trusted=True,
+            domain="health",
+            archetype=_question_health_archetype(q) or "general_health",
+            bucket=_question_health_archetype(q) or "general_health",
+            source="question_regex",
+        )
+    if not exp.engine_key:
+        return None
     if exp.engine_key == "health" and exp.archetype:
         try:
             from ask_health import run_health_static_engine

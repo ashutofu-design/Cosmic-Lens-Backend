@@ -173,7 +173,7 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.4.0";
+export const OBS_DEBUGGER_VERSION = "2.4.1";
 
 const DNA_DOMAIN_LABEL: Record<string, string> = {
   love: "Relationship",
@@ -432,6 +432,19 @@ function buildFinalTrace(
   ];
 }
 
+function resolveDnaPipeline(
+  obs: AskObservability,
+  ctx: AskLlmContext | null,
+  row: AskQuestionItem,
+): ObservabilityPipelineStep[] {
+  const server = obs.question_dna_pipeline;
+  const bucket = server?.find((s) => s.label === "Bucket")?.value?.trim() || "";
+  if (server?.length && bucket && bucket !== "—") {
+    return server;
+  }
+  return buildFullDnaPipeline(ctx, row);
+}
+
 function enrichObservability(
   obs: AskObservability,
   ctx: AskLlmContext | null,
@@ -608,7 +621,7 @@ function enrichObservability(
 
   const enriched: AskObservability = {
     ...obs,
-    question_dna_pipeline: buildFullDnaPipeline(ctx, row),
+    question_dna_pipeline: resolveDnaPipeline(obs, ctx, row),
     routing_warning: routingWarning,
     routing_decision: {
       ...(obs.routing_decision || {}),

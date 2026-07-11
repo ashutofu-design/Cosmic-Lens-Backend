@@ -1278,8 +1278,15 @@ def attach_observability_to_context(
     row_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     out = dict(ctx)
+    prepared = _prepare_ctx_for_observability(out, question_text)
+    if prepared.get("question_dna"):
+        out["question_dna"] = prepared["question_dna"]
+    if isinstance(prepared.get("llm_intent"), dict):
+        out["llm_intent"] = prepared["llm_intent"]
+    if prepared.get("question_normalized"):
+        out["question_normalized"] = prepared["question_normalized"]
     out["observability"] = build_observability_debug(
-        out,
+        prepared,
         question_text=question_text,
         answer_text=answer_text,
         row_meta=row_meta,

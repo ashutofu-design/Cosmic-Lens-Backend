@@ -1,7 +1,7 @@
 """Tests for admin observability debugger bundle."""
 import unittest
 
-from ask_observability_debug import build_observability_debug
+from ask_observability_debug import attach_observability_to_context, build_observability_debug
 
 
 class TestAskObservabilityDebug(unittest.TestCase):
@@ -85,6 +85,29 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertEqual(pipeline["Bucket Match"], "HIGH (97%)")
         self.assertEqual(pipeline["Timing Required"], "no")
         self.assertEqual(pipeline["Time Context"], "present")
+
+    def test_attach_observability_preserves_question_dna_on_ctx(self):
+        q = "Kya mera partner kisi aur me interested hai?"
+        dna_item = {
+            "normalized_question": q,
+            "domain": "love",
+            "bucket": "third_person_infidelity",
+            "engine_archetype": "secret_relationship",
+            "confidence": 0.97,
+        }
+        ctx = {
+            "question": q,
+            "question_dna": {"questions": [dna_item], "source": "llm"},
+            "slice_meta": {"archetype": "secret_relationship"},
+        }
+        out = attach_observability_to_context(ctx, question_text=q, answer_text="test")
+        self.assertIsInstance(out.get("question_dna"), dict)
+        self.assertEqual(
+            out["question_dna"]["questions"][0]["bucket"],
+            "third_person_infidelity",
+        )
+        pipeline = {s["label"]: s["value"] for s in out["observability"]["question_dna_pipeline"]}
+        self.assertIn("third_person_infidelity", pipeline["Bucket"])
 
 
 if __name__ == "__main__":

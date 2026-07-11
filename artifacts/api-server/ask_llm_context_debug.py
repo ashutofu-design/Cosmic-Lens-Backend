@@ -3522,6 +3522,16 @@ def refresh_stored_llm_context_understanding(ctx: dict[str, Any]) -> dict[str, A
     ).strip()
     intent = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
     preserved_dna = ctx.get("question_dna") or intent.get("question_dna")
+    if not preserved_dna:
+        try:
+            from ask_question_dna import extract_question_dna, question_dna_enabled
+
+            if question_dna_enabled():
+                backfill = extract_question_dna(q, client=None)
+                if isinstance(backfill, dict) and backfill.get("questions"):
+                    preserved_dna = backfill
+        except Exception:
+            pass
     if not q and isinstance(intent, dict):
         q = str(intent.get("question_normalized") or intent.get("question_echo") or "").strip()
     if not q:

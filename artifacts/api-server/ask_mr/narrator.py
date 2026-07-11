@@ -8,6 +8,22 @@ from ask_cosmo_narrator import build_cosmo_ask_length_block
 from .types import EngineResult
 from ask_career.job_registry import JOB_ENGINE_ARCHETYPES
 
+
+def _is_health_narrator_arch(archetype: str) -> bool:
+    try:
+        from ask_health.health_narrator import is_health_narratable_archetype
+
+        return is_health_narratable_archetype(archetype)
+    except Exception:
+        return (archetype or "").strip().lower() in {
+            "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
+            "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
+            "addiction_support", "reproductive_support", "general_health",
+            "digestive_health", "heart_blood_pressure", "cardio_health", "nervous_health",
+            "musculoskeletal_health", "skin_health", "endocrine_health", "respiratory_health",
+            "immune_health",
+        }
+
 _MR_CONFIDENT_TONE = """
 TONE — confident chart reading (engine already decided; do NOT sound doubtful):
 • State patterns directly: hai / hote hain / rehta hai / rehti hai / hota hai / hoti hai / dikhta hai.
@@ -109,18 +125,10 @@ def _archetype_extra_rules(
             "Stay on TOPIC_LOCK — no invented placements, dates, or unrelated drift. "
             "Native-self focus when they asked about themselves."
         )
-    elif arch in (
-        "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
-        "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
-        "addiction_support", "reproductive_support", "general_health",
-        "digestive_health", "cardio_health", "nervous_health", "musculoskeletal_health",
-        "skin_health", "endocrine_health", "respiratory_health", "immune_health",
-    ):
-        rules.append(
-            "Health Q — warm friend tone. NO disease names, death, illness dates, or cure guarantees. "
-            "Say: kamzor lagta hai, stress rehta hai, doctor/counselling when needed. "
-            "No jargon: vulnerability zones, vitality score, screening."
-        )
+    elif _is_health_narrator_arch(arch):
+        from ask_health.health_narrator import HEALTH_NARRATOR_RULES
+
+        rules.append(HEALTH_NARRATOR_RULES)
     elif arch in (
         "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
         "spending_personality", "financial_discipline", "investment_risk",
@@ -179,13 +187,7 @@ def build_mr_engine_narrator_system_prompt(
         if arch == "commitment"
         else (
         "health"
-        if arch in (
-            "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
-            "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
-            "addiction_support", "reproductive_support", "general_health",
-            "digestive_health", "cardio_health", "nervous_health", "musculoskeletal_health",
-            "skin_health", "endocrine_health", "respiratory_health", "immune_health",
-        )
+        if _is_health_narrator_arch(arch)
         else (
             "finance"
             if arch in (
@@ -224,6 +226,14 @@ def build_mr_engine_narrator_system_prompt(
         from ask_mr.commitment_narrator import build_commitment_narrator_length_block
 
         length_block = build_commitment_narrator_length_block(
+            wants_explain=wants_explain,
+            concise=concise,
+            extra_rules=extras,
+        )
+    elif _is_health_narrator_arch(arch):
+        from ask_health.health_narrator import build_health_narrator_length_block
+
+        length_block = build_health_narrator_length_block(
             wants_explain=wants_explain,
             concise=concise,
             extra_rules=extras,

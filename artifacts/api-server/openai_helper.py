@@ -7898,7 +7898,22 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         flush=True,
                     )
                 if _is_health_static:
-                    chart_text = _health_engine_result.to_narrator_payload()
+                    from ask_health.health_narrator import (
+                        engine_result_to_health_json,
+                        health_narrator_payload,
+                    )
+
+                    chart_text = health_narrator_payload(
+                        _health_engine_result,
+                        question=question or "",
+                        wants_explain=wants_explain,
+                    )
+                    _ni_checks = dict(_health_engine_result.checks or {})
+                    _ni_checks["narrator_input"] = engine_result_to_health_json(
+                        _health_engine_result,
+                        question=question or "",
+                    )
+                    _health_engine_result.checks = _ni_checks
                     _chart_slice_type = "health_engine_v1"
                     print(
                         f"[raw_passthrough] HEALTH_ENGINE "
@@ -8350,13 +8365,28 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     flush=True,
                 )
 
+            from ask_health.health_narrator import (
+                engine_result_to_health_json,
+                health_narrator_payload,
+            )
+
             _health_engine_result = run_health_static_engine(
                 kundli if isinstance(kundli, dict) else {},
                 question or "",
                 wants_explain=wants_explain,
                 archetype=_resolved_health_arch_rec,
             )
-            chart_text = _health_engine_result.to_narrator_payload()
+            chart_text = health_narrator_payload(
+                _health_engine_result,
+                question=question or "",
+                wants_explain=wants_explain,
+            )
+            _ni_checks = dict(_health_engine_result.checks or {})
+            _ni_checks["narrator_input"] = engine_result_to_health_json(
+                _health_engine_result,
+                question=question or "",
+            )
+            _health_engine_result.checks = _ni_checks
             dcr_love_meta = {
                 "slice": "health_engine_v1",
                 "topic": "health",

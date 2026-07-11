@@ -463,6 +463,62 @@ def partner_nature_angle_label(angle: str | None) -> str:
     return _PARTNER_NATURE_ANGLE_LABELS.get(key, "Partner nature / personality")
 
 
+_COMMUNICATION_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("conflict_resolution", re.compile(r"(?ix)\b(resolve|suljhana|repair\s+after|ladai\s+ke\s+baad|fight\s+ke\s+baad|conflict\s+resolve)\b")),
+    ("silence", re.compile(r"(?ix)\b(silent|silence|khamoshi|baat\s*nahi|not\s*talking|ignore|sunta\s*nahi)\b")),
+    ("misunderstanding", re.compile(r"(?ix)\b(misunderstand\w*|galatfehmi|samajh\s*nahi|wrong\s+read)\b")),
+    ("arguments", re.compile(r"(?ix)\b(argument|jhagda|ladai|fight|conflict)\b")),
+    ("listening", re.compile(r"(?ix)\b(sunta|sunte|listening|listen|heard)\b")),
+    ("express_feelings", re.compile(r"(?ix)\b(express|share\s+feelings|feelings\s+bol|khul\s+kar|emotional\s+talk)\b")),
+    ("texting_style", re.compile(r"(?ix)\b(texting|whatsapp|message|text\s+style|chat\s+style)\b")),
+    ("understanding_partner", re.compile(r"(?ix)\b(samajh\s*payeg\w*|samjheg\w*|understand\s+me|mujhe\s+samjhe)\b")),
+    ("communication_gap", re.compile(r"(?ix)\b(communication\s+(problem|gap|issue)|baat\s*cheet\s+problem|talk\s+gap)\b")),
+    ("honest_talk", re.compile(r"(?ix)\b(honest|seedhi\s+baat|frank|sach\s+bol)\b")),
+    ("avoid_talk", re.compile(r"(?ix)\b(avoid|dodge|baat\s+se\s+bacht\w*|discuss\s+nahi)\b")),
+    ("tone_style", re.compile(r"(?ix)\b(tone|harsh|soft\s+spoken|bolne\s+ka\s+andaz)\b")),
+    ("general_communication", re.compile(r"(?ix)\b(communication|baat\s*cheet|talk|discuss|bolna)\b")),
+]
+
+_COMMUNICATION_ANGLE_LABELS: dict[str, str] = {
+    "general_communication": "General relationship communication",
+    "silence": "Silence / khamoshi / not talking",
+    "misunderstanding": "Misunderstanding / galatfehmi",
+    "arguments": "Arguments / jhagda / conflict talk",
+    "listening": "Listening / sunna",
+    "express_feelings": "Feelings express karna",
+    "texting_style": "Texting / message style",
+    "conflict_resolution": "Conflict resolve / repair after fight",
+    "understanding_partner": "Partner samajh payega / felt understood",
+    "communication_gap": "Communication gap / problem",
+    "honest_talk": "Honest / seedhi baat",
+    "avoid_talk": "Talk avoid / dodge",
+    "tone_style": "Tone / bolne ka andaz",
+}
+
+
+def infer_communication_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(communication|baat\s*cheet|baat|samajh\s*payeg\w*|samjheg\w*|misunderstand\w*|"
+        r"silent|silence|khamoshi|baat\s*nahi|argument|jhagda|ladai|sunta|sunte|listen|"
+        r"talk|discuss|bolna|message|text|whatsapp|texting|tone|honest|express|feelings|"
+        r"galatfehmi|conflict|resolve|bacht|avoid|dodge|gap|problem|seedhi|frank|harsh)\b",
+        q,
+    ):
+        return None
+    for name, rx in _COMMUNICATION_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_communication"
+
+
+def communication_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _COMMUNICATION_ANGLE_LABELS.get(key, "Communication / baat cheet")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

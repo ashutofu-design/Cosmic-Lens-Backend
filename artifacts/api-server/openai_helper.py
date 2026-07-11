@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Communication engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "communication"
+        and os.environ.get("ASK_COMMUNICATION_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.communication_narrator import (
+            engine_result_to_communication_json,
+            render_communication_template_answer,
+        )
+
+        _comm_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _comm_dna = _llm_intent_admin.get("question_dna")
+        _comm_json = engine_result_to_communication_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_comm_dna if isinstance(_comm_dna, dict) else None,
+        )
+        _comm_checks = dict(_mr_engine_result.checks or {})
+        _comm_checks["narrator_input"] = _comm_json
+        _comm_checks["question"] = question or ""
+        _mr_engine_result.checks = _comm_checks
+        _comm_text = render_communication_template_answer(_comm_json, question or "", lang=eff_lang)
+        _out_comm = {
+            "text": _comm_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_comm_json.get("confidence") or 48) / 100.0)),
+            "source": "communication_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_comm = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "communication",
+            "skip_llm": True,
+            "narrator_input": _comm_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_comm,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_comm,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="communication_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── Partner nature engine — deterministic template narrator ──
     if (
         _is_mr_static

@@ -57,6 +57,7 @@ def format_engine_rich_plain(
         concise = _concise_mode()
     from ask_intent_fidelity import (
         infer_breakup_angle,
+        infer_communication_angle,
         infer_compatibility_angle,
         infer_loyalty_angle,
         infer_partner_commitment_angle,
@@ -154,6 +155,17 @@ def format_engine_rich_plain(
 
             data = engine_result_to_partner_nature_json(result, question=q)
             big = render_partner_nature_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "communication" or infer_communication_angle(q):
+        try:
+            from ask_mr.communication_narrator import (
+                engine_result_to_communication_json,
+                render_communication_template_answer,
+            )
+
+            data = engine_result_to_communication_json(result, question=q)
+            big = render_communication_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
     else:
@@ -435,6 +447,25 @@ def narrate_mr_engine_llm(
             )
         else:
             return render_partner_nature_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "communication":
+        from ask_mr.communication_narrator import (
+            communication_engine_narrator_payload,
+            engine_result_to_communication_json,
+            render_communication_template_answer,
+            validate_communication_narrator_output,
+        )
+
+        narrator_json = engine_result_to_communication_json(engine_result, question=question or "")
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_COMMUNICATION_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = communication_engine_narrator_payload(
+                engine_result, wants_explain=wants_explain, question=question or ""
+            )
+        else:
+            return render_communication_template_answer(narrator_json, question or "", lang=eff_lang)
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -584,6 +615,18 @@ def narrate_mr_engine_llm(
                     from ask_mr.partner_nature_narrator import render_partner_nature_template_answer
 
                     return render_partner_nature_template_answer(
+                        narrator_json, question or "", lang=eff_lang
+                    )
+            if arch == "communication" and narrator_json:
+                ok, issues = validate_communication_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] communication validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.communication_narrator import render_communication_template_answer
+
+                    return render_communication_template_answer(
                         narrator_json, question or "", lang=eff_lang
                     )
             return polished or None

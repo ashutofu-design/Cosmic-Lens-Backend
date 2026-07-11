@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Relationship remedies engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "relationship_remedies"
+        and os.environ.get("ASK_RELATIONSHIP_REMEDIES_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.relationship_remedies_narrator import (
+            engine_result_to_relationship_remedies_json,
+            render_relationship_remedies_template_answer,
+        )
+
+        _rem_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _rem_dna = _llm_intent_admin.get("question_dna")
+        _rem_json = engine_result_to_relationship_remedies_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_rem_dna if isinstance(_rem_dna, dict) else None,
+        )
+        _rem_checks = dict(_mr_engine_result.checks or {})
+        _rem_checks["narrator_input"] = _rem_json
+        _rem_checks["question"] = question or ""
+        _mr_engine_result.checks = _rem_checks
+        _rem_text = render_relationship_remedies_template_answer(_rem_json, question or "", lang=eff_lang)
+        _out_rem = {
+            "text": _rem_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_rem_json.get("confidence") or 48) / 100.0)),
+            "source": "relationship_remedies_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_rem = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "relationship_remedies",
+            "skip_llm": True,
+            "narrator_input": _rem_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_rem,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_rem,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="relationship_remedies_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── Relationship verification engine — deterministic template narrator ──
     if (
         _is_mr_static

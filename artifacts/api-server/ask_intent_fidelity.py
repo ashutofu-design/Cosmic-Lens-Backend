@@ -1225,6 +1225,82 @@ def relationship_verification_angle_label(angle: str | None) -> str:
     return _RELATIONSHIP_VERIFICATION_ANGLE_LABELS.get(key, "Relationship verification")
 
 
+_RELATIONSHIP_REMEDIES_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "gemstone_query",
+        re.compile(r"(?ix)\b(gemstone|gem\s*stone|ratna|pukhraj|neelam|ruby|emerald)\b"),
+    ),
+    (
+        "puja_totka",
+        re.compile(r"(?ix)\b(puja|pooja|totka|parikrama|path|aarti)\b"),
+    ),
+    (
+        "mantra_upay",
+        re.compile(r"(?ix)\b(mantra|jap|jaap|108|chant)\b"),
+    ),
+    (
+        "daan_seva",
+        re.compile(r"(?ix)\b(daan|daanam|seva|charity|donation)\b"),
+    ),
+    (
+        "friction_fix",
+        re.compile(
+            r"(?ix)\b(jhagda|jhagad|fight|problem|tension|ruko|rukne|bachane|repair|solve|door\s+kar)"
+        ),
+    ),
+    (
+        "marriage_remedy",
+        re.compile(r"(?ix)\b(shaadi|shadi|marriage|vivah|wedding|delay)\b"),
+    ),
+    (
+        "love_harmony",
+        re.compile(r"(?ix)\b(pyar|pyaar|love|harmony|rishta\s+strong|bond\s+strong|closeness)\b"),
+    ),
+]
+
+_RELATIONSHIP_REMEDIES_ANGLE_LABELS: dict[str, str] = {
+    "general_remedy": "General relationship remedy",
+    "mantra_upay": "Mantra / jap upay",
+    "puja_totka": "Puja / totka remedy",
+    "love_harmony": "Love / harmony remedy",
+    "marriage_remedy": "Marriage / shaadi remedy",
+    "friction_fix": "Friction / problem-fix remedy",
+    "gemstone_query": "Gemstone / ratna query",
+    "daan_seva": "Daan / seva remedy",
+}
+
+
+def infer_relationship_remedies_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if re.search(
+        r"(?ix)\b(career|job|money|health|business|property)\b",
+        q,
+    ) and not re.search(r"(?ix)\b(love|relationship|rishta|marriage|partner|pyar|shaadi)\b", q):
+        return None
+    if not re.search(
+        r"(?ix)\b("
+        r"upay|upaay|remedy|remedies|mantra|totka|puja|pooja|daan|seva|"
+        r"pyar|pyaar|love|rishta|relationship|marriage|shaadi|vivah|harmony|"
+        r"gemstone|ratna|pukhraj|neelam|jap|jaap|parikrama"
+        r")\b",
+        q,
+    ):
+        return None
+    for name, rx in _RELATIONSHIP_REMEDIES_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    if re.search(r"(?ix)\b(upay|remedy|remedies)\b", q):
+        return "general_remedy"
+    return None
+
+
+def relationship_remedies_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _RELATIONSHIP_REMEDIES_ANGLE_LABELS.get(key, "Relationship remedy")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

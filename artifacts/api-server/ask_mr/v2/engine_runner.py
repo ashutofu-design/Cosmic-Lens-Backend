@@ -145,7 +145,12 @@ def _default_checks(
             "emotional_attachment_level": level,
         })
     elif eid == "relationship_remedies":
-        checks["remedy_scope"] = level
+        checks.update({
+            "remedy_level": level,
+            "relationship_remedies_level": level,
+            "rem_level": level,
+            "remedy_scope": level,
+        })
     return checks
 
 

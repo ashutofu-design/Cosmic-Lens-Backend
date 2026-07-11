@@ -259,8 +259,17 @@ def should_defer_career_timing(question: str) -> bool:
             return True
     except Exception:
         pass
+    try:
+        from ask_health.routing import health_overrides_career  # type: ignore
+
+        if health_overrides_career(q):
+            return True
+    except Exception:
+        pass
     if re.search(
-        r"(?ix)\b(health|swasth|bimari|illness|disease|hospital|surgery|operat\w*)\b", q
+        r"(?ix)\b(health|swasth|bimari|illness|disease|hospital|surgery|operat\w*|"
+        r"blood\s*pressure|hypertension|heart|dil|bp)\b",
+        q,
     ) and not re.search(r"(?ix)\b(job|naukri|career|salary|promotion|office)\b", q):
         return True
     if re.search(r"(?ix)\b(recovery|theek)\b", q) and re.search(

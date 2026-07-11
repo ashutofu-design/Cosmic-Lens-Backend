@@ -57,6 +57,13 @@ def test_govt_job_timing():
     assert classify_career_timing_bucket(q) == "govt_job"
 
 
+def test_future_blood_pressure_not_career_timing():
+    q = "kya meri kundli me future me blood pressure ki problem hai?"
+    assert should_defer_career_timing(q)
+    assert not is_career_timing_question(q)
+    assert not is_career_question(q)
+
+
 def test_phase59_career_gate_import():
     from openai_helper import _is_career_question, _phase59_format_career_facts_block, _phase59_is_career_question
 

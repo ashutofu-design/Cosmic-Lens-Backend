@@ -223,11 +223,17 @@ class TestAskHealthEngine(unittest.TestCase):
         q = "kya meri kundli me future me blood pressure ki problem hai?"
         from ask_health.routing import health_overrides_career
         from ask_career.classifier import is_career_static_question
+        from ask_career.timing_registry import (
+            is_career_timing_question,
+            should_defer_career_timing,
+        )
 
         self.assertEqual(classify_health_archetype(q), "heart_blood_pressure")
         self.assertTrue(is_health_static_question(q))
         self.assertTrue(health_overrides_career(q))
         self.assertFalse(is_career_static_question(q))
+        self.assertTrue(should_defer_career_timing(q))
+        self.assertFalse(is_career_timing_question(q))
 
     def test_heart_blood_pressure_engine_payload(self):
         q = "mera blood pressure high rehta hai chart me kya dikhta hai?"

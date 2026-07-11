@@ -8647,7 +8647,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _career_timing_q = is_career_timing_question(question or "", _llm_intent)
     except Exception:
         _career_timing_q = bool(is_timing and _is_career_question(question or ""))
-    if _career_timing_q and isinstance(kundli, dict) and kundli.get("planets"):
+    _domain_engine_owns_answer = (
+        isinstance(dcr_love_meta, dict)
+        and str(dcr_love_meta.get("slice") or "").endswith("_engine_v1")
+        and dcr_love_meta.get("slice") not in ("career_engine_v1",)
+    )
+    if (
+        _career_timing_q
+        and isinstance(kundli, dict)
+        and kundli.get("planets")
+        and not _domain_engine_owns_answer
+    ):
         try:
             _intel_for_career = {}
             try:
@@ -8665,13 +8675,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             if career_block:
                 is_career_engine = True
                 chart_text = chart_text + "\n" + career_block
+                _existing_slice = (
+                    str(dcr_love_meta.get("slice") or "")
+                    if isinstance(dcr_love_meta, dict)
+                    else ""
+                )
+                _may_set_career_timing_meta = (
+                    not _existing_slice
+                    or _existing_slice in ("career_engine_v1", "career_timing_v1")
+                )
                 if (
                     isinstance(_career_verdict, dict)
                     and _career_verdict
-                    and not (
-                        isinstance(dcr_love_meta, dict)
-                        and dcr_love_meta.get("slice") == "career_engine_v1"
-                    )
+                    and _may_set_career_timing_meta
                 ):
                     try:
                         from ask_hard_guards import (

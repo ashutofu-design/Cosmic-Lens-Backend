@@ -1,20 +1,72 @@
-import type { AskQuestionItem } from "./api";
+import type { AskLlmContext, AskQuestionItem, AnswerFidelitySummary, EngineVerificationSummary } from "./api";
 import { formatDate, formatInr } from "./api";
-import {
-  AskLlmContextPanel,
-  AnswerFidelityBadge,
-  AnswerPathBadge,
-  bootstrapAskLlmContextFromRow,
-  EngineTracePanel,
-  EngineVerificationBadge,
-  LlmQuestionUnderstandingBrief,
-  parseAskLlmContext,
-  resolveEngineVerificationSummary,
-} from "./AskLlmContextPanel";
 import { AskObservabilityDebugger } from "./AskObservabilityDebugger";
 import { CopyTextButton } from "./CopyTextButton";
 import { resolveEngineDisplayFromContext } from "./engineDisplay";
+import { parseAskLlmContext, resolveAnswerPath } from "./askLlmContextParse";
 import { QuestionLangBadge } from "./QuestionLangBadge";
+
+function AnswerPathBadge({
+  ctx,
+  row,
+}: {
+  ctx: AskLlmContext | null;
+  row: Pick<AskQuestionItem, "answer_source" | "engine_tag" | "total_tokens">;
+}) {
+  const { code, label } = resolveAnswerPath(ctx, row);
+  return <span className={`answer-path-badge answer-path-${code}`}>{label}</span>;
+}
+
+function EngineVerificationBadge({
+  summary,
+}: {
+  summary: EngineVerificationSummary | null;
+}) {
+  if (!summary) {
+    return <span className="engine-verify-badge engine-verify-unknown">Unknown</span>;
+  }
+  if (summary.status === "none") {
+    return (
+      <span className="engine-verify-badge engine-verify-none" title={summary.reason || undefined}>
+        {summary.label}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`engine-verify-badge engine-verify-${summary.status}`}
+      title={summary.reason || undefined}
+    >
+      {summary.label}
+    </span>
+  );
+}
+
+function AnswerFidelityBadge({ summary }: { summary: AnswerFidelitySummary | null }) {
+  if (!summary?.label) {
+    return null;
+  }
+  return (
+    <span
+      className={`answer-fidelity-badge answer-fidelity-${summary.status || "unknown"}`}
+      title={summary.reason || undefined}
+    >
+      {summary.label}
+    </span>
+  );
+}
+
+function LlmUnderstandingBrief({ ctx }: { ctx: AskLlmContext | null }) {
+  const text =
+    ctx?.question_meaning?.trim() ||
+    ctx?.llm_intent?.question_summary?.trim() ||
+    ctx?.understanding_line?.trim() ||
+    "";
+  if (!text) {
+    return <span className="detail-muted">Not saved for this row.</span>;
+  }
+  return <pre className="ask-detail-llm-meaning">{text}</pre>;
+}
 
 export function AskQuestionDetailPage({
   row,
@@ -24,7 +76,7 @@ export function AskQuestionDetailPage({
   onBack: () => void;
 }) {
   const ctx = parseAskLlmContext(row);
-  const engineVerify = resolveEngineVerificationSummary(ctx);
+  const engineVerify = ctx?.engine_verification_summary ?? null;
   const answerFidelity = ctx?.answer_fidelity_summary ?? null;
   const engineDisplay = resolveEngineDisplayFromContext(ctx, row, engineVerify);
 
@@ -117,7 +169,7 @@ export function AskQuestionDetailPage({
         ) : null}
         <div className="ask-detail-meta-wide ask-detail-llm-understood">
           <span className="detail-muted">LLM understood</span>
-          <LlmQuestionUnderstandingBrief ctx={ctx} />
+          <LlmUnderstandingBrief ctx={ctx} />
         </div>
         <div className="ask-detail-meta-wide ask-detail-verdict-engine">
           {row.verdict_summary ? (
@@ -142,18 +194,6 @@ export function AskQuestionDetailPage({
       </div>
 
       <AskObservabilityDebugger row={row} />
-
-      <details className="ask-detail-legacy-debug">
-        <summary>Legacy raw trace (advanced — deprecated)</summary>
-        <div className="ask-detail-context">
-          <EngineTracePanel ctx={ctx || bootstrapAskLlmContextFromRow(row)} row={row} />
-          <AskLlmContextPanel
-            row={row}
-            panelId={`ask-llm-context-${row.id}`}
-            defaultOpen={false}
-          />
-        </div>
-      </details>
     </section>
   );
 }

@@ -34,9 +34,9 @@ class HealthNarratorTests(unittest.TestCase):
 
     def test_narrator_payload_uses_engine_facts(self):
         payload = to_health_llm_payload(self.result, question=self.q)
-        self.assertIn("VERIFIED_HEALTH_CONTEXT_JSON:", payload)
+        self.assertIn("HEALTH_ENGINE_EXECUTION_JSON:", payload)
         self.assertIn("heart_blood_pressure", payload)
-        self.assertIn("health_chart_context", payload)
+        self.assertIn("health_engine_execution", payload)
         self.assertIn("health_d1_facts_v1", payload)
         self.assertIn('"planets"', payload)
 
@@ -49,8 +49,8 @@ class HealthNarratorTests(unittest.TestCase):
         )
         self.assertIn("ENGINE FACTS:", prompt)
         self.assertNotIn("The Big Picture", prompt)
-        self.assertIn("VERIFIED_HEALTH_CONTEXT_JSON", prompt)
-        self.assertIn("sawal samjho", prompt)
+        self.assertIn("HEALTH_ENGINE_EXECUTION_JSON", prompt)
+        self.assertIn("HEALTH_ENGINE_EXECUTION_JSON padh", prompt)
         self.assertIn("Normal astrologer", prompt)
 
     def test_disease_list_question_routes_health(self):
@@ -81,8 +81,8 @@ class HealthNarratorTests(unittest.TestCase):
         self.assertIn("d9", pack)
         self.assertIn("lagnesh", pack)
         payload = to_health_llm_payload(result, question=q)
-        self.assertIn("health_chart_context", payload)
-        self.assertIn('"d9"', payload)
+        self.assertIn("health_engine_execution", payload)
+        self.assertIn('"d1"', payload)
 
 
 if __name__ == "__main__":

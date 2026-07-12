@@ -40,8 +40,7 @@ STRUCTURE (batch test — short direct answer only):
 _COSMO_HEALTH_ADAPTIVE = """
 1. Pehle user ka sawal samjho — kya puch raha hai aur kitna detail chahiye.
    Chhota seedha sawal = chhota jawab. Kyun/detail wala sawal = thoda aur explain karo.
-2. VERIFIED_HEALTH_CONTEXT_JSON padh kar jawab do. Zarurat ho to apni Vedic health samajh se
-   connect karo, lekin JSON me jo nahi hai woh mat banao.
+2. HEALTH_ENGINE_EXECUTION_JSON padh kar jawab do — isme poora D1+D9 engine execution hai.
 3. Sirf usi cheez ka jawab do jo pucha gaya — extra section, filler ya unrelated baat mat do.
 4. Normal astrologer ki tarah likho — seedha, natural Hinglish flow; textbook ya AI tone nahi.
 """.strip()

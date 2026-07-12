@@ -232,7 +232,7 @@ def build_mr_engine_narrator_system_prompt(
             extra_rules=extras,
         )
         engine_lock = (
-            "HEALTH JSON: VERIFIED_HEALTH_CONTEXT_JSON me jo chart facts hain woh sahi hain — "
+            "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON me jo engine execution data hai woh sahi hai — "
             "unhi se sawal ka jawab banao."
         )
     else:

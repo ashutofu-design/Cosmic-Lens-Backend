@@ -590,10 +590,17 @@ def build_blocked_response(
 
 
 def extract_narrator_json_from_chart_text(chart_text: str) -> dict[str, Any] | None:
+    from ask_health.presenter import HEALTH_ENGINE_EXECUTION_JSON_LABEL
+
     raw = chart_text or ""
-    if "VERIFIED_HEALTH_CONTEXT_JSON:" in raw:
+    if HEALTH_ENGINE_EXECUTION_JSON_LABEL in raw or "VERIFIED_HEALTH_CONTEXT_JSON:" in raw:
         try:
-            payload = json.loads(raw.split("VERIFIED_HEALTH_CONTEXT_JSON:", 1)[1].strip())
+            marker = (
+                HEALTH_ENGINE_EXECUTION_JSON_LABEL
+                if HEALTH_ENGINE_EXECUTION_JSON_LABEL in raw
+                else "VERIFIED_HEALTH_CONTEXT_JSON:"
+            )
+            payload = json.loads(raw.split(marker, 1)[1].strip())
             engine = payload.get("engine") if isinstance(payload, dict) else None
             if isinstance(engine, dict):
                 return {

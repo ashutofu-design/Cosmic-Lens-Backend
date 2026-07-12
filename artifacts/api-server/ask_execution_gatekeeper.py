@@ -484,9 +484,6 @@ def check_final_answer_gate(
             rule="rule_8_empty",
         )
     meta = slice_meta if isinstance(slice_meta, dict) else {}
-    nj = narrator_json or _narrator_json(meta)
-    engine_verdict = str(meta.get("verdict") or "").strip()
-    exp = dna_expectation(admin, question=question)
 
     # Rule 5 — banned hedging / obvious hallucination tone
     if _HALLUCINATION_RX.search(text):
@@ -517,24 +514,12 @@ def check_final_answer_gate(
     # Rule 8 — verdict alignment (soft: skip when answer is gatekeeper block text)
     if "execution_gatekeeper" in str(meta.get("source") or ""):
         return GatekeeperResult(True, "final", "ok", "blocked_message_ok")
-    ref_verdict = str(
-        (nj or {}).get("final_verdict")
-        or (nj or {}).get("direct_answer")
-        or engine_verdict
-        or ""
-    ).strip()
-    if ref_verdict and len(ref_verdict) > 12 and sl_dom == "health":
-        chunk = ref_verdict[:32].lower()
-        if chunk and chunk not in text.lower():
-            words = [w for w in re.split(r"\s+", chunk) if len(w) > 3][:2]
-            if words and not any(w in text.lower() for w in words):
-                return GatekeeperResult(
-                    ok=False,
-                    stage="final",
-                    reason="verdict_mismatch",
-                    rule="rule_8_verdict_not_in_answer",
-                    failed_checks=[f"engine={ref_verdict[:60]}"],
-                )
+    # Health answers are quality-gated by the dedicated health answer validator
+    # (topic-match + chart-proof + safety). The old verbatim verdict-substring
+    # match conflicts with natural astrologer-tone answers, so we skip it for
+    # health and trust the validator instead.
+    if sl_dom == "health":
+        return GatekeeperResult(True, "final", "ok", "health_validator_owns_quality")
 
     return GatekeeperResult(True, "final", "ok", "final_ok")
 

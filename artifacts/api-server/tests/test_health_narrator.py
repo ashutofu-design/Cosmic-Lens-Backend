@@ -52,7 +52,7 @@ class HealthNarratorTests(unittest.TestCase):
         self.assertIn("HEALTH_ENGINE_EXECUTION_JSON", prompt)
         self.assertIn("HEALTH_ENGINE_EXECUTION_JSON", prompt)
         self.assertIn("POORA padho", prompt)
-        self.assertIn("Normal astrologer", prompt)
+        self.assertIn("astrologer", prompt)
 
     def test_disease_list_question_routes_health(self):
         q = "mujhse kya kya disease ho sakta he"

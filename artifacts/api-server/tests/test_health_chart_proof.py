@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_health.answer_validator import validate_health_llm_answer
+from ask_health.answer_validator import validate_health_llm_answer
 from ask_health.chart_proof import (
     answer_cites_chart_proof,
     chart_support_signals,
@@ -26,7 +27,10 @@ _SUPPORTED_EXECUTION = {
         ],
         "afflictions": ["Malefics in H6: Saturn"],
         "sub_flags": {"moon_afflicted": True},
-        "health_houses": [{"house": 6, "occupants": ["Saturn"]}],
+        "health_houses": [
+            {"house": 6, "occupants": ["Saturn"], "lord": "Mercury"},
+            {"house": 8, "lord": "Mars"},
+        ],
     },
     "d9": {
         "ascendant": "Aries",
@@ -97,6 +101,28 @@ class HealthChartProofTests(unittest.TestCase):
         )
         self.assertFalse(ok)
         self.assertIn("missing_chart_proof", issues)
+
+
+    def test_disease_list_good_answer_passes(self):
+        ok, issues = validate_chart_proof_requirement(
+            "mujhse kya kya disease ho sakta he",
+            "6th ghar me Saturn pressure hai aur 8th lord dusthana me — chronic aur hospital zones monitor karo. Specific disease naam chart se nahi batata.",
+            "general_health",
+            _SUPPORTED_EXECUTION,
+        )
+        self.assertTrue(ok, issues)
+
+    def test_disease_list_blocks_disease_names(self):
+        ok, issues = validate_health_llm_answer(
+            "mujhse kya kya disease ho sakta he",
+            "Diabetes aur thyroid ki tendency ho sakti hai. Saturn 6th ghar me hai.",
+            {
+                "archetype": "general_health",
+                "checks": {"health_engine_execution": _SUPPORTED_EXECUTION},
+            },
+        )
+        self.assertFalse(ok)
+        self.assertIn("disease_name", issues)
 
 
 if __name__ == "__main__":

@@ -117,7 +117,7 @@ _SYSTEM_DETECT: list[tuple[str, re.Pattern[str]]] = [
         r"हार्मोन|थायराइड)")),
     ("respiratory_health", re.compile(
         r"(?ix)(breath|breathing|saans|saans\s+phool|lung|phephra|"
-        r"cough|khansi|khaansi|cold|sardi|zukam|bar\s+bar|chest\s+infect|nasal|nose\s+block|"
+        r"cough|khansi|khaansi|cold|sardi|zukam|thandi|thand|sardi\s+lag|"
         r"सांस\s+की\s+समस्या|खांसी|फेफड़)")),
     ("immune_health", re.compile(
         r"(?ix)(immunity|immune|baar\s*baar\s+(beemar|bimar|sick|ill)|"

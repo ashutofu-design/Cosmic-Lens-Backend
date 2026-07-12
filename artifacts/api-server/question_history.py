@@ -679,6 +679,7 @@ def get_admin_ask_question(question_id: str) -> dict | None:
                     "cost_usd": float(uq.cost_usd) if uq.cost_usd is not None else None,
                     "llm_model": uq.llm_model,
                 },
+                kundli=chart if isinstance(chart, dict) else None,
             )
         except Exception as exc:
             print(f"[question_history] observability attach skipped: {exc}", flush=True)

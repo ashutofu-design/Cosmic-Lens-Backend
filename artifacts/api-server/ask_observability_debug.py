@@ -174,7 +174,90 @@ def _ensure_question_dna(ctx: dict[str, Any], question_text: str) -> dict[str, A
     return {"questions": [item], "source": "observability_infer", "latency_ms": 0}
 
 
-def _prepare_ctx_for_observability(ctx: dict[str, Any], question_text: str) -> dict[str, Any]:
+def _is_health_observability_ctx(ctx: dict[str, Any], question_text: str = "") -> bool:
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    if str(sm.get("slice") or "").strip() == "health_engine_v1":
+        return True
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    if str(li.get("domain") or "").strip().lower() == "health":
+        return True
+    arch = str(sm.get("archetype") or li.get("mr_archetype") or "").strip().lower()
+    if arch.endswith("_health") or arch in {
+        "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
+        "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
+        "addiction_support", "reproductive_support", "heart_blood_pressure", "general_health",
+        "digestive_health", "cardio_health", "nervous_health", "musculoskeletal_health",
+        "skin_health", "endocrine_health", "respiratory_health", "immune_health",
+    }:
+        return True
+    q = (question_text or ctx.get("question") or ctx.get("question_raw") or "").strip()
+    if not q:
+        return False
+    try:
+        from ask_health.health_registry import is_health_static_question
+
+        return bool(is_health_static_question(q))
+    except Exception:
+        return False
+
+
+def _inject_health_engine_execution(
+    ctx: dict[str, Any],
+    kundli: dict[str, Any] | None,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    if not isinstance(ctx, dict):
+        return ctx
+    if not _is_health_observability_ctx(ctx):
+        return ctx
+    checks = _merged_checks(ctx)
+    existing = checks.get("health_engine_execution")
+    if (
+        not force
+        and isinstance(existing, dict)
+        and isinstance(existing.get("d1"), dict)
+        and existing["d1"].get("planets")
+        and isinstance(existing.get("d9"), dict)
+        and existing["d9"].get("planets")
+    ):
+        return ctx
+    chart = kundli if isinstance(kundli, dict) else None
+    if chart is None:
+        for key in ("kundli", "chart", "chart_json"):
+            candidate = ctx.get(key)
+            if isinstance(candidate, dict) and candidate.get("planets"):
+                chart = candidate
+                break
+    if chart is None:
+        return ctx
+    try:
+        from health_static.health_facts import compute_health_engine_execution
+
+        pack = compute_health_engine_execution(chart)
+        checks = dict(checks)
+        checks["health_engine_execution"] = pack
+        checks["d1_health_facts"] = pack.get("d1") or {}
+        checks["d9_health_facts"] = pack.get("d9") or {}
+        checks["engine_version"] = "health_engine_execution_v1"
+        ctx["checks"] = checks
+        sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+        sm_checks = dict(sm.get("checks") or {}) if isinstance(sm.get("checks"), dict) else {}
+        for key in ("health_engine_execution", "d1_health_facts", "d9_health_facts", "engine_version"):
+            sm_checks[key] = checks[key]
+        sm["checks"] = sm_checks
+        ctx["slice_meta"] = sm
+    except Exception:
+        pass
+    return ctx
+
+
+def _prepare_ctx_for_observability(
+    ctx: dict[str, Any],
+    question_text: str,
+    *,
+    kundli: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     out = dict(ctx)
     q = (question_text or out.get("question") or "").strip()
     if q:
@@ -225,6 +308,7 @@ def _prepare_ctx_for_observability(ctx: dict[str, Any], question_text: str) -> d
     if dna_item.get("timing") is not None and "is_timing" not in out:
         out["is_timing"] = bool(dna_item.get("timing"))
 
+    out = _inject_health_engine_execution(out, kundli)
     return out
 
 
@@ -1191,11 +1275,12 @@ def build_observability_debug(
     question_text: str = "",
     answer_text: str = "",
     row_meta: dict[str, Any] | None = None,
+    kundli: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Structured debugger payload for admin Ask detail."""
     if not isinstance(ctx, dict):
         ctx = {}
-    ctx = _prepare_ctx_for_observability(ctx, question_text)
+    ctx = _prepare_ctx_for_observability(ctx, question_text, kundli=kundli)
 
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
     archetype = str(sm.get("archetype") or ctx.get("routed_archetype") or "—")
@@ -1220,6 +1305,10 @@ def build_observability_debug(
             "d1": d1_health_facts,
             "d9": _dig(ctx, sm, key="d9_health_facts") or {"error": "d9 missing"},
         }
+    health_charts_mode = bool(
+        health_engine_execution
+        and _is_health_observability_ctx(ctx, question_text)
+    )
     trace_labels = [
         "Question",
         "DNA",
@@ -1248,7 +1337,7 @@ def build_observability_debug(
         "engine_health": engine_health,
         "rule_decisions": decision_table,
         "engine_execution": {
-            "display_mode": "health_charts" if health_engine_execution else "engine_rules",
+            "display_mode": "health_charts" if health_charts_mode else "engine_rules",
             "health_engine_execution": health_engine_execution,
             "engine_name": archetype,
             "engine_version": _dig(ctx.get("checks") or {}, sm or {}, key="engine_version"),
@@ -1291,25 +1380,31 @@ def attach_observability_to_context(
     question_text: str = "",
     answer_text: str = "",
     row_meta: dict[str, Any] | None = None,
+    kundli: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     out = dict(ctx)
-    prepared = _prepare_ctx_for_observability(out, question_text)
+    prepared = _prepare_ctx_for_observability(out, question_text, kundli=kundli)
     if prepared.get("question_dna"):
         out["question_dna"] = prepared["question_dna"]
     if isinstance(prepared.get("llm_intent"), dict):
         out["llm_intent"] = prepared["llm_intent"]
     if prepared.get("question_normalized"):
         out["question_normalized"] = prepared["question_normalized"]
+    if isinstance(prepared.get("checks"), dict):
+        out["checks"] = prepared["checks"]
+    if isinstance(prepared.get("slice_meta"), dict):
+        out["slice_meta"] = prepared["slice_meta"]
     out["observability"] = build_observability_debug(
         prepared,
         question_text=question_text,
         answer_text=answer_text,
         row_meta=row_meta,
+        kundli=kundli,
     )
     return out
 
 
-OBS_DEBUGGER_VERSION = "2.5.0"
+OBS_DEBUGGER_VERSION = "2.6.1"
 
 
 def _format_pipeline_section(title: str, steps: list[dict[str, Any]] | None) -> list[str]:

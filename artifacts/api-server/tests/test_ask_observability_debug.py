@@ -150,7 +150,39 @@ class TestAskObservabilityDebug(unittest.TestCase):
             obs["engine_execution"]["health_engine_execution"]["d1"]["ascendant"],
             "Leo",
         )
-        self.assertIn("d9", obs["engine_execution"]["health_engine_execution"])
+    def test_health_admin_recomputes_d1_d9_from_kundli(self):
+        kundli = {
+            "ascendant": "Leo",
+            "planets": [
+                {"name": "Sun", "sign": "Leo", "house": 1},
+                {"name": "Moon", "sign": "Scorpio", "house": 4},
+            ],
+            "divisionalCharts": {
+                "D9": {
+                    "ascendant": "Aries",
+                    "planets": [
+                        {"name": "Sun", "sign": "Leo", "house": 5},
+                        {"name": "Moon", "sign": "Scorpio", "house": 8},
+                    ],
+                }
+            },
+        }
+        ctx = {
+            "question": "meri sehat kaisi hai",
+            "slice_meta": {"slice": "health_engine_v1", "archetype": "overall_vitality"},
+            "llm_intent": {"domain": "health"},
+        }
+        obs = build_observability_debug(
+            ctx,
+            question_text=ctx["question"],
+            answer_text="ok",
+            kundli=kundli,
+        )
+        pack = obs["engine_execution"]["health_engine_execution"]
+        self.assertEqual(pack["d1"]["ascendant"], "Leo")
+        self.assertEqual(pack["d9"]["ascendant"], "Aries")
+        self.assertEqual(len(pack["d1"]["planets"]), 2)
+        self.assertEqual(obs["engine_execution"]["display_mode"], "health_charts")
 
 
 if __name__ == "__main__":

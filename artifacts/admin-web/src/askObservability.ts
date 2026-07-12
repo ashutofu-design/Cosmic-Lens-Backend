@@ -235,6 +235,26 @@ export const ASTRO_MODULE_LABELS: Record<string, string> = {
   bcp: "BCP me kya check hua",
 };
 
+function isHealthAskRow(row: AskQuestionItem, ctx: AskLlmContext | null, exec: AskObservability["engine_execution"]): boolean {
+  if (exec?.display_mode === "health_charts" || exec?.health_engine_execution) {
+    return true;
+  }
+  const topic = (row.topic || "").trim().toLowerCase();
+  if (topic === "health" || topic === "sehat") {
+    return true;
+  }
+  const sm = (ctx?.slice_meta || {}) as Record<string, unknown>;
+  const li = (ctx?.llm_intent || {}) as Record<string, unknown>;
+  if (String(sm.slice || "").includes("health")) {
+    return true;
+  }
+  if (String(li.domain || "").toLowerCase() === "health") {
+    return true;
+  }
+  const arch = String(sm.archetype || li.mr_archetype || "").toLowerCase();
+  return arch.includes("health") || arch.includes("vitality") || arch.includes("chronic");
+}
+
 function stepAuditFromContext(
   ctx: AskLlmContext | null,
 ): Record<string, Record<string, unknown>> {
@@ -256,7 +276,7 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.6.0";
+export const OBS_DEBUGGER_VERSION = "2.6.1";
 
 const DNA_DOMAIN_LABEL: Record<string, string> = {
   love: "Relationship",
@@ -691,6 +711,9 @@ function enrichObservability(
       exec.display_mode = "health_charts";
     }
   }
+  if (isHealthAskRow(row, ctx, exec) && exec.health_engine_execution) {
+    exec.display_mode = "health_charts";
+  }
   if (!exec.d1_health_facts) {
     const d1HealthFacts =
       exec.health_engine_execution?.d1 ||
@@ -852,6 +875,17 @@ function buildFallbackObservability(
     },
     routing_warning: routingWarning,
     engine_execution: {
+      display_mode: isHealthAskRow(row, ctx, undefined) ? "health_charts" : "engine_rules",
+      health_engine_execution:
+        (checks.health_engine_execution as ObservabilityHealthEngineExecution | undefined) ||
+        (smChecks.health_engine_execution as ObservabilityHealthEngineExecution | undefined) ||
+        ((checks.d1_health_facts || smChecks.d1_health_facts)
+          ? {
+              schema_version: "health_engine_execution_v1",
+              d1: (checks.d1_health_facts || smChecks.d1_health_facts) as ObservabilityHealthChartFacts,
+              d9: (checks.d9_health_facts || smChecks.d9_health_facts || { error: "d9 missing" }) as ObservabilityHealthChartFacts,
+            }
+          : null),
       engine_name: String(sm.archetype || "—"),
       modules,
       modules_skipped: modules.filter((m) => !m.loaded).map((m) => m.module),

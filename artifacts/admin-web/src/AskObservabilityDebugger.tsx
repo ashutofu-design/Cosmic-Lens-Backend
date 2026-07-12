@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { AskQuestionItem } from "./api";
+import type { AskQuestionItem, AskLlmContext } from "./api";
 import { formatInr } from "./api";
 import {
   OBS_DEBUGGER_VERSION,
@@ -246,10 +246,18 @@ function formatHealthD1Steps(
 
 function buildEngineExecutionSteps(
   exec: ReturnType<typeof resolveAskObservability>["engine_execution"],
+  row?: AskQuestionItem,
+  ctx?: AskLlmContext | null,
 ): { label: string; value: string }[] {
   const healthSteps = formatHealthEngineExecutionSteps(exec?.health_engine_execution);
-  if (healthSteps.length) {
-    return healthSteps;
+  if (healthSteps.length || exec?.display_mode === "health_charts" || (row && isHealthAskRow(row, ctx || null, exec))) {
+    if (healthSteps.length) {
+      return healthSteps;
+    }
+    return [{
+      label: "Health Chart Pack",
+      value: "D1 + D9 data abhi load nahi hua. Naya health question pucho ya admin/API deploy check karo (v2.6.1+).",
+    }];
   }
 
   const modules = exec?.modules || [];
@@ -314,6 +322,10 @@ function formatMs(ms: number | null | undefined): string {
 
 export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
   const obs = resolveAskObservability(row);
+  const ctx =
+    row.llm_context && typeof row.llm_context === "object"
+      ? row.llm_context
+      : null;
   const exec = obs.engine_execution || {};
   const evidence = obs.planet_evidence || {};
   const perf = obs.performance || {};
@@ -377,7 +389,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
             </>
           )}
         </p>
-        <PipelineList steps={buildEngineExecutionSteps(exec)} />
+        <PipelineList steps={buildEngineExecutionSteps(exec, row, ctx)} />
       </Section>
 
       <Section title="3. Rule Decision Table" stars={5}>

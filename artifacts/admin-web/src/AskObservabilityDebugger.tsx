@@ -114,94 +114,39 @@ function formatHealthChartFactsSteps(
   chartLabel: "D1" | "D9",
 ): { label: string; value: string }[] {
   if (!facts || facts.error) {
-    return [{ label: `${chartLabel} Chart`, value: facts?.error || "data missing" }];
+    return [{ label: `${chartLabel}`, value: facts?.error || "data missing" }];
   }
 
+  const lagnaLine =
+    chartLabel === "D1"
+      ? `Lagna ${facts.ascendant || "?"} · Vitality ${facts.vitality_score ?? "?"}/100 (${facts.vitality_risk || "?"})\nLagnesh: ${formatLagneshLine(facts.lagnesh as Record<string, unknown>)}`
+      : `Lagna ${facts.ascendant || "?"}\nLagnesh: ${formatLagneshLine(facts.lagnesh as Record<string, unknown>)}`;
+
   const planets = (facts.planets || []).map((p) => {
-    const flags = [p.retrograde ? "retrograde" : "", p.combust ? "combust" : ""].filter(Boolean);
-    const degree = p.degree != null ? ` ${p.degree.toFixed(2)}°` : "";
+    const flags = [p.retrograde ? "R" : "", p.combust ? "combust" : ""].filter(Boolean);
     const strength =
       p.strength_score != null
-        ? ` strength ${p.strength_score > 0 ? "+" : ""}${p.strength_score}`
+        ? ` · str ${p.strength_score > 0 ? "+" : ""}${p.strength_score}`
         : "";
     const shadbala =
       p.shadbala?.strength_pct != null ? ` · Shadbala ${p.shadbala.strength_pct}%` : "";
-    const roles = (p.health_roles || []).length ? ` · ${(p.health_roles || []).join(", ")}` : "";
-    return `${p.name || "?"}: ${p.sign || "?"}${degree} · H${p.house || "?"} · ${p.dignity || "?"}${strength}${shadbala}${flags.length ? ` · ${flags.join(", ")}` : ""}${roles}`;
-  });
-
-  const allHouses = (facts.houses || []).map((raw) => {
-    const h = raw as { house?: number; sign?: string; lord?: string; occupants?: string[] };
-    return `H${h.house || "?"} ${h.sign || "?"} · lord ${h.lord || "?"} · occupants ${(h.occupants || []).join(", ") || "none"}`;
+    return `${p.name || "?"}: ${p.sign || "?"} · H${p.house || "?"} · ${p.dignity || "?"}${strength}${shadbala}${flags.length ? ` · ${flags.join(", ")}` : ""}`;
   });
 
   const healthHouses = (facts.health_houses || []).map((h) => {
     const lord = h.lord_state || {};
     const aspects = (h.aspects_received || [])
-      .map((a) => `${a.planet || "?"} from H${a.from_house || "?"} (${a.polarity || "neutral"})`)
+      .map((a) => `${a.planet || "?"} H${a.from_house || "?"}`)
       .join(", ");
-    const lordStrength =
-      lord.lord_shadbala?.strength_pct != null
-        ? `, Shadbala ${lord.lord_shadbala.strength_pct}%`
-        : lord.lord_strength_score != null
-          ? `, strength ${lord.lord_strength_score > 0 ? "+" : ""}${lord.lord_strength_score}`
-          : "";
-    return `H${h.house || "?"} ${h.sign || "?"} [${(h.health_roles || []).join(", ")}]\nlord ${lord.lord || h.lord || "?"} → H${lord.lord_house || "?"}, ${lord.lord_dignity || "?"}${lordStrength}${lord.lord_in_dusthana ? ", dusthana" : ""}\noccupants: ${(h.occupants || []).join(", ") || "none"}\naspects: ${aspects || "none"}`;
+    return `H${h.house || "?"} ${h.sign || "?"} · lord ${lord.lord || h.lord || "?"} → H${lord.lord_house || "?"}, ${lord.lord_dignity || "?"} · occupants ${(h.occupants || []).join(", ") || "none"}${aspects ? ` · aspects ${aspects}` : ""}`;
   });
 
-  const karakas = Object.entries(facts.karakas || {}).map(([name, k]) => {
-    const row = k as {
-      sign?: string;
-      house?: number;
-      dignity?: string;
-      strength_score?: number;
-      health_roles?: string[];
-    };
-    return `${name}: ${row.sign || "?"} · H${row.house || "?"} · ${row.dignity || "?"} · strength ${row.strength_score ?? "?"} · ${(row.health_roles || []).join(", ")}`;
-  });
-
-  const aspects = (facts.aspects || []).map((raw) => {
-    const a = raw as { planet?: string; from_house?: number; to_house?: number; polarity?: string };
-    return `${a.planet || "?"} H${a.from_house || "?"} → H${a.to_house || "?"} (${a.polarity || "neutral"})`;
-  });
-
-  const shadbala = Object.entries(facts.shadbala || {}).map(([name, raw]) => {
-    const row = raw as { strength_pct?: number; total?: number; required?: number };
-    if (row.strength_pct == null) return `${name}: —`;
-    return `${name}: ${row.strength_pct}% (${row.total ?? "?"} / ${row.required ?? "?"})`;
-  });
-
-  const dimensions = Object.entries(facts.dimensions || {}).map(
-    ([name, d]) => `${name}: ${d.verdict || "?"} · score ${d.score ?? "?"} · ${d.reason || "—"}`,
-  );
-
-  const overview =
-    chartLabel === "D1"
-      ? `${facts.schema_version || "?"} · Lagna ${facts.ascendant || "?"} · Vitality ${facts.vitality_score ?? "?"}/100 (${facts.vitality_risk || "?"})`
-      : `${facts.schema_version || "?"} · Lagna ${facts.ascendant || "?"}`;
-
-  const steps: { label: string; value: string }[] = [
-    { label: `${chartLabel} Overview`, value: overview },
-    { label: `${chartLabel} Lagnesh`, value: formatLagneshLine(facts.lagnesh as Record<string, unknown>) },
-    { label: `${chartLabel} Planets + Power`, value: planets.join("\n") || "—" },
-    { label: `${chartLabel} All 12 Houses`, value: allHouses.join("\n") || "—" },
-    { label: `${chartLabel} Health Houses (1/3/4/5/6/8/12)`, value: healthHouses.join("\n\n") || "—" },
-    { label: `${chartLabel} House Lords (all 12)`, value: Object.entries(facts.house_lords || {}).map(([key, raw]) => {
-      const lord = raw as Record<string, unknown>;
-      return `${key}: ${lord.lord || "?"} → H${lord.lord_house || "?"} · ${lord.lord_sign || "?"} · ${lord.lord_dignity || "?"} · strength ${lord.lord_strength_score ?? "?"}`;
-    }).join("\n") || "—" },
-    { label: `${chartLabel} Health Karakas`, value: karakas.join("\n") || "—" },
-    { label: `${chartLabel} Aspects`, value: aspects.join("\n") || "none" },
-    { label: `${chartLabel} Afflictions / Pressure`, value: (facts.afflictions || []).join("\n") || "none" },
+  return [
+    { label: `${chartLabel} · Lagna + Lagnesh`, value: lagnaLine },
+    { label: `${chartLabel} · Planets (9)`, value: planets.join("\n") || "—" },
+    { label: `${chartLabel} · Health Houses (6)`, value: healthHouses.join("\n\n") || "—" },
+    { label: `${chartLabel} · Afflictions`, value: (facts.afflictions || []).join("\n") || "none" },
   ];
-
-  if (shadbala.length) {
-    steps.push({ label: `${chartLabel} Shadbala`, value: shadbala.join("\n") });
-  }
-  if (dimensions.length) {
-    steps.push({ label: `${chartLabel} Health Dimensions`, value: dimensions.join("\n") });
-  }
-  return steps;
 }
 
 function formatHealthEngineExecutionSteps(
@@ -210,28 +155,16 @@ function formatHealthEngineExecutionSteps(
   if (!pack?.schema_version && !pack?.d1) return [];
 
   const steps: { label: string; value: string }[] = [
-    {
-      label: "Health Chart Pack",
-      value: `${pack.schema_version || "health_engine_execution_v1"} · fixed D1 + D9 for every health question`,
-    },
+    ...formatHealthChartFactsSteps(pack.d1, "D1"),
+    ...formatHealthChartFactsSteps(pack.d9, "D9"),
   ];
 
-  steps.push(...formatHealthChartFactsSteps(pack.d1, "D1"));
-  steps.push(...formatHealthChartFactsSteps(pack.d9, "D9"));
-
-  const lagneshD1 = formatLagneshLine(pack.lagnesh?.d1 as Record<string, unknown>);
-  const lagneshD9 = formatLagneshLine(pack.lagnesh?.d9 as Record<string, unknown>);
-  steps.push({
-    label: "Lagnesh Compare (D1 vs D9)",
-    value: `D1: ${lagneshD1}\nD9: ${lagneshD9}`,
-  });
-
   const vargottama = (pack.vargottama_details || []).map((row) => {
-    const mark = row.vargottama ? "✅ vargottama" : "—";
-    return `${row.planet || "?"}: D1 ${row.d1_sign || "?"} H${row.d1_house || "?"} · D9 ${row.d9_sign || "?"} H${row.d9_house || "?"} · ${mark}`;
+    const mark = row.vargottama ? "✅" : "—";
+    return `${row.planet || "?"}: D1 ${row.d1_sign || "?"} H${row.d1_house || "?"} · D9 ${row.d9_sign || "?"} H${row.d9_house || "?"} ${mark}`;
   });
   steps.push({
-    label: "Vargottama (D1 sign = D9 sign)",
+    label: "Vargottama",
     value: vargottama.join("\n") || (pack.vargottama_planets || []).join(", ") || "none",
   });
 

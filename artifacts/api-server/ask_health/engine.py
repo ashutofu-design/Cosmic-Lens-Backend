@@ -28,22 +28,26 @@ _SYSTEM_ARCHETYPES = frozenset({
 })
 
 
-def _attach_d1_health_facts(result: EngineResult, kundli: dict) -> EngineResult:
-    """Persist the complete verified D1 health pack for LLM + admin debugger."""
+def _attach_health_engine_execution(result: EngineResult, kundli: dict) -> EngineResult:
+    """Persist fixed D1 + D9 health chart pack for LLM + admin debugger."""
     try:
-        from health_static.health_facts import compute_health_facts
+        from health_static.health_facts import compute_health_engine_execution
 
-        facts = compute_health_facts(kundli if isinstance(kundli, dict) else {})
-        if not facts.get("error"):
-            checks = dict(result.checks or {})
-            checks["d1_health_facts"] = facts
-            checks["engine_version"] = "health_d1_facts_v1"
-            result.checks = checks
+        pack = compute_health_engine_execution(kundli if isinstance(kundli, dict) else {})
+        checks = dict(result.checks or {})
+        checks["health_engine_execution"] = pack
+        checks["d1_health_facts"] = pack.get("d1") or {}
+        checks["d9_health_facts"] = pack.get("d9") or {}
+        checks["engine_version"] = "health_engine_execution_v1"
+        result.checks = checks
     except Exception as exc:
         checks = dict(result.checks or {})
-        checks["d1_health_facts_error"] = str(exc)[:180]
+        checks["health_engine_execution_error"] = str(exc)[:180]
         result.checks = checks
     return result
+
+
+_attach_d1_health_facts = _attach_health_engine_execution
 
 
 def run_health_static_engine(

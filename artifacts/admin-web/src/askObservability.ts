@@ -49,10 +49,11 @@ export interface ObservabilityEngineHealth {
   execution_ms?: number | null;
 }
 
-export interface ObservabilityHealthD1Facts {
+export interface ObservabilityHealthChartFacts {
   schema_version?: string;
   chart?: string;
   ascendant?: string;
+  lagnesh?: Record<string, unknown>;
   vitality_score?: number;
   vitality_risk?: string;
   planets?: Array<{
@@ -104,6 +105,28 @@ export interface ObservabilityHealthD1Facts {
     { verdict?: string; reason?: string; tier?: string; score?: number }
   >;
   sub_flags?: Record<string, unknown>;
+  error?: string;
+}
+
+export type ObservabilityHealthD1Facts = ObservabilityHealthChartFacts;
+
+export interface ObservabilityHealthEngineExecution {
+  schema_version?: string;
+  d1?: ObservabilityHealthChartFacts;
+  d9?: ObservabilityHealthChartFacts;
+  lagnesh?: {
+    d1?: Record<string, unknown>;
+    d9?: Record<string, unknown>;
+  };
+  vargottama_planets?: string[];
+  vargottama_details?: Array<{
+    planet?: string;
+    d1_sign?: string;
+    d1_house?: number;
+    d9_sign?: string;
+    d9_house?: number;
+    vargottama?: boolean;
+  }>;
 }
 
 export interface ObservabilityHallucinationSummary {
@@ -126,6 +149,8 @@ export interface AskObservability {
   engine_health?: ObservabilityEngineHealth;
   rule_decisions?: ObservabilityRuleDecision[];
   engine_execution?: {
+    display_mode?: "health_charts" | "engine_rules";
+    health_engine_execution?: ObservabilityHealthEngineExecution | null;
     engine_name?: string;
     engine_version?: string;
     modules?: ObservabilityModule[];
@@ -231,7 +256,7 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.5.0";
+export const OBS_DEBUGGER_VERSION = "2.6.0";
 
 const DNA_DOMAIN_LABEL: Record<string, string> = {
   love: "Relationship",
@@ -650,8 +675,27 @@ function enrichObservability(
   if (!exec.verdict) {
     exec.verdict = String(engineVerdict.verdict || "—");
   }
+  if (!exec.health_engine_execution) {
+    const healthPack =
+      checks.health_engine_execution ||
+      smChecks.health_engine_execution ||
+      (checks.d1_health_facts || smChecks.d1_health_facts
+        ? {
+            schema_version: "health_engine_execution_v1",
+            d1: checks.d1_health_facts || smChecks.d1_health_facts,
+            d9: checks.d9_health_facts || smChecks.d9_health_facts || { error: "d9 missing" },
+          }
+        : null);
+    if (healthPack && typeof healthPack === "object") {
+      exec.health_engine_execution = healthPack as ObservabilityHealthEngineExecution;
+      exec.display_mode = "health_charts";
+    }
+  }
   if (!exec.d1_health_facts) {
-    const d1HealthFacts = checks.d1_health_facts || smChecks.d1_health_facts;
+    const d1HealthFacts =
+      exec.health_engine_execution?.d1 ||
+      checks.d1_health_facts ||
+      smChecks.d1_health_facts;
     if (d1HealthFacts && typeof d1HealthFacts === "object") {
       exec.d1_health_facts = d1HealthFacts as ObservabilityHealthD1Facts;
     }
@@ -983,7 +1027,13 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
       lines.push(`  ${r.rule_id || "?"} — ${r.reason || "—"}`);
     }
   }
-  if (exec.d1_health_facts) {
+  if (exec.health_engine_execution) {
+    lines.push(
+      "",
+      "Health Engine Execution (D1 + D9):",
+      JSON.stringify(exec.health_engine_execution, null, 2),
+    );
+  } else if (exec.d1_health_facts) {
     lines.push(
       "",
       "D1 Health Fact Pack:",

@@ -2829,6 +2829,8 @@ def build_admin_llm_context(
             "modules_used",
             "narrator_input",
             "d1_health_facts",
+            "d9_health_facts",
+            "health_engine_execution",
             "scorecard",
             "primary_score",
             "commitment_level",

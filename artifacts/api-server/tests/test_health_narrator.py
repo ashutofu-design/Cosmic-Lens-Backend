@@ -1,4 +1,4 @@
-"""Tests for health engine → adaptive LLM prompt with verified D1 facts."""
+"""Tests for health D1 + D9 engine execution pack."""
 from __future__ import annotations
 
 import os
@@ -37,6 +37,7 @@ class HealthNarratorTests(unittest.TestCase):
         self.assertIn("VERIFIED_HEALTH_CONTEXT_JSON:", payload)
         self.assertIn("heart_blood_pressure", payload)
         self.assertIn("d1_health_facts", payload)
+        self.assertIn("health_engine_execution", payload)
         self.assertIn("health_d1_facts_v1", payload)
 
     def test_system_prompt_adapts_depth_from_same_prompt(self):
@@ -57,16 +58,31 @@ class HealthNarratorTests(unittest.TestCase):
         arch = detect_health_archetype(q)
         self.assertIn(arch, ("preventive_risk", "general_health", "chronic_tendency"))
 
-    def test_payload_includes_complete_chart_for_any_question(self):
+    def test_payload_includes_d1_and_d9_health_execution(self):
         q = "mujhse kya kya disease ho sakta he"
-        result = run_health_static_engine(_SAMPLE_KUNDLI, q, archetype="general_health")
+        kundli = {
+            **_SAMPLE_KUNDLI,
+            "divisionalCharts": {
+                "D9": {
+                    "ascendant": "Aries",
+                    "planets": [
+                        {"name": "Sun", "sign": "Leo", "house": 5},
+                        {"name": "Moon", "sign": "Scorpio", "house": 8},
+                        {"name": "Saturn", "sign": "Capricorn", "house": 10},
+                    ],
+                }
+            },
+        }
+        result = run_health_static_engine(kundli, q, archetype="general_health")
+        checks = result.checks or {}
+        pack = checks.get("health_engine_execution") or {}
+        self.assertEqual(pack.get("schema_version"), "health_engine_execution_v1")
+        self.assertIn("d1", pack)
+        self.assertIn("d9", pack)
+        self.assertIn("lagnesh", pack)
         payload = to_health_llm_payload(result, question=q)
-        self.assertIn('"planets"', payload)
-        self.assertIn('"houses"', payload)
-        self.assertIn('"house_lords"', payload)
-        self.assertIn('"aspects"', payload)
-        self.assertIn('"dimensions"', payload)
-        self.assertIn("Saturn", payload)
+        self.assertIn("health_engine_execution", payload)
+        self.assertIn("d9_health_facts", payload)
 
 
 if __name__ == "__main__":

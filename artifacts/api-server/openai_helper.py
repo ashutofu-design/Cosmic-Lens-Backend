@@ -7939,6 +7939,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         "answer_plan": _health_engine_result.answer_plan,
                         "ignore": list(_health_engine_result.ignore or []),
                         "d1_health_facts": _ni_checks.get("d1_health_facts") or {},
+                        "d9_health_facts": _ni_checks.get("d9_health_facts") or {},
+                        "health_engine_execution": _ni_checks.get("health_engine_execution") or {},
                     }
                     _health_engine_result.checks = _ni_checks
                     if isinstance(dcr_love_meta, dict):
@@ -8379,6 +8381,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "answer_plan": _health_engine_result.answer_plan,
                 "ignore": list(_health_engine_result.ignore or []),
                 "d1_health_facts": _ni_checks.get("d1_health_facts") or {},
+                "d9_health_facts": _ni_checks.get("d9_health_facts") or {},
+                "health_engine_execution": _ni_checks.get("health_engine_execution") or {},
             }
             _health_engine_result.checks = _ni_checks
             dcr_love_meta = {
@@ -10826,6 +10830,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             for _ck in (
                 "narrator_input",
                 "d1_health_facts",
+                "d9_health_facts",
+                "health_engine_execution",
                 "engine_version",
                 "rules_version",
             ):

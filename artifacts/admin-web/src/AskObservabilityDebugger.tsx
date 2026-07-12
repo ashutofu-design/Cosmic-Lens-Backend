@@ -5,7 +5,6 @@ import {
   OBS_DEBUGGER_VERSION,
   resolveAskObservability,
   type ObservabilityEvidence,
-  type ObservabilityHealthD1Facts,
   type ObservabilityRule,
   type ObservabilityRuleDecision,
 } from "./askObservability";
@@ -102,36 +101,37 @@ function formatRulesIgnored(ignored: ObservabilityRule[]): string {
     .join("\n\n");
 }
 
-function formatHealthD1Steps(
-  facts: ObservabilityHealthD1Facts | null | undefined,
+function formatLagneshLine(lagnesh: Record<string, unknown> | null | undefined): string {
+  if (!lagnesh || !lagnesh.lord) return "—";
+  const shadbala = lagnesh.lord_shadbala as { strength_pct?: number } | null | undefined;
+  const shadbalaText =
+    shadbala?.strength_pct != null ? ` · Shadbala ${shadbala.strength_pct}%` : "";
+  return `${lagnesh.lord} → H${lagnesh.lord_house || "?"} · ${lagnesh.lord_sign || "?"} · ${lagnesh.lord_dignity || "?"} · strength ${lagnesh.lord_strength_score ?? "?"}${shadbalaText}${lagnesh.lord_in_dusthana ? " · dusthana" : ""}${lagnesh.lord_retrograde ? " · retrograde" : ""}`;
+}
+
+function formatHealthChartFactsSteps(
+  facts: import("./askObservability").ObservabilityHealthChartFacts | null | undefined,
+  chartLabel: "D1" | "D9",
 ): { label: string; value: string }[] {
-  if (!facts || !facts.schema_version) return [];
+  if (!facts || facts.error) {
+    return [{ label: `${chartLabel} Chart`, value: facts?.error || "data missing" }];
+  }
 
   const planets = (facts.planets || []).map((p) => {
-    const flags = [
-      p.retrograde ? "retrograde" : "",
-      p.combust ? "combust" : "",
-    ].filter(Boolean);
+    const flags = [p.retrograde ? "retrograde" : "", p.combust ? "combust" : ""].filter(Boolean);
     const degree = p.degree != null ? ` ${p.degree.toFixed(2)}°` : "";
     const strength =
       p.strength_score != null
         ? ` strength ${p.strength_score > 0 ? "+" : ""}${p.strength_score}`
         : "";
     const shadbala =
-      p.shadbala?.strength_pct != null
-        ? ` · Shadbala ${p.shadbala.strength_pct}%`
-        : "";
+      p.shadbala?.strength_pct != null ? ` · Shadbala ${p.shadbala.strength_pct}%` : "";
     const roles = (p.health_roles || []).length ? ` · ${(p.health_roles || []).join(", ")}` : "";
     return `${p.name || "?"}: ${p.sign || "?"}${degree} · H${p.house || "?"} · ${p.dignity || "?"}${strength}${shadbala}${flags.length ? ` · ${flags.join(", ")}` : ""}${roles}`;
   });
 
   const allHouses = (facts.houses || []).map((raw) => {
-    const h = raw as {
-      house?: number;
-      sign?: string;
-      lord?: string;
-      occupants?: string[];
-    };
+    const h = raw as { house?: number; sign?: string; lord?: string; occupants?: string[] };
     return `H${h.house || "?"} ${h.sign || "?"} · lord ${h.lord || "?"} · occupants ${(h.occupants || []).join(", ") || "none"}`;
   });
 
@@ -149,26 +149,109 @@ function formatHealthD1Steps(
     return `H${h.house || "?"} ${h.sign || "?"} [${(h.health_roles || []).join(", ")}]\nlord ${lord.lord || h.lord || "?"} → H${lord.lord_house || "?"}, ${lord.lord_dignity || "?"}${lordStrength}${lord.lord_in_dusthana ? ", dusthana" : ""}\noccupants: ${(h.occupants || []).join(", ") || "none"}\naspects: ${aspects || "none"}`;
   });
 
-  const dimensions = Object.entries(facts.dimensions || {}).map(([name, d]) => (
-    `${name}: ${d.verdict || "?"} · score ${d.score ?? "?"} · ${d.reason || "—"}`
-  ));
+  const karakas = Object.entries(facts.karakas || {}).map(([name, k]) => {
+    const row = k as {
+      sign?: string;
+      house?: number;
+      dignity?: string;
+      strength_score?: number;
+      health_roles?: string[];
+    };
+    return `${name}: ${row.sign || "?"} · H${row.house || "?"} · ${row.dignity || "?"} · strength ${row.strength_score ?? "?"} · ${(row.health_roles || []).join(", ")}`;
+  });
 
-  return [
-    {
-      label: "D1 Health Fact Pack",
-      value: `${facts.schema_version} · Ascendant ${facts.ascendant || "?"} · Vitality ${facts.vitality_score ?? "?"}/100 (${facts.vitality_risk || "?"})`,
-    },
-    { label: "D1 Planets + Strength", value: planets.join("\n") || "—" },
-    { label: "All 12 Houses", value: allHouses.join("\n") || "—" },
-    { label: "Health Houses (1/3/4/5/6/8/12)", value: healthHouses.join("\n\n") || "—" },
-    { label: "Health Dimensions", value: dimensions.join("\n") || "—" },
-    { label: "Pressure / Affliction Signals", value: (facts.afflictions || []).join("\n") || "none" },
+  const aspects = (facts.aspects || []).map((raw) => {
+    const a = raw as { planet?: string; from_house?: number; to_house?: number; polarity?: string };
+    return `${a.planet || "?"} H${a.from_house || "?"} → H${a.to_house || "?"} (${a.polarity || "neutral"})`;
+  });
+
+  const shadbala = Object.entries(facts.shadbala || {}).map(([name, raw]) => {
+    const row = raw as { strength_pct?: number; total?: number; required?: number };
+    if (row.strength_pct == null) return `${name}: —`;
+    return `${name}: ${row.strength_pct}% (${row.total ?? "?"} / ${row.required ?? "?"})`;
+  });
+
+  const dimensions = Object.entries(facts.dimensions || {}).map(
+    ([name, d]) => `${name}: ${d.verdict || "?"} · score ${d.score ?? "?"} · ${d.reason || "—"}`,
+  );
+
+  const overview =
+    chartLabel === "D1"
+      ? `${facts.schema_version || "?"} · Lagna ${facts.ascendant || "?"} · Vitality ${facts.vitality_score ?? "?"}/100 (${facts.vitality_risk || "?"})`
+      : `${facts.schema_version || "?"} · Lagna ${facts.ascendant || "?"}`;
+
+  const steps: { label: string; value: string }[] = [
+    { label: `${chartLabel} Overview`, value: overview },
+    { label: `${chartLabel} Lagnesh`, value: formatLagneshLine(facts.lagnesh as Record<string, unknown>) },
+    { label: `${chartLabel} Planets + Power`, value: planets.join("\n") || "—" },
+    { label: `${chartLabel} All 12 Houses`, value: allHouses.join("\n") || "—" },
+    { label: `${chartLabel} Health Houses (1/3/4/5/6/8/12)`, value: healthHouses.join("\n\n") || "—" },
+    { label: `${chartLabel} House Lords (all 12)`, value: Object.entries(facts.house_lords || {}).map(([key, raw]) => {
+      const lord = raw as Record<string, unknown>;
+      return `${key}: ${lord.lord || "?"} → H${lord.lord_house || "?"} · ${lord.lord_sign || "?"} · ${lord.lord_dignity || "?"} · strength ${lord.lord_strength_score ?? "?"}`;
+    }).join("\n") || "—" },
+    { label: `${chartLabel} Health Karakas`, value: karakas.join("\n") || "—" },
+    { label: `${chartLabel} Aspects`, value: aspects.join("\n") || "none" },
+    { label: `${chartLabel} Afflictions / Pressure`, value: (facts.afflictions || []).join("\n") || "none" },
   ];
+
+  if (shadbala.length) {
+    steps.push({ label: `${chartLabel} Shadbala`, value: shadbala.join("\n") });
+  }
+  if (dimensions.length) {
+    steps.push({ label: `${chartLabel} Health Dimensions`, value: dimensions.join("\n") });
+  }
+  return steps;
+}
+
+function formatHealthEngineExecutionSteps(
+  pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
+): { label: string; value: string }[] {
+  if (!pack?.schema_version && !pack?.d1) return [];
+
+  const steps: { label: string; value: string }[] = [
+    {
+      label: "Health Chart Pack",
+      value: `${pack.schema_version || "health_engine_execution_v1"} · fixed D1 + D9 for every health question`,
+    },
+  ];
+
+  steps.push(...formatHealthChartFactsSteps(pack.d1, "D1"));
+  steps.push(...formatHealthChartFactsSteps(pack.d9, "D9"));
+
+  const lagneshD1 = formatLagneshLine(pack.lagnesh?.d1 as Record<string, unknown>);
+  const lagneshD9 = formatLagneshLine(pack.lagnesh?.d9 as Record<string, unknown>);
+  steps.push({
+    label: "Lagnesh Compare (D1 vs D9)",
+    value: `D1: ${lagneshD1}\nD9: ${lagneshD9}`,
+  });
+
+  const vargottama = (pack.vargottama_details || []).map((row) => {
+    const mark = row.vargottama ? "✅ vargottama" : "—";
+    return `${row.planet || "?"}: D1 ${row.d1_sign || "?"} H${row.d1_house || "?"} · D9 ${row.d9_sign || "?"} H${row.d9_house || "?"} · ${mark}`;
+  });
+  steps.push({
+    label: "Vargottama (D1 sign = D9 sign)",
+    value: vargottama.join("\n") || (pack.vargottama_planets || []).join(", ") || "none",
+  });
+
+  return steps;
+}
+
+function formatHealthD1Steps(
+  facts: import("./askObservability").ObservabilityHealthD1Facts | null | undefined,
+): { label: string; value: string }[] {
+  return formatHealthChartFactsSteps(facts, "D1");
 }
 
 function buildEngineExecutionSteps(
   exec: ReturnType<typeof resolveAskObservability>["engine_execution"],
 ): { label: string; value: string }[] {
+  const healthSteps = formatHealthEngineExecutionSteps(exec?.health_engine_execution);
+  if (healthSteps.length) {
+    return healthSteps;
+  }
+
   const modules = exec?.modules || [];
   const modLines =
     modules.length > 0
@@ -280,8 +363,19 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
 
       <Section title="2. Engine Execution" stars={5}>
         <p className="detail-muted obs-engine-name">
-          Engine: <code>{exec.engine_name || "—"}</code>
-          {exec.engine_version ? ` · v${exec.engine_version}` : null}
+          {exec.display_mode === "health_charts" || exec.health_engine_execution ? (
+            <>
+              Health charts: <code>D1 + D9</code>
+              {exec.health_engine_execution?.schema_version
+                ? ` · ${exec.health_engine_execution.schema_version}`
+                : null}
+            </>
+          ) : (
+            <>
+              Engine: <code>{exec.engine_name || "—"}</code>
+              {exec.engine_version ? ` · v${exec.engine_version}` : null}
+            </>
+          )}
         </p>
         <PipelineList steps={buildEngineExecutionSteps(exec)} />
       </Section>

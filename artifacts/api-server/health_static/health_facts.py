@@ -464,13 +464,7 @@ def _compute_recovery_capacity(
     return v, reason, _tier(v), score
 
 
-def compute_health_facts(kundli: dict) -> Dict[str, Any]:
-    if not isinstance(kundli, dict):
-        return {"error": "invalid kundli"}
-
-    raw_planets = kundli.get("planets") or []
-    if not raw_planets:
-        return {"error": "planets missing"}
+def _normalize_planet_list(raw_planets: List[Any]) -> List[dict]:
     planets: List[dict] = []
     for raw in raw_planets:
         if not isinstance(raw, dict):
@@ -483,12 +477,26 @@ def compute_health_facts(kundli: dict) -> Dict[str, Any]:
                 or planet.get("bhava")
             )
         if not planet.get("sign"):
-            longitude = _as_float(planet.get("longitude"))
-            if longitude is not None:
-                planet["sign"] = _SIGN_NAMES[int(longitude // 30) % 12]
+            sign_idx = planet.get("signIndex") or planet.get("sign_idx")
+            if isinstance(sign_idx, int):
+                planet["sign"] = _SIGN_NAMES[int(sign_idx) % 12]
+            else:
+                longitude = _as_float(planet.get("longitude"))
+                if longitude is not None:
+                    planet["sign"] = _SIGN_NAMES[int(longitude // 30) % 12]
         planets.append(planet)
+    return planets
+
+
+def _resolve_d1_chart(kundli: dict) -> Tuple[Optional[List[dict]], Optional[int], Optional[str]]:
+    if not isinstance(kundli, dict):
+        return None, None, "invalid kundli"
+    raw_planets = kundli.get("planets") or []
+    if not raw_planets:
+        return None, None, "planets missing"
+    planets = _normalize_planet_list(raw_planets)
     if not planets:
-        return {"error": "valid planets missing"}
+        return None, None, "valid planets missing"
 
     asc = kundli.get("ascendant")
     asc_sign = (
@@ -511,8 +519,63 @@ def compute_health_facts(kundli: dict) -> Dict[str, Any]:
             if asc_si is not None:
                 break
     if asc_si is None:
-        return {"error": "lagna missing"}
+        return None, None, "lagna missing"
+    return planets, asc_si, None
 
+
+def _resolve_d9_chart(kundli: dict) -> Tuple[Optional[List[dict]], Optional[int], Optional[str]]:
+    if not isinstance(kundli, dict):
+        return None, None, "invalid kundli"
+    divs = kundli.get("divisionalCharts") or kundli.get("divisional_charts") or {}
+    d9_chart = divs.get("D9") if isinstance(divs, dict) else None
+    if not isinstance(d9_chart, dict):
+        return None, None, "d9 missing"
+
+    asc_si: Optional[int] = None
+    for key in ("ascendantSignIndex", "ascendantSignIdx", "ascendant", "lagna", "lagnaSign"):
+        v = d9_chart.get(key)
+        if isinstance(v, int):
+            asc_si = int(v) % 12
+            break
+        if isinstance(v, str):
+            asc_si = _sign_idx(v)
+            if asc_si is not None:
+                break
+    if asc_si is None:
+        return None, None, "d9 lagna missing"
+
+    raw_planets = d9_chart.get("planets") or []
+    if not raw_planets:
+        return None, None, "d9 planets missing"
+    planets = _normalize_planet_list(raw_planets)
+    if not planets:
+        return None, None, "d9 valid planets missing"
+
+    for planet in planets:
+        if planet.get("house"):
+            continue
+        sign_idx = _sign_idx(str(planet.get("sign") or ""))
+        if sign_idx is None:
+            raw_idx = planet.get("signIndex") or planet.get("sign_idx")
+            if isinstance(raw_idx, int):
+                sign_idx = int(raw_idx) % 12
+        if sign_idx is not None:
+            planet["house"] = ((sign_idx - asc_si) % 12) + 1
+            if not planet.get("sign"):
+                planet["sign"] = _SIGN_NAMES[sign_idx]
+    return planets, asc_si, None
+
+
+def _build_chart_health_pack(
+    planets: List[dict],
+    asc_si: int,
+    *,
+    chart: str,
+    kundli: Optional[dict] = None,
+    with_dimensions: bool = True,
+    with_shadbala: bool = True,
+) -> Dict[str, Any]:
+    schema_version = "health_d1_facts_v1" if chart == "D1" else "health_d9_facts_v1"
     lord_states = {
         f"h{hn}": _lord_state(planets, asc_si, hn)
         for hn in range(1, 13)
@@ -523,14 +586,15 @@ def compute_health_facts(kundli: dict) -> Dict[str, Any]:
 
     vitality_score = 50
     vitality_risk = "Moderate"
-    try:
-        from vedic.health_vitality_score_v1 import compute_health_vitality_score
+    if with_dimensions and isinstance(kundli, dict):
+        try:
+            from vedic.health_vitality_score_v1 import compute_health_vitality_score
 
-        vs = compute_health_vitality_score(kundli)
-        vitality_score = int(vs.get("score") or 50)
-        vitality_risk = str(vs.get("risk") or "Moderate")
-    except Exception:
-        pass
+            vs = compute_health_vitality_score(kundli)
+            vitality_score = int(vs.get("score") or 50)
+            vitality_risk = str(vs.get("risk") or "Moderate")
+        except Exception:
+            pass
 
     afflictions: List[str] = []
     for hn in (1, 6, 8, 12):
@@ -546,36 +610,37 @@ def compute_health_facts(kundli: dict) -> Dict[str, Any]:
     moon_aff = _afflicts_moon(planets)
     afflictions.extend(moon_aff[:3])
 
-    ov_v, ov_r, ov_t, ov_s = _compute_overall_vitality(
-        lord_states, karakas, vitality_score, afflictions,
-    )
-    ch_v, ch_r, ch_t, ch_s = _compute_chronic_tendency(lord_states, karakas, planets)
-    ms_v, ms_r, ms_t, ms_s = _compute_mental_stress(karakas, lord_states, planets)
-    sr_v, sr_r, sr_t, sr_s = _compute_surgery_risk_tone(karakas, lord_states, planets)
-    pr_v, pr_r, pr_t, pr_s = _compute_preventive_risk(lord_states, planets)
-    rc_v, rc_r, rc_t, rc_s = _compute_recovery_capacity(lord_states, karakas, planets)
-
-    dimensions = {
-        "overall_vitality": {"verdict": ov_v, "reason": ov_r, "tier": ov_t, "score": ov_s},
-        "chronic_tendency": {"verdict": ch_v, "reason": ch_r, "tier": ch_t, "score": ch_s},
-        "mental_stress": {"verdict": ms_v, "reason": ms_r, "tier": ms_t, "score": ms_s},
-        "surgery_risk_tone": {"verdict": sr_v, "reason": sr_r, "tier": sr_t, "score": sr_s},
-        "preventive_risk": {"verdict": pr_v, "reason": pr_r, "tier": pr_t, "score": pr_s},
-        "recovery_capacity": {"verdict": rc_v, "reason": rc_r, "tier": rc_t, "score": rc_s},
-    }
-
-    sub_flags = {
-        "vitality_score": vitality_score,
-        "vitality_risk": vitality_risk,
-        "moon_afflicted": bool(moon_aff),
-        "chronic_pressure": ch_v == "RED",
-        "mental_pressure": ms_v == "RED",
-        "surgery_caution": sr_v == "RED",
-        "immune_weak": ov_v == "RED",
-    }
+    dimensions: Dict[str, Any] = {}
+    sub_flags: Dict[str, Any] = {}
+    if with_dimensions:
+        ov_v, ov_r, ov_t, ov_s = _compute_overall_vitality(
+            lord_states, karakas, vitality_score, afflictions,
+        )
+        ch_v, ch_r, ch_t, ch_s = _compute_chronic_tendency(lord_states, karakas, planets)
+        ms_v, ms_r, ms_t, ms_s = _compute_mental_stress(karakas, lord_states, planets)
+        sr_v, sr_r, sr_t, sr_s = _compute_surgery_risk_tone(karakas, lord_states, planets)
+        pr_v, pr_r, pr_t, pr_s = _compute_preventive_risk(lord_states, planets)
+        rc_v, rc_r, rc_t, rc_s = _compute_recovery_capacity(lord_states, karakas, planets)
+        dimensions = {
+            "overall_vitality": {"verdict": ov_v, "reason": ov_r, "tier": ov_t, "score": ov_s},
+            "chronic_tendency": {"verdict": ch_v, "reason": ch_r, "tier": ch_t, "score": ch_s},
+            "mental_stress": {"verdict": ms_v, "reason": ms_r, "tier": ms_t, "score": ms_s},
+            "surgery_risk_tone": {"verdict": sr_v, "reason": sr_r, "tier": sr_t, "score": sr_s},
+            "preventive_risk": {"verdict": pr_v, "reason": pr_r, "tier": pr_t, "score": pr_s},
+            "recovery_capacity": {"verdict": rc_v, "reason": rc_r, "tier": rc_t, "score": rc_s},
+        }
+        sub_flags = {
+            "vitality_score": vitality_score,
+            "vitality_risk": vitality_risk,
+            "moon_afflicted": bool(moon_aff),
+            "chronic_pressure": ch_v == "RED",
+            "mental_pressure": ms_v == "RED",
+            "surgery_caution": sr_v == "RED",
+            "immune_weak": ov_v == "RED",
+        }
 
     aspect_rows = _aspect_rows(planets, tuple(range(1, 13)))
-    shadbala = _compute_shadbala_rows(planets, asc_si)
+    shadbala = _compute_shadbala_rows(planets, asc_si) if with_shadbala else {}
     for state in lord_states.values():
         state["lord_shadbala"] = shadbala.get(state.get("lord"))
     for name, state in karakas.items():
@@ -584,12 +649,15 @@ def compute_health_facts(kundli: dict) -> Dict[str, Any]:
     house_rows = _house_fact_rows(planets, asc_si, lord_states, aspect_rows)
     ascendant_sign = _SIGN_NAMES[asc_si]
     health_house_rows = [row for row in house_rows if row["health_relevant"]]
+    lagnesh = dict(lord_states.get("h1") or {})
+    lagnesh["chart"] = chart
 
-    return {
-        "schema_version": "health_d1_facts_v1",
-        "chart": "D1",
+    out: Dict[str, Any] = {
+        "schema_version": schema_version,
+        "chart": chart,
         "ascendant": ascendant_sign,
         "asc_si": asc_si,
+        "lagnesh": lagnesh,
         "planets": planet_rows,
         "houses": house_rows,
         "health_houses": health_house_rows,
@@ -598,8 +666,82 @@ def compute_health_facts(kundli: dict) -> Dict[str, Any]:
         "shadbala": shadbala,
         "aspects": aspect_rows,
         "afflictions": afflictions[:8],
-        "dimensions": dimensions,
-        "sub_flags": sub_flags,
-        "vitality_score": vitality_score,
-        "vitality_risk": vitality_risk,
+    }
+    if with_dimensions:
+        out["dimensions"] = dimensions
+        out["sub_flags"] = sub_flags
+        out["vitality_score"] = vitality_score
+        out["vitality_risk"] = vitality_risk
+    return out
+
+
+def compute_health_facts(kundli: dict) -> Dict[str, Any]:
+    planets, asc_si, err = _resolve_d1_chart(kundli)
+    if err:
+        return {"error": err, "chart": "D1", "schema_version": "health_d1_facts_v1"}
+    return _build_chart_health_pack(
+        planets,
+        asc_si,
+        chart="D1",
+        kundli=kundli,
+        with_dimensions=True,
+        with_shadbala=True,
+    )
+
+
+def compute_d9_health_facts(kundli: dict) -> Dict[str, Any]:
+    planets, asc_si, err = _resolve_d9_chart(kundli)
+    if err:
+        return {"error": err, "chart": "D9", "schema_version": "health_d9_facts_v1"}
+    return _build_chart_health_pack(
+        planets,
+        asc_si,
+        chart="D9",
+        with_dimensions=False,
+        with_shadbala=False,
+    )
+
+
+def compute_health_engine_execution(kundli: dict) -> Dict[str, Any]:
+    """Fixed D1 + D9 health chart pack for admin Engine Execution and LLM context."""
+    d1 = compute_health_facts(kundli if isinstance(kundli, dict) else {})
+    d9 = compute_d9_health_facts(kundli if isinstance(kundli, dict) else {})
+
+    d1_map = {
+        str(p.get("name") or ""): p
+        for p in (d1.get("planets") or [])
+        if p.get("name")
+    }
+    d9_map = {
+        str(p.get("name") or ""): p
+        for p in (d9.get("planets") or [])
+        if p.get("name") and not d9.get("error")
+    }
+    vargottama_details: List[dict] = []
+    for name, d1p in d1_map.items():
+        d9p = d9_map.get(name)
+        if not d9p:
+            continue
+        is_vargottama = d1p.get("sign") == d9p.get("sign")
+        vargottama_details.append({
+            "planet": name,
+            "d1_sign": d1p.get("sign"),
+            "d1_house": d1p.get("house"),
+            "d9_sign": d9p.get("sign"),
+            "d9_house": d9p.get("house"),
+            "vargottama": is_vargottama,
+        })
+
+    return {
+        "schema_version": "health_engine_execution_v1",
+        "d1": d1,
+        "d9": d9,
+        "lagnesh": {
+            "d1": d1.get("lagnesh") or (d1.get("house_lords") or {}).get("h1") or {},
+            "d9": d9.get("lagnesh") or (d9.get("house_lords") or {}).get("h1") or {},
+        },
+        "vargottama_planets": [
+            row["planet"] for row in vargottama_details if row.get("vargottama")
+        ],
+        "vargottama_details": vargottama_details,
     }

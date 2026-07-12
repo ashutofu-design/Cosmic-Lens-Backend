@@ -696,6 +696,8 @@ def try_recover_engine_from_dna(
                 "answer_plan": res.answer_plan,
                 "ignore": list(res.ignore or []),
                 "d1_health_facts": checks.get("d1_health_facts") or {},
+                "d9_health_facts": checks.get("d9_health_facts") or {},
+                "health_engine_execution": checks.get("health_engine_execution") or {},
             }
             checks["gatekeeper_recovered"] = True
             meta = {

@@ -23,7 +23,9 @@ def to_health_llm_payload(result: EngineResult, *, question: str = "") -> str:
             "answer_plan": result.answer_plan,
             "do_not_claim": list(result.ignore or []),
         },
+        "health_engine_execution": checks.get("health_engine_execution") or {},
         "d1_health_facts": checks.get("d1_health_facts") or {},
+        "d9_health_facts": checks.get("d9_health_facts") or {},
     }
     return (
         "VERIFIED_HEALTH_CONTEXT_JSON:\n"

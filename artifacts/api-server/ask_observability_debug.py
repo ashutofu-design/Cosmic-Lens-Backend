@@ -1211,6 +1211,15 @@ def build_observability_debug(
     d1_health_facts = _dig(ctx, sm, key="d1_health_facts")
     if not isinstance(d1_health_facts, dict):
         d1_health_facts = None
+    health_engine_execution = _dig(ctx, sm, key="health_engine_execution")
+    if not isinstance(health_engine_execution, dict):
+        health_engine_execution = None
+    if health_engine_execution is None and d1_health_facts:
+        health_engine_execution = {
+            "schema_version": "health_engine_execution_v1",
+            "d1": d1_health_facts,
+            "d9": _dig(ctx, sm, key="d9_health_facts") or {"error": "d9 missing"},
+        }
     trace_labels = [
         "Question",
         "DNA",
@@ -1239,6 +1248,8 @@ def build_observability_debug(
         "engine_health": engine_health,
         "rule_decisions": decision_table,
         "engine_execution": {
+            "display_mode": "health_charts" if health_engine_execution else "engine_rules",
+            "health_engine_execution": health_engine_execution,
             "engine_name": archetype,
             "engine_version": _dig(ctx.get("checks") or {}, sm or {}, key="engine_version"),
             "modules": modules,

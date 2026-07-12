@@ -2,6 +2,7 @@
 import unittest
 
 from ask_observability_debug import attach_observability_to_context, build_observability_debug
+from health_static.health_facts import compute_health_engine_execution
 
 
 class TestAskObservabilityDebug(unittest.TestCase):
@@ -110,21 +111,25 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertIn("third_person_infidelity", pipeline["Bucket"])
 
     def test_health_d1_facts_appear_inside_engine_execution(self):
-        facts = {
-            "schema_version": "health_d1_facts_v1",
-            "chart": "D1",
+        facts = compute_health_engine_execution({
             "ascendant": "Leo",
-            "planets": [{"name": "Sun", "sign": "Leo", "house": 1}],
-            "houses": [{"house": 1, "sign": "Leo"}],
-            "health_houses": [{"house": 1, "sign": "Leo"}],
-            "dimensions": {"overall_vitality": {"verdict": "GREEN", "score": 2}},
-        }
+            "planets": [
+                {"name": "Sun", "sign": "Leo", "house": 1},
+                {"name": "Moon", "sign": "Scorpio", "house": 4},
+            ],
+            "divisionalCharts": {
+                "D9": {
+                    "ascendant": "Aries",
+                    "planets": [{"name": "Sun", "sign": "Leo", "house": 5}],
+                }
+            },
+        })
         ctx = {
             "question": "meri sehat kaisi hai",
             "slice_meta": {
                 "slice": "health_engine_v1",
                 "archetype": "overall_vitality",
-                "checks": {"d1_health_facts": facts},
+                "checks": {"health_engine_execution": facts},
             },
             "llm_intent": {"domain": "health"},
         }
@@ -134,10 +139,18 @@ class TestAskObservabilityDebug(unittest.TestCase):
             answer_text="Sehat supportive hai.",
         )
         self.assertEqual(
-            obs["engine_execution"]["d1_health_facts"]["schema_version"],
-            "health_d1_facts_v1",
+            obs["engine_execution"]["health_engine_execution"]["schema_version"],
+            "health_engine_execution_v1",
         )
-        self.assertEqual(obs["engine_execution"]["d1_health_facts"]["ascendant"], "Leo")
+        self.assertEqual(
+            obs["engine_execution"]["display_mode"],
+            "health_charts",
+        )
+        self.assertEqual(
+            obs["engine_execution"]["health_engine_execution"]["d1"]["ascendant"],
+            "Leo",
+        )
+        self.assertIn("d9", obs["engine_execution"]["health_engine_execution"])
 
 
 if __name__ == "__main__":

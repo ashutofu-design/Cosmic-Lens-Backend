@@ -97,6 +97,9 @@ class TestAskHealthEngine(unittest.TestCase):
             archetype="general_health",
         )
         facts = (res.checks or {}).get("d1_health_facts") or {}
+        pack = (res.checks or {}).get("health_engine_execution") or {}
+        self.assertEqual(pack.get("schema_version"), "health_engine_execution_v1")
+        self.assertEqual(pack.get("d1", {}).get("ascendant"), "Leo")
         self.assertEqual(facts.get("schema_version"), "health_d1_facts_v1")
         self.assertEqual(facts.get("chart"), "D1")
         self.assertEqual(facts.get("ascendant"), "Leo")

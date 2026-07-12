@@ -51,14 +51,16 @@ function PipelineList({ steps }: { steps: { label: string; value: string }[] }) 
 
 function DnaPipelineGrid({ steps }: { steps: { label: string; value: string }[] }) {
   return (
-    <dl className="obs-dna-grid">
-      {steps.map((step, i) => (
-        <div key={`${step.label}-${i}`} className="obs-dna-grid-row">
-          <dt className="obs-dna-grid-label">{step.label}</dt>
-          <dd className="obs-dna-grid-value">{step.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <table className="obs-dna-table">
+      <tbody>
+        {steps.map((step, i) => (
+          <tr key={`${step.label}-${i}`}>
+            <th scope="row">{step.label}</th>
+            <td>{step.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -349,9 +351,6 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
       ) : null}
 
       <Section title="1. Question DNA" stars={1} className="obs-section-dna">
-        <p className="detail-muted obs-dna-hint">
-          Same classifier fields as mobile DNA Check (Normalized → Bucket Match).
-        </p>
         <DnaPipelineGrid steps={obs.question_dna_pipeline || []} />
       </Section>
 

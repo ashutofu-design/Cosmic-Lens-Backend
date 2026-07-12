@@ -46,7 +46,8 @@ _COSMO_HEALTH_ADAPTIVE = """
    (jaise "Saturn 6th ghar me", "Moon afflicted", "H6 me malefic").
 5. Agar JSON me sawal ki strong signal NAHI hai — seedha bolo chart me itni zyada tendency
    nahi dikhti, zyada tension mat lo. Bina proof ke generic advice (pollution, pranayama only) mat do.
-6. Normal astrologer ki tarah likho — seedha, natural Hinglish flow; textbook ya AI tone nahi.
+6. Proof jawab ke beech natural likho — end me alag "(Proof:...)" ya "Proof:" line mat add karo.
+7. Normal astrologer ki tarah likho — seedha, natural Hinglish flow; textbook ya AI tone nahi.
 """.strip()
 
 _COSMO_ASK_MARKDOWN = """

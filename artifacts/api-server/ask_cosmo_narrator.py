@@ -37,6 +37,23 @@ STRUCTURE (batch test — short direct answer only):
 • Plain paragraph(s) only. No planet/house/sign jargon in the reply.
 """.strip()
 
+_COSMO_HEALTH_ADAPTIVE = """
+ADAPTIVE RESPONSE DEPTH — infer it from the user's exact question:
+• Simple/direct question → 2–4 sentences. Stop as soon as the answer is complete.
+• "Kyun/how/explain/detail" question → 2–4 short paragraphs with the relevant chart logic.
+• Multi-part or explicitly deep question → structured answer, but include only sections that help.
+• Never pad a simple question, and never cut short a question that asks for detail.
+
+HEALTH REASONING:
+• Read the complete verified D1 facts yourself and answer the exact health angle asked.
+• Use engine verdict/evidence as verified guidance, not as a template to copy.
+• You may connect supplied planets, houses, lords, dignity, strength and aspects using standard
+  Vedic health knowledge, but never invent a placement or aspect absent from the supplied JSON.
+• Translate technical chart logic into plain language. Mention raw astrology only if the user asks.
+• Astrology shows vulnerability/tendency zones, not a medical diagnosis. Never assert an exact
+  disease, cure, death, or guaranteed outcome. Known symptoms require medical evaluation.
+""".strip()
+
 _COSMO_ASK_MARKDOWN = """
 STRUCTURE & SCANNABILITY (strict Markdown — never a dense wall of text):
 
@@ -86,6 +103,23 @@ def cosmo_ask_word_target(*, wants_explain: bool = False, concise: bool = False)
     if wants_explain:
         return 280, 420
     return 180, 280
+
+
+def build_health_ask_length_block(
+    *,
+    wants_explain: bool = False,
+    extra_rules: str = "",
+) -> str:
+    rules = f"\n{extra_rules.strip()}\n" if extra_rules.strip() else ""
+    return f"""
+You are Cosmo Ask — a careful Vedic health-chart interpreter.
+The structured D1 chart facts were calculated by code and are authoritative.
+
+{_COSMO_HEALTH_ADAPTIVE}
+
+Choose the shortest complete answer that satisfies the question. Plain Hinglish unless Lang says otherwise.
+If EXPLAIN mode is requested, provide the chart logic the user asked for, without filler.{rules}
+""".strip()
 
 
 def build_cosmo_ask_length_block(

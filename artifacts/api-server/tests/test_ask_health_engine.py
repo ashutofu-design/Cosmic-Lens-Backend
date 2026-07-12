@@ -90,6 +90,33 @@ class TestAskHealthEngine(unittest.TestCase):
         self.assertIn("8th house", joined)
         self.assertIn("12th house", joined)
 
+    def test_every_health_result_contains_complete_d1_fact_pack(self):
+        res = run_health_static_engine(
+            _SAMPLE_KUNDLI,
+            "meri health overall kaisi hai",
+            archetype="general_health",
+        )
+        facts = (res.checks or {}).get("d1_health_facts") or {}
+        self.assertEqual(facts.get("schema_version"), "health_d1_facts_v1")
+        self.assertEqual(facts.get("chart"), "D1")
+        self.assertEqual(facts.get("ascendant"), "Leo")
+        self.assertEqual(len(facts.get("planets") or []), 9)
+        self.assertEqual(len(facts.get("houses") or []), 12)
+        self.assertEqual(
+            {h["house"] for h in facts.get("health_houses") or []},
+            {1, 3, 4, 5, 6, 8, 12},
+        )
+        self.assertEqual(len(facts.get("house_lords") or {}), 12)
+        self.assertEqual(len(facts.get("karakas") or {}), 9)
+        self.assertIn("dimensions", facts)
+        self.assertIn("overall_vitality", facts["dimensions"])
+        self.assertIn("score", facts["dimensions"]["overall_vitality"])
+        sun = next(p for p in facts["planets"] if p["name"] == "Sun")
+        self.assertEqual(sun["house"], 1)
+        self.assertEqual(sun["dignity"], "own")
+        self.assertIn("heart", sun["health_roles"])
+        self.assertIn("strength_pct", sun["shadbala"])
+
     def test_kya_kya_health_issue_engine_payload(self):
         q = "Mujhse yeh batao kya kya health issue ho raha hai"
         res = run_health_static_engine(_SAMPLE_KUNDLI, q, archetype="general_health")

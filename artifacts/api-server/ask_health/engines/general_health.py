@@ -13,9 +13,9 @@ from ._health_base import (
 )
 
 _ISSUE_NOW_Q = re.compile(
-    r"(?ix)(kya\s+kya\s+(?:health\s+|sehat\s+|tabiyat\s+)?(?:issue|problem|dikkat|bimari)|"
+    r"(?ix)(kya\s+kya\s+(?:health\s+|sehat\s+|tabiyat\s+)?(?:issue|problem|dikkat|bimari|disease|rog)|"
     r"(?:health|sehat|tabiyat)\s+(?:issue|problem|dikkat)\s+ho\s+raha|"
-    r"(?:issue|problem|dikkat|bimari)\s+ho\s+rahi?)"
+    r"(?:issue|problem|dikkat|bimari|disease)\s+ho\s+rahi?)"
 )
 
 
@@ -54,11 +54,10 @@ def run_general_health(kundli: dict, question: str, *, wants_explain: bool = Fal
     issue_now = bool(_ISSUE_NOW_Q.search(question or ""))
     if issue_now:
         answer_plan = (
-            "User wants to know what health troubles/patterns they feel NOW — "
-            "warm plain Hinglish: energy, stress, recurring weakness, body strain. "
-            "Use 6/8/12 + vitality/stress/chronic evidence as felt patterns, NOT jargon."
+            "Answer the health troubles/tendencies the user asked about. "
+            "Name vulnerability zones, not diagnosed diseases."
         )
-        summary = ["Cosmo friend tone.", "No disease names.", "No engine jargon."]
+        summary = ["No disease diagnosis.", "Answer exact question."]
         word_budget = 105 if wants_explain else 95
     else:
         answer_plan = "Open health Q — pick relevant dimensions from evidence."

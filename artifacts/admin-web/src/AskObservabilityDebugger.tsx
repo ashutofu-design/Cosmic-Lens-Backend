@@ -3,9 +3,9 @@ import type { AskQuestionItem } from "./api";
 import { formatInr } from "./api";
 import {
   OBS_DEBUGGER_VERSION,
-  orderScorecardEntries,
   resolveAskObservability,
   type ObservabilityEvidence,
+  type ObservabilityHealthD1Facts,
   type ObservabilityRule,
   type ObservabilityRuleDecision,
 } from "./askObservability";
@@ -102,6 +102,70 @@ function formatRulesIgnored(ignored: ObservabilityRule[]): string {
     .join("\n\n");
 }
 
+function formatHealthD1Steps(
+  facts: ObservabilityHealthD1Facts | null | undefined,
+): { label: string; value: string }[] {
+  if (!facts || !facts.schema_version) return [];
+
+  const planets = (facts.planets || []).map((p) => {
+    const flags = [
+      p.retrograde ? "retrograde" : "",
+      p.combust ? "combust" : "",
+    ].filter(Boolean);
+    const degree = p.degree != null ? ` ${p.degree.toFixed(2)}°` : "";
+    const strength =
+      p.strength_score != null
+        ? ` strength ${p.strength_score > 0 ? "+" : ""}${p.strength_score}`
+        : "";
+    const shadbala =
+      p.shadbala?.strength_pct != null
+        ? ` · Shadbala ${p.shadbala.strength_pct}%`
+        : "";
+    const roles = (p.health_roles || []).length ? ` · ${(p.health_roles || []).join(", ")}` : "";
+    return `${p.name || "?"}: ${p.sign || "?"}${degree} · H${p.house || "?"} · ${p.dignity || "?"}${strength}${shadbala}${flags.length ? ` · ${flags.join(", ")}` : ""}${roles}`;
+  });
+
+  const allHouses = (facts.houses || []).map((raw) => {
+    const h = raw as {
+      house?: number;
+      sign?: string;
+      lord?: string;
+      occupants?: string[];
+    };
+    return `H${h.house || "?"} ${h.sign || "?"} · lord ${h.lord || "?"} · occupants ${(h.occupants || []).join(", ") || "none"}`;
+  });
+
+  const healthHouses = (facts.health_houses || []).map((h) => {
+    const lord = h.lord_state || {};
+    const aspects = (h.aspects_received || [])
+      .map((a) => `${a.planet || "?"} from H${a.from_house || "?"} (${a.polarity || "neutral"})`)
+      .join(", ");
+    const lordStrength =
+      lord.lord_shadbala?.strength_pct != null
+        ? `, Shadbala ${lord.lord_shadbala.strength_pct}%`
+        : lord.lord_strength_score != null
+          ? `, strength ${lord.lord_strength_score > 0 ? "+" : ""}${lord.lord_strength_score}`
+          : "";
+    return `H${h.house || "?"} ${h.sign || "?"} [${(h.health_roles || []).join(", ")}]\nlord ${lord.lord || h.lord || "?"} → H${lord.lord_house || "?"}, ${lord.lord_dignity || "?"}${lordStrength}${lord.lord_in_dusthana ? ", dusthana" : ""}\noccupants: ${(h.occupants || []).join(", ") || "none"}\naspects: ${aspects || "none"}`;
+  });
+
+  const dimensions = Object.entries(facts.dimensions || {}).map(([name, d]) => (
+    `${name}: ${d.verdict || "?"} · score ${d.score ?? "?"} · ${d.reason || "—"}`
+  ));
+
+  return [
+    {
+      label: "D1 Health Fact Pack",
+      value: `${facts.schema_version} · Ascendant ${facts.ascendant || "?"} · Vitality ${facts.vitality_score ?? "?"}/100 (${facts.vitality_risk || "?"})`,
+    },
+    { label: "D1 Planets + Strength", value: planets.join("\n") || "—" },
+    { label: "All 12 Houses", value: allHouses.join("\n") || "—" },
+    { label: "Health Houses (1/3/4/5/6/8/12)", value: healthHouses.join("\n\n") || "—" },
+    { label: "Health Dimensions", value: dimensions.join("\n") || "—" },
+    { label: "Pressure / Affliction Signals", value: (facts.afflictions || []).join("\n") || "none" },
+  ];
+}
+
 function buildEngineExecutionSteps(
   exec: ReturnType<typeof resolveAskObservability>["engine_execution"],
 ): { label: string; value: string }[] {
@@ -115,6 +179,7 @@ function buildEngineExecutionSteps(
     { label: "Modules Loaded", value: modLines },
     { label: "Rules Fired", value: formatRulesFired(exec?.fired || []) },
   ];
+  steps.push(...formatHealthD1Steps(exec?.d1_health_facts));
 
   const ignoredText = formatRulesIgnored(exec?.ignored || []);
   if (ignoredText) {
@@ -124,29 +189,6 @@ function buildEngineExecutionSteps(
   steps.push(
     { label: "Final Score", value: String(exec?.final_score ?? "—") },
     { label: "Verdict", value: String(exec?.verdict || exec?.verdict_level || "—") },
-  );
-
-  return steps;
-}
-
-function buildConflictSteps(
-  conflict: ReturnType<typeof resolveAskObservability>["conflict_resolution"],
-): { label: string; value: string }[] {
-  const modules = conflict?.modules || [];
-  const steps: { label: string; value: string }[] = [];
-
-  if (modules.length) {
-    steps.push({
-      label: "Module polarity",
-      value: modules.map((m) => `${m.module}\n${m.polarity}`).join("\n\n"),
-    });
-  } else {
-    steps.push({ label: "Module polarity", value: "—" });
-  }
-
-  steps.push(
-    { label: "Conflict", value: conflict?.conflict || conflict?.final_result || "None" },
-    { label: "Reason", value: conflict?.reason || "—" },
   );
 
   return steps;
@@ -191,13 +233,9 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
   const obs = resolveAskObservability(row);
   const exec = obs.engine_execution || {};
   const evidence = obs.planet_evidence || {};
-  const conflict = obs.conflict_resolution || {};
-  const scorecard = obs.scorecard || {};
-  const scoreEntries = orderScorecardEntries(scorecard);
   const perf = obs.performance || {};
   const trace = obs.final_trace || [];
   const hallSummary = obs.hallucination_summary;
-  const health = obs.engine_health || {};
   const ruleDecisions = obs.rule_decisions || [];
 
   return (
@@ -240,40 +278,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         <PipelineList steps={obs.question_dna_pipeline || []} />
       </Section>
 
-      <Section title="2. Engine Health" stars={5}>
-        <div className="obs-health-grid">
-          <div>
-            <span className="detail-muted">Modules loaded</span>
-            <div className="obs-big-value obs-big-value-sm">{health.modules_loaded || "—"}</div>
-          </div>
-          <div>
-            <span className="detail-muted">Rules evaluated</span>
-            <div className="obs-big-value obs-big-value-sm">{health.rules_evaluated ?? "—"}</div>
-          </div>
-          <div>
-            <span className="detail-muted">Rules fired</span>
-            <div className="obs-big-value obs-big-value-sm">{health.rules_fired ?? "—"}</div>
-          </div>
-          <div>
-            <span className="detail-muted">Skipped</span>
-            <div className="obs-big-value obs-big-value-sm">{health.rules_skipped ?? "—"}</div>
-          </div>
-          <div>
-            <span className="detail-muted">Confidence</span>
-            <div className="obs-big-value obs-big-value-sm">
-              {health.confidence_pct != null ? `${health.confidence_pct}%` : "—"}
-            </div>
-          </div>
-          <div>
-            <span className="detail-muted">Execution</span>
-            <div className="obs-big-value obs-big-value-sm">
-              {formatMs(health.execution_ms ?? exec.execution_time_ms)}
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="3. Engine Execution" stars={5}>
+      <Section title="2. Engine Execution" stars={5}>
         <p className="detail-muted obs-engine-name">
           Engine: <code>{exec.engine_name || "—"}</code>
           {exec.engine_version ? ` · v${exec.engine_version}` : null}
@@ -281,49 +286,18 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         <PipelineList steps={buildEngineExecutionSteps(exec)} />
       </Section>
 
-      <Section title="4. Rule Decision Table" stars={5}>
+      <Section title="3. Rule Decision Table" stars={5}>
         <RuleDecisionTable rows={ruleDecisions} />
       </Section>
 
-      <Section title="5. Planet Evidence" stars={5}>
+      <Section title="4. Planet Evidence" stars={5}>
         <div className="obs-evidence-cols">
           <EvidenceColumn title="Positive" items={evidence.positive || []} icon="✅" />
           <EvidenceColumn title="Negative" items={evidence.negative || []} icon="❌" />
         </div>
       </Section>
 
-      <Section title="6. Conflict Resolution" stars={3}>
-        <PipelineList steps={buildConflictSteps(conflict)} />
-      </Section>
-
-      <Section title="7. Scorecard" stars={5}>
-        {scoreEntries.length === 0 ? (
-          <p className="detail-muted">No scorecard saved.</p>
-        ) : (
-          <div className="obs-scorecard-grid">
-            {scoreEntries.map(([k, v]) => (
-              <div key={k} className="obs-scorecard-item">
-                <span className="detail-muted">{k}</span>
-                <span className="obs-scorecard-value">{v}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      <Section title="8. Narrator Input" stars={5}>
-        {obs.narrator_input ? (
-          <pre className="obs-json">{JSON.stringify(obs.narrator_input, null, 2)}</pre>
-        ) : (
-          <p className="detail-muted">Not saved — exact JSON sent to LLM missing.</p>
-        )}
-      </Section>
-
-      <Section title="9. Narrator Output">
-        <pre className="obs-answer-preview">{obs.narrator_output || row.answer_text || "—"}</pre>
-      </Section>
-
-      <Section title="10. Hallucination Check" stars={5}>
+      <Section title="5. Hallucination Check" stars={5}>
         {hallSummary ? (
           <ul className="obs-hallucination-summary">
             <li className={hallSummary.engine_facts_used?.ok ? "obs-ok" : "obs-bad"}>
@@ -384,7 +358,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         )}
       </Section>
 
-      <Section title="11. Final Trace" stars={4} defaultOpen>
+      <Section title="6. Final Trace" stars={4} defaultOpen>
         <PipelineList steps={trace} />
       </Section>
     </div>

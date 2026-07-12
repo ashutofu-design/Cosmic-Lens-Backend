@@ -42,9 +42,13 @@ def run_preventive_risk(kundli: dict, question: str, *, wants_explain: bool = Fa
         verdict=verdict,
         confidence=confidence,
         word_budget=90 if wants_explain else 75,
-        answer_plan="Future risk/tendency zones — NOT illness date.",
+        answer_plan="Future risk/tendency zones — NOT illness date or diagnosis.",
         summary=["Prevention focus.", "No diagnosis names."],
         evidence=evidence[:8],
         ignore=["timing", "disease names"],
-        checks={"slice_type": "health_engine_v1", "archetype": "preventive_risk", "prevent_v": v},
+        checks={
+            "slice_type": "health_engine_v1",
+            "archetype": "preventive_risk",
+            "prevent_v": v,
+        },
     )

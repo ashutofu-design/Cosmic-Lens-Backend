@@ -49,6 +49,63 @@ export interface ObservabilityEngineHealth {
   execution_ms?: number | null;
 }
 
+export interface ObservabilityHealthD1Facts {
+  schema_version?: string;
+  chart?: string;
+  ascendant?: string;
+  vitality_score?: number;
+  vitality_risk?: string;
+  planets?: Array<{
+    name?: string;
+    sign?: string;
+    house?: number;
+    degree?: number | null;
+    dignity?: string;
+    strength_score?: number;
+    shadbala?: {
+      total?: number;
+      required?: number;
+      strength_pct?: number;
+      parts?: Record<string, unknown>;
+    } | null;
+    retrograde?: boolean;
+    combust?: boolean;
+    health_roles?: string[];
+  }>;
+  houses?: Array<Record<string, unknown>>;
+  health_houses?: Array<{
+    house?: number;
+    sign?: string;
+    lord?: string;
+    lord_state?: {
+      lord?: string;
+      lord_house?: number;
+      lord_dignity?: string;
+      lord_strength_score?: number;
+      lord_shadbala?: { strength_pct?: number } | null;
+      lord_in_dusthana?: boolean;
+    };
+    occupants?: string[];
+    aspects_received?: Array<{
+      planet?: string;
+      from_house?: number;
+      to_house?: number;
+      polarity?: string;
+    }>;
+    health_roles?: string[];
+  }>;
+  house_lords?: Record<string, Record<string, unknown>>;
+  karakas?: Record<string, Record<string, unknown>>;
+  shadbala?: Record<string, Record<string, unknown>>;
+  aspects?: Array<Record<string, unknown>>;
+  afflictions?: string[];
+  dimensions?: Record<
+    string,
+    { verdict?: string; reason?: string; tier?: string; score?: number }
+  >;
+  sub_flags?: Record<string, unknown>;
+}
+
 export interface ObservabilityHallucinationSummary {
   engine_facts_used?: { ok: boolean; detail?: string };
   extra_llm_assumptions?: { ok: boolean; items?: string[] };
@@ -79,6 +136,7 @@ export interface AskObservability {
     final_score?: number | string | null;
     verdict_level?: string | null;
     verdict?: string | null;
+    d1_health_facts?: ObservabilityHealthD1Facts | null;
   };
   astrology_checks?: Record<string, string[]>;
   planet_evidence?: {
@@ -173,7 +231,7 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.4.2";
+export const OBS_DEBUGGER_VERSION = "2.5.0";
 
 const DNA_DOMAIN_LABEL: Record<string, string> = {
   love: "Relationship",
@@ -592,6 +650,12 @@ function enrichObservability(
   if (!exec.verdict) {
     exec.verdict = String(engineVerdict.verdict || "—");
   }
+  if (!exec.d1_health_facts) {
+    const d1HealthFacts = checks.d1_health_facts || smChecks.d1_health_facts;
+    if (d1HealthFacts && typeof d1HealthFacts === "object") {
+      exec.d1_health_facts = d1HealthFacts as ObservabilityHealthD1Facts;
+    }
+  }
 
   const hallSummary = obs.hallucination_summary || {
     engine_facts_used: {
@@ -859,10 +923,7 @@ function formatEvidenceList(
 export function buildAskDetailCopyText(row: AskQuestionItem): string {
   const obs = resolveAskObservability(row);
   const exec = obs.engine_execution || {};
-  const health = obs.engine_health || {};
   const evidence = obs.planet_evidence || {};
-  const conflict = obs.conflict_resolution || {};
-  const scoreEntries = orderScorecardEntries(obs.scorecard || {});
   const perf = obs.performance || {};
 
   const lines: string[] = [
@@ -897,15 +958,7 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   lines.push(...formatPipelineSection("1. QUESTION DNA", obs.question_dna_pipeline));
 
   lines.push(
-    "=== 2. ENGINE HEALTH ===",
-    `Modules loaded: ${health.modules_loaded || "—"}`,
-    `Rules evaluated: ${health.rules_evaluated ?? "—"}`,
-    `Rules fired: ${health.rules_fired ?? "—"}`,
-    `Rules skipped: ${health.rules_skipped ?? "—"}`,
-    `Confidence: ${health.confidence_pct != null ? `${health.confidence_pct}%` : "—"}`,
-    `Execution: ${health.execution_ms != null ? `${health.execution_ms}ms` : "—"}`,
-    "",
-    "=== 3. ENGINE EXECUTION ===",
+    "=== 2. ENGINE EXECUTION ===",
     `Engine: ${exec.engine_name || "—"}${exec.engine_version ? ` v${exec.engine_version}` : ""}`,
     `Final score: ${exec.final_score ?? "—"}`,
     `Verdict: ${exec.verdict || exec.verdict_level || "—"}`,
@@ -930,9 +983,16 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
       lines.push(`  ${r.rule_id || "?"} — ${r.reason || "—"}`);
     }
   }
+  if (exec.d1_health_facts) {
+    lines.push(
+      "",
+      "D1 Health Fact Pack:",
+      JSON.stringify(exec.d1_health_facts, null, 2),
+    );
+  }
   lines.push("");
 
-  lines.push("=== 4. RULE DECISION TABLE ===");
+  lines.push("=== 3. RULE DECISION TABLE ===");
   if (!(obs.rule_decisions || []).length) {
     lines.push("—", "");
   } else {
@@ -944,7 +1004,7 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
     lines.push("");
   }
 
-  lines.push("=== 5. PLANET EVIDENCE ===");
+  lines.push("=== 4. PLANET EVIDENCE ===");
   lines.push(...formatEvidenceList("Positive", evidence.positive));
   lines.push(...formatEvidenceList("Negative", evidence.negative));
   if ((evidence.neutral || []).length) {
@@ -952,38 +1012,7 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   }
   lines.push("");
 
-  lines.push(
-    "=== 6. CONFLICT RESOLUTION ===",
-    `Conflict: ${conflict.conflict || conflict.final_result || "None"}`,
-    `Reason: ${conflict.reason || "—"}`,
-  );
-  for (const m of conflict.modules || []) {
-    lines.push(`  ${m.module}: ${m.polarity}`);
-  }
-  lines.push("");
-
-  lines.push("=== 7. SCORECARD ===");
-  if (!scoreEntries.length) {
-    lines.push("—", "");
-  } else {
-    for (const [k, v] of scoreEntries) {
-      lines.push(`${k}: ${v}`);
-    }
-    lines.push("");
-  }
-
-  lines.push("=== 8. NARRATOR INPUT (JSON) ===");
-  lines.push(
-    obs.narrator_input
-      ? JSON.stringify(obs.narrator_input, null, 2)
-      : "—",
-    "",
-    "=== 9. NARRATOR OUTPUT ===",
-    obs.narrator_output || row.answer_text || "—",
-    "",
-  );
-
-  lines.push("=== 10. HALLUCINATION CHECK ===");
+  lines.push("=== 5. HALLUCINATION CHECK ===");
   const hall = obs.hallucination_summary;
   if (hall) {
     lines.push(
@@ -1007,7 +1036,7 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   }
   lines.push("");
 
-  lines.push(...formatPipelineSection("11. FINAL TRACE", obs.final_trace));
+  lines.push(...formatPipelineSection("6. FINAL TRACE", obs.final_trace));
 
   return lines.join("\n").trim() + "\n";
 }

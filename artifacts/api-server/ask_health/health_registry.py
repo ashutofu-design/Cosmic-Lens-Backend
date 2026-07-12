@@ -155,9 +155,9 @@ _PREVENT_RX = re.compile(
 )
 
 _ISSUE_NOW_RX = re.compile(
-    r"(?ix)(kya\s+kya\s+(?:health\s+|sehat\s+|tabiyat\s+)?(?:issue|problem|dikkat|bimari)|"
+    r"(?ix)(kya\s+kya\s+(?:health\s+|sehat\s+|tabiyat\s+)?(?:issue|problem|dikkat|bimari|disease|rog)|"
     r"(?:health|sehat|tabiyat)\s+(?:issue|problem|dikkat)\s+ho\s+raha|"
-    r"(?:issue|problem|dikkat|bimari)\s+ho\s+rahi?|"
+    r"(?:issue|problem|dikkat|bimari|disease)\s+ho\s+rahi?|"
     r"ho\s+raha\s+hai.*(?:health|issue|dikkat|tabiyat))"
 )
 

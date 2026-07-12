@@ -1208,6 +1208,9 @@ def build_observability_debug(
     narrator_input = _ensure_narrator_input(ctx, evidence, rules)
     verdict_extras = _engine_verdict_extras(ctx, evidence)
     hallucination_rows = _hallucination_checks(answer_text, ctx)
+    d1_health_facts = _dig(ctx, sm, key="d1_health_facts")
+    if not isinstance(d1_health_facts, dict):
+        d1_health_facts = None
     trace_labels = [
         "Question",
         "DNA",
@@ -1241,6 +1244,7 @@ def build_observability_debug(
             "modules": modules,
             "modules_skipped": _modules_skipped(modules),
             "execution_time_ms": _execution_time_ms(ctx),
+            "d1_health_facts": d1_health_facts,
             **rules,
         },
         "astrology_checks": _astrology_checks(ctx),
@@ -1294,7 +1298,7 @@ def attach_observability_to_context(
     return out
 
 
-OBS_DEBUGGER_VERSION = "2.4.0"
+OBS_DEBUGGER_VERSION = "2.5.0"
 
 
 def _format_pipeline_section(title: str, steps: list[dict[str, Any]] | None) -> list[str]:

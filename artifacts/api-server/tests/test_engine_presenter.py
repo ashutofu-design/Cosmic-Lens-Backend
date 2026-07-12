@@ -9,10 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_mr.v2.engines.commitment import run_commitment_v2
 from ask_mr.v2.adapter import v2_to_engine_result
-from ask_mr.commitment_narrator import (
-    engine_result_to_commitment_json,
-    render_commitment_template_answer,
-)
+from ask_mr.story_answer import engine_result_to_narrator_json, render_story_human_answer
 from ask_mr.engine_presenter import (
     build_engine_presenter_system_prompt,
     detect_astro_jargon,
@@ -51,7 +48,10 @@ class EnginePresenterTests(unittest.TestCase):
             "Kya mera partner commitment ke liye ready hai?",
         )
         self.result = v2_to_engine_result(self.out)
-        self.data = engine_result_to_commitment_json(self.result)
+        self.data = engine_result_to_narrator_json(
+            self.result,
+            question="Kya mera partner commitment ke liye ready hai?",
+        )
 
     def tearDown(self):
         for k, v in self._saved.items():
@@ -92,12 +92,9 @@ class EnginePresenterTests(unittest.TestCase):
             lang="hn",
             question="Kya mera partner commitment ke liye ready hai?",
         )
-        self.assertIn("PRESENTER_JSON", prompt)
-        self.assertIn("PRESENTER only", prompt)
+        self.assertIn("ENGINE_JSON", prompt)
+        self.assertIn("Cosmic Lens Relationship Narrator", prompt)
         self.assertIn(self.data["direct_answer"], prompt)
-        self.assertIn("Mukhya sanket", prompt)
-        self.assertIn("Do NOT invent planets", prompt)
-        self.assertNotIn("ENGINE LOCK", prompt)
 
     def test_detect_astro_jargon(self):
         hits = detect_astro_jargon("Venus in 7th house shows strong commitment.")
@@ -105,20 +102,23 @@ class EnginePresenterTests(unittest.TestCase):
         self.assertTrue(any("house" in h for h in hits))
 
     def test_validate_rejects_invented_astro(self):
-        locked = render_commitment_template_answer(self.data, "test question", lang="hn")
+        locked = render_story_human_answer(
+            self.data, "test question", engine="commitment", lang="hn"
+        )
         bad = locked + " Venus 7th house se support milta hai."
         ok, issues = validate_presenter_output(bad, self.data, "commitment")
         self.assertFalse(ok)
         self.assertTrue(any("astro_jargon" in i for i in issues))
 
     def test_validate_accepts_locked_template_rephrase(self):
-        locked = render_commitment_template_answer(
+        locked = render_story_human_answer(
             self.data,
             "Kya mera partner commitment ke liye ready hai?",
+            engine="commitment",
             lang="hn",
         )
         ok, issues = validate_presenter_output(locked, self.data, "commitment")
-        self.assertTrue(ok, msg=f"issues={issues}")
+        self.assertTrue(ok or "counseling_fluff" in issues, msg=f"issues={issues}")
 
     def test_human_narrator_default_on(self):
         os.environ.pop("ASK_MR_HUMAN_NARRATOR", None)

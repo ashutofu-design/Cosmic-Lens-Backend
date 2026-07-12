@@ -427,7 +427,12 @@ def check_narrator_json_gate(narrator_json: dict[str, Any] | None) -> Gatekeeper
             rule="rule_3_narrator_json_missing",
         )
     # Rule 4 — content fields must include direct_answer + at least one evidence list
-    if not str(narrator_json.get("direct_answer") or narrator_json.get("final_verdict") or "").strip():
+    if not str(
+        narrator_json.get("direct_answer")
+        or narrator_json.get("final_verdict")
+        or narrator_json.get("verdict")
+        or ""
+    ).strip():
         return GatekeeperResult(
             ok=False,
             stage="narrator",
@@ -441,6 +446,10 @@ def check_narrator_json_gate(narrator_json: dict[str, Any] | None) -> Gatekeeper
             "weakest",
             "positive_indicators",
             "risk_indicators",
+            "evidence",
+            "evidence_positive",
+            "evidence_negative",
+            "answer_plan",
             "reason",
             "reason_summary",
             "warnings",
@@ -582,6 +591,23 @@ def build_blocked_response(
 
 def extract_narrator_json_from_chart_text(chart_text: str) -> dict[str, Any] | None:
     raw = chart_text or ""
+    if "VERIFIED_HEALTH_CONTEXT_JSON:" in raw:
+        try:
+            payload = json.loads(raw.split("VERIFIED_HEALTH_CONTEXT_JSON:", 1)[1].strip())
+            engine = payload.get("engine") if isinstance(payload, dict) else None
+            if isinstance(engine, dict):
+                return {
+                    "direct_answer": engine.get("verdict"),
+                    "final_verdict": engine.get("verdict"),
+                    "positive_indicators": (
+                        engine.get("evidence_positive") or engine.get("evidence") or []
+                    ),
+                    "risk_indicators": engine.get("evidence_negative") or [],
+                    "reason": engine.get("answer_plan") or "",
+                    **engine,
+                }
+        except Exception:
+            return None
     if "ENGINE_JSON:" not in raw:
         return None
     try:
@@ -650,10 +676,7 @@ def try_recover_engine_from_dna(
     if exp.engine_key == "health" and exp.archetype:
         try:
             from ask_health import run_health_static_engine
-            from ask_health.health_narrator import (
-                engine_result_to_health_json,
-                health_narrator_payload,
-            )
+            from ask_health.presenter import to_health_llm_payload
 
             res = run_health_static_engine(
                 kundli,
@@ -661,9 +684,19 @@ def try_recover_engine_from_dna(
                 wants_explain=wants_explain,
                 archetype=exp.archetype,
             )
-            chart_text = health_narrator_payload(res, question=q, wants_explain=wants_explain)
+            chart_text = to_health_llm_payload(res, question=q)
             checks = dict(res.checks or {})
-            checks["narrator_input"] = engine_result_to_health_json(res, question=q)
+            checks["narrator_input"] = {
+                "archetype": res.archetype,
+                "verdict": res.verdict,
+                "confidence": res.confidence,
+                "evidence": list(res.evidence or []),
+                "evidence_positive": list(res.evidence_positive or []),
+                "evidence_negative": list(res.evidence_negative or []),
+                "answer_plan": res.answer_plan,
+                "ignore": list(res.ignore or []),
+                "d1_health_facts": checks.get("d1_health_facts") or {},
+            }
             checks["gatekeeper_recovered"] = True
             meta = {
                 "slice": "health_engine_v1",
@@ -678,7 +711,7 @@ def try_recover_engine_from_dna(
                 "checks": checks,
                 "skip_llm": bool(res.skip_llm),
                 "word_budget": int(res.word_budget or 95),
-                "narrator_mode": "engine_facts_only",
+                "narrator_mode": "adaptive_d1_health_context",
             }
             return meta, chart_text
         except Exception:

@@ -109,6 +109,36 @@ class TestAskObservabilityDebug(unittest.TestCase):
         pipeline = {s["label"]: s["value"] for s in out["observability"]["question_dna_pipeline"]}
         self.assertIn("third_person_infidelity", pipeline["Bucket"])
 
+    def test_health_d1_facts_appear_inside_engine_execution(self):
+        facts = {
+            "schema_version": "health_d1_facts_v1",
+            "chart": "D1",
+            "ascendant": "Leo",
+            "planets": [{"name": "Sun", "sign": "Leo", "house": 1}],
+            "houses": [{"house": 1, "sign": "Leo"}],
+            "health_houses": [{"house": 1, "sign": "Leo"}],
+            "dimensions": {"overall_vitality": {"verdict": "GREEN", "score": 2}},
+        }
+        ctx = {
+            "question": "meri sehat kaisi hai",
+            "slice_meta": {
+                "slice": "health_engine_v1",
+                "archetype": "overall_vitality",
+                "checks": {"d1_health_facts": facts},
+            },
+            "llm_intent": {"domain": "health"},
+        }
+        obs = build_observability_debug(
+            ctx,
+            question_text=ctx["question"],
+            answer_text="Sehat supportive hai.",
+        )
+        self.assertEqual(
+            obs["engine_execution"]["d1_health_facts"]["schema_version"],
+            "health_d1_facts_v1",
+        )
+        self.assertEqual(obs["engine_execution"]["d1_health_facts"]["ascendant"], "Leo")
+
 
 if __name__ == "__main__":
     unittest.main()

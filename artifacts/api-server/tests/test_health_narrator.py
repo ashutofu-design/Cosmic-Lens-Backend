@@ -1,7 +1,6 @@
-"""Tests for Health Engine narrator — JSON-only payload + prompt rules."""
+"""Tests for health engine → adaptive LLM prompt with verified D1 facts."""
 from __future__ import annotations
 
-import json
 import os
 import sys
 import unittest
@@ -9,12 +8,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_health.engine import run_health_static_engine
-from ask_health.health_narrator import (
-    build_health_narrator_length_block,
-    engine_result_to_health_json,
-    health_narrator_payload,
-    is_health_narratable_archetype,
-)
+from ask_health.health_registry import detect_health_archetype
+from ask_health.presenter import to_health_llm_payload
 from ask_mr.narrator import build_mr_engine_narrator_system_prompt
 
 _SAMPLE_KUNDLI = {
@@ -37,42 +32,42 @@ class HealthNarratorTests(unittest.TestCase):
             archetype="heart_blood_pressure",
         )
 
-    def test_health_json_shape(self):
-        data = engine_result_to_health_json(self.result, question=self.q)
-        self.assertEqual(data["question_type"], "health")
-        self.assertEqual(data["archetype"], "heart_blood_pressure")
-        self.assertIn("direct_answer", data)
-        self.assertIn("positive_indicators", data)
-        self.assertIn("risk_indicators", data)
-        self.assertIn("confidence_explanation", data)
-        self.assertTrue(data["positive_indicators"] or data["risk_indicators"])
-
-    def test_payload_has_engine_json(self):
-        payload = health_narrator_payload(self.result, question=self.q)
-        self.assertIn("ENGINE_JSON:", payload)
-        self.assertIn("SOURCE_LOCK", payload)
+    def test_narrator_payload_uses_engine_facts(self):
+        payload = to_health_llm_payload(self.result, question=self.q)
+        self.assertIn("VERIFIED_HEALTH_CONTEXT_JSON:", payload)
         self.assertIn("heart_blood_pressure", payload)
+        self.assertIn("d1_health_facts", payload)
+        self.assertIn("health_d1_facts_v1", payload)
 
-    def test_system_prompt_uses_health_narrator_rules(self):
-        payload = health_narrator_payload(self.result, question=self.q)
+    def test_system_prompt_adapts_depth_from_same_prompt(self):
+        payload = to_health_llm_payload(self.result, question=self.q)
         prompt = build_mr_engine_narrator_system_prompt(
             chart_text=payload,
             reply_lang="hn",
             archetype="heart_blood_pressure",
         )
-        self.assertIn("Cosmic Lens Health Narrator", prompt)
-        self.assertIn("Kyun ye verdict aaya", prompt)
-        self.assertIn("confidence_explanation", prompt)
+        self.assertIn("ENGINE FACTS:", prompt)
+        self.assertNotIn("The Big Picture", prompt)
+        self.assertIn("ADAPTIVE RESPONSE DEPTH", prompt)
+        self.assertIn("Simple/direct question", prompt)
+        self.assertIn("Multi-part", prompt)
+        self.assertIn("complete verified D1 facts", prompt)
 
-    def test_heart_blood_pressure_is_narratable(self):
-        self.assertTrue(is_health_narratable_archetype("heart_blood_pressure"))
-        self.assertFalse(is_health_narratable_archetype("refuse_diagnosis"))
+    def test_disease_list_question_routes_health(self):
+        q = "mujhse kya kya disease ho sakta he"
+        arch = detect_health_archetype(q)
+        self.assertIn(arch, ("preventive_risk", "general_health", "chronic_tendency"))
 
-    def test_json_roundtrip(self):
-        payload = health_narrator_payload(self.result, question=self.q)
-        raw = payload.split("ENGINE_JSON:\n", 1)[1]
-        data = json.loads(raw)
-        self.assertEqual(data["topic_lock"], "Heart & blood pressure")
+    def test_payload_includes_complete_chart_for_any_question(self):
+        q = "mujhse kya kya disease ho sakta he"
+        result = run_health_static_engine(_SAMPLE_KUNDLI, q, archetype="general_health")
+        payload = to_health_llm_payload(result, question=q)
+        self.assertIn('"planets"', payload)
+        self.assertIn('"houses"', payload)
+        self.assertIn('"house_lords"', payload)
+        self.assertIn('"aspects"', payload)
+        self.assertIn('"dimensions"', payload)
+        self.assertIn("Saturn", payload)
 
 
 if __name__ == "__main__":

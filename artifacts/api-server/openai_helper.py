@@ -766,20 +766,11 @@ def _passthrough_property_focus(question, topic_id):
 
 
 # ─────────────────────────────────────────────────────────────────────
-# HEALTH FOCUS (H3, 2026-05-06) — CAFB engine wiring.
-# Mirrors property focus structure. Replaces health_static engine
-# when HEALTH_STATIC_BYPASS=1 (default ON in flask_app).
-# Killswitch: HEALTH_FOCUS_BLOCK=0/false/no/off (handled by helper).
+# HEALTH FOCUS composable prompt — permanently removed (2026-07-12).
+# Health LLM answers: ask_health engine evidence → generic MR narrator (no health_narrator).
+# This module keeps hard guards, scope gate, and post-injectors.
 # ─────────────────────────────────────────────────────────────────────
 _HEALTH_TOPIC_IDS = frozenset({"health", "swasthya", "vitality", "wellness"})
-
-_HEALTH_FOCUS_FALLBACK_COUNT = 0
-
-
-def _health_focus_enabled():
-    """True UNLESS HEALTH_FOCUS_BLOCK explicitly disables. Default ON."""
-    val = os.environ.get("HEALTH_FOCUS_BLOCK", "").strip().lower()
-    return val not in ("0", "false", "no", "off")
 
 
 def _is_health_topic(topic_id, question):
@@ -803,41 +794,8 @@ def _is_health_topic(topic_id, question):
 
 
 def _passthrough_health_focus(question, topic_id):
-    """Return HEALTH FOCUS block for health Qs in passthrough paths.
-
-    Returns "" (safe no-op) when:
-      - HEALTH_FOCUS_BLOCK killswitch off
-      - question is not a health Q (by topic_id or regex gate)
-      - any sub-step raises (logged, never propagates)
-    """
-    try:
-        if (os.environ.get("ASK_HEALTH_ENGINE") or "1").strip() != "0":
-            from ask_health.classifier import is_health_static_question  # type: ignore
-
-            if is_health_static_question(question or ""):
-                return ""
-        if not _health_focus_enabled():
-            return ""
-        if not _is_health_topic(topic_id, question):
-            return ""
-        try:
-            from health_focus_routing import build_health_focus  # type: ignore
-            return f"\n\nHEALTH FOCUS for this question:\n{build_health_focus(question)}\n"
-        except Exception as _hfr_exc:  # noqa: BLE001
-            try:
-                global _HEALTH_FOCUS_FALLBACK_COUNT
-                _HEALTH_FOCUS_FALLBACK_COUNT += 1
-            except NameError:
-                _HEALTH_FOCUS_FALLBACK_COUNT = 1  # type: ignore
-            print(f"[passthrough_health_focus][FALLBACK_COUNT={_HEALTH_FOCUS_FALLBACK_COUNT}] "
-                  f"router failed: {str(_hfr_exc)[:160]}", flush=True)
-            return ""
-    except Exception as _hf_exc:  # noqa: BLE001
-        print(f"[passthrough_health_focus] skipped: {str(_hf_exc)[:160]}")
-        return ""
-
-
-    return True
+    """Permanently disabled — composable HEALTH FOCUS prompt removed."""
+    return ""
 
 
 def _normalize_passthrough_kundli(kundli: Any) -> dict | None:
@@ -1367,7 +1325,7 @@ _PT_SYS_INTRO = (
       "- Single-fact (\"lagna kya\", \"current dasha\", \"aaj muhurat\") → 1-2 lines, sirf fact, no preamble\n"
       "- Casual (\"hi\", \"thanks\", \"ok\", \"bye\") → 1 line warm reply\n"
       "- Identity (\"kaun ho\", \"AI ho kya\") → \"Main Cosmo hun, ek advance cosmic intelligence\" — 1-2 lines\n"
-      "- Emotional/predictive (love, career, shaadi, health, future, life-event) → **2-3 short sentences, max ~40 words**. Seedha jawab, dost jaisa — report nahi.\n"
+      "- Emotional/predictive (love, career, shaadi, future, life-event) → **2-3 short sentences, max ~40 words**. Seedha jawab, dost jaisa — report nahi.\n"
       "- Deep/philosophical Q (sirf jab user detail maange) → max ~55 words, phir bhi tight.\n\n"
 
       "━━━ STRUCTURE ━━━\n"
@@ -1400,7 +1358,7 @@ _PT_SYS_INTRO = (
       "\"DO NOT cite\" list ki cheezein KABHI mention nahi. TOPIC-LOCK supreme hai.\n\n"
 
       "━━━ DOMAIN QUICK-REF (internal use, devotee ko mat dikhao) ━━━\n"
-      "Health: 1/6/8/12 + Mangal/Shani/Rahu/Chandra | Career: 10/6/2/11 + Surya/Shani/Budh/Mangal\n"
+      "Career: 10/6/2/11 + Surya/Shani/Budh/Mangal\n"
       "Marriage: 7/5/8 + Shukra/Mangal/Guru/Rahu-Ketu | Wealth: 2/11/5 + Guru/Shukra/Budh\n"
       "Children: 5/5L/Guru | Mother: 4/4L/Chandra | Father: 9/9L/Surya | Younger sib: 3/3L/Mangal | Elder sib: 11/11L\n"
       "Home: 4/4L | Education: 4/5/Budh/Guru | Higher studies: 9/5/Guru | Court: 6/8 | Foreign: 12/9/Rahu\n"
@@ -1431,8 +1389,7 @@ _PT_SYS_INTRO = (
       # prompt so the LLM reads it LAST → strongest behavioral weight.
       # Overrides the earlier "150-200 words / 250-300 words" guidance
       # which produced 230+ word tangential answers (user-flagged bug,
-      # H2.7.6 review). Mirrors health_static contract enforced via
-      # _enforce_word_cap (90-120 ideal, 150 hard cap).
+      # H2.7.6 review). Enforced via _enforce_word_cap (90-120 ideal, 150 hard cap).
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       "━━━ H2.7.7 LENGTH & FOCUS LOCK (FINAL OVERRIDE — sabse important) ━━━\n"
       "Yeh rules upar ke length-guidance ko OVERRIDE karte hain:\n\n"
@@ -1440,7 +1397,7 @@ _PT_SYS_INTRO = (
       "1. WORD BUDGET (HARD):\n"
       "   • Single-fact / casual / identity Q → 1-2 lines (no change)\n"
       "   • Har baaki narrative Q (placement meaning, dasha, prediction, "
-      "love, career, health, deep/philosophical — sab) → "
+      "love, career, deep/philosophical — sab) → "
       "TARGET 80-120 words, ABSOLUTE MAX 150 words. 150+ = FAIL.\n"
       "   • 250-300 word \"deep\" answers BANNED. Depth = clarity, not length.\n\n"
 
@@ -2927,16 +2884,14 @@ _LOVE_QUESTION_RX = __import__("re").compile(
     __import__("re").IGNORECASE,
 )
 
-# Marriage keywords that override love routing — if the user mentions
-# shaadi/vivah/spouse, it's a marriage question (even with love vocabulary
-# like "love marriage kab hogi"), so marriage_engine handles it.
+# Marriage keywords that previously overrode love routing. Routing authority
+# is Question DNA (Domain → DNA → Engine); this gate is topic-lock only.
 _MARRIAGE_OVERRIDE_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
 
 
 def _is_love_question(text: str) -> bool:
-    """True iff text matches love trigger AND not the marriage-override gate.
-    Marriage routing has priority — questions like 'love marriage kab hogi'
-    go to marriage_engine, not love_engine."""
+    """True iff text matches love trigger. Marriage-vs-love engine choice
+    is decided by DNA routing, not keyword priority here."""
     if not isinstance(text, str) or not text.strip():
         return False
     if _MARRIAGE_OVERRIDE_RX.search(text):
@@ -4089,7 +4044,7 @@ NARRATIVE MODE (pattern / quality / yes-no — NOT timing):
 {lang_block}
 
 UNDERSTAND THE QUESTION
-- Identify what the user wants: fact, yes/no, quality, strength, luck, career, marriage, health, money, psychology, placement, etc.
+- Identify what the user wants: fact, yes/no, quality, strength, luck, career, marriage, money, psychology, placement, etc.
 - Infer Hinglish typos from context — answer the real question, never lecture about spelling.
 
 READ THE CHART (internal — translate to plain language in the reply)
@@ -4097,7 +4052,7 @@ READ THE CHART (internal — translate to plain language in the reply)
 - Pick the RIGHT houses, lords, and karakas for THIS question, e.g.:
   luck/bhagya/kismat → 9H, 9L, Jupiter, 11H, 5H | marriage/love → 7H, 7L, Venus, Jupiter, D9 7H
   career/job → 10H, 10L, 6H, 2H, 11H, Saturn, Mercury | wealth/money → 2H, 11H, 5H, 9H, Jupiter
-  health → Lagna/1L, 6H, 8H, 12H, Moon | psychology → Moon, Lagna, Rahu, Saturn, D9
+  psychology → Moon, Lagna, Rahu, Saturn, D9
   planet/house asked → that planet or house directly
 - Reason: planet → house → lordship → conjunction/aspect → dignity → affliction or strength.
 - D9 cross-check: for key D1 lords/karakas, find the same planet in D9 — strong D9 confirms; weak D9 (6/8/12, debilitated, malefic) = fragile or delayed.
@@ -7585,14 +7540,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                                 wants_explain=wants_explain,
                                 archetype=_recover_arch,
                             )
-                            if _mr_rec.archetype == "partner_nature":
-                                from ask_mr.engines.partner_nature import (
-                                    partner_nature_narrator_payload,
-                                )
+                            from ask_mr.relationship_narrator import attach_narrator_json_to_result
 
-                                chart_text = partner_nature_narrator_payload(_mr_rec)
-                            else:
-                                chart_text = _mr_rec.to_narrator_payload()
+                            attach_narrator_json_to_result(
+                                _mr_rec,
+                                question=question or "",
+                                llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                            )
+                            chart_text = _mr_rec.to_narrator_payload()
                             dcr_love_meta = mr_engine_slice_meta(_mr_rec)
                             _is_gap_static = False
                             _is_mr_static = True
@@ -7887,7 +7842,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     "checks": dict(_health_engine_result.checks or {}),
                     "skip_llm": bool(_health_engine_result.skip_llm),
                     "word_budget": int(_health_engine_result.word_budget or 75),
-                    "narrator_mode": "engine_facts_only",
+                    "narrator_mode": "adaptive_d1_health_context",
                 }
                 try:
                     from ask_engine_verification import verify_engine_output
@@ -7937,14 +7892,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             wants_explain=wants_explain,
                             archetype=_recover_arch,
                         )
-                        if _mr_rec.archetype == "partner_nature":
-                            from ask_mr.engines.partner_nature import (
-                                partner_nature_narrator_payload,
-                            )
+                        from ask_mr.relationship_narrator import attach_narrator_json_to_result
 
-                            chart_text = partner_nature_narrator_payload(_mr_rec)
-                        else:
-                            chart_text = _mr_rec.to_narrator_payload()
+                        attach_narrator_json_to_result(
+                            _mr_rec,
+                            question=question or "",
+                            llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                        )
+                        chart_text = _mr_rec.to_narrator_payload()
                         dcr_love_meta = mr_engine_slice_meta(_mr_rec)
                         _is_health_static = False
                         _is_mr_static = True
@@ -7967,22 +7922,27 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         flush=True,
                     )
                 if _is_health_static:
-                    from ask_health.health_narrator import (
-                        engine_result_to_health_json,
-                        health_narrator_payload,
-                    )
+                    from ask_health.presenter import to_health_llm_payload
 
-                    chart_text = health_narrator_payload(
+                    chart_text = to_health_llm_payload(
                         _health_engine_result,
                         question=question or "",
-                        wants_explain=wants_explain,
                     )
                     _ni_checks = dict(_health_engine_result.checks or {})
-                    _ni_checks["narrator_input"] = engine_result_to_health_json(
-                        _health_engine_result,
-                        question=question or "",
-                    )
+                    _ni_checks["narrator_input"] = {
+                        "archetype": _health_engine_result.archetype,
+                        "verdict": _health_engine_result.verdict,
+                        "confidence": _health_engine_result.confidence,
+                        "evidence": list(_health_engine_result.evidence or []),
+                        "evidence_positive": list(_health_engine_result.evidence_positive or []),
+                        "evidence_negative": list(_health_engine_result.evidence_negative or []),
+                        "answer_plan": _health_engine_result.answer_plan,
+                        "ignore": list(_health_engine_result.ignore or []),
+                        "d1_health_facts": _ni_checks.get("d1_health_facts") or {},
+                    }
                     _health_engine_result.checks = _ni_checks
+                    if isinstance(dcr_love_meta, dict):
+                        dcr_love_meta["checks"] = dict(_ni_checks)
                     _chart_slice_type = "health_engine_v1"
                     print(
                         f"[raw_passthrough] HEALTH_ENGINE "
@@ -8187,52 +8147,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             flush=True,
                         )
                     if not _is_open_chart_qa:
-                        if _mr_engine_result.archetype == "partner_nature":
-                            from ask_mr.engines.partner_nature import (
-                                partner_nature_narrator_payload,
-                            )
+                        from ask_mr.relationship_narrator import attach_narrator_json_to_result
 
-                            chart_text = partner_nature_narrator_payload(_mr_engine_result)
-                        elif _mr_engine_result.archetype == "commitment":
-                            from ask_mr.commitment_narrator import (
-                                commitment_narrator_payload,
-                                engine_result_to_commitment_json,
-                            )
-
-                            chart_text = commitment_narrator_payload(
-                                _mr_engine_result,
-                                wants_explain=wants_explain,
-                                question=question or "",
-                            )
-                            _ni_checks = dict(_mr_engine_result.checks or {})
-                            _ni_checks["narrator_input"] = engine_result_to_commitment_json(
-                                _mr_engine_result
-                            )
-                            _mr_engine_result.checks = _ni_checks
-                        elif _mr_engine_result.archetype == "secret_relationship":
-                            from ask_mr.secret_narrator import (
-                                engine_result_to_secret_json,
-                                secret_narrator_payload,
-                            )
-
-                            _sec_dna = None
-                            if isinstance(_llm_intent_admin, dict):
-                                _sec_dna = _llm_intent_admin.get("question_dna")
-                            chart_text = secret_narrator_payload(
-                                _mr_engine_result,
-                                wants_explain=False,
-                                question=question or "",
-                                question_dna=_sec_dna if isinstance(_sec_dna, dict) else None,
-                            )
-                            _ni_checks = dict(_mr_engine_result.checks or {})
-                            _ni_checks["narrator_input"] = engine_result_to_secret_json(
-                                _mr_engine_result,
-                                question=question or "",
-                                question_dna=_sec_dna if isinstance(_sec_dna, dict) else None,
-                            )
-                            _mr_engine_result.checks = _ni_checks
-                        else:
-                            chart_text = _mr_engine_result.to_narrator_payload()
+                        attach_narrator_json_to_result(
+                            _mr_engine_result,
+                            question=question or "",
+                            llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                        )
+                        chart_text = _mr_engine_result.to_narrator_payload()
                         if _mr_engine_result.archetype == "open_chart_qa":
                             from ask_chart_open_qa import open_chart_qa_slice_meta
 
@@ -8434,10 +8356,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     flush=True,
                 )
 
-            from ask_health.health_narrator import (
-                engine_result_to_health_json,
-                health_narrator_payload,
-            )
+            from ask_health.presenter import to_health_llm_payload
 
             _health_engine_result = run_health_static_engine(
                 kundli if isinstance(kundli, dict) else {},
@@ -8445,16 +8364,22 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 wants_explain=wants_explain,
                 archetype=_resolved_health_arch_rec,
             )
-            chart_text = health_narrator_payload(
+            chart_text = to_health_llm_payload(
                 _health_engine_result,
                 question=question or "",
-                wants_explain=wants_explain,
             )
             _ni_checks = dict(_health_engine_result.checks or {})
-            _ni_checks["narrator_input"] = engine_result_to_health_json(
-                _health_engine_result,
-                question=question or "",
-            )
+            _ni_checks["narrator_input"] = {
+                "archetype": _health_engine_result.archetype,
+                "verdict": _health_engine_result.verdict,
+                "confidence": _health_engine_result.confidence,
+                "evidence": list(_health_engine_result.evidence or []),
+                "evidence_positive": list(_health_engine_result.evidence_positive or []),
+                "evidence_negative": list(_health_engine_result.evidence_negative or []),
+                "answer_plan": _health_engine_result.answer_plan,
+                "ignore": list(_health_engine_result.ignore or []),
+                "d1_health_facts": _ni_checks.get("d1_health_facts") or {},
+            }
             _health_engine_result.checks = _ni_checks
             dcr_love_meta = {
                 "slice": "health_engine_v1",
@@ -8467,7 +8392,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "checks": dict(_health_engine_result.checks or {}),
                 "skip_llm": bool(_health_engine_result.skip_llm),
                 "word_budget": int(_health_engine_result.word_budget or 75),
-                "narrator_mode": "engine_facts_only",
+                "narrator_mode": "adaptive_d1_health_context",
             }
             _chart_slice_type = "health_engine_v1"
             _is_health_static = True
@@ -9300,18 +9225,22 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
-    # ── Commitment engine — deterministic template narrator (production) ──
+    # ── Unified relationship MR narrator (all engines) ──
     from ask_mr.engine_presenter import human_narrator_enabled
 
     if _is_mr_static and _mr_engine_result is not None and human_narrator_enabled():
-        from ask_mr.static_answer import try_human_presenter_mr_answer
+        try:
+            from ask_mr.static_answer import try_human_presenter_mr_answer
 
-        _human_presenter = try_human_presenter_mr_answer(
-            _mr_engine_result,
-            question=question or "",
-            lang=eff_lang,
-            llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
-        )
+            _human_presenter = try_human_presenter_mr_answer(
+                _mr_engine_result,
+                question=question or "",
+                lang=eff_lang,
+                llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+            )
+        except Exception as _hp_exc:
+            print(f"[raw_passthrough] try_human_presenter failed: {_hp_exc}", flush=True)
+            _human_presenter = None
         if _human_presenter:
             _hp_arch = str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower()
             _hp_json = _human_presenter.pop("_narrator_json", None)
@@ -9344,1227 +9273,100 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
         _hp_arch = str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower()
         if _hp_arch:
-            from ask_mr.story_answer import (
-                engine_result_to_narrator_json,
-                is_story_engine,
-                render_story_human_answer,
-            )
+            from ask_mr.story_answer import story_compose_enabled
 
-            if is_story_engine(_hp_arch):
-                _dna_fb = None
-                if isinstance(_llm_intent_admin, dict):
-                    _dna_fb = _llm_intent_admin.get("question_dna")
-                _json_fb = engine_result_to_narrator_json(
+            if story_compose_enabled():
+                from ask_mr.story_answer import (
+                    engine_result_to_narrator_json,
+                    is_story_engine,
+                    render_story_human_answer,
+                )
+
+                if is_story_engine(_hp_arch):
+                    _json_fb = engine_result_to_narrator_json(
+                        _mr_engine_result,
+                        question=question or "",
+                        llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    )
+                    _text_fb = render_story_human_answer(
+                        _json_fb, question or "", engine=_hp_arch, lang=eff_lang
+                    )
+                    _pt_checks_sec_fb = {
+                        "slice_type": "mr_engine_v1",
+                        "resolved_route": _resolved_route,
+                        "is_mr_static": True,
+                        "archetype": _hp_arch,
+                        "skip_llm": True,
+                        "presenter_mode": False,
+                        "story_compose": True,
+                        "narrator_input": _json_fb,
+                        "dasha_included": False,
+                    }
+                    return _attach_admin(
+                        {
+                            "text": _text_fb,
+                            "topic": "marriage",
+                            "question_type": qtype,
+                            "confidence": max(
+                                0.15,
+                                min(1.0, float(_json_fb.get("confidence") or 48) / 100.0),
+                            ),
+                            "source": f"{_hp_arch}_engine_story_compose",
+                            "engine_tag": "ans-engine",
+                            "follow_ups": [],
+                        },
+                        question=question or "",
+                        question_type=qtype,
+                        is_timing=bool(is_timing),
+                        checks=_pt_checks_sec_fb,
+                        chart_text=chart_text,
+                        slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                        llm_called=False,
+                        skip_reason=f"{_hp_arch}_engine_story_compose",
+                        intent_source=_intent_source,
+                        llm_intent=_llm_intent_admin,
+                    )
+            else:
+                from ask_mr.engine_narrate import narrate_mr_engine_llm
+
+                _llm_fb = narrate_mr_engine_llm(
+                    question or "",
                     _mr_engine_result,
-                    question=question or "",
+                    lang=eff_lang,
                     llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    wants_explain=wants_explain,
                 )
-                _text_fb = render_story_human_answer(
-                    _json_fb, question or "", engine=_hp_arch, lang=eff_lang
-                )
-                _pt_checks_sec_fb = {
-                    "slice_type": "mr_engine_v1",
-                    "resolved_route": _resolved_route,
-                    "is_mr_static": True,
-                    "archetype": _hp_arch,
-                    "skip_llm": True,
-                    "presenter_mode": False,
-                    "story_compose": True,
-                    "narrator_input": _json_fb,
-                    "dasha_included": False,
-                }
-                return _attach_admin(
-                    {
-                        "text": _text_fb,
-                        "topic": "marriage",
-                        "question_type": qtype,
-                        "confidence": max(
-                            0.15,
-                            min(1.0, float(_json_fb.get("confidence") or 48) / 100.0),
-                        ),
-                        "source": f"{_hp_arch}_engine_story_compose",
-                        "engine_tag": "ans-engine",
-                        "follow_ups": [],
-                    },
-                    question=question or "",
-                    question_type=qtype,
-                    is_timing=bool(is_timing),
-                    checks=_pt_checks_sec_fb,
-                    chart_text=chart_text,
-                    slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-                    llm_called=False,
-                    skip_reason=f"{_hp_arch}_engine_story_compose",
-                    intent_source=_intent_source,
-                    llm_intent=_llm_intent_admin,
-                )
-
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "commitment"
-        and os.environ.get("ASK_COMMITMENT_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-        and not human_narrator_enabled()
-    ):
-        from ask_mr.commitment_narrator import (
-            engine_result_to_commitment_json,
-            render_commitment_template_answer,
-        )
-
-        _commit_json = engine_result_to_commitment_json(_mr_engine_result, question=question or "")
-        _commit_checks = dict(_mr_engine_result.checks or {})
-        _commit_checks["narrator_input"] = _commit_json
-        _commit_checks["question"] = question or ""
-        _mr_engine_result.checks = _commit_checks
-        _commit_text = render_commitment_template_answer(
-            _commit_json,
-            question or "",
-            lang=eff_lang,
-        )
-        _out_commit = {
-            "text": _commit_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.4, min(1.0, float(_commit_json.get("confidence") or 55) / 100.0)),
-            "source": "commitment_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_commit = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "commitment",
-            "skip_llm": True,
-            "narrator_input": _commit_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_commit,
-            question=question or "",
-            question_type=qtype,
-            is_timing=False,
-            checks=_pt_checks_commit,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="commitment_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Patch-up / reconciliation engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "patchup"
-        and os.environ.get("ASK_PATCHUP_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-        and not human_narrator_enabled()
-    ):
-        from ask_mr.patchup_narrator import (
-            engine_result_to_patchup_json,
-            render_patchup_template_answer,
-        )
-
-        _patch_json = engine_result_to_patchup_json(_mr_engine_result, question=question or "")
-        _patch_checks = dict(_mr_engine_result.checks or {})
-        _patch_checks["narrator_input"] = _patch_json
-        _patch_checks["question"] = question or ""
-        _mr_engine_result.checks = _patch_checks
-        _patch_text = render_patchup_template_answer(
-            _patch_json,
-            question or "",
-            lang=eff_lang,
-        )
-        _out_patch = {
-            "text": _patch_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_patch_json.get("confidence") or 48) / 100.0)),
-            "source": "patchup_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_patch = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "patchup",
-            "skip_llm": True,
-            "narrator_input": _patch_json,
-            "dasha_included": bool((_patch_json.get("timing") or {}).get("summary")),
-        }
-        return _attach_admin(
-            _out_patch,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_patch,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="patchup_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Loyalty / trust engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "loyalty_trust"
-        and os.environ.get("ASK_LOYALTY_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.loyalty_narrator import (
-            engine_result_to_loyalty_json,
-            render_loyalty_template_answer,
-        )
-
-        _loyalty_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _loyalty_dna = _llm_intent_admin.get("question_dna")
-        _loyalty_json = engine_result_to_loyalty_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_loyalty_dna if isinstance(_loyalty_dna, dict) else None,
-        )
-        _loyalty_checks = dict(_mr_engine_result.checks or {})
-        _loyalty_checks["narrator_input"] = _loyalty_json
-        _loyalty_checks["question"] = question or ""
-        _mr_engine_result.checks = _loyalty_checks
-        _loyalty_text = render_loyalty_template_answer(
-            _loyalty_json,
-            question or "",
-            lang=eff_lang,
-        )
-        _out_loyalty = {
-            "text": _loyalty_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_loyalty_json.get("confidence") or 48) / 100.0)),
-            "source": "loyalty_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_loyalty = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "loyalty_trust",
-            "skip_llm": True,
-            "narrator_input": _loyalty_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_loyalty,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_loyalty,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="loyalty_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Breakup / separation risk engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "breakup_risk"
-        and os.environ.get("ASK_BREAKUP_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.breakup_narrator import (
-            engine_result_to_breakup_json,
-            render_breakup_template_answer,
-        )
-
-        _breakup_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _breakup_dna = _llm_intent_admin.get("question_dna")
-        _breakup_json = engine_result_to_breakup_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_breakup_dna if isinstance(_breakup_dna, dict) else None,
-        )
-        _breakup_checks = dict(_mr_engine_result.checks or {})
-        _breakup_checks["narrator_input"] = _breakup_json
-        _breakup_checks["question"] = question or ""
-        _mr_engine_result.checks = _breakup_checks
-        _breakup_text = render_breakup_template_answer(
-            _breakup_json,
-            question or "",
-            lang=eff_lang,
-        )
-        _out_breakup = {
-            "text": _breakup_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_breakup_json.get("confidence") or 48) / 100.0)),
-            "source": "breakup_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_breakup = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "breakup_risk",
-            "skip_llm": True,
-            "narrator_input": _breakup_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_breakup,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_breakup,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="breakup_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Compatibility engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "compatibility"
-        and os.environ.get("ASK_COMPATIBILITY_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.compatibility_narrator import (
-            engine_result_to_compatibility_json,
-            render_compatibility_template_answer,
-        )
-
-        _compat_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _compat_dna = _llm_intent_admin.get("question_dna")
-        _compat_json = engine_result_to_compatibility_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_compat_dna if isinstance(_compat_dna, dict) else None,
-        )
-        _compat_checks = dict(_mr_engine_result.checks or {})
-        _compat_checks["narrator_input"] = _compat_json
-        _compat_checks["question"] = question or ""
-        _mr_engine_result.checks = _compat_checks
-        _compat_text = render_compatibility_template_answer(
-            _compat_json,
-            question or "",
-            lang=eff_lang,
-        )
-        _out_compat = {
-            "text": _compat_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_compat_json.get("confidence") or 48) / 100.0)),
-            "source": "compatibility_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_compat = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "compatibility",
-            "skip_llm": True,
-            "narrator_input": _compat_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_compat,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_compat,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="compatibility_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Secret relationship engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "secret_relationship"
-        and os.environ.get("ASK_SECRET_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-        and not human_narrator_enabled()
-    ):
-        from ask_mr.secret_narrator import (
-            engine_result_to_secret_json,
-            render_secret_template_answer,
-        )
-
-        _secret_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _secret_dna = _llm_intent_admin.get("question_dna")
-        _secret_json = engine_result_to_secret_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_secret_dna if isinstance(_secret_dna, dict) else None,
-        )
-        _secret_checks = dict(_mr_engine_result.checks or {})
-        _secret_checks["narrator_input"] = _secret_json
-        _secret_checks["question"] = question or ""
-        _mr_engine_result.checks = _secret_checks
-        _secret_text = render_secret_template_answer(_secret_json, question or "", lang=eff_lang)
-        _out_secret = {
-            "text": _secret_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_secret_json.get("confidence") or 48) / 100.0)),
-            "source": "secret_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_secret = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "secret_relationship",
-            "skip_llm": True,
-            "narrator_input": _secret_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_secret,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_secret,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="secret_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Relationship remedies engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "relationship_remedies"
-        and os.environ.get("ASK_RELATIONSHIP_REMEDIES_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.relationship_remedies_narrator import (
-            engine_result_to_relationship_remedies_json,
-            render_relationship_remedies_template_answer,
-        )
-
-        _rem_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _rem_dna = _llm_intent_admin.get("question_dna")
-        _rem_json = engine_result_to_relationship_remedies_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_rem_dna if isinstance(_rem_dna, dict) else None,
-        )
-        _rem_checks = dict(_mr_engine_result.checks or {})
-        _rem_checks["narrator_input"] = _rem_json
-        _rem_checks["question"] = question or ""
-        _mr_engine_result.checks = _rem_checks
-        _rem_text = render_relationship_remedies_template_answer(_rem_json, question or "", lang=eff_lang)
-        _out_rem = {
-            "text": _rem_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_rem_json.get("confidence") or 48) / 100.0)),
-            "source": "relationship_remedies_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_rem = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "relationship_remedies",
-            "skip_llm": True,
-            "narrator_input": _rem_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_rem,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_rem,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="relationship_remedies_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Relationship verification engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "relationship_verification"
-        and os.environ.get("ASK_RELATIONSHIP_VERIFICATION_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.relationship_verification_narrator import (
-            engine_result_to_relationship_verification_json,
-            render_relationship_verification_template_answer,
-        )
-
-        _rver_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _rver_dna = _llm_intent_admin.get("question_dna")
-        _rver_json = engine_result_to_relationship_verification_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_rver_dna if isinstance(_rver_dna, dict) else None,
-        )
-        _rver_checks = dict(_mr_engine_result.checks or {})
-        _rver_checks["narrator_input"] = _rver_json
-        _rver_checks["question"] = question or ""
-        _mr_engine_result.checks = _rver_checks
-        _rver_text = render_relationship_verification_template_answer(_rver_json, question or "", lang=eff_lang)
-        _out_rver = {
-            "text": _rver_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_rver_json.get("confidence") or 48) / 100.0)),
-            "source": "relationship_verification_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_rver = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "relationship_verification",
-            "skip_llm": True,
-            "narrator_input": _rver_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_rver,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_rver,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="relationship_verification_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Relationship decisions engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "relationship_decisions"
-        and os.environ.get("ASK_RELATIONSHIP_DECISIONS_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.relationship_decisions_narrator import (
-            engine_result_to_relationship_decisions_json,
-            render_relationship_decisions_template_answer,
-        )
-
-        _rdec_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _rdec_dna = _llm_intent_admin.get("question_dna")
-        _rdec_json = engine_result_to_relationship_decisions_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_rdec_dna if isinstance(_rdec_dna, dict) else None,
-        )
-        _rdec_checks = dict(_mr_engine_result.checks or {})
-        _rdec_checks["narrator_input"] = _rdec_json
-        _rdec_checks["question"] = question or ""
-        _mr_engine_result.checks = _rdec_checks
-        _rdec_text = render_relationship_decisions_template_answer(_rdec_json, question or "", lang=eff_lang)
-        _out_rdec = {
-            "text": _rdec_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_rdec_json.get("confidence") or 48) / 100.0)),
-            "source": "relationship_decisions_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_rdec = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "relationship_decisions",
-            "skip_llm": True,
-            "narrator_input": _rdec_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_rdec,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_rdec,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="relationship_decisions_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Relationship future engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "relationship_future"
-        and os.environ.get("ASK_RELATIONSHIP_FUTURE_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.relationship_future_narrator import (
-            engine_result_to_relationship_future_json,
-            render_relationship_future_template_answer,
-        )
-
-        _rfut_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _rfut_dna = _llm_intent_admin.get("question_dna")
-        _rfut_json = engine_result_to_relationship_future_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_rfut_dna if isinstance(_rfut_dna, dict) else None,
-        )
-        _rfut_checks = dict(_mr_engine_result.checks or {})
-        _rfut_checks["narrator_input"] = _rfut_json
-        _rfut_checks["question"] = question or ""
-        _mr_engine_result.checks = _rfut_checks
-        _rfut_text = render_relationship_future_template_answer(_rfut_json, question or "", lang=eff_lang)
-        _out_rfut = {
-            "text": _rfut_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_rfut_json.get("confidence") or 48) / 100.0)),
-            "source": "relationship_future_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_rfut = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "relationship_future",
-            "skip_llm": True,
-            "narrator_input": _rfut_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_rfut,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_rfut,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="relationship_future_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Karmic marriage engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "karmic_marriage"
-        and os.environ.get("ASK_KARMIC_MARRIAGE_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.karmic_marriage_narrator import (
-            engine_result_to_karmic_marriage_json,
-            render_karmic_marriage_template_answer,
-        )
-
-        _karm_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _karm_dna = _llm_intent_admin.get("question_dna")
-        _karm_json = engine_result_to_karmic_marriage_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_karm_dna if isinstance(_karm_dna, dict) else None,
-        )
-        _karm_checks = dict(_mr_engine_result.checks or {})
-        _karm_checks["narrator_input"] = _karm_json
-        _karm_checks["question"] = question or ""
-        _mr_engine_result.checks = _karm_checks
-        _karm_text = render_karmic_marriage_template_answer(_karm_json, question or "", lang=eff_lang)
-        _out_karm = {
-            "text": _karm_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_karm_json.get("confidence") or 48) / 100.0)),
-            "source": "karmic_marriage_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_karm = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "karmic_marriage",
-            "skip_llm": True,
-            "narrator_input": _karm_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_karm,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_karm,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="karmic_marriage_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Bed intimacy engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "bed_intimacy"
-        and os.environ.get("ASK_BED_INTIMACY_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.bed_intimacy_narrator import (
-            engine_result_to_bed_intimacy_json,
-            render_bed_intimacy_template_answer,
-        )
-
-        _intim_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _intim_dna = _llm_intent_admin.get("question_dna")
-        _intim_json = engine_result_to_bed_intimacy_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_intim_dna if isinstance(_intim_dna, dict) else None,
-        )
-        _intim_checks = dict(_mr_engine_result.checks or {})
-        _intim_checks["narrator_input"] = _intim_json
-        _intim_checks["question"] = question or ""
-        _mr_engine_result.checks = _intim_checks
-        _intim_text = render_bed_intimacy_template_answer(_intim_json, question or "", lang=eff_lang)
-        _out_intim = {
-            "text": _intim_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_intim_json.get("confidence") or 48) / 100.0)),
-            "source": "bed_intimacy_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_intim = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "bed_intimacy",
-            "skip_llm": True,
-            "narrator_input": _intim_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_intim,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_intim,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="bed_intimacy_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Chemistry engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "chemistry"
-        and os.environ.get("ASK_CHEMISTRY_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.chemistry_narrator import (
-            engine_result_to_chemistry_json,
-            render_chemistry_template_answer,
-        )
-
-        _chem_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _chem_dna = _llm_intent_admin.get("question_dna")
-        _chem_json = engine_result_to_chemistry_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_chem_dna if isinstance(_chem_dna, dict) else None,
-        )
-        _chem_checks = dict(_mr_engine_result.checks or {})
-        _chem_checks["narrator_input"] = _chem_json
-        _chem_checks["question"] = question or ""
-        _mr_engine_result.checks = _chem_checks
-        _chem_text = render_chemistry_template_answer(_chem_json, question or "", lang=eff_lang)
-        _out_chem = {
-            "text": _chem_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_chem_json.get("confidence") or 48) / 100.0)),
-            "source": "chemistry_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_chem = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "chemistry",
-            "skip_llm": True,
-            "narrator_input": _chem_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_chem,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_chem,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="chemistry_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── One-sided love engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "one_sided_love"
-        and os.environ.get("ASK_ONE_SIDED_LOVE_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.one_sided_love_narrator import (
-            engine_result_to_one_sided_love_json,
-            render_one_sided_love_template_answer,
-        )
-
-        _os_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _os_dna = _llm_intent_admin.get("question_dna")
-        _os_json = engine_result_to_one_sided_love_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_os_dna if isinstance(_os_dna, dict) else None,
-        )
-        _os_checks = dict(_mr_engine_result.checks or {})
-        _os_checks["narrator_input"] = _os_json
-        _os_checks["question"] = question or ""
-        _mr_engine_result.checks = _os_checks
-        _os_text = render_one_sided_love_template_answer(_os_json, question or "", lang=eff_lang)
-        _out_os = {
-            "text": _os_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_os_json.get("confidence") or 48) / 100.0)),
-            "source": "one_sided_love_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_os = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "one_sided_love",
-            "skip_llm": True,
-            "narrator_input": _os_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_os,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_os,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="one_sided_love_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Toxicity engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "toxicity"
-        and os.environ.get("ASK_TOXICITY_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.toxicity_narrator import (
-            engine_result_to_toxicity_json,
-            render_toxicity_template_answer,
-        )
-
-        _tox_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _tox_dna = _llm_intent_admin.get("question_dna")
-        _tox_json = engine_result_to_toxicity_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_tox_dna if isinstance(_tox_dna, dict) else None,
-        )
-        _tox_checks = dict(_mr_engine_result.checks or {})
-        _tox_checks["narrator_input"] = _tox_json
-        _tox_checks["question"] = question or ""
-        _mr_engine_result.checks = _tox_checks
-        _tox_text = render_toxicity_template_answer(_tox_json, question or "", lang=eff_lang)
-        _out_tox = {
-            "text": _tox_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_tox_json.get("confidence") or 48) / 100.0)),
-            "source": "toxicity_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_tox = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "toxicity",
-            "skip_llm": True,
-            "narrator_input": _tox_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_tox,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_tox,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="toxicity_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Long distance engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "long_distance"
-        and os.environ.get("ASK_LONG_DISTANCE_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.long_distance_narrator import (
-            engine_result_to_long_distance_json,
-            render_long_distance_template_answer,
-        )
-
-        _ld_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _ld_dna = _llm_intent_admin.get("question_dna")
-        _ld_json = engine_result_to_long_distance_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_ld_dna if isinstance(_ld_dna, dict) else None,
-        )
-        _ld_checks = dict(_mr_engine_result.checks or {})
-        _ld_checks["narrator_input"] = _ld_json
-        _ld_checks["question"] = question or ""
-        _mr_engine_result.checks = _ld_checks
-        _ld_text = render_long_distance_template_answer(_ld_json, question or "", lang=eff_lang)
-        _out_ld = {
-            "text": _ld_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_ld_json.get("confidence") or 48) / 100.0)),
-            "source": "long_distance_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_ld = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "long_distance",
-            "skip_llm": True,
-            "narrator_input": _ld_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_ld,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_ld,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="long_distance_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Family approval engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "family_approval"
-        and os.environ.get("ASK_FAMILY_APPROVAL_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.family_approval_narrator import (
-            engine_result_to_family_approval_json,
-            render_family_approval_template_answer,
-        )
-
-        _fa_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _fa_dna = _llm_intent_admin.get("question_dna")
-        _fa_json = engine_result_to_family_approval_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_fa_dna if isinstance(_fa_dna, dict) else None,
-        )
-        _fa_checks = dict(_mr_engine_result.checks or {})
-        _fa_checks["narrator_input"] = _fa_json
-        _fa_checks["question"] = question or ""
-        _mr_engine_result.checks = _fa_checks
-        _fa_text = render_family_approval_template_answer(_fa_json, question or "", lang=eff_lang)
-        _out_fa = {
-            "text": _fa_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_fa_json.get("confidence") or 48) / 100.0)),
-            "source": "family_approval_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_fa = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "family_approval",
-            "skip_llm": True,
-            "narrator_input": _fa_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_fa,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_fa,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="family_approval_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Emotional attachment engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "emotional_attachment"
-        and os.environ.get("ASK_EMOTIONAL_ATTACHMENT_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.emotional_attachment_narrator import (
-            engine_result_to_emotional_attachment_json,
-            render_emotional_attachment_template_answer,
-        )
-
-        _ea_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _ea_dna = _llm_intent_admin.get("question_dna")
-        _ea_json = engine_result_to_emotional_attachment_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_ea_dna if isinstance(_ea_dna, dict) else None,
-        )
-        _ea_checks = dict(_mr_engine_result.checks or {})
-        _ea_checks["narrator_input"] = _ea_json
-        _ea_checks["question"] = question or ""
-        _mr_engine_result.checks = _ea_checks
-        _ea_text = render_emotional_attachment_template_answer(_ea_json, question or "", lang=eff_lang)
-        _out_ea = {
-            "text": _ea_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_ea_json.get("confidence") or 48) / 100.0)),
-            "source": "emotional_attachment_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_ea = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "emotional_attachment",
-            "skip_llm": True,
-            "narrator_input": _ea_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_ea,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_ea,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="emotional_attachment_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Communication engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "communication"
-        and os.environ.get("ASK_COMMUNICATION_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.communication_narrator import (
-            engine_result_to_communication_json,
-            render_communication_template_answer,
-        )
-
-        _comm_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _comm_dna = _llm_intent_admin.get("question_dna")
-        _comm_json = engine_result_to_communication_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_comm_dna if isinstance(_comm_dna, dict) else None,
-        )
-        _comm_checks = dict(_mr_engine_result.checks or {})
-        _comm_checks["narrator_input"] = _comm_json
-        _comm_checks["question"] = question or ""
-        _mr_engine_result.checks = _comm_checks
-        _comm_text = render_communication_template_answer(_comm_json, question or "", lang=eff_lang)
-        _out_comm = {
-            "text": _comm_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_comm_json.get("confidence") or 48) / 100.0)),
-            "source": "communication_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_comm = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "communication",
-            "skip_llm": True,
-            "narrator_input": _comm_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_comm,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_comm,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="communication_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
-
-    # ── Partner nature engine — deterministic template narrator ──
-    if (
-        _is_mr_static
-        and _mr_engine_result is not None
-        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "partner_nature"
-        and os.environ.get("ASK_PARTNER_NATURE_USE_LLM", "").strip().lower()
-        not in ("1", "true", "yes")
-    ):
-        from ask_mr.partner_nature_narrator import (
-            engine_result_to_partner_nature_json,
-            render_partner_nature_template_answer,
-        )
-
-        _pn_dna = None
-        if isinstance(_llm_intent_admin, dict):
-            _pn_dna = _llm_intent_admin.get("question_dna")
-        _pn_json = engine_result_to_partner_nature_json(
-            _mr_engine_result,
-            question=question or "",
-            question_dna=_pn_dna if isinstance(_pn_dna, dict) else None,
-        )
-        _pn_checks = dict(_mr_engine_result.checks or {})
-        _pn_checks["narrator_input"] = _pn_json
-        _pn_checks["question"] = question or ""
-        _mr_engine_result.checks = _pn_checks
-        _pn_text = render_partner_nature_template_answer(_pn_json, question or "", lang=eff_lang)
-        _out_pn = {
-            "text": _pn_text,
-            "topic": "marriage",
-            "question_type": qtype,
-            "confidence": max(0.15, min(1.0, float(_pn_json.get("confidence") or 48) / 100.0)),
-            "source": "partner_nature_engine_template",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        _pt_checks_pn = {
-            "slice_type": "mr_engine_v1",
-            "resolved_route": _resolved_route,
-            "is_mr_static": True,
-            "archetype": "partner_nature",
-            "skip_llm": True,
-            "narrator_input": _pn_json,
-            "dasha_included": False,
-        }
-        return _attach_admin(
-            _out_pn,
-            question=question or "",
-            question_type=qtype,
-            is_timing=bool(is_timing),
-            checks=_pt_checks_pn,
-            chart_text=chart_text,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-            llm_called=False,
-            skip_reason="partner_nature_engine_template",
-            intent_source=_intent_source,
-            llm_intent=_llm_intent_admin,
-        )
+                if _llm_fb and str(_llm_fb).strip():
+                    return _attach_admin(
+                        {
+                            "text": str(_llm_fb).strip(),
+                            "topic": "marriage",
+                            "question_type": qtype,
+                            "confidence": 0.85,
+                            "source": f"{_hp_arch}_engine_presenter",
+                            "engine_tag": "ans-engine",
+                            "follow_ups": [],
+                        },
+                        question=question or "",
+                        question_type=qtype,
+                        is_timing=bool(is_timing),
+                        checks={
+                            "slice_type": "mr_engine_v1",
+                            "resolved_route": _resolved_route,
+                            "is_mr_static": True,
+                            "archetype": _hp_arch,
+                            "skip_llm": False,
+                            "presenter_mode": True,
+                            "story_compose": False,
+                            "dasha_included": False,
+                        },
+                        chart_text=chart_text,
+                        slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                        llm_called=True,
+                        skip_reason=f"{_hp_arch}_engine_presenter",
+                        intent_source=_intent_source,
+                        llm_intent=_llm_intent_admin,
+                    )
 
     # ── MR engine template-only (skip LLM for simple yes/no e.g. manglik) ──
     if (
@@ -10876,22 +9678,42 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     try:
         if _mr_engine_narrator:
-            from ask_mr.narrator import build_mr_engine_narrator_system_prompt
-
             _wb_mr = int((dcr_love_meta or {}).get("word_budget") or 55)
             _batch_concise = _is_batch_concise_mode_safe()
-            system_prompt = build_mr_engine_narrator_system_prompt(
-                chart_text=chart_text,
-                reply_lang=eff_lang,
-                wants_explain=wants_explain,
-                archetype=_archetype_mr,
-                word_budget=_wb_mr,
-                is_partner_nature=_is_pn_narrator,
-                question_focus=_mr_question_focus,
-                user_intent=_user_intent_hint,
-                open_chart_qa=_open_chart_qa,
-                concise=_batch_concise,
-            )
+            try:
+                from ask_mr.relationship_narrator import (
+                    build_relationship_narrator_system_prompt,
+                    is_relationship_mr_engine,
+                )
+
+                if is_relationship_mr_engine(_archetype_mr):
+                    system_prompt = build_relationship_narrator_system_prompt(
+                        engine_result=_mr_engine_result,
+                        chart_text=chart_text,
+                        question=question or "",
+                        reply_lang=eff_lang,
+                        wants_explain=wants_explain,
+                        llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                        word_budget=_wb_mr,
+                        concise=_batch_concise,
+                    )
+                else:
+                    raise ValueError("non-relationship mr archetype")
+            except Exception:
+                from ask_mr.narrator import build_mr_engine_narrator_system_prompt
+
+                system_prompt = build_mr_engine_narrator_system_prompt(
+                    chart_text=chart_text,
+                    reply_lang=eff_lang,
+                    wants_explain=wants_explain,
+                    archetype=_archetype_mr,
+                    word_budget=_wb_mr,
+                    is_partner_nature=_is_pn_narrator,
+                    question_focus=_mr_question_focus,
+                    user_intent=_user_intent_hint,
+                    open_chart_qa=_open_chart_qa,
+                    concise=_batch_concise,
+                )
             print(
                 f"[raw_passthrough] MR_NARRATOR archetype={_archetype_mr} "
                 f"prompt_chars={len(system_prompt)} explain={wants_explain}",
@@ -10926,20 +9748,38 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception as _sp_exc:
         print(f"[raw_passthrough] system_prompt build failed: {_sp_exc}", flush=True)
         if _mr_engine_narrator:
-            from ask_mr.narrator import build_mr_engine_narrator_system_prompt
+            try:
+                from ask_mr.relationship_narrator import (
+                    build_relationship_narrator_system_prompt,
+                    is_relationship_mr_engine,
+                )
 
-            system_prompt = build_mr_engine_narrator_system_prompt(
-                chart_text=chart_text or "(no engine facts)",
-                reply_lang=eff_lang,
-                wants_explain=wants_explain,
-                archetype=_archetype_mr,
-                word_budget=55,
-                is_partner_nature=_is_pn_narrator,
-                question_focus=_mr_question_focus,
-                user_intent=_user_intent_hint,
-                open_chart_qa=_open_chart_qa,
-                concise=_is_batch_concise_mode_safe(),
-            )
+                if is_relationship_mr_engine(_archetype_mr):
+                    system_prompt = build_relationship_narrator_system_prompt(
+                        engine_result=_mr_engine_result,
+                        chart_text=chart_text or "(no engine facts)",
+                        question=question or "",
+                        reply_lang=eff_lang,
+                        wants_explain=wants_explain,
+                        llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    )
+                else:
+                    raise ValueError("non-relationship mr archetype")
+            except Exception:
+                from ask_mr.narrator import build_mr_engine_narrator_system_prompt
+
+                system_prompt = build_mr_engine_narrator_system_prompt(
+                    chart_text=chart_text or "(no engine facts)",
+                    reply_lang=eff_lang,
+                    wants_explain=wants_explain,
+                    archetype=_archetype_mr,
+                    word_budget=55,
+                    is_partner_nature=_is_pn_narrator,
+                    question_focus=_mr_question_focus,
+                    user_intent=_user_intent_hint,
+                    open_chart_qa=_open_chart_qa,
+                    concise=_is_batch_concise_mode_safe(),
+                )
         else:
             system_prompt = _build_universal_ask_system_prompt(
                 chart_text=chart_text or "(no chart data available)",
@@ -11012,11 +9852,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 archetype=_mr_archetype_override,
             )
             if _mr_rec_result.archetype == "partner_nature":
-                from ask_mr.engines.partner_nature import partner_nature_narrator_payload
+                from ask_mr.relationship_narrator import attach_narrator_json_to_result
 
-                chart_text = partner_nature_narrator_payload(_mr_rec_result)
-            else:
-                chart_text = _mr_rec_result.to_narrator_payload()
+                attach_narrator_json_to_result(
+                    _mr_rec_result,
+                    question=question or "",
+                    llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                )
+            chart_text = _mr_rec_result.to_narrator_payload()
             dcr_love_meta = mr_engine_slice_meta(_mr_rec_result)
             _is_mr_static = True
             _chart_slice_type = "mr_engine_v1"
@@ -11492,19 +10335,25 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         text = _llm_raw_text
         _answer_fidelity: dict = {}
         if _mr_engine_narrator:
-            from ask_cosmo_narrator import enforce_cosmo_engine_answer
+            _adaptive_health = (
+                isinstance(dcr_love_meta, dict)
+                and dcr_love_meta.get("narrator_mode") == "adaptive_d1_health_context"
+            )
+            if not _adaptive_health:
+                from ask_cosmo_narrator import enforce_cosmo_engine_answer
 
-            try:
-                text = enforce_cosmo_engine_answer(
-                    text,
-                    wants_explain=wants_explain,
-                    concise=_is_batch_concise_mode_safe(),
-                )
-            except TypeError:
-                text = enforce_cosmo_engine_answer(
-                    text,
-                    wants_explain=wants_explain,
-                )
+                _concise_enforce = _is_batch_concise_mode_safe()
+                try:
+                    text = enforce_cosmo_engine_answer(
+                        text,
+                        wants_explain=wants_explain,
+                        concise=_concise_enforce,
+                    )
+                except TypeError:
+                    text = enforce_cosmo_engine_answer(
+                        text,
+                        wants_explain=wants_explain,
+                    )
         elif _direct_llm_bypass or _eng_checks.get("llm_no_engine"):
             pass
         else:
@@ -11519,29 +10368,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
             text = polish_mr_confident_tone(text)
             text = _strip_decision_template_labels(text)
-            if _archetype_mr == "commitment" and _mr_engine_result is not None:
-                from ask_mr.commitment_narrator import (
-                    engine_result_to_commitment_json,
-                    render_commitment_template_answer,
-                    validate_commitment_narrator_output,
-                )
-
-                _commit_val_json = engine_result_to_commitment_json(_mr_engine_result)
-                _commit_ok, _commit_issues = validate_commitment_narrator_output(
-                    text,
-                    _commit_val_json,
-                )
-                if not _commit_ok:
-                    print(
-                        f"[raw_passthrough] commitment LLM validation failed "
-                        f"{_commit_issues} — template fallback",
-                        flush=True,
-                    )
-                    text = render_commitment_template_answer(
-                        _commit_val_json,
-                        question or "",
-                        lang=eff_lang,
-                    )
         if is_decision:
             if _decision_needs_plain_rewrite(text):
                 try:
@@ -11982,6 +10808,24 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "contradiction",
                 "contradiction_detail",
                 "explanation",
+                "engine_version",
+                "rules_version",
+            ):
+                if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
+                    _pt_checks[_ck] = _sm_checks[_ck]
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "health_engine_v1":
+            _pt_checks["health_engine"] = "v1"
+            _pt_checks["narrator_mode"] = (
+                dcr_love_meta.get("narrator_mode") or "adaptive_d1_health_context"
+            )
+            _sm_checks = (
+                dcr_love_meta.get("checks")
+                if isinstance(dcr_love_meta.get("checks"), dict)
+                else {}
+            )
+            for _ck in (
+                "narrator_input",
+                "d1_health_facts",
                 "engine_version",
                 "rules_version",
             ):
@@ -13187,28 +12031,9 @@ def _build_messages(
                     print(f"[passthrough_legacy] property focus skipped: "
                           f"{str(_pf_exc_pt_lg)[:160]}")
                     _property_focus_pt_lg = ""
-                # ── HEALTH FOCUS (H3) — passthrough legacy parity ─────
-                _health_focus_pt_lg = ""
-                try:
-                    _health_focus_pt_lg = _passthrough_health_focus(
-                        question, ""
-                    )
-                except Exception as _hf_exc_pt_lg:  # noqa: BLE001
-                    print(f"[passthrough_legacy] health focus skipped: "
-                          f"{str(_hf_exc_pt_lg)[:160]}")
-                    _health_focus_pt_lg = ""
-                # ── HEALTH chart-trim (drop dasha sections) ───────────
-                try:
-                    if _chart_block_pt and _health_focus_pt_lg:
-                        from health_focus_routing import trim_dasha_sections as _htds_lg  # type: ignore
-                        _chart_block_pt, _hn_lg = _htds_lg(_chart_block_pt, question)
-                        if _hn_lg > 0:
-                            print(f"[passthrough_legacy] health chart trimmed: dropped {_hn_lg} dasha sections")
-                except Exception as _htds_exc_lg:  # noqa: BLE001
-                    print(f"[passthrough_legacy] health chart trim skipped: {str(_htds_exc_lg)[:160]}")
                 _msgs_pt: list[dict] = [{
                     "role": "system",
-                    "content": _sys_intro_pt + _chart_block_pt + _kp_block_pt + _property_focus_pt_lg + _health_focus_pt_lg + _marriage_block_pt,
+                    "content": _sys_intro_pt + _chart_block_pt + _kp_block_pt + _property_focus_pt_lg + _marriage_block_pt,
                 }]
                 # Last 6 conversation turns for follow-up continuity
                 # (e.g. "yeh tumne kaise bola?" type clarifiers).
@@ -13904,21 +12729,6 @@ def _build_messages(
                   f"router failed → fat-constant fallback: {str(_pfr_exc)[:160]}",
                   flush=True)
             focus = _PROPERTY_FOCUS_TEXT
-    # ── HEALTH FOCUS (H3) — narrative-path injection (CAFB) ──
-    # Replaces fat health_static engine. Killswitch: HEALTH_FOCUS_BLOCK.
-    elif _is_health_topic(topic, question) and _health_focus_enabled():
-        try:
-            from health_focus_routing import build_health_focus as _bhf  # type: ignore
-            focus = _bhf(question)
-        except Exception as _hfr_exc:  # noqa: BLE001
-            try:
-                global _HEALTH_FOCUS_FALLBACK_COUNT
-                _HEALTH_FOCUS_FALLBACK_COUNT += 1
-            except NameError:
-                _HEALTH_FOCUS_FALLBACK_COUNT = 1  # type: ignore
-            print(f"[narrative_health_focus][FALLBACK_COUNT={_HEALTH_FOCUS_FALLBACK_COUNT}] "
-                  f"router failed: {str(_hfr_exc)[:160]}", flush=True)
-            focus = ""
     kp_block  = _kp_context(birth, topic)
     tr_block  = _transit_context()
     _, beh    = _summarise_history(history or [])
@@ -24251,24 +23061,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     print(f"[passthrough_sync] property focus skipped: "
                           f"{str(_pf_exc_pt)[:160]}")
                     _property_focus_pt = ""
-                # ── HEALTH FOCUS (H3) — passthrough sync parity ─────
-                _health_focus_pt = ""
-                try:
-                    _health_focus_pt = _passthrough_health_focus(
-                        question, _qu_topic
-                    )
-                except Exception as _hf_exc_pt:  # noqa: BLE001
-                    print(f"[passthrough_sync] health focus skipped: "
-                          f"{str(_hf_exc_pt)[:160]}")
-                    _health_focus_pt = ""
-                try:
-                    if _chart_block_pt and _health_focus_pt:
-                        from health_focus_routing import trim_dasha_sections as _htds_pt  # type: ignore
-                        _chart_block_pt, _hn_pt = _htds_pt(_chart_block_pt, question)
-                        if _hn_pt > 0:
-                            print(f"[passthrough_sync] health chart trimmed: dropped {_hn_pt} dasha sections")
-                except Exception as _htds_exc_pt:  # noqa: BLE001
-                    print(f"[passthrough_sync] health chart trim skipped: {str(_htds_exc_pt)[:160]}")
                 _msgs_pt: list[dict] = [{
                     "role": "system",
                     "content": (
@@ -24276,7 +23068,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         + _chart_block_pt
                         + _kp_block_pt
                         + _property_focus_pt
-                        + _health_focus_pt
                         + _marriage_block_pt
                         + _emotion_tone_pt
                     ),
@@ -27991,31 +26782,12 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 print(f"[passthrough_stream] property focus skipped: "
                       f"{str(_pf_exc_pt_s)[:160]}")
                 _property_focus_pt_s = ""
-            # ── HEALTH FOCUS (H3) — passthrough stream parity ─────
-            _health_focus_pt_s = ""
-            try:
-                _health_focus_pt_s = _passthrough_health_focus(
-                    question, _topic_id_s
-                )
-            except Exception as _hf_exc_pt_s:  # noqa: BLE001
-                print(f"[passthrough_stream] health focus skipped: "
-                      f"{str(_hf_exc_pt_s)[:160]}")
-                _health_focus_pt_s = ""
-            try:
-                if _chart_block_pt_s and _health_focus_pt_s:
-                    from health_focus_routing import trim_dasha_sections as _htds_s  # type: ignore
-                    _chart_block_pt_s, _hn_s = _htds_s(_chart_block_pt_s, question)
-                    if _hn_s > 0:
-                        print(f"[passthrough_stream] health chart trimmed: dropped {_hn_s} dasha sections")
-            except Exception as _htds_exc_s:  # noqa: BLE001
-                print(f"[passthrough_stream] health chart trim skipped: {str(_htds_exc_s)[:160]}")
             _msgs_pt_s: list[dict] = [{
                 "role":    "system",
                 "content": _PT_SYS_INTRO
                            + _chart_block_pt_s
                            + _kp_block_pt_s
                            + _property_focus_pt_s
-                           + _health_focus_pt_s
                            + _locked_section_pt_s
                            + _marriage_block_pt_s,
             }]

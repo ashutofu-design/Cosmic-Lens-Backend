@@ -2395,11 +2395,12 @@ def recompute_mr_engine_admin_context(
         checks["archetype"] = meta.get("archetype")
     if not checks.get("narrator_input"):
         try:
-            arch = str(meta.get("archetype") or "").lower()
-            if arch in ("commitment", "loyalty_trust", "loyalty"):
-                from ask_mr.commitment_narrator import engine_result_to_commitment_json
+            from ask_mr.relationship_narrator import engine_result_to_relationship_json
 
-                checks["narrator_input"] = engine_result_to_commitment_json(rec)
+            checks["narrator_input"] = engine_result_to_relationship_json(
+                rec,
+                question=q or "",
+            )
         except Exception:
             pass
     out["checks"] = checks
@@ -2827,6 +2828,7 @@ def build_admin_llm_context(
             "rules_fired",
             "modules_used",
             "narrator_input",
+            "d1_health_facts",
             "scorecard",
             "primary_score",
             "commitment_level",

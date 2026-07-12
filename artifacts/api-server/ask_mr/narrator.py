@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import re
 
-from ask_cosmo_narrator import build_cosmo_ask_length_block
+from ask_cosmo_narrator import build_cosmo_ask_length_block, build_health_ask_length_block
 from .types import EngineResult
 from ask_career.job_registry import JOB_ENGINE_ARCHETYPES
 
 
-def _is_health_narrator_arch(archetype: str) -> bool:
+def _is_health_archetype(archetype: str) -> bool:
+    arch = (archetype or "").strip().lower()
+    if not arch or arch.startswith("refuse_") or arch == "crisis_redirect":
+        return False
     try:
-        from ask_health.health_narrator import is_health_narratable_archetype
+        from ask_health.health_registry import HEALTH_ARCHETYPES
 
-        return is_health_narratable_archetype(archetype)
+        return arch in HEALTH_ARCHETYPES
     except Exception:
-        return (archetype or "").strip().lower() in {
+        return arch in {
             "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
             "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
             "addiction_support", "reproductive_support", "general_health",
@@ -125,10 +128,13 @@ def _archetype_extra_rules(
             "Stay on TOPIC_LOCK — no invented placements, dates, or unrelated drift. "
             "Native-self focus when they asked about themselves."
         )
-    elif _is_health_narrator_arch(arch):
-        from ask_health.health_narrator import HEALTH_NARRATOR_RULES
-
-        rules.append(HEALTH_NARRATOR_RULES)
+    elif _is_health_archetype(arch):
+        rules.append(
+            "Health Q — user ke exact sawal ka natural jawab; ENGINE FACTS padh kar apni "
+            "samajh se simple daily health language me likho. Specific disease names mat banao. "
+            "Planet/house/sign jargon reply me mat dikhao. 'Kya kya bimari' type Q = tendency "
+            "zones / weak areas batao, diagnosis list mat do."
+        )
     elif arch in (
         "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
         "spending_personality", "financial_discipline", "investment_risk",
@@ -140,9 +146,10 @@ def _archetype_extra_rules(
             "Do not invent amounts or dates."
         )
     elif arch == "commitment":
-        from ask_mr.commitment_narrator import COMMITMENT_NARRATOR_RULES
-
-        rules.append(COMMITMENT_NARRATOR_RULES)
+        rules.append(
+            "Relationship Q — direct answer first, then reasons, then practical line. "
+            "No planet/house jargon."
+        )
     elif arch in JOB_ENGINE_ARCHETYPES or arch.startswith("career") or arch in (
         "job_vs_business", "sector_fit", "creativity_innovation", "career_milestones",
         "govt_job", "vocational_trade", "entrepreneurship", "income_wealth",
@@ -187,7 +194,7 @@ def build_mr_engine_narrator_system_prompt(
         if arch == "commitment"
         else (
         "health"
-        if _is_health_narrator_arch(arch)
+        if _is_health_archetype(arch)
         else (
             "finance"
             if arch in (
@@ -222,21 +229,15 @@ def build_mr_engine_narrator_system_prompt(
             "\nIf engine gives love vs arranged % split — LEAD Big Picture with those numbers only."
         )
 
-    if arch == "commitment":
-        from ask_mr.commitment_narrator import build_commitment_narrator_length_block
-
-        length_block = build_commitment_narrator_length_block(
+    if _is_health_archetype(arch):
+        length_block = build_health_ask_length_block(
             wants_explain=wants_explain,
-            concise=concise,
             extra_rules=extras,
         )
-    elif _is_health_narrator_arch(arch):
-        from ask_health.health_narrator import build_health_narrator_length_block
-
-        length_block = build_health_narrator_length_block(
-            wants_explain=wants_explain,
-            concise=concise,
-            extra_rules=extras,
+        engine_lock = (
+            "HEALTH DATA LOCK: Every chart placement, lord, dignity, strength and aspect in "
+            "VERIFIED_HEALTH_CONTEXT_JSON is code-verified. Interpret those supplied facts yourself "
+            "for the exact question. Never invent or alter a chart fact."
         )
     else:
         try:
@@ -247,12 +248,17 @@ def build_mr_engine_narrator_system_prompt(
                 concise=concise,
             )
         except TypeError:
-            # VPS may have older ask_cosmo_narrator.py without batch concise kwarg.
             length_block = build_cosmo_ask_length_block(
                 wants_explain=wants_explain,
                 topic=topic_hint,
                 extra_rules=extras,
             )
+        engine_lock = (
+            "ENGINE LOCK: Facts below are final — narrate and EXPAND them; never recalculate or contradict VERDICT.\n"
+            "Do NOT add new planets/houses/dasha reasons beyond ENGINE FACTS.\n"
+            "If user asked for % / kitna / ratio, lead Big Picture with engine numbers only — do not invent figures.\n"
+            "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष — use the Markdown section headers given."
+        )
 
     intent_block = ""
     if (user_intent or "").strip():
@@ -263,10 +269,7 @@ def build_mr_engine_narrator_system_prompt(
 
     return f"""{_NARRATOR_LANG[rl]}
 {intent_block}
-ENGINE LOCK: Facts below are final — narrate and EXPAND them; never recalculate or contradict VERDICT.
-Do NOT add new planets/houses/dasha reasons beyond ENGINE FACTS.
-If user asked for % / kitna / ratio, lead Big Picture with engine numbers only — do not invent figures.
-BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष — use the Markdown section headers given.
+{engine_lock}
 
 {length_block}
 

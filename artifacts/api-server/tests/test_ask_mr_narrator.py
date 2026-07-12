@@ -36,20 +36,19 @@ SAMPLE_KUNDLI = {
 
 
 class MrNarratorTests(unittest.TestCase):
-    def test_narrator_prompt_forbids_calculation(self):
-        eng = run_mr_static_engine(SAMPLE_KUNDLI, "love marriage kyun?", wants_explain=True)
-        payload = eng.to_narrator_payload()
-        prompt = build_mr_engine_narrator_system_prompt(
-            chart_text=payload,
-            archetype=eng.archetype,
-            word_budget=eng.word_budget,
-            wants_explain=True,
+    def test_loyalty_narrator_uses_master_rules(self):
+        from ask_mr.relationship_narrator import RELATIONSHIP_NARRATOR_RULES, build_relationship_narrator_system_prompt
+
+        eng = run_mr_static_engine(SAMPLE_KUNDLI, "kya mera partner loyal hai")
+        prompt = build_relationship_narrator_system_prompt(
+            engine_result=eng,
+            question="kya mera partner loyal hai",
+            reply_lang="hn",
         )
-        self.assertIn("NOT calculating", prompt)
-        self.assertIn("ENGINE FACTS", prompt)
-        self.assertNotIn("Full D1 is below", prompt)
-        self.assertLess(len(prompt), 2200)
-        self.assertLess(len(payload), 900)
+        self.assertIn("Cosmic Lens Relationship Narrator", prompt)
+        self.assertIn(RELATIONSHIP_NARRATOR_RULES.splitlines()[0], prompt)
+        self.assertIn("ENGINE_JSON:", prompt)
+        self.assertIn("Never calculate astrology yourself", prompt)
 
     def test_love_vs_arranged_uses_llm_not_template(self):
         eng = run_mr_static_engine(SAMPLE_KUNDLI, "love marriage ya arrange?", wants_explain=False)
@@ -112,17 +111,17 @@ class MrNarratorTests(unittest.TestCase):
 
     def test_partner_nature_prompt_requires_three_paragraphs(self):
         from ask_mr.engines.partner_nature import partner_nature_narrator_payload, run_partner_nature
+        from ask_mr.relationship_narrator import build_relationship_narrator_system_prompt
 
         eng = run_partner_nature(SAMPLE_KUNDLI, "partner nature?", birth=None)
-        prompt = build_mr_engine_narrator_system_prompt(
+        prompt = build_relationship_narrator_system_prompt(
+            engine_result=eng,
             chart_text=partner_nature_narrator_payload(eng),
-            archetype="partner_nature",
-            is_partner_nature=True,
-            word_budget=120,
+            question="partner nature?",
+            reply_lang="hn",
         )
-        self.assertIn("exactly 3 paragraphs", prompt)
-        self.assertIn("PARAGRAPH 1", prompt)
-        self.assertIn("BANNED hedging", prompt)
+        self.assertIn("Cosmic Lens Relationship Narrator", prompt)
+        self.assertIn("partner nature", prompt.lower())
 
     def test_attachment_payload_uses_four_sentences_not_three_paras(self):
         from ask_mr.engines.partner_nature import partner_nature_narrator_payload, run_partner_nature
@@ -136,15 +135,17 @@ class MrNarratorTests(unittest.TestCase):
         self.assertIn("exactly 4 complete sentences", payload)
         self.assertNotIn("PARA 3 — presence in love", payload)
 
-    def test_attachment_narrator_prompt_four_sentences(self):
-        prompt = build_mr_engine_narrator_system_prompt(
-            chart_text="test",
-            archetype="partner_nature",
-            is_partner_nature=True,
-            question_focus="partnership_attachment",
-            word_budget=100,
+    def test_attachment_narrator_prompt_unified_cosmo_voice(self):
+        from ask_mr.relationship_narrator import build_relationship_narrator_system_prompt
+
+        prompt = build_relationship_narrator_system_prompt(
+            chart_text="VERDICT: mixed attachment",
+            question="Mera aur mere partner ka emotional attachment kaisa rahega",
+            reply_lang="hn",
+            engine_result=None,
         )
-        self.assertIn("exactly 4 complete sentences", prompt)
+        self.assertIn("Cosmic Lens Relationship Narrator", prompt)
+        self.assertIn("emotional attachment", prompt.lower())
 
     def test_attachment_enforce_never_ends_mid_phrase(self):
         from openai_helper import _enforce_partnership_attachment_answer

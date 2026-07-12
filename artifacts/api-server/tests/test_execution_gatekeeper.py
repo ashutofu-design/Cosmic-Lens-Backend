@@ -107,6 +107,45 @@ class ExecutionGatekeeperTests(unittest.TestCase):
         res = run_post_engine_gate(None, slice_meta=meta, chart_text="")
         self.assertTrue(res.ok)
 
+    def test_verified_health_context_payload_passes(self):
+        from ask_health import run_health_static_engine
+        from ask_health.presenter import to_health_llm_payload
+
+        kundli = {
+            "ascendant": "Leo",
+            "planets": [
+                {"name": "Sun", "sign": "Leo", "house": 1, "longitude": 120.0},
+                {"name": "Moon", "sign": "Scorpio", "house": 4, "longitude": 220.0},
+                {"name": "Mars", "sign": "Aries", "house": 9, "longitude": 10.0},
+                {"name": "Mercury", "sign": "Virgo", "house": 2, "longitude": 160.0},
+                {"name": "Jupiter", "sign": "Sagittarius", "house": 5, "longitude": 250.0},
+                {"name": "Venus", "sign": "Libra", "house": 3, "longitude": 190.0},
+                {"name": "Saturn", "sign": "Capricorn", "house": 6, "longitude": 290.0},
+                {"name": "Rahu", "sign": "Gemini", "house": 11, "longitude": 80.0},
+                {"name": "Ketu", "sign": "Sagittarius", "house": 5, "longitude": 260.0},
+            ],
+        }
+        question = "meri sehat kaisi hai"
+        result = run_health_static_engine(
+            kundli, question, archetype="overall_vitality"
+        )
+        chart_text = to_health_llm_payload(result, question=question)
+        meta = {
+            "slice": "health_engine_v1",
+            "archetype": result.archetype,
+            "verdict": result.verdict,
+            "evidence": list(result.evidence or []),
+            "checks": dict(result.checks or {}),
+            "narrator_mode": "adaptive_d1_health_context",
+        }
+        res = run_post_engine_gate(
+            None,
+            slice_meta=meta,
+            chart_text=chart_text,
+            question=question,
+        )
+        self.assertTrue(res.ok, res.to_dict())
+
     def test_routing_mismatch_detected(self):
         admin = {
             "dna_routing_applied": True,

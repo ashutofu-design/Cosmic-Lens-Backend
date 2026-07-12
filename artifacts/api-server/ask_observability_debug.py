@@ -1404,7 +1404,7 @@ def attach_observability_to_context(
     return out
 
 
-OBS_DEBUGGER_VERSION = "2.6.1"
+OBS_DEBUGGER_VERSION = "2.6.2"
 
 
 def _format_pipeline_section(title: str, steps: list[dict[str, Any]] | None) -> list[str]:

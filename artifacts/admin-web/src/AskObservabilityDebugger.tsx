@@ -189,7 +189,7 @@ function buildEngineExecutionSteps(
     }
     return [{
       label: "Health Chart Pack",
-      value: "D1 + D9 data abhi load nahi hua. Naya health question pucho ya admin/API deploy check karo (v2.6.1+).",
+      value: `D1 + D9 data abhi load nahi hua. Naya health question pucho ya admin/API deploy check karo (v${OBS_DEBUGGER_VERSION}+).`,
     }];
   }
 

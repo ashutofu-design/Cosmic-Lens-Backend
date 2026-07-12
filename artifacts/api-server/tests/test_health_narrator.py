@@ -48,10 +48,9 @@ class HealthNarratorTests(unittest.TestCase):
         )
         self.assertIn("ENGINE FACTS:", prompt)
         self.assertNotIn("The Big Picture", prompt)
-        self.assertIn("ADAPTIVE RESPONSE DEPTH", prompt)
-        self.assertIn("Simple/direct question", prompt)
-        self.assertIn("Multi-part", prompt)
-        self.assertIn("complete verified D1 facts", prompt)
+        self.assertIn("VERIFIED_HEALTH_CONTEXT_JSON", prompt)
+        self.assertIn("sawal samjho", prompt)
+        self.assertIn("Normal astrologer", prompt)
 
     def test_disease_list_question_routes_health(self):
         q = "mujhse kya kya disease ho sakta he"

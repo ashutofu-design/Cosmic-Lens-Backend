@@ -130,10 +130,7 @@ def _archetype_extra_rules(
         )
     elif _is_health_archetype(arch):
         rules.append(
-            "Health Q — user ke exact sawal ka natural jawab; ENGINE FACTS padh kar apni "
-            "samajh se simple daily health language me likho. Specific disease names mat banao. "
-            "Planet/house/sign jargon reply me mat dikhao. 'Kya kya bimari' type Q = tendency "
-            "zones / weak areas batao, diagnosis list mat do."
+            "Health Q — sawal identify karo, JSON facts padho, usi ke hisaab se natural jawab do."
         )
     elif arch in (
         "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
@@ -235,9 +232,8 @@ def build_mr_engine_narrator_system_prompt(
             extra_rules=extras,
         )
         engine_lock = (
-            "HEALTH DATA LOCK: Every chart placement, lord, dignity, strength and aspect in "
-            "VERIFIED_HEALTH_CONTEXT_JSON is code-verified. Interpret those supplied facts yourself "
-            "for the exact question. Never invent or alter a chart fact."
+            "HEALTH JSON: VERIFIED_HEALTH_CONTEXT_JSON me jo chart facts hain woh sahi hain — "
+            "unhi se sawal ka jawab banao."
         )
     else:
         try:

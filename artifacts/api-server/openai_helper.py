@@ -10258,9 +10258,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 question=question or "",
                 meta=dcr_love_meta,
             )
-            if not _llm_raw_text and _health_validator_audit.get("final_block"):
+            if not _llm_raw_text:
                 print(
-                    f"[raw_passthrough] HEALTH_VALIDATOR BLOCK "
+                    f"[raw_passthrough] HEALTH_VALIDATOR empty "
                     f"issues={_health_validator_audit.get('issues')}",
                     flush=True,
                 )
@@ -10276,7 +10276,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     "engine_tag": "ans-gate",
                     "follow_ups": [],
                 }
-            if _health_validator_audit.get("attempts", 0) > 1:
+            if _health_validator_audit.get("released_anyway"):
+                print(
+                    f"[raw_passthrough] HEALTH_VALIDATOR released_with_issues "
+                    f"attempts={_health_validator_audit.get('attempts')} "
+                    f"issues={_health_validator_audit.get('final_issues')}",
+                    flush=True,
+                )
+            elif _health_validator_audit.get("attempts", 0) > 1:
                 print(
                     f"[raw_passthrough] HEALTH_VALIDATOR ok "
                     f"attempts={_health_validator_audit.get('attempts')}",

@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ask_health.answer_validator import (
     build_health_validator_display,
     build_health_validator_retry_feedback,
+    run_health_llm_validator_loop,
     validate_health_llm_answer,
 )
 
@@ -96,6 +97,59 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         self.assertGreaterEqual(len(display.get("checks") or []), 5)
         check_ids = {c.get("id") for c in display.get("checks") or []}
         self.assertIn("chart_proof", check_ids)
+
+    def test_releases_last_answer_after_max_retries(self):
+        class _Msg:
+            def __init__(self, content):
+                self.content = content
+
+        class _Choice:
+            def __init__(self, content):
+                self.message = _Msg(content)
+
+        class _Resp:
+            def __init__(self, content):
+                self.choices = [_Choice(content)]
+
+        class _Client:
+            def __init__(self):
+                self.n = 0
+
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**_kwargs):
+                        return _Client._next()
+
+            _answers = [
+                "Pollution se bacho aur pranayama karo.",
+                "Pollution se bacho aur pranayama karo.",
+                "Pollution se bacho aur pranayama karo.",
+                "Pollution se bacho aur pranayama karo.",
+            ]
+            _i = 0
+
+            @classmethod
+            def _next(cls):
+                content = cls._answers[min(cls._i, len(cls._answers) - 1)]
+                cls._i += 1
+                return _Resp(content)
+
+        meta = {
+            "archetype": "respiratory_health",
+            "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
+        }
+        text, audit = run_health_llm_validator_loop(
+            _Client(),
+            model="test",
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=100,
+            question="mujhse thandi bahut rehti hai kya karu",
+            meta=meta,
+        )
+        self.assertTrue(text)
+        self.assertFalse(audit.get("passed"))
+        self.assertTrue(audit.get("released_anyway"))
 
 
 if __name__ == "__main__":

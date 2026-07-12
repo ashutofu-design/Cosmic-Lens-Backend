@@ -44,6 +44,14 @@ _GENERIC_ONLY_RX = re.compile(
     r"(?ix)^(dekh[oie]?|chart\s+me|aapke\s+chart).*(pollution|pranayama|fresh\s+hawa|"
     r"safai|environment|stress\s+bhi\s+kam)"
 )
+_DISEASE_LIST_Q_RX = re.compile(
+    r"(?ix)(kya\s+kya\s+(?:health\s+|sehat\s+|tabiyat\s+)?(?:issue|problem|dikkat|bimari|disease|rog)|"
+    r"(?:issue|problem|dikkat|bimari|disease)\s+ho\s+sakt)"
+)
+
+
+def is_disease_list_question(question: str) -> bool:
+    return bool(_DISEASE_LIST_Q_RX.search(question or ""))
 
 
 def _chart_pack(execution: dict[str, Any], key: str) -> dict[str, Any]:
@@ -51,23 +59,11 @@ def _chart_pack(execution: dict[str, Any], key: str) -> dict[str, Any]:
     return chart if not chart.get("error") else {}
 
 
-def chart_support_signals(
-    question: str,
-    archetype: str,
-    execution: dict[str, Any],
-) -> tuple[bool, list[str]]:
-    """Return whether JSON supports the asked health issue + citeable reasons."""
-    arch = (archetype or "").strip().lower()
-    q = (question or "").strip()
-    respiratory = arch in _RESPiratory_ARCH or bool(_RESPiratory_Q_RX.search(q))
-    if not respiratory:
-        return True, []
-
+def _collect_d1_signals(d1: dict[str, Any]) -> list[str]:
     reasons: list[str] = []
-    d1 = _chart_pack(execution, "d1")
     for aff in d1.get("afflictions") or []:
-        text = str(aff)
-        if re.search(r"(?ix)(h6|h8|h12|moon|malefic|dusthana|6|8|12)", text):
+        text = str(aff).strip()
+        if text:
             reasons.append(text)
 
     sub = d1.get("sub_flags") if isinstance(d1.get("sub_flags"), dict) else {}
@@ -97,10 +93,20 @@ def chart_support_signals(
             continue
         hn = int(row.get("house") or 0)
         occ = row.get("occupants") or []
-        if hn in (6, 8, 12) and occ:
-            reasons.append(f"House {hn} occupants: {', '.join(str(x) for x in occ[:4])}")
+        lord = str(row.get("lord") or (row.get("lord_state") or {}).get("lord") or "").strip()
+        if hn in (6, 8, 12):
+            if occ:
+                reasons.append(f"House {hn} occupants: {', '.join(str(x) for x in occ[:4])}")
+            elif lord:
+                reasons.append(f"House {hn} lord: {lord}")
 
-    # de-dup while preserving order
+    for key in ("preventive_risk", "chronic_tendency", "overall_vitality", "mental_stress"):
+        dim = (d1.get("dimensions") or {}).get(key) if isinstance(d1.get("dimensions"), dict) else {}
+        if isinstance(dim, dict):
+            reason = str(dim.get("reason") or "").strip()
+            if reason:
+                reasons.append(reason[:140])
+
     seen: set[str] = set()
     unique: list[str] = []
     for item in reasons:
@@ -108,7 +114,18 @@ def chart_support_signals(
         if key and key not in seen:
             seen.add(key)
             unique.append(item)
-    return bool(unique), unique
+    return unique
+
+
+def chart_support_signals(
+    question: str,
+    archetype: str,
+    execution: dict[str, Any],
+) -> tuple[bool, list[str]]:
+    """Return whether JSON has citeable chart signals for this question."""
+    d1 = _chart_pack(execution, "d1")
+    signals = _collect_d1_signals(d1)
+    return bool(signals), signals
 
 
 def answer_cites_chart_proof(answer: str, execution: dict[str, Any]) -> bool:
@@ -158,6 +175,21 @@ def answer_cites_chart_proof(answer: str, execution: dict[str, Any]) -> bool:
         if asc and re.search(rf"\b{re.escape(asc)}\b", text, re.I) and _PROOF_LINK_RX.search(text):
             return True
 
+        for row in chart.get("health_houses") or []:
+            if not isinstance(row, dict):
+                continue
+            hn = int(row.get("house") or 0)
+            if hn not in (1, 6, 8, 12):
+                continue
+            house_pat = _HOUSE_WORDS.get(hn)
+            if house_pat and re.search(house_pat, text, re.I) and _PROOF_LINK_RX.search(text):
+                return True
+            lord = str(row.get("lord") or (row.get("lord_state") or {}).get("lord") or "").strip()
+            if lord and re.search(rf"\b{re.escape(lord)}\b", text, re.I) and (
+                (house_pat and re.search(house_pat, text, re.I)) or _PROOF_LINK_RX.search(text)
+            ):
+                return True
+
     return False
 
 
@@ -177,10 +209,15 @@ def validate_chart_proof_requirement(
     has_proof = answer_cites_chart_proof(answer, execution)
     honest_low = answer_honest_low_tension(answer)
 
-    if supported:
-        if not has_proof:
-            issues.append("missing_chart_proof")
-    elif not honest_low and _RESPiratory_Q_RX.search(question or ""):
+    if signals and not has_proof:
+        issues.append("missing_chart_proof")
+    elif is_disease_list_question(question or "") and not has_proof:
+        issues.append("missing_chart_proof")
+    elif (
+        not honest_low
+        and not has_proof
+        and _RESPiratory_Q_RX.search(question or "")
+    ):
         if re.search(r"(?ix)(weak|kamzor|tendency|problem|issue|allergy|lungs|saans)", answer or ""):
             issues.append("unsupported_claim_without_proof")
     elif _GENERIC_ONLY_RX.search(answer or "") and not has_proof:
@@ -189,7 +226,12 @@ def validate_chart_proof_requirement(
     return len(issues) == 0, issues
 
 
-def proof_retry_hint(signals: list[str]) -> str:
+def proof_retry_hint(signals: list[str], question: str = "") -> str:
+    if is_disease_list_question(question):
+        return (
+            "User ne disease list puchi — specific disease naam (diabetes, cancer, asthma, TB) "
+            "mat likho. JSON se vulnerability zones batao: planet + 6th/8th/12th ghar/lord/affliction."
+        )
     if not signals:
         return (
             "Chart me is sawal ki strong signal nahi — seedha bolo tendency zyada nahi dikhti, "

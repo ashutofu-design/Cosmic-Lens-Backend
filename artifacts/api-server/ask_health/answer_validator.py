@@ -11,6 +11,7 @@ from .chart_proof import (
     answer_cites_chart_proof,
     answer_honest_low_tension,
     chart_support_signals,
+    is_disease_list_question,
     proof_retry_hint,
     validate_chart_proof_requirement,
 )
@@ -47,7 +48,7 @@ _ARCH_ANSWER_HINTS: dict[str, re.Pattern[str]] = {
     "chronic_tendency": re.compile(r"(?ix)(chronic|purani|lamba|baar|tendency|weak)"),
     "digestive_health": re.compile(r"(?ix)(digest|pet|stomach|acidity|gas|liver)"),
     "general_health": re.compile(
-        r"(?ix)(sehat|health|tendency|constitution|vitality|weak|strong|care|zone)"
+        r"(?ix)(sehat|health|tendency|constitution|vitality|weak|strong|care|zone|ghar|rog|dikkat)"
     ),
     "preventive_risk": re.compile(r"(?ix)(risk|tendency|weak|care|monitor|prevent)"),
     "overall_vitality": re.compile(r"(?ix)(vitality|energy|sehat|strong|weak|constitution)"),
@@ -60,9 +61,28 @@ def health_validator_enabled() -> bool:
 
 def health_validator_max_retries() -> int:
     try:
-        return max(0, min(3, int(os.environ.get("ASK_HEALTH_VALIDATOR_RETRIES", "2"))))
+        return max(0, min(3, int(os.environ.get("ASK_HEALTH_VALIDATOR_RETRIES", "3"))))
     except (TypeError, ValueError):
-        return 2
+        return 3
+
+
+def _question_topic_matches(question: str, answer: str, archetype: str) -> bool:
+    q = (question or "").strip()
+    text = (answer or "").strip()
+    if not q or not text:
+        return False
+    if is_disease_list_question(q):
+        return bool(re.search(
+            r"(?ix)(zone|tendency|ghar|rog|vulner|monitor|weak|6th|8th|12th|pressure|chart|lord|afflict)",
+            text,
+        ))
+    if re.search(r"(?ix)(thand|thandi|sardi|cold|khansi|saans|breath|chest|zukam)", q):
+        return bool(
+            re.search(r"(?ix)(thand|thandi|sardi|cold|khansi|saans|breath|chest|zukam)", text)
+            or answer_honest_low_tension(text)
+        )
+    hint_rx = _ARCH_ANSWER_HINTS.get(archetype) or _ARCH_ANSWER_HINTS.get("general_health")
+    return not hint_rx or bool(hint_rx.search(text))
 
 
 def _execution_from_meta(meta: dict[str, Any]) -> dict[str, Any]:
@@ -125,8 +145,7 @@ def validate_health_llm_answer(
         issues.append("template_sections")
 
     archetype = str(meta.get("archetype") or classify_health_archetype(q) or "")
-    hint_rx = _ARCH_ANSWER_HINTS.get(archetype) or _ARCH_ANSWER_HINTS.get("general_health")
-    if hint_rx and not hint_rx.search(text):
+    if not _question_topic_matches(q, text, archetype):
         issues.append("question_drift")
 
     if re.search(r"(?ix)\bkya\s+kar", q) and not _ACTION_RX.search(text):
@@ -188,8 +207,7 @@ def build_health_validator_display(
     ok_safe, safe_issues = verify_health_answer(q, text, meta)
     tpl_ok = not _SECTION_HEADER_RX.search(text)
     archetype = str(meta.get("archetype") or classify_health_archetype(q) or "")
-    hint_rx = _ARCH_ANSWER_HINTS.get(archetype) or _ARCH_ANSWER_HINTS.get("general_health")
-    drift_ok = not hint_rx or bool(hint_rx.search(text))
+    drift_ok = _question_topic_matches(q, text, archetype)
     action_ok = not re.search(r"(?ix)\bkya\s+kar", q) or bool(_ACTION_RX.search(text))
     length_ok = not (_SIMPLE_Q_RX.search(q) and len(text.split()) > 110)
     json_issues = [
@@ -261,6 +279,8 @@ def build_health_validator_display(
         "passed": ok,
         "attempts": int(audit.get("attempts") or 1),
         "final_block": bool(audit.get("final_block")),
+        "released_anyway": bool(audit.get("released_anyway")),
+        "final_issues": list(audit.get("final_issues") or []),
         "issues": issues,
         "checks": checks,
         "chart_support_signals": signals[:6],
@@ -277,16 +297,30 @@ def build_health_validator_retry_feedback(
     execution = _execution_from_meta(meta)
     archetype = str(meta.get("archetype") or classify_health_archetype(question) or "")
     _, signals = chart_support_signals(question, archetype, execution)
+    issue_hints = {
+        "question_drift": "Jawab me user ke sawal ki language/topic clearly cover karo.",
+        "missing_chart_proof": "JSON se planet + ghar/sign/affliction cite karo (6th/8th/12th).",
+        "disease_name": "Specific disease naam mat likho — vulnerability zones batao.",
+        "missing_action_guidance": "Practical steps add karo (rest, doctor, routine).",
+    }
     lines = [
         "CORRECTION REQUIRED — previous answer failed validation.",
         f"User question: {question.strip()}",
         "Rewrite using ONLY HEALTH_ENGINE_EXECUTION_JSON facts.",
         "Answer ONLY what was asked; no template sections; no invented planets/houses/signs.",
-        proof_retry_hint(signals),
+        proof_retry_hint(signals, question),
         "Issues:",
     ]
+    if "disease_name" in issues:
+        lines.insert(
+            5,
+            "NEVER name specific diseases (diabetes, cancer, asthma, TB). Use chart zones only.",
+        )
     for issue in issues[:8]:
         lines.append(f"- {issue}")
+        hint = issue_hints.get(issue.split(":")[0])
+        if hint:
+            lines.append(f"  → {hint}")
     lines.append("Return the corrected final answer only.")
     return "\n".join(lines)
 
@@ -334,8 +368,10 @@ def run_health_llm_validator_loop(
             return text, audit
         if attempt >= max_retries:
             audit["passed"] = False
-            audit["final_block"] = True
-            return "", audit
+            audit["released_anyway"] = bool(text)
+            audit["final_issues"] = list(issues)
+            audit["final_block"] = not bool(text)
+            return text, audit
         thread = thread + [
             {"role": "assistant", "content": text},
             {"role": "user", "content": build_health_validator_retry_feedback(issues, question, meta)},

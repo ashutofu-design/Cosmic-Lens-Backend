@@ -232,8 +232,14 @@ function HealthValidatorPanel({ audit }: { audit: ObservabilityHealthValidatorAu
   return (
     <div className="obs-validator">
       <div className="obs-validator-summary">
-        <span className={audit.passed ? "obs-rule-pass" : "obs-rule-fail"}>
-          {audit.passed ? "RELEASED" : audit.final_block ? "BLOCKED" : "FAILED"}
+        <span className={audit.passed ? "obs-rule-pass" : audit.released_anyway ? "obs-rule-skip" : "obs-rule-fail"}>
+          {audit.passed
+            ? "RELEASED"
+            : audit.released_anyway
+              ? "RELEASED (with issues)"
+              : audit.final_block
+                ? "BLOCKED"
+                : "FAILED"}
         </span>
         <span className="detail-muted">
           Attempts: {audit.attempts ?? "—"}

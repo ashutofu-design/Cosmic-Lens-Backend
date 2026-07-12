@@ -50,8 +50,8 @@ class HealthNarratorTests(unittest.TestCase):
         self.assertIn("ENGINE FACTS:", prompt)
         self.assertNotIn("The Big Picture", prompt)
         self.assertIn("HEALTH_ENGINE_EXECUTION_JSON", prompt)
-        self.assertIn("HEALTH_ENGINE_EXECUTION_JSON padh", prompt)
-        self.assertIn("chart PROOF", prompt)
+        self.assertIn("HEALTH_ENGINE_EXECUTION_JSON", prompt)
+        self.assertIn("POORA padho", prompt)
         self.assertIn("Normal astrologer", prompt)
 
     def test_disease_list_question_routes_health(self):

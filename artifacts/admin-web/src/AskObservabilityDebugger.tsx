@@ -14,14 +14,16 @@ function Section({
   stars,
   children,
   defaultOpen = true,
+  className,
 }: {
   title: string;
   stars?: number;
   children: ReactNode;
   defaultOpen?: boolean;
+  className?: string;
 }) {
   return (
-    <details className="obs-section" open={defaultOpen}>
+    <details className={`obs-section${className ? ` ${className}` : ""}`} open={defaultOpen}>
       <summary>
         <span className="obs-section-title">
           {title}
@@ -44,6 +46,19 @@ function PipelineList({ steps }: { steps: { label: string; value: string }[] }) 
         </li>
       ))}
     </ol>
+  );
+}
+
+function DnaPipelineGrid({ steps }: { steps: { label: string; value: string }[] }) {
+  return (
+    <dl className="obs-dna-grid">
+      {steps.map((step, i) => (
+        <div key={`${step.label}-${i}`} className="obs-dna-grid-row">
+          <dt className="obs-dna-grid-label">{step.label}</dt>
+          <dd className="obs-dna-grid-value">{step.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -333,11 +348,11 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         </div>
       ) : null}
 
-      <Section title="1. Question DNA" stars={1}>
-        <p className="detail-muted" style={{ marginBottom: 8 }}>
+      <Section title="1. Question DNA" stars={1} className="obs-section-dna">
+        <p className="detail-muted obs-dna-hint">
           Same classifier fields as mobile DNA Check (Normalized → Bucket Match).
         </p>
-        <PipelineList steps={obs.question_dna_pipeline || []} />
+        <DnaPipelineGrid steps={obs.question_dna_pipeline || []} />
       </Section>
 
       <Section title="2. Engine Execution" stars={5}>

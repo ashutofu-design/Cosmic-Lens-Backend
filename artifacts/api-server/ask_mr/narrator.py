@@ -234,7 +234,7 @@ def build_mr_engine_narrator_system_prompt(
         engine_lock = (
             "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON poora D1+D9 pack hai — planets, health_houses, "
             "afflictions, dimensions sab yahi se. Sawal samjho, JSON padho, planet+ghar proof ke saath "
-            "jawab do. 3 retry tak sudharo; specific disease naam mat likho."
+            "jawab do. 3 retry tak sudharo; specific disease naam mat likho; paisa/career tabhi jab user ne pucha ho."
         )
     else:
         try:

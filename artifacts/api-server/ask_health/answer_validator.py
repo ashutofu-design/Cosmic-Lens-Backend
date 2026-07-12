@@ -33,6 +33,30 @@ _ACTION_RX = re.compile(
 _SIMPLE_Q_RX = re.compile(
     r"(?ix)^(mujhse|meri|mera|mujhe|kya\s+karu|kya\s+karein|kaise|kyun|kya\s+ho)\b"
 )
+_FINANCE_Q_RX = re.compile(
+    r"(?ix)(paisa|paise|money|kharcha|kharche|expense|expenses|financial|finance|"
+    r"bachat|saving|savings|loan|debt|wealth|emi|karz|udhar|insurance|fd\b)"
+)
+_FINANCE_A_RX = re.compile(
+    r"(?ix)(paisa|paise|money|kharcha|kharche|expense|expenses|financial|finance|"
+    r"bachat|saving|savings|loan|debt|wealth|emi|karz|udhar|insurance|"
+    r"unexpected\s+expenses|financial\s+planning)"
+)
+_CAREER_Q_RX = re.compile(
+    r"(?ix)(naukri|job|promotion|salary|boss|office|business|startup|"
+    r"career|profession|government\s+job|private\s+job|kaam)"
+)
+_CAREER_A_RX = re.compile(
+    r"(?ix)(naukri|job|promotion|salary|boss|office|business|startup|"
+    r"career|profession|government\s+job|private\s+job)"
+)
+_TRAVEL_Q_RX = re.compile(
+    r"(?ix)(travel|safar|yatra|trip|ghum|foreign|abroad|videsh|safar\s+ke|travel\s+ke)"
+)
+_TRAVEL_A_RX = re.compile(
+    r"(?ix)(travel|safar|yatra|trip|ghum|foreign|abroad|videsh|safar\s+ke|travel\s+ke|"
+    r"travel\s+stress|safar\s+me)"
+)
 
 _ARCH_ANSWER_HINTS: dict[str, re.Pattern[str]] = {
     "respiratory_health": re.compile(
@@ -66,10 +90,49 @@ def health_validator_max_retries() -> int:
         return 3
 
 
+def _user_asked_finance(question: str) -> bool:
+    return bool(_FINANCE_Q_RX.search(question or ""))
+
+
+def _answer_mentions_finance(answer: str) -> bool:
+    return bool(_FINANCE_A_RX.search(answer or ""))
+
+
+def _user_asked_career(question: str) -> bool:
+    return bool(_CAREER_Q_RX.search(question or ""))
+
+
+def _answer_mentions_career(answer: str) -> bool:
+    return bool(_CAREER_A_RX.search(answer or ""))
+
+
+def _user_asked_travel(question: str) -> bool:
+    return bool(_TRAVEL_Q_RX.search(question or ""))
+
+
+def _answer_mentions_travel(answer: str) -> bool:
+    return bool(_TRAVEL_A_RX.search(answer or ""))
+
+
+def _unasked_topic_issues(question: str, answer: str) -> list[str]:
+    q = (question or "").strip()
+    text = (answer or "").strip()
+    issues: list[str] = []
+    if _answer_mentions_finance(text) and not _user_asked_finance(q):
+        issues.append("unasked_finance")
+    if _answer_mentions_career(text) and not _user_asked_career(q):
+        issues.append("unasked_career")
+    return issues
+
+
 def _question_topic_matches(question: str, answer: str, archetype: str) -> bool:
     q = (question or "").strip()
     text = (answer or "").strip()
     if not q or not text:
+        return False
+    if _unasked_topic_issues(q, text):
+        return False
+    if _user_asked_travel(q) and not _answer_mentions_travel(text):
         return False
     if is_disease_list_question(q):
         return bool(re.search(
@@ -145,7 +208,9 @@ def validate_health_llm_answer(
         issues.append("template_sections")
 
     archetype = str(meta.get("archetype") or classify_health_archetype(q) or "")
-    if not _question_topic_matches(q, text, archetype):
+    unasked = _unasked_topic_issues(q, text)
+    issues.extend(unasked)
+    if not _question_topic_matches(q, text, archetype) and not unasked:
         issues.append("question_drift")
 
     if re.search(r"(?ix)\bkya\s+kar", q) and not _ACTION_RX.search(text):
@@ -208,6 +273,7 @@ def build_health_validator_display(
     tpl_ok = not _SECTION_HEADER_RX.search(text)
     archetype = str(meta.get("archetype") or classify_health_archetype(q) or "")
     drift_ok = _question_topic_matches(q, text, archetype)
+    unasked = _unasked_topic_issues(q, text)
     action_ok = not re.search(r"(?ix)\bkya\s+kar", q) or bool(_ACTION_RX.search(text))
     length_ok = not (_SIMPLE_Q_RX.search(q) and len(text.split()) > 110)
     json_issues = [
@@ -236,10 +302,16 @@ def build_health_validator_display(
             "issues": ["template_sections"] if not tpl_ok else [],
         },
         {
+            "id": "unasked_topics",
+            "label": "No unasked finance/career topics",
+            "passed": not unasked,
+            "issues": unasked,
+        },
+        {
             "id": "question_drift",
             "label": "Answer matches question topic",
             "passed": drift_ok,
-            "issues": ["question_drift"] if not drift_ok else [],
+            "issues": ["question_drift"] if not drift_ok and not unasked else [],
         },
         {
             "id": "missing_action_guidance",
@@ -299,6 +371,8 @@ def build_health_validator_retry_feedback(
     _, signals = chart_support_signals(question, archetype, execution)
     issue_hints = {
         "question_drift": "Jawab me user ke sawal ki language/topic clearly cover karo.",
+        "unasked_finance": "User ne paisa/kharcha/insurance nahi pucha — finance topic hatao, sirf health/travel jawab do.",
+        "unasked_career": "User ne career/naukri nahi pucha — career topic mat add karo.",
         "missing_chart_proof": "JSON se planet + ghar/sign/affliction cite karo (6th/8th/12th).",
         "disease_name": "Specific disease naam mat likho — vulnerability zones batao.",
         "missing_action_guidance": "Practical steps add karo (rest, doctor, routine).",

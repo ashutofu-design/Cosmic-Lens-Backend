@@ -71,7 +71,37 @@ class HealthAnswerValidatorTests(unittest.TestCase):
             meta,
         )
         self.assertFalse(ok)
-        self.assertIn("question_drift", issues)
+        self.assertIn("unasked_career", issues)
+
+    def test_blocks_unasked_finance_on_travel_health(self):
+        meta = {
+            "archetype": "general_health",
+            "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
+        }
+        answer = (
+            "Travel ke time 6th house Venus weak hai, isliye immunity low rehti hai. "
+            "Paise ke mamle mein kharcha zyada hota hai aur unexpected expenses aate hain. "
+            "Insurance ya financial planning faydemand hoga."
+        )
+        ok, issues = validate_health_llm_answer(
+            "jab bhi travel karta hun koi na koi health issue aa jaata he aisa kyun",
+            answer,
+            meta,
+        )
+        self.assertFalse(ok)
+        self.assertIn("unasked_finance", issues)
+
+    def test_allows_finance_when_user_asked(self):
+        meta = {
+            "archetype": "general_health",
+            "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
+        }
+        ok, issues = validate_health_llm_answer(
+            "travel pe health issue aur paisa kyun jata hai",
+            "Safar me Saturn 6th ghar me hai, health weak hoti hai aur kharcha bhi badh jata hai.",
+            meta,
+        )
+        self.assertTrue(ok, issues)
 
     def test_retry_feedback_mentions_issues(self):
         fb = build_health_validator_retry_feedback(

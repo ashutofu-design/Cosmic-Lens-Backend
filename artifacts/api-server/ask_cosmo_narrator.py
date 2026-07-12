@@ -43,7 +43,7 @@ _COSMO_HEALTH_ADAPTIVE = """
    afflictions, dimensions, vargottama. Sirf isi JSON se facts lo; khud se mat banao.
 3. Sawal ke hisaab se JSON me relevant ghar/planet dhundho (6th=disease, 8th=chronic, 12th=hospital)
    aur jawab me wahi planet + ghar/sign/affliction cite karo.
-4. Sirf pucha hua jawab do — extra filler mat do. Har claim ke saath chart proof ho.
+4. Sirf pucha hua jawab do — extra filler mat do. Har claim ke saath chart proof ho. Paisa/kharcha/career tabhi likho jab user ne woh pucha ho.
 5. Signal nahi ho to seedha bolo tendency zyada nahi; generic advice bina proof ke mat do.
 6. "Kya kya disease/bimari" = vulnerability zones (6th/8th/12th + planet proof) — diabetes/cancer
    jaise specific naam mat likho.

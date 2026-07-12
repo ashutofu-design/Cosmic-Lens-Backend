@@ -5,8 +5,8 @@ import {
   OBS_DEBUGGER_VERSION,
   resolveAskObservability,
   type ObservabilityEvidence,
+  type ObservabilityHealthValidatorAudit,
   type ObservabilityRule,
-  type ObservabilityRuleDecision,
 } from "./askObservability";
 
 function Section({
@@ -218,32 +218,55 @@ function buildEngineExecutionSteps(
   return steps;
 }
 
-function RuleDecisionTable({ rows }: { rows: ObservabilityRuleDecision[] }) {
-  if (!rows.length) {
-    return <p className="detail-muted">No rule decision table — re-ask after API deploy.</p>;
+function HealthValidatorPanel({ audit }: { audit: ObservabilityHealthValidatorAudit | undefined }) {
+  if (!audit?.applies) {
+    return (
+      <p className="detail-muted">
+        Health answer validator applies only to health questions. Re-ask a health question after API
+        deploy (v{OBS_DEBUGGER_VERSION}+).
+      </p>
+    );
   }
+
+  const checks = audit.checks || [];
   return (
-    <div className="obs-rule-decisions">
-      {rows.map((row, i) => (
-        <div key={`${row.rule_id}-${i}`} className="obs-rule-decision-row">
-          <div className="obs-rule-decision-head">
-            <code>{row.rule_id}</code>
-            <span
-              className={
-                row.status === "PASS"
-                  ? "obs-rule-pass"
-                  : row.status === "FAIL"
-                    ? "obs-rule-fail"
-                    : "obs-rule-skip"
-              }
-            >
-              {row.status}
-              {row.weight != null && row.status !== "SKIP" ? ` ${row.weight > 0 ? "+" : ""}${row.weight}` : ""}
-            </span>
-          </div>
-          <p className="detail-muted obs-rule-reason">{row.reason || "—"}</p>
+    <div className="obs-validator">
+      <div className="obs-validator-summary">
+        <span className={audit.passed ? "obs-rule-pass" : "obs-rule-fail"}>
+          {audit.passed ? "RELEASED" : audit.final_block ? "BLOCKED" : "FAILED"}
+        </span>
+        <span className="detail-muted">
+          Attempts: {audit.attempts ?? "—"}
+          {audit.source ? ` · ${audit.source}` : ""}
+          {audit.enabled === false ? " · validator off" : ""}
+        </span>
+      </div>
+      {checks.length === 0 ? (
+        <p className="detail-muted">No validator checks — re-ask after API deploy.</p>
+      ) : (
+        <div className="obs-rule-decisions">
+          {checks.map((chk) => (
+            <div key={chk.id || chk.label} className="obs-rule-decision-row">
+              <div className="obs-rule-decision-head">
+                <span>{chk.label || chk.id || "Check"}</span>
+                <span className={chk.passed ? "obs-rule-pass" : "obs-rule-fail"}>
+                  {chk.passed ? "PASS" : "FAIL"}
+                </span>
+              </div>
+              {(chk.issues || []).length > 0 ? (
+                <p className="detail-muted obs-rule-reason">
+                  {(chk.issues || []).join(" · ")}
+                </p>
+              ) : null}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
+      {(audit.issues || []).length > 0 ? (
+        <p className="detail-muted obs-validator-issues">
+          Combined issues: {(audit.issues || []).join(", ")}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -264,7 +287,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
   const perf = obs.performance || {};
   const trace = obs.final_trace || [];
   const hallSummary = obs.hallucination_summary;
-  const ruleDecisions = obs.rule_decisions || [];
+  const validatorAudit = obs.health_validator_audit;
 
   return (
     <div className="obs-debugger">
@@ -325,8 +348,8 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         <PipelineList steps={buildEngineExecutionSteps(exec, row, ctx)} />
       </Section>
 
-      <Section title="3. Rule Decision Table" stars={5}>
-        <RuleDecisionTable rows={ruleDecisions} />
+      <Section title="3. Health Answer Validator" stars={5}>
+        <HealthValidatorPanel audit={validatorAudit} />
       </Section>
 
       <Section title="4. Planet Evidence" stars={5}>

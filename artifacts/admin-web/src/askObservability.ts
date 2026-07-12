@@ -40,6 +40,24 @@ export interface ObservabilityRuleDecision {
   reason?: string;
 }
 
+export interface ObservabilityHealthValidatorCheck {
+  id?: string;
+  label?: string;
+  passed?: boolean;
+  issues?: string[];
+}
+
+export interface ObservabilityHealthValidatorAudit {
+  applies?: boolean;
+  enabled?: boolean;
+  passed?: boolean;
+  attempts?: number;
+  final_block?: boolean;
+  issues?: string[];
+  checks?: ObservabilityHealthValidatorCheck[];
+  source?: string;
+}
+
 export interface ObservabilityEngineHealth {
   modules_loaded?: string;
   rules_evaluated?: number;
@@ -148,6 +166,7 @@ export interface AskObservability {
   routing_warning?: string | null;
   engine_health?: ObservabilityEngineHealth;
   rule_decisions?: ObservabilityRuleDecision[];
+  health_validator_audit?: ObservabilityHealthValidatorAudit;
   engine_execution?: {
     display_mode?: "health_charts" | "engine_rules";
     health_engine_execution?: ObservabilityHealthEngineExecution | null;
@@ -276,7 +295,7 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.6.2";
+export const OBS_DEBUGGER_VERSION = "2.6.3";
 
 const DNA_DOMAIN_LABEL: Record<string, string> = {
   love: "Relationship",
@@ -776,6 +795,10 @@ function enrichObservability(
     },
     engine_health: obs.engine_health,
     rule_decisions: obs.rule_decisions,
+    health_validator_audit:
+      obs.health_validator_audit ||
+      (checks.health_validator_audit as ObservabilityHealthValidatorAudit | undefined) ||
+      (smChecks.health_validator_audit as ObservabilityHealthValidatorAudit | undefined),
     astrology_checks: astro,
     engine_execution: exec,
     planet_evidence: planetEvidence,
@@ -1076,14 +1099,26 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   }
   lines.push("");
 
-  lines.push("=== 3. RULE DECISION TABLE ===");
-  if (!(obs.rule_decisions || []).length) {
-    lines.push("—", "");
+  lines.push("=== 3. HEALTH ANSWER VALIDATOR ===");
+  const validator = obs.health_validator_audit;
+  if (!validator?.applies) {
+    lines.push("— (health questions only)", "");
   } else {
-    for (const d of obs.rule_decisions || []) {
-      lines.push(
-        `${d.rule_id || "?"} | ${d.status || "—"} | ${d.weight ?? 0} | ${d.reason || "—"}`,
-      );
+    lines.push(
+      `Enabled: ${validator.enabled ? "yes" : "no"} | Passed: ${validator.passed ? "yes" : "no"} | Attempts: ${validator.attempts ?? "—"} | Source: ${validator.source || "—"}`,
+    );
+    if (validator.final_block) {
+      lines.push("Final block: YES");
+    }
+    for (const chk of validator.checks || []) {
+      const mark = chk.passed ? "PASS" : "FAIL";
+      lines.push(`${chk.label || chk.id || "?"} | ${mark}`);
+      for (const issue of chk.issues || []) {
+        lines.push(`  - ${issue}`);
+      }
+    }
+    if ((validator.issues || []).length) {
+      lines.push(`Issues: ${(validator.issues || []).join(", ")}`);
     }
     lines.push("");
   }

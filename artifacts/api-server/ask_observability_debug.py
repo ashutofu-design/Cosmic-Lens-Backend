@@ -1269,6 +1269,32 @@ def _hallucination_summary(
     }
 
 
+def _health_validator_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    if not _is_health_observability_ctx(ctx, question_text):
+        return {"applies": False}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    stored = _dig(ctx, sm, key="health_validator_audit")
+    meta = {
+        "archetype": sm.get("archetype"),
+        "checks": _merged_checks(ctx),
+    }
+    try:
+        from ask_health.answer_validator import build_health_validator_display
+
+        return build_health_validator_display(
+            question_text,
+            answer_text,
+            meta,
+            stored_audit=stored if isinstance(stored, dict) else None,
+        )
+    except Exception:
+        return {"applies": True, "enabled": False, "passed": False, "issues": ["validator_error"]}
+
+
 def build_observability_debug(
     ctx: dict[str, Any] | None,
     *,
@@ -1309,6 +1335,7 @@ def build_observability_debug(
         health_engine_execution
         and _is_health_observability_ctx(ctx, question_text)
     )
+    health_validator_audit = _health_validator_section(ctx, question_text, answer_text)
     trace_labels = [
         "Question",
         "DNA",
@@ -1335,6 +1362,7 @@ def build_observability_debug(
         "routing_decision": routing,
         "routing_warning": _routing_warning(question_text, archetype, _dna_engine_archetype(ctx)),
         "engine_health": engine_health,
+        "health_validator_audit": health_validator_audit,
         "rule_decisions": decision_table,
         "engine_execution": {
             "display_mode": "health_charts" if health_charts_mode else "engine_rules",
@@ -1495,20 +1523,28 @@ def build_ask_debug_export_text(row: dict[str, Any]) -> str:
                     f"{rule.get('note') or rule.get('module') or ''}"
                 )
     lines.append("")
-    lines.append("=== 4. RULE DECISION TABLE ===")
-    decisions = obs.get("rule_decisions") or []
-    if not decisions:
-        lines.append("—")
+    lines.append("=== 4. HEALTH ANSWER VALIDATOR ===")
+    validator = obs.get("health_validator_audit") or {}
+    if not validator.get("applies"):
+        lines.append("— (health questions only)")
     else:
-        for dec in decisions:
-            if isinstance(dec, dict):
-                lines.append(
-                    f"{dec.get('rule_id') or '?'} | {dec.get('status') or '?'} | "
-                    f"{dec.get('weight') if dec.get('weight') is not None else 0} | "
-                    f"{dec.get('reason') or '—'}"
-                )
+        lines.append(
+            f"Enabled: {validator.get('enabled')} | Passed: {validator.get('passed')} | "
+            f"Attempts: {validator.get('attempts')} | Source: {validator.get('source') or '—'}"
+        )
+        if validator.get("final_block"):
+            lines.append("Final block: YES")
+        for chk in validator.get("checks") or []:
+            if isinstance(chk, dict):
+                mark = "PASS" if chk.get("passed") else "FAIL"
+                lines.append(f"  {chk.get('label') or chk.get('id') or '?'} | {mark}")
+                for issue in chk.get("issues") or []:
+                    lines.append(f"    - {issue}")
+        if validator.get("issues"):
+            lines.append("Issues: " + ", ".join(str(i) for i in validator.get("issues") or []))
     lines.append("")
-    lines.extend(["=== 5. PLANET EVIDENCE ===", "Positive:"])
+    lines.append("=== 5. PLANET EVIDENCE ===")
+    lines.append("Positive:")
     pos = evidence.get("positive") or []
     if not pos:
         lines.append("  —")

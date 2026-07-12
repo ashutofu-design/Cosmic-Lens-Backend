@@ -163,6 +163,81 @@ def validate_health_llm_answer(
     return len(issues) == 0, issues
 
 
+def build_health_validator_display(
+    question: str,
+    answer: str,
+    meta: dict[str, Any],
+    stored_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Structured validator audit for admin observability."""
+    ok, issues = validate_health_llm_answer(question, answer, meta)
+    text = (answer or "").strip()
+    q = (question or "").strip()
+
+    ok_safe, safe_issues = verify_health_answer(q, text, meta)
+    tpl_ok = not _SECTION_HEADER_RX.search(text)
+    archetype = str(meta.get("archetype") or classify_health_archetype(q) or "")
+    hint_rx = _ARCH_ANSWER_HINTS.get(archetype) or _ARCH_ANSWER_HINTS.get("general_health")
+    drift_ok = not hint_rx or bool(hint_rx.search(text))
+    action_ok = not re.search(r"(?ix)\bkya\s+kar", q) or bool(_ACTION_RX.search(text))
+    length_ok = not (_SIMPLE_Q_RX.search(q) and len(text.split()) > 110)
+    json_issues = [
+        i for i in issues
+        if i.startswith(("invented_planet", "wrong_house", "invented_sign"))
+    ]
+
+    checks: list[dict[str, Any]] = [
+        {
+            "id": "safety",
+            "label": "Medical safety guard",
+            "passed": ok_safe,
+            "issues": safe_issues,
+        },
+        {
+            "id": "template_sections",
+            "label": "No rigid template headers",
+            "passed": tpl_ok,
+            "issues": ["template_sections"] if not tpl_ok else [],
+        },
+        {
+            "id": "question_drift",
+            "label": "Answer matches question topic",
+            "passed": drift_ok,
+            "issues": ["question_drift"] if not drift_ok else [],
+        },
+        {
+            "id": "missing_action_guidance",
+            "label": "Action guidance (kya karu)",
+            "passed": action_ok,
+            "issues": ["missing_action_guidance"] if not action_ok else [],
+        },
+        {
+            "id": "answer_too_long",
+            "label": "Answer length (simple question)",
+            "passed": length_ok,
+            "issues": ["answer_too_long"] if not length_ok else [],
+        },
+        {
+            "id": "json_facts",
+            "label": "Chart JSON facts (D1 + D9)",
+            "passed": not json_issues,
+            "issues": json_issues,
+        },
+    ]
+
+    audit = stored_audit if isinstance(stored_audit, dict) else {}
+    return {
+        "applies": True,
+        "enabled": audit.get("enabled", health_validator_enabled()),
+        "passed": ok,
+        "attempts": int(audit.get("attempts") or 1),
+        "final_block": bool(audit.get("final_block")),
+        "issues": issues,
+        "checks": checks,
+        "source": "live_audit" if audit else "recomputed",
+    }
+
+
 def build_health_validator_retry_feedback(issues: list[str], question: str) -> str:
     lines = [
         "CORRECTION REQUIRED — previous answer failed validation.",

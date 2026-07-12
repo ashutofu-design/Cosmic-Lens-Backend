@@ -184,6 +184,52 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertEqual(len(pack["d1"]["planets"]), 2)
         self.assertEqual(obs["engine_execution"]["display_mode"], "health_charts")
 
+    def test_health_validator_audit_in_observability(self):
+        facts = compute_health_engine_execution({
+            "ascendant": "Leo",
+            "planets": [
+                {"name": "Sun", "sign": "Leo", "house": 1},
+                {"name": "Saturn", "sign": "Capricorn", "house": 6},
+            ],
+            "divisionalCharts": {
+                "D9": {
+                    "ascendant": "Aries",
+                    "planets": [{"name": "Sun", "sign": "Leo", "house": 5}],
+                }
+            },
+        })
+        ctx = {
+            "question": "mujhse thandi bahut rehti hai kya karu",
+            "slice_meta": {
+                "slice": "health_engine_v1",
+                "archetype": "respiratory_health",
+                "checks": {
+                    "health_engine_execution": facts,
+                    "health_validator_audit": {
+                        "enabled": True,
+                        "attempts": 2,
+                        "passed": True,
+                        "issues": [],
+                    },
+                },
+            },
+            "llm_intent": {"domain": "health"},
+        }
+        obs = build_observability_debug(
+            ctx,
+            question_text=ctx["question"],
+            answer_text="Chart me sardi/thand ki tendency dikhti hai. Rest aur doctor checkup rakho.",
+        )
+        audit = obs.get("health_validator_audit") or {}
+        self.assertTrue(audit.get("applies"))
+        self.assertTrue(audit.get("passed"))
+        self.assertEqual(audit.get("attempts"), 2)
+        self.assertEqual(audit.get("source"), "live_audit")
+        check_ids = {c.get("id") for c in audit.get("checks") or []}
+        self.assertIn("safety", check_ids)
+        self.assertIn("question_drift", check_ids)
+        self.assertIn("json_facts", check_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

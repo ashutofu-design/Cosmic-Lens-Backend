@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_health.answer_validator import (
+    build_health_validator_display,
     build_health_validator_retry_feedback,
     validate_health_llm_answer,
 )
@@ -76,6 +77,21 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         )
         self.assertIn("question_drift", fb)
         self.assertIn("HEALTH_ENGINE_EXECUTION_JSON", fb)
+
+    def test_display_includes_check_rows(self):
+        meta = {
+            "archetype": "respiratory_health",
+            "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
+        }
+        display = build_health_validator_display(
+            "mujhse thandi bahut rehti hai",
+            "Chart me sardi/thand ki tendency dikhti hai.",
+            meta,
+            stored_audit={"attempts": 1, "passed": True},
+        )
+        self.assertTrue(display.get("applies"))
+        self.assertTrue(display.get("passed"))
+        self.assertGreaterEqual(len(display.get("checks") or []), 4)
 
 
 if __name__ == "__main__":

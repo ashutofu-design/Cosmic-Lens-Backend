@@ -10236,13 +10236,59 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
 
     _llm_raw_text = ""
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=_llm_messages,
-            max_tokens=_max_tok,
+    _health_validator_audit: dict = {}
+    resp = None
+    _use_health_validator = (
+        isinstance(dcr_love_meta, dict)
+        and dcr_love_meta.get("slice") == "health_engine_v1"
+        and not (
+            _health_engine_result is not None
+            and getattr(_health_engine_result, "skip_llm", False)
         )
-        _llm_raw_text = (resp.choices[0].message.content or "").strip()
+    )
+    try:
+        if _use_health_validator:
+            from ask_health.answer_validator import run_health_llm_validator_loop
+
+            _llm_raw_text, _health_validator_audit = run_health_llm_validator_loop(
+                client,
+                model=model,
+                messages=_llm_messages,
+                max_tokens=_max_tok,
+                question=question or "",
+                meta=dcr_love_meta,
+            )
+            if not _llm_raw_text and _health_validator_audit.get("final_block"):
+                print(
+                    f"[raw_passthrough] HEALTH_VALIDATOR BLOCK "
+                    f"issues={_health_validator_audit.get('issues')}",
+                    flush=True,
+                )
+                return {
+                    "text": (
+                        "Abhi is sawal ka verified jawab generate nahi ho paaya. "
+                        "Thodi der baad dobara try karein."
+                    ),
+                    "topic": "health",
+                    "question_type": qtype,
+                    "confidence": 0.0,
+                    "source": "health_validator_blocked",
+                    "engine_tag": "ans-gate",
+                    "follow_ups": [],
+                }
+            if _health_validator_audit.get("attempts", 0) > 1:
+                print(
+                    f"[raw_passthrough] HEALTH_VALIDATOR ok "
+                    f"attempts={_health_validator_audit.get('attempts')}",
+                    flush=True,
+                )
+        else:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=_llm_messages,
+                max_tokens=_max_tok,
+            )
+            _llm_raw_text = (resp.choices[0].message.content or "").strip()
     except Exception as exc:
         try:
             print(f"[raw_passthrough] OpenAI call failed: {exc}", flush=True)
@@ -10676,7 +10722,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         # mega-prompt is well above that threshold, so 2nd+ requests with
         # the same prefix should report a non-zero `cached_tokens`. Cached
         # input is billed at 25% of the normal input rate (~75% off).
-        usage = getattr(resp, "usage", None)
+        usage = getattr(resp, "usage", None) if resp is not None else None
         prompt_tok = getattr(usage, "prompt_tokens", 0) if usage else 0
         completion_tok = getattr(usage, "completion_tokens", 0) if usage else 0
         cached_tok = 0
@@ -10837,6 +10883,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             ):
                 if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
                     _pt_checks[_ck] = _sm_checks[_ck]
+            if _health_validator_audit:
+                _pt_checks["health_validator_audit"] = _health_validator_audit
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
             _pt_checks["career_engine"] = "v1"
             _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (

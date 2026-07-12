@@ -7,6 +7,13 @@ import re
 from typing import Any
 
 from .answer_guard import verify_health_answer
+from .chart_proof import (
+    answer_cites_chart_proof,
+    answer_honest_low_tension,
+    chart_support_signals,
+    proof_retry_hint,
+    validate_chart_proof_requirement,
+)
 from .classifier import classify_health_archetype
 
 _PLANET_NAMES = (
@@ -160,6 +167,10 @@ def validate_health_llm_answer(
                 issues.append(f"invented_sign:{raw_sign}")
                 break
 
+    ok_proof, proof_issues = validate_chart_proof_requirement(q, text, archetype, execution)
+    if not ok_proof:
+        issues.extend(proof_issues)
+
     return len(issues) == 0, issues
 
 
@@ -185,6 +196,13 @@ def build_health_validator_display(
         i for i in issues
         if i.startswith(("invented_planet", "wrong_house", "invented_sign"))
     ]
+    proof_issues = [i for i in issues if i in (
+        "missing_chart_proof", "unsupported_claim_without_proof", "generic_advice_without_proof",
+    )]
+    execution = _execution_from_meta(meta)
+    supported, signals = chart_support_signals(q, archetype, execution)
+    has_proof = answer_cites_chart_proof(text, execution)
+    honest_low = answer_honest_low_tension(text)
 
     checks: list[dict[str, Any]] = [
         {
@@ -223,6 +241,17 @@ def build_health_validator_display(
             "passed": not json_issues,
             "issues": json_issues,
         },
+        {
+            "id": "chart_proof",
+            "label": "Chart-backed proof cited",
+            "passed": not proof_issues,
+            "issues": proof_issues,
+            "detail": (
+                f"signals={len(signals)} proof={has_proof} honest_low={honest_low}"
+                if supported or proof_issues
+                else "n/a"
+            ),
+        },
     ]
 
     audit = stored_audit if isinstance(stored_audit, dict) else {}
@@ -234,16 +263,26 @@ def build_health_validator_display(
         "final_block": bool(audit.get("final_block")),
         "issues": issues,
         "checks": checks,
+        "chart_support_signals": signals[:6],
         "source": "live_audit" if audit else "recomputed",
     }
 
 
-def build_health_validator_retry_feedback(issues: list[str], question: str) -> str:
+def build_health_validator_retry_feedback(
+    issues: list[str],
+    question: str,
+    meta: dict[str, Any] | None = None,
+) -> str:
+    meta = meta or {}
+    execution = _execution_from_meta(meta)
+    archetype = str(meta.get("archetype") or classify_health_archetype(question) or "")
+    _, signals = chart_support_signals(question, archetype, execution)
     lines = [
         "CORRECTION REQUIRED — previous answer failed validation.",
         f"User question: {question.strip()}",
         "Rewrite using ONLY HEALTH_ENGINE_EXECUTION_JSON facts.",
         "Answer ONLY what was asked; no template sections; no invented planets/houses/signs.",
+        proof_retry_hint(signals),
         "Issues:",
     ]
     for issue in issues[:8]:
@@ -299,7 +338,7 @@ def run_health_llm_validator_loop(
             return "", audit
         thread = thread + [
             {"role": "assistant", "content": text},
-            {"role": "user", "content": build_health_validator_retry_feedback(issues, question)},
+            {"role": "user", "content": build_health_validator_retry_feedback(issues, question, meta)},
         ]
 
     audit["passed"] = False

@@ -55,6 +55,7 @@ export interface ObservabilityHealthValidatorAudit {
   final_block?: boolean;
   issues?: string[];
   checks?: ObservabilityHealthValidatorCheck[];
+  chart_support_signals?: string[];
   source?: string;
 }
 
@@ -295,7 +296,7 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.6.3";
+export const OBS_DEBUGGER_VERSION = "2.6.4";
 
 const DNA_DOMAIN_LABEL: Record<string, string> = {
   love: "Relationship",

@@ -267,6 +267,11 @@ function HealthValidatorPanel({ audit }: { audit: ObservabilityHealthValidatorAu
           Combined issues: {(audit.issues || []).join(", ")}
         </p>
       ) : null}
+      {(audit.chart_support_signals || []).length > 0 ? (
+        <p className="detail-muted obs-validator-issues">
+          Chart signals: {(audit.chart_support_signals || []).join(" · ")}
+        </p>
+      ) : null}
     </div>
   );
 }

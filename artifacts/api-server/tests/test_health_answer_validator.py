@@ -21,8 +21,10 @@ _SAMPLE_EXECUTION = {
         "planets": [
             {"name": "Sun", "sign": "Leo", "house": 1},
             {"name": "Saturn", "sign": "Capricorn", "house": 6},
-            {"name": "Moon", "sign": "Scorpio", "house": 4},
+            {"name": "Moon", "sign": "Scorpio", "house": 4, "dignity": "debilitated", "strength_score": -2},
         ],
+        "afflictions": ["Malefics in H6: Saturn"],
+        "sub_flags": {"moon_afflicted": True},
     },
     "d9": {
         "ascendant": "Aries",
@@ -39,7 +41,7 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         }
         ok, issues = validate_health_llm_answer(
             "mujhse thandi bahut rehti hai kya karu",
-            "Chart me sardi/thand ki tendency dikhti hai. Rest aur doctor checkup rakho.",
+            "Saturn 6th ghar me hai, isliye chart me thandi/sardi ki tendency dikhti hai. Rest aur doctor checkup rakho.",
             meta,
         )
         self.assertTrue(ok, issues)
@@ -85,13 +87,15 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         }
         display = build_health_validator_display(
             "mujhse thandi bahut rehti hai",
-            "Chart me sardi/thand ki tendency dikhti hai.",
+            "Saturn 6th ghar me hai, isliye thandi tendency dikhti hai.",
             meta,
             stored_audit={"attempts": 1, "passed": True},
         )
         self.assertTrue(display.get("applies"))
         self.assertTrue(display.get("passed"))
-        self.assertGreaterEqual(len(display.get("checks") or []), 4)
+        self.assertGreaterEqual(len(display.get("checks") or []), 5)
+        check_ids = {c.get("id") for c in display.get("checks") or []}
+        self.assertIn("chart_proof", check_ids)
 
 
 if __name__ == "__main__":

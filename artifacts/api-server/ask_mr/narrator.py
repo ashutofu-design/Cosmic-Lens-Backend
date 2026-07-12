@@ -233,7 +233,8 @@ def build_mr_engine_narrator_system_prompt(
         )
         engine_lock = (
             "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON me jo engine execution data hai woh sahi hai — "
-            "unhi se sawal ka jawab banao."
+            "unhi se sawal ka jawab banao. Har health claim ke saath JSON se proof cite karo "
+            "(planet + house/sign/affliction). Signal nahi ho to honestly bolo tendency zyada nahi."
         )
     else:
         try:

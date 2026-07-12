@@ -218,7 +218,7 @@ class TestAskObservabilityDebug(unittest.TestCase):
         obs = build_observability_debug(
             ctx,
             question_text=ctx["question"],
-            answer_text="Chart me sardi/thand ki tendency dikhti hai. Rest aur doctor checkup rakho.",
+            answer_text="Saturn 6th ghar me hai, isliye thandi tendency dikhti hai. Rest rakho.",
         )
         audit = obs.get("health_validator_audit") or {}
         self.assertTrue(audit.get("applies"))
@@ -229,6 +229,7 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertIn("safety", check_ids)
         self.assertIn("question_drift", check_ids)
         self.assertIn("json_facts", check_ids)
+        self.assertIn("chart_proof", check_ids)
 
 
 if __name__ == "__main__":

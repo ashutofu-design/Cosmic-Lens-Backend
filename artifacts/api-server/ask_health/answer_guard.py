@@ -82,9 +82,12 @@ def verify_health_answer(
     if _SURGERY_MUHURAT_RX.search(text):
         issues.append("surgery_muhurat")
     if _DISEASE_NAME_RX.search(text):
-        issues.append("disease_name")
+        answer_diseases = _disease_tokens_in(text)
+        question_diseases = _disease_tokens_in(q)
+        if answer_diseases - question_diseases:
+            issues.append("disease_name")
     archetype = str(meta.get("archetype") or "")
-    if "kab" not in q and "when" not in q and _TIMING_DATE_RX.search(text):
+    if not re.search(r"(?ix)\b(kab|when)\b", q) and _TIMING_DATE_RX.search(text):
         issues.append("unsolicited_timing")
     if archetype == "surgery_risk_tone" and _SURGERY_MUHURAT_RX.search(text):
         issues.append("surgery_date_leak")

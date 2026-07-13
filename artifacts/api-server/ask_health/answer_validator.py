@@ -38,7 +38,8 @@ _SIMPLE_Q_RX = re.compile(
 )
 _GENERAL_HEALTH_OVERVIEW_Q_RX = re.compile(
     r"(?ix)(health ke bare|health ke baare|meri sehat|mere health|overall health|"
-    r"health overview|sehat ke bare|sehat ke baare|health ke baare me|health ke bare me)"
+    r"health overview|sehat ke bare|sehat ke baare|health ke baare me|health ke bare me|"
+    r"(?:mer[ei]|mujhse)\s+(?:health|sehat)\s+(?:ke\s+)?(?:bare|baare)\s+me)"
 )
 _SURGERY_RISK_Q_RX = re.compile(
     r"(?ix)(operation|surgery|shastra[\s-]?kriya).{0,50}?"
@@ -133,18 +134,30 @@ _DNA_STYLE_LIMITS: dict[str, dict[str, int]] = {
 }
 
 
+_DNA_CONTRACT_KEYS: tuple[str, ...] = (
+    "normalized_question",
+    "intent",
+    "user_wants",
+    "question_type",
+    "domain",
+    "bucket",
+    "answer_style",
+    "answer_approach",
+)
+
+
 def _resolve_dna_contract(meta: dict[str, Any]) -> dict[str, str]:
-    """Question DNA fields used to gate health answers."""
+    """Question DNA fields used to gate health answers and DNA Judge."""
     out: dict[str, str] = {}
     if not isinstance(meta, dict):
         return out
-    for key in ("answer_style", "answer_approach", "user_wants", "intent"):
+    for key in _DNA_CONTRACT_KEYS:
         val = str(meta.get(key) or "").strip()
         if val:
             out[key] = val
     item = meta.get("question_dna_item")
     if isinstance(item, dict):
-        for key in ("answer_style", "answer_approach", "user_wants", "intent"):
+        for key in _DNA_CONTRACT_KEYS:
             val = str(item.get(key) or "").strip()
             if val and key not in out:
                 out[key] = val
@@ -152,11 +165,28 @@ def _resolve_dna_contract(meta: dict[str, Any]) -> dict[str, str]:
     if isinstance(qd, dict):
         qs = qd.get("questions")
         if isinstance(qs, list) and qs and isinstance(qs[0], dict):
-            for key in ("answer_style", "answer_approach", "user_wants", "intent"):
+            for key in _DNA_CONTRACT_KEYS:
                 val = str(qs[0].get(key) or "").strip()
                 if val and key not in out:
                     out[key] = val
     return out
+
+
+def should_apply_health_overview_contract(question: str) -> bool:
+    """Only true general-overview asks — never travel+health or specific cause asks."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    try:
+        from engine_collision_registry import should_prioritize_health_over_travel
+
+        if should_prioritize_health_over_travel(q):
+            return False
+    except Exception:
+        pass
+    if re.search(r"(?ix)\b(kyun|kyon|why|kaise|how|kya\s+karu|kya\s+karein)\b", q):
+        return False
+    return _is_general_health_overview_question(q)
 
 
 def _is_general_health_overview_question(question: str) -> bool:
@@ -168,12 +198,11 @@ def _is_surgery_risk_question(question: str) -> bool:
 
 
 def _enrich_dna_contract(meta: dict[str, Any], question: str) -> dict[str, str]:
-    """Fill overview contract when Question DNA missing or mismatched on overview asks."""
+    """Fill overview contract only for true general-overview asks; preserve Question DNA otherwise."""
     contract = _resolve_dna_contract(meta)
-    is_overview_q = _is_general_health_overview_question(question) or (
-        _SIMPLE_Q_RX.search(question or "") and "health" in (question or "").lower()
-    )
-    if is_overview_q:
+    if not contract.get("normalized_question"):
+        contract["normalized_question"] = (question or "").strip()
+    if should_apply_health_overview_contract(question):
         contract["answer_approach"] = _DEFAULT_OVERVIEW_PLAN
         contract.setdefault("answer_style", "short_paragraph")
         if not contract.get("user_wants"):
@@ -593,12 +622,18 @@ def build_health_validator_retry_feedback(
         "CORRECTION REQUIRED — previous answer failed validation.",
         f"User question: {question.strip()}",
     ]
+    if dna_contract.get("normalized_question"):
+        lines.append(f"Normalized question (MUST answer this): {dna_contract['normalized_question']}")
+    if dna_contract.get("intent"):
+        lines.append(f"User intent (Question DNA): {dna_contract['intent']}")
+    if dna_contract.get("user_wants"):
+        lines.append(f"User wants: {dna_contract['user_wants']}")
+    if dna_contract.get("question_type"):
+        lines.append(f"Question type: {dna_contract['question_type']}")
     if dna_contract.get("answer_style"):
         lines.append(f"Question DNA Answer Style (MUST match): {dna_contract['answer_style']}")
     if dna_contract.get("answer_approach"):
         lines.append(f"Question DNA LLM Answer Plan (MUST follow): {dna_contract['answer_approach']}")
-    if dna_contract.get("user_wants"):
-        lines.append(f"User wants: {dna_contract['user_wants']}")
     judge_hint = str(meta.get("dna_judge_hint") or "").strip()
     if judge_hint:
         lines.append(f"DNA Judge fix hint: {judge_hint}")
@@ -706,7 +741,12 @@ def run_health_llm_validator_loop(
         contract = _enrich_dna_contract(meta, question)
         ok_j = True
         if health_dna_judge_enabled() and (
-            contract.get("answer_style") or contract.get("answer_approach")
+            contract.get("user_wants")
+            or contract.get("intent")
+            or contract.get("normalized_question")
+            or contract.get("answer_style")
+            or contract.get("answer_approach")
+            or contract.get("question_type")
         ):
             ok_j, j_issues, judge_hint, j_audit = llm_judge_health_dna_alignment(
                 client,

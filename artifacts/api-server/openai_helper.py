@@ -10294,21 +10294,32 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _qs = _qd.get("questions")
                     if isinstance(_qs, list) and _qs and isinstance(_qs[0], dict):
                         _q0 = _qs[0]
+                        _health_meta["question_dna_item"] = _q0
                         for _dk in (
+                            "normalized_question",
+                            "intent",
+                            "user_wants",
+                            "question_type",
+                            "domain",
+                            "bucket",
                             "answer_style",
                             "answer_approach",
-                            "user_wants",
-                            "intent",
-                            "question_type",
-                            "normalized_question",
                         ):
                             if _q0.get(_dk) not in (None, ""):
                                 _health_meta[_dk] = _q0[_dk]
 
-            if re.search(
-                r"(?ix)(health ke bare|health ke baare|meri sehat|mere health|overall health)",
-                question or "",
-            ):
+            try:
+                from ask_health.answer_validator import should_apply_health_overview_contract
+
+                _health_overview_only = should_apply_health_overview_contract(question or "")
+            except Exception:
+                _health_overview_only = bool(
+                    re.search(
+                        r"(?ix)(health ke bare|health ke baare|meri sehat|mere health|overall health)",
+                        question or "",
+                    )
+                )
+            if _health_overview_only:
                 _health_meta["answer_approach"] = (
                     "Provide a general overview of health aspects based on the chart, "
                     "focusing on key health indicators without specific predictions or remedies."

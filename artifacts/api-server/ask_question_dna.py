@@ -752,13 +752,16 @@ def build_question_dna_narrator_rules(
     is_health_overview = bool(_HEALTH_OVERVIEW_Q_RX.search(question or ""))
     if health_validator or is_health_overview:
         try:
-            from ask_health.answer_validator import _is_general_health_overview_question
+            from ask_health.answer_validator import should_apply_health_overview_contract
 
-            is_health_overview = is_health_overview or _is_general_health_overview_question(
-                question
-            )
+            is_health_overview = should_apply_health_overview_contract(question)
         except Exception:
-            pass
+            try:
+                from ask_health.answer_validator import _is_general_health_overview_question
+
+                is_health_overview = _is_general_health_overview_question(question)
+            except Exception:
+                pass
         if is_health_overview:
             plan = (
                 "Provide a general overview of health aspects based on the chart, "

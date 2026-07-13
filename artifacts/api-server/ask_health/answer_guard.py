@@ -81,6 +81,8 @@ def verify_health_answer(
         issues.append("cure_guarantee")
     if _SURGERY_MUHURAT_RX.search(text):
         issues.append("surgery_muhurat")
+    if _DISEASE_NAME_RX.search(text):
+        issues.append("disease_name")
     archetype = str(meta.get("archetype") or "")
     if "kab" not in q and "when" not in q and _TIMING_DATE_RX.search(text):
         issues.append("unsolicited_timing")

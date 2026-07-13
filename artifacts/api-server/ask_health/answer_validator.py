@@ -27,6 +27,12 @@ _SECTION_HEADER_RX = re.compile(
 _ACTION_RX = re.compile(
     r"(?ix)\b(karo|karein|rakho|dhyan|rest|doctor|checkup|routine|avoid|kam|zyada|try|follow)\b"
 )
+_FINANCE_TOPIC_RX = re.compile(
+    r"(?ix)\b(paisa|paise|kharcha|finance|financial|insurance|expense|money|budget)\b"
+)
+_CAREER_TOPIC_RX = re.compile(
+    r"(?ix)\b(career|naukri|job|promotion|office|salary|boss)\b"
+)
 _SIMPLE_Q_RX = re.compile(
     r"(?ix)^(mujhse|meri|mera|mujhe|kya\s+karu|kya\s+karein|kaise|kyun|kya\s+ho)\b"
 )
@@ -187,6 +193,20 @@ def _should_skip_chart_proof(meta: dict[str, Any], question: str) -> bool:
     return False
 
 
+def validate_unasked_topics(question: str, answer: str) -> tuple[bool, list[str]]:
+    """Block finance/career drift when user did not ask for those topics."""
+    issues: list[str] = []
+    q = (question or "").strip()
+    text = (answer or "").strip()
+    if not text:
+        return True, issues
+    if _FINANCE_TOPIC_RX.search(text) and not _FINANCE_TOPIC_RX.search(q):
+        issues.append("unasked_finance")
+    if _CAREER_TOPIC_RX.search(text) and not _CAREER_TOPIC_RX.search(q):
+        issues.append("unasked_career")
+    return len(issues) == 0, issues
+
+
 def _issues_after_judge_pass(issues: list[str]) -> list[str]:
     """Judge PASS = DNA style/plan OK; drop soft alignment issues only."""
     soft_exact = frozenset({
@@ -307,7 +327,7 @@ def validate_dna_answer_plan(answer: str, meta: dict[str, Any]) -> tuple[bool, l
         if re.search(r"(?ix)^(haan|nahi|yes|no)[.!]?\s*$", text.strip(), re.I):
             issues.append("dna_plan_not_balanced")
 
-    if re.search(r"(?ix)(plain language|d1/d9|chart json|chart evidence)", plan_l):
+    if re.search(r"(?ix)(planet\s*\+\s*ghar\s+proof|planet\s*\+\s*ghar\s+cite|cite\s+planet|proof\s+mandatory)", plan_l):
         execution = _execution_from_meta(meta)
         if execution and not answer_cites_chart_proof(text, execution):
             issues.append("dna_plan_missing_chart_cite")
@@ -348,6 +368,10 @@ def validate_health_llm_answer(
     word_limit = _answer_word_limit(meta, q)
     if word_limit is not None and len(text.split()) > word_limit:
         issues.append("answer_too_long")
+
+    ok_topics, topic_issues = validate_unasked_topics(q, text)
+    if not ok_topics:
+        issues.extend(topic_issues)
 
     execution = _execution_from_meta(meta)
     planet_houses = _planet_house_map(execution)
@@ -408,6 +432,7 @@ def build_health_validator_display(
     word_limit = _answer_word_limit(meta, q)
     if word_limit is not None:
         length_ok = len(text.split()) <= word_limit
+    topics_ok, topic_issues = validate_unasked_topics(q, text)
     dna_contract = _resolve_dna_contract(meta)
     style_ok, style_issues = validate_dna_answer_style(text, meta)
     plan_ok, plan_issues = validate_dna_answer_plan(text, meta)
@@ -439,6 +464,12 @@ def build_health_validator_display(
             "label": "Answer length (simple question)",
             "passed": length_ok,
             "issues": ["answer_too_long"] if not length_ok else [],
+        },
+        {
+            "id": "unasked_topics",
+            "label": "No unasked finance/career drift",
+            "passed": topics_ok,
+            "issues": topic_issues,
         },
         {
             "id": "dna_answer_style",
@@ -521,6 +552,13 @@ def build_health_validator_retry_feedback(
             "Jawab bahut lamba hai — 2-4 chhote sentences (max ~60-80 words). "
             "Sirf user ke sawal ka direct jawab; extra topics mat add karo."
         ),
+        "unasked_finance": (
+            "User ne paisa/kharcha/finance nahi pucha — money/insurance/expense hatao; "
+            "sirf health/travel angle rakho."
+        ),
+        "unasked_career": (
+            "User ne career/job nahi pucha — promotion/office/career mention hatao."
+        ),
         "dna_style_too_long": "Question DNA Answer Style ke hisaab se jawab chhota karo (style limit exceed).",
         "dna_style_too_short": "Question DNA Answer Style ke hisaab se thoda detail badhao.",
         "dna_style_too_many_sentences": "Question DNA Answer Style ke hisaab se kam sentences likho.",
@@ -528,7 +566,10 @@ def build_health_validator_retry_feedback(
         "dna_plan_timing_lead": "LLM Answer Plan ke mutabiq pehle timing window (dasha/transit) batao.",
         "dna_plan_too_absolute": "LLM Answer Plan cautious hai — pakka/guarantee wording hatao.",
         "dna_plan_not_balanced": "LLM Answer Plan balanced guidance maangta hai — sirf haan/nahi mat do.",
-        "dna_plan_missing_chart_cite": "LLM Answer Plan chart JSON cite maangta hai — planet + ghar likho.",
+        "dna_plan_missing_chart_cite": (
+            "LLM Answer Plan explicitly planet+ghar proof maangta hai — ek light cite add karo "
+            "ya plain language me chart anchor rakho."
+        ),
         "dna_plan_length_mismatch": "LLM Answer Plan short answer maangta hai — lamba mat likho.",
         "dna_plan_user_wants_miss": "User wants (Question DNA) cover nahi hua — user_wants ke mutabiq jawab do.",
         "dna_plan_too_technical": (
@@ -563,7 +604,8 @@ def build_health_validator_retry_feedback(
         lines.append(f"DNA Judge fix hint: {judge_hint}")
     lines.extend([
         "Rewrite using ONLY HEALTH_ENGINE_EXECUTION_JSON facts.",
-        "Answer ONLY what was asked; no template sections; no invented planets/houses/signs.",
+        "Answer ONLY what was asked — no template sections; no invented planets/houses/signs.",
+        "Pick relevant JSON facts for THIS question only; light proof (max 1 point); no planet+ghar list.",
         "Issues:",
     ])
     if "disease_name" in issues:

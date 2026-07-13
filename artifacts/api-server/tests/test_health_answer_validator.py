@@ -67,7 +67,7 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(any("wrong_house" in i or "invented" in i for i in issues))
 
-    def test_allows_career_mention_without_drift_gate(self):
+    def test_blocks_unasked_career(self):
         meta = {
             "archetype": "respiratory_health",
             "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
@@ -77,21 +77,39 @@ class HealthAnswerValidatorTests(unittest.TestCase):
             "Aapka career strong hai aur promotion jaldi milegi.",
             meta,
         )
-        self.assertTrue(ok, issues)
+        self.assertFalse(ok)
+        self.assertIn("unasked_career", issues)
 
-    def test_allows_finance_mention_on_travel_health_without_unasked_gate(self):
+    def test_blocks_unasked_finance_on_travel_health(self):
         meta = {
             "archetype": "general_health",
             "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
         }
         answer = (
-            "Travel ke time 6th house Venus weak hai, isliye immunity low rehti hai. "
+            "Travel ke time immunity kamzor rehti hai, isliye chhoti health issues aati hain. "
             "Paise ke mamle mein kharcha zyada hota hai aur unexpected expenses aate hain. "
             "Insurance ya financial planning faydemand hoga."
         )
         ok, issues = validate_health_llm_answer(
             "jab bhi travel karta hun koi na koi health issue aa jaata he aisa kyun",
             answer,
+            meta,
+        )
+        self.assertFalse(ok)
+        self.assertIn("unasked_finance", issues)
+
+    def test_allows_plain_language_without_heavy_proof(self):
+        meta = {
+            "archetype": "general_health",
+            "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
+        }
+        ok, issues = validate_health_llm_answer(
+            "jab bhi travel karta hun koi na koi health issue aa jaata he aisa kyun",
+            (
+                "Safar ke time routine bigad jati hai aur body ka balance disturb hota hai, "
+                "isliye chart me travel-health link dikhta hai — thodi sensitivity rehti hai. "
+                "Travel se pehle rest aur hydration rakho."
+            ),
             meta,
         )
         self.assertTrue(ok, issues)
@@ -131,8 +149,8 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         self.assertTrue(display.get("passed"))
         self.assertGreaterEqual(len(display.get("checks") or []), 5)
         check_ids = {c.get("id") for c in display.get("checks") or []}
+        self.assertIn("unasked_topics", check_ids)
         self.assertNotIn("chart_proof", check_ids)
-        self.assertNotIn("unasked_topics", check_ids)
         self.assertNotIn("question_drift", check_ids)
 
     def test_dna_style_blocks_long_answer(self):
@@ -151,7 +169,7 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(any(i.startswith("dna_style") for i in issues))
 
-    def test_dna_plan_requires_chart_cite_when_plan_says_so(self):
+    def test_dna_plan_allows_plain_language_without_mandatory_proof(self):
         meta = {
             "archetype": "general_health",
             "answer_style": "short_2_3_lines",
@@ -160,14 +178,25 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         }
         ok, issues = validate_health_llm_answer(
             "mujhse mere health ke bare me jaana he",
+            "Aapki sehat me thodi sensitivity hai, stress aur neend par dhyan dena faydemand hoga.",
+            meta,
+        )
+        self.assertTrue(ok, issues)
+
+    def test_dna_plan_requires_chart_cite_when_plan_demands_proof(self):
+        meta = {
+            "archetype": "general_health",
+            "answer_style": "short_2_3_lines",
+            "answer_approach": "Use D1/D9 — short direct health read with planet+ghar proof.",
+            "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
+        }
+        ok, issues = validate_health_llm_answer(
+            "mujhse mere health ke bare me jaana he",
             "Aapki sehat thodi weak lag sakti hai, dhyan rakho.",
             meta,
         )
         self.assertFalse(ok)
-        self.assertTrue(
-            any(i in issues for i in ("dna_plan_missing_chart_cite",)),
-            issues,
-        )
+        self.assertIn("dna_plan_missing_chart_cite", issues)
 
     def test_dna_style_and_plan_pass_with_proof(self):
         meta = {
@@ -279,7 +308,10 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         }
         ok, issues = validate_health_llm_answer(
             "kya mujhse kabhi operation ka samna karna padega",
-            "Saturn 6th ghar me hai, isliye operation March 2027 me hoga.",
+            (
+                "Saturn 6th ghar me health pressure dikhata hai, isliye future me kabhi medical "
+                "procedure ki zarurat pad sakti hai. March 2027 ka koi fixed date chart se nahi aata."
+            ),
             meta,
         )
         self.assertFalse(ok)
@@ -311,10 +343,10 @@ class HealthAnswerValidatorTests(unittest.TestCase):
                             return _Client._next()
 
                 _answers = [
-                    "Pollution se bacho aur pranayama karo.",
-                    "Pollution se bacho aur pranayama karo.",
-                    "Pollution se bacho aur pranayama karo.",
-                    "Pollution se bacho aur pranayama karo.",
+                    "Jupiter 9th ghar me hai, isliye thandi tendency strong hai.",
+                    "Jupiter 9th ghar me hai, isliye thandi tendency strong hai.",
+                    "Jupiter 9th ghar me hai, isliye thandi tendency strong hai.",
+                    "Jupiter 9th ghar me hai, isliye thandi tendency strong hai.",
                 ]
                 _i = 0
 
@@ -362,7 +394,7 @@ class HealthAnswerValidatorTests(unittest.TestCase):
                 class completions:
                     @staticmethod
                     def create(**_kwargs):
-                        return _Resp("Pollution se bacho aur pranayama karo.")
+                        return _Resp("Jupiter 9th ghar me hai, isliye thandi tendency strong hai.")
 
         os.environ["ASK_HEALTH_VALIDATOR_BLOCK"] = "0"
         try:
@@ -379,6 +411,7 @@ class HealthAnswerValidatorTests(unittest.TestCase):
                 meta=meta,
             )
             self.assertTrue(text)
+            self.assertFalse(audit.get("passed"))
             self.assertTrue(audit.get("released_anyway"))
         finally:
             os.environ.pop("ASK_HEALTH_VALIDATOR_BLOCK", None)

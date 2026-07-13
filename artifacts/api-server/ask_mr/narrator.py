@@ -237,9 +237,10 @@ def build_mr_engine_narrator_system_prompt(
             "Soft overview paragraph do; planet+ghar list mat do."
             if _health_overview
             else (
-                "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON poora D1+D9 pack hai — planets, health_houses, "
-                "afflictions, dimensions sab yahi se. Sawal samjho, JSON padho, planet+ghar proof ke saath "
-                "jawab do. 3 retry tak sudharo; specific disease naam mat likho; paisa/career tabhi jab user ne pucha ho."
+                "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON poora D1+D9 pack hai — poora padho, lekin jawab me "
+                "sirf sawal-relevant facts pick karo. Pehle user ka sawal samjho, phir JSON se selective read. "
+                "Proof light (1 point max); planet+ghar har line me mat likho. Paisa/career/8th-Rahu tabhi "
+                "jab user ne pucha ho. Specific disease naam mat likho."
             )
         )
     else:

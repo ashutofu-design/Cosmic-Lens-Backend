@@ -9,7 +9,6 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_health.answer_validator import validate_health_llm_answer
-from ask_health.answer_validator import validate_health_llm_answer
 from ask_health.chart_proof import (
     answer_cites_chart_proof,
     chart_support_signals,
@@ -89,18 +88,17 @@ class HealthChartProofTests(unittest.TestCase):
         )
         self.assertTrue(ok, issues)
 
-    def test_validator_requires_proof_for_supported_chart(self):
+    def test_allows_plain_language_when_chart_has_signals(self):
         meta = {
             "archetype": "respiratory_health",
             "checks": {"health_engine_execution": _SUPPORTED_EXECUTION},
         }
         ok, issues = validate_health_llm_answer(
             "mujhse thandi bahut rehti hai kya karu",
-            "Pollution se bacho aur pranayama karo.",
+            "Chart me thandi/sardi ki tendency dikhti hai. Rest rakho aur doctor checkup karo.",
             meta,
         )
-        self.assertFalse(ok)
-        self.assertIn("missing_chart_proof", issues)
+        self.assertTrue(ok, issues)
 
 
     def test_disease_list_good_answer_passes(self):

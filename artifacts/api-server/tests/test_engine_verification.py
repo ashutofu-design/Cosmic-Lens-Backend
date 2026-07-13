@@ -65,6 +65,26 @@ class EngineVerificationTests(unittest.TestCase):
         self.assertFalse(ver.ok)
         self.assertEqual(ver.action, "reroute_mr")
 
+    def test_health_empty_evidence_ok_when_execution_pack_present(self):
+        meta = {
+            "evidence": [],
+            "checks": {
+                "health_engine_execution": {
+                    "schema_version": "health_engine_execution_v1",
+                    "d1": {"ascendant": "Leo", "planets": []},
+                    "d9": {"ascendant": "Aries", "planets": []},
+                },
+            },
+        }
+        ver = verify_engine_output(
+            "mere health ke bare me kuch batao",
+            engine_key="health",
+            archetype="general_health",
+            slice_meta=meta,
+        )
+        self.assertTrue(ver.ok, ver.to_dict())
+        self.assertEqual(ver.reason, "health_execution_pack_ok")
+
 
 class EngineVerificationAdminSummaryTests(unittest.TestCase):
     def test_summary_correct_when_verification_ok(self):

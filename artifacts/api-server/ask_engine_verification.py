@@ -421,6 +421,17 @@ def verify_engine_output(
 
     if engine_key in ("gap", "mr", "health", "career", "finance") and ev_count == 0:
         if not meta.get("skip_llm") and not meta.get("template_text"):
+            # health_engine_v1 uses D1/D9 execution JSON — not legacy evidence[] lines.
+            if engine_key == "health":
+                checks = meta.get("checks") if isinstance(meta.get("checks"), dict) else {}
+                pack = checks.get("health_engine_execution")
+                if isinstance(pack, dict) and (pack.get("d1") or pack.get("d9")):
+                    return EngineVerificationResult(
+                        ok=True,
+                        action="keep",
+                        reason="health_execution_pack_ok",
+                        failed_checks=[],
+                    )
             failed.append("empty_evidence")
             mr_arch = suggest_mr_archetype_for_question(q)
             if mr_arch and engine_key != "mr":

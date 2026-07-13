@@ -4,6 +4,7 @@ import { formatInr } from "./api";
 import {
   OBS_DEBUGGER_VERSION,
   resolveAskObservability,
+  normalizeHealthDnaJudgeAudit,
   type ObservabilityHealthDnaJudgeAudit,
   type ObservabilityRule,
 } from "./askObservability";
@@ -309,7 +310,9 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
       : null;
   const exec = obs.engine_execution || {};
   const perf = obs.performance || {};
-  const dnaJudgeAudit = obs.health_dna_judge_audit || obs.health_validator_audit;
+  const dnaJudgeAudit = normalizeHealthDnaJudgeAudit(
+    obs.health_dna_judge_audit || obs.health_validator_audit,
+  );
 
   return (
     <div className="obs-debugger">

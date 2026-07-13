@@ -70,6 +70,51 @@ export interface ObservabilityHealthDnaJudgeAudit {
   source?: string;
 }
 
+/** Map legacy health_validator_audit rows → DNA Judge-only display shape. */
+export function normalizeHealthDnaJudgeAudit(
+  raw: ObservabilityHealthDnaJudgeAudit | ObservabilityHealthValidatorAudit | undefined,
+): ObservabilityHealthDnaJudgeAudit | undefined {
+  if (!raw) return undefined;
+  if (raw.applies === false) return { applies: false };
+
+  const legacy = raw as ObservabilityHealthValidatorAudit;
+  const nested = legacy.dna_judge;
+  const hasLegacyChecks = (legacy.checks || []).length > 0;
+  const hasLegacyValidator =
+    legacy.attempts != null || legacy.released_anyway != null || legacy.final_block != null;
+
+  if (!nested && !hasLegacyChecks && !hasLegacyValidator && raw.contract) {
+    return raw as ObservabilityHealthDnaJudgeAudit;
+  }
+
+  if (nested || hasLegacyChecks || hasLegacyValidator) {
+    const judgeCheck = (legacy.checks || []).find((c) => c.id === "dna_llm_judge");
+    return {
+      applies: true,
+      enabled: nested?.enabled ?? raw.enabled ?? true,
+      passed:
+        nested?.passed != null
+          ? Boolean(nested.passed)
+          : judgeCheck?.passed != null
+            ? Boolean(judgeCheck.passed)
+            : raw.passed,
+      issues: [
+        ...(nested?.issues || []),
+        ...(judgeCheck?.issues || []),
+        ...(raw.issues || []),
+        ...(legacy.final_issues || []),
+      ].filter((x, i, arr) => x && arr.indexOf(x) === i),
+      fix_hint: nested?.fix_hint || judgeCheck?.detail || raw.fix_hint || null,
+      contract: raw.contract,
+      judge_version: raw.judge_version || "health_dna_v2",
+      skipped: nested?.skipped,
+      source: raw.source || "legacy_validator_audit",
+    };
+  }
+
+  return raw as ObservabilityHealthDnaJudgeAudit;
+}
+
 /** @deprecated use ObservabilityHealthDnaJudgeAudit */
 export interface ObservabilityHealthValidatorAudit extends ObservabilityHealthDnaJudgeAudit {
   attempts?: number;
@@ -962,18 +1007,20 @@ function enrichObservability(
     },
     engine_health: obs.engine_health,
     rule_decisions: obs.rule_decisions,
-    health_dna_judge_audit:
+    health_dna_judge_audit: normalizeHealthDnaJudgeAudit(
       obs.health_dna_judge_audit ||
-      (checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
-      (smChecks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
-      obs.health_validator_audit ||
-      (checks.health_validator_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
-      (smChecks.health_validator_audit as ObservabilityHealthDnaJudgeAudit | undefined),
-    health_validator_audit:
+        (checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+        (smChecks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+        obs.health_validator_audit ||
+        (checks.health_validator_audit as ObservabilityHealthValidatorAudit | undefined) ||
+        (smChecks.health_validator_audit as ObservabilityHealthValidatorAudit | undefined),
+    ),
+    health_validator_audit: normalizeHealthDnaJudgeAudit(
       obs.health_dna_judge_audit ||
-      obs.health_validator_audit ||
-      (checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
-      (checks.health_validator_audit as ObservabilityHealthDnaJudgeAudit | undefined),
+        obs.health_validator_audit ||
+        (checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+        (checks.health_validator_audit as ObservabilityHealthValidatorAudit | undefined),
+    ),
     astrology_checks: astro,
     engine_execution: exec,
     planet_evidence: planetEvidence,

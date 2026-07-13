@@ -291,6 +291,11 @@ class TestAskHealthEngine(unittest.TestCase):
         self.assertTrue(res.skip_llm)
         self.assertTrue(res.template_text)
 
+    def test_asthma_question_routes_to_health(self):
+        q = "kya mujhse asthma he"
+        self.assertTrue(is_health_static_question(q))
+        self.assertEqual(classify_health_archetype(q), "health_engine_execution_v1")
+
 
 if __name__ == "__main__":
     unittest.main()

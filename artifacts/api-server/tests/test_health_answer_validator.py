@@ -340,6 +340,27 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         self.assertFalse(audit.get("released_anyway"))
         self.assertTrue(audit.get("final_issues") or audit.get("issues"))
 
+    def test_allows_asthma_in_answer_when_user_asked_asthma(self):
+        from ask_health.answer_guard import verify_health_answer
+
+        ok, issues = verify_health_answer(
+            "kya mujhse asthma he",
+            "Chart me saans/3rd house sensitivity dikhti hai — asthma jaisi tendency ho sakti hai, lekin yeh medical diagnosis nahi.",
+            {"archetype": "health_engine_execution_v1"},
+        )
+        self.assertTrue(ok, issues)
+
+    def test_blocks_unasked_disease_name_in_answer(self):
+        from ask_health.answer_guard import verify_health_answer
+
+        ok, issues = verify_health_answer(
+            "kya mujhse asthma he",
+            "Aapko diabetes ki tendency dikh rahi hai chart me.",
+            {"archetype": "health_engine_execution_v1"},
+        )
+        self.assertFalse(ok)
+        self.assertIn("disease_name", issues)
+
 
 if __name__ == "__main__":
     unittest.main()

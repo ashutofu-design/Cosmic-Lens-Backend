@@ -12,11 +12,24 @@ _DISEASE_NAME_RX = re.compile(
     r"(?ix)\b("
     r"diabetes|cancer|kanser|carcinoma|tumor|tumour|tumors|"
     r"hiv|aids|tuberculosis|\btb\b|"
-    r"arthritis|asthma|epilepsy|parkinson|schizophrenia|"
+    r"arthritis|asthma|asthama|epilepsy|parkinson|schizophrenia|"
     r"leukemia|leukaemia|lymphoma|"
-    r"मधुमेह|कैंसर|ट्यूमर|एचआईवी"
+    r"मधुमेह|कैंसर|ट्यूमर|एचआईवी|अस्थमा"
     r")\b"
 )
+
+
+def _normalize_disease_token(token: str) -> str:
+    t = (token or "").strip().lower()
+    if t == "asthama":
+        return "asthma"
+    return t
+
+
+def _disease_tokens_in(text: str) -> set[str]:
+    return {_normalize_disease_token(m.group(1)) for m in _DISEASE_NAME_RX.finditer(text or "")}
+
+
 _DEATH_PRED_RX = re.compile(
     r"(?ix)\b("
     r"you will die|mar\s+jao?ge|mar\s+jaoge|maut\s+(aa\s+)?jaye?gi|"
@@ -57,11 +70,14 @@ def verify_health_answer(
 ) -> tuple[bool, list[str]]:
     issues: list[str] = []
     text = (answer or "").strip()
+    q = (question or "").lower()
     if not text:
         return False, ["empty_answer"]
     if _BANNED_LABEL_RX.search(text):
         issues.append("template_labels")
-    if _DISEASE_NAME_RX.search(text):
+    answer_diseases = _disease_tokens_in(text)
+    question_diseases = _disease_tokens_in(q)
+    if answer_diseases and not answer_diseases.issubset(question_diseases):
         issues.append("disease_name")
     if _DEATH_PRED_RX.search(text):
         issues.append("death_prediction")
@@ -70,7 +86,6 @@ def verify_health_answer(
     if _SURGERY_MUHURAT_RX.search(text):
         issues.append("surgery_muhurat")
     archetype = str(meta.get("archetype") or "")
-    q = (question or "").lower()
     if "kab" not in q and "when" not in q and _TIMING_DATE_RX.search(text):
         issues.append("unsolicited_timing")
     if archetype == "surgery_risk_tone" and _SURGERY_MUHURAT_RX.search(text):

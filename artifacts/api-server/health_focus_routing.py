@@ -1,216 +1,22 @@
 """
-health_focus_routing.py — H3 (2026-05-06)
-================================================================
-COMPOSABLE ATOMIC FOCUS BLOCKS for health/swasthya Qs.
+health_focus_routing.py — health guards, scope gate, post-injectors.
 
-Direct mirror of `property_focus_routing.py` (P1.2). Replaces the
-fat `health_static/` engine (152 KB engine + 122 KB replies + 87 KB
-topics + 25 KB pack + 14 KB routing) with ~25 atomic CHECK blocks
-+ a thin axes router.
+The composable HEALTH FOCUS LLM prompt (atomic ACTION/SYSTEM/INTENT blocks,
+ANSWER STYLE rules) was permanently removed 2026-07-12. Health answers now
+use ask_health engine + generic MR narrator only.
 
-WHY THIS EXISTS
----------------
-Health has ~1500+ possible Qs across 4 axes:
-  ACTION   = analyze | prevent | recover | manage_chronic | mental_support
-             | repro_support | analyze (general)
-  SYSTEM   = digestive | cardio | nervous | musculoskeletal | skin
-             | endocrine | respiratory | immune | reproductive
-  INTENT   = STATIC (vitality kaisi hai?) | QUALITY (tendency/aage risk)
-             | TIMING (kab thik honga? — REFUSE) | RISK | REMEDY
-  EDGE     = parent_health | addiction | accident_risk | sensitive_repro
-             | sensitive_mental
-
-Enumerating in a fat prompt does NOT scale (the old health_static
-had 87 KB of topics JSON and STILL missed Qs). Instead this module
-exposes ~26 atomic CHECK blocks (~150 chars each) + a framework
-header that teaches the LLM to:
-  1. detect axes server-side
-  2. compose 2-4 relevant atomic blocks
-  3. ignore the rest
-
-Total prompt: ~2.5 KB. Covers 1500+ Q combinations.
-
-⚠️  BRAND-SAFETY HARD GUARDS (non-negotiable, ported from
-    health_static.health_routing._WARN_PATTERNS):
-  • NEVER predict death / longevity end (REFUSE_DEATH)
-  • NEVER name specific diseases (REFUSE_DIAGNOSIS)
-  • NEVER guarantee cure (REFUSE_CURE_GUARANTEE)
-  • NEVER predict illness/recovery date (REFUSE_TIMING_*)
-  • Suicide/self-harm phrasing → CRISIS_REDIRECT (helpline)
-  • Mental / reproductive / parent / addiction → sensitive bucket
-    → softer tone + extra disclaimer
-
-KILLSWITCHES (independent, all default ON):
-  HEALTH_FOCUS_BLOCK    = entire framework
-  HEALTH_FOCUS_AXES     = axes-routing only (off → fat block)
-  HEALTH_CHART_SLICE    = chart slicing only
-  HEALTH_DISCLAIMER     = mandatory medical-disclaimer post-injector
-
-ADD-ONLY: new file, no edits to existing modules' logic.
+This module retains:
+  • Hard-guard detection (CRISIS, REFUSE_*)
+  • is_health_question scope gate
+  • Medical disclaimer + forbidden-vocab post-injectors
 """
 from __future__ import annotations
 import os as _os
 import re as _re
-from typing import Optional, Tuple, List, Dict, Any
-
-
-# ── ATOMIC CHECK BLOCKS ──────────────────────────────────────────────
-# Each block is a single-line directive (~150 chars). LLM picks 2-4
-# based on question axes. Order in dict has no semantic meaning — but
-# REFUSE/CRISIS blocks are visually grouped last as "always-append".
-ATOMIC_CHECKS: Dict[str, str] = {
-    # ── ACTION blocks (pick ONE primary based on user intent) ─────────
-    "ANALYZE":         "General vitality scan: 1H + Lagnesh dignity → Sun (vitality karaka) + Moon (mind/fluids) strength → 6H/6L (disease) + 8H/8L (chronic) + Mars/Saturn affliction → KP 1st CSL.",
-    "PREVENT":         "Risk-flag scan: 6H/6L + 8H/8L + 12H lords on 1H or aspecting Lagnesh → Mars-Saturn affliction on Lagna/Moon → benefic protection (Jupiter/Venus on 1/5/9). Frame as 'tendency to watch', NOT diagnosis.",
-    "RECOVER":         "Recovery capacity (NOT date): 6L dignity (own/exalted = good resistance) → Mars+Mercury (healing karakas) → Jupiter aspect on 1H/6H → Vipreet-Raja-yoga from 6/8/12 lord exchange. Doctor compliance > chart.",
-    "MANAGE_CHRONIC":  "Long-term tendency: 8H + 8L + Saturn dignity → Rahu node on 1/6/8 → 6L+8L exchange → mention 'lifestyle factors > chart' as primary lever. Suggest 1 chart-aligned habit (no medical names).",
-    "MENTAL_SUPPORT":  "Moon dignity (own/exalted/debilitated) + Moon's nakshatra-lord → 4H (mind/peace) + 4L → Mercury (cognition) + Jupiter (wisdom/calm) aspect on Moon → afflictions from Saturn/Rahu/Ketu on Moon.",
-    "REPRO_SUPPORT":   "5H + 5L (children) → Jupiter karaka (santaan-karaka) → 7H/7L (partner-support) → Mars/Venus (vitality of reproductive system) → D7 Saptamsa if available. Frame as energetic-tendency, fertility-specialist consult primary.",
-
-    # ── SYSTEM modifier blocks (ADD when system detected; informational only) ──
-    "DIGESTIVE":       "ADD: Mercury (digestion karaka) + 5H/Leo region → Sun digestion-fire → Moon (fluid imbalance) → afflictions from Saturn (slow) / Mars (acidity-tendency).",
-    "CARDIO":          "ADD: Sun (heart karaka) + Leo/5H region → 4H (chest cavity) + 4L → Jupiter expansion vs Saturn constriction on Sun/4H. Cardiology consult primary.",
-    "NERVOUS":         "ADD: Mercury (nerves) + Saturn (nervous-system endurance) → Moon (mind-body link) → Rahu/Ketu on Mercury or 3H = sensitivity-tendency.",
-    "MUSCULOSKELETAL": "ADD: Mars (muscles) + Saturn (bones/joints) + Sun (skeletal frame) → 6H/6L (acute pain) vs 8H/8L (chronic stiffness-tendency).",
-    "SKIN":            "ADD: Mercury (skin karaka) + Moon (complexion/hydration) → Saturn-Mars affliction on Mercury/Moon → 6H = surface-issue tendency.",
-    "ENDOCRINE":       "ADD: Sun (vitality core) + Jupiter (metabolism/expansion) + Moon (fluid balance) → Saturn (slow metabolism) + Rahu (imbalance) afflictions. Endocrinologist consult primary.",
-    "RESPIRATORY":     "ADD: Mercury (breath/lungs region) + Moon (mucous) → 3H (breath-channel) + 3L → Mars/Saturn affliction on Mercury/3H.",
-    "IMMUNE":          "ADD: Sun (core vitality) + Mars (defence) + Lagnesh dignity → 6L well-placed = strong resistance → Jupiter aspect on 1H = protective.",
-    "REPRO_SYS":       "ADD: 5H + 7H + 8H (reproductive cluster) → Jupiter (santaan-karaka) + Venus (vitality) + Mars (procreation-energy) → afflictions from Saturn-Rahu on 5/7/8.",
-
-    # ── INTENT blocks (pick based on what user is asking) ────────────
-    "STATIC_VITALITY": "If pure existence Q ('vitality kaisi? immunity strong? sehat kaisa?') → strength-rating (weak/moderate/strong) + 1H sign + Lagnesh placement + Sun-Moon dignity. NO dasha. NO transit. NO 'when'. NO disease names.",
-    "QUALITY_TENDENCY":"If 'aage chal ke / kya tendency / future me kya risk' Q (NATURE not date) → describe TENDENCY-character: which afflictions create vulnerability (Saturn-Rahu on 6/8), which combinations protect (Jupiter on 1/5/9). Frame as inherent-nature, NOT 'kab hoga'. NO dasha forecasting.",
-    "RISK":            "APPEND when -ve tone or 'kya risk/dikkat/khatra' asked: 6/8/12 lord placements, Rahu-Ketu axis on 1/6/8, Mars-Saturn affliction on Lagna/Moon, malefic transit on 1H/6H. Frame as 'tendency-zone to monitor'.",
-    "REMEDY":          "APPEND in CLOSER (last line): ONE Vedic remedy specific to the weakest factor — graha mantra/japa, gemstone (with caveats), donation, OR a chart-aligned lifestyle nudge (sleep schedule for Moon, sunlight for Sun, etc.). Free-first, paid optional.",
-
-    # ── EDGE-CASE blocks (sensitive sub-domains) ─────────────────────
-    "ACCIDENT_RISK":   "If accident/injury/chot Q → Mars (sudden-event karaka) + 8H/8L (sudden disruption) + Ketu (mokshakaraka, also sudden hit) → malefic transit over Mars/8H. Frame as 'caution-window tendency', NEVER predict event.",
-    "PARENT_HEALTH":   "If parent's health asked → 4H/4L for mother, 9H/9L for father → 1H/8H of native (parent karakas). Soft tone. Suggest immediate doctor + practical caregiver action; chart is supportive insight only.",
-    "ADDICTION":       "If addiction/nasha asked → Rahu (illusion/intoxication-tendency) + Moon afflicted by Rahu/Saturn → 12H (escapism). Frame as 'tendency to watch'; recovery groups + counselling primary, chart is one input.",
-
-    # ── HARD-GUARD REFUSAL blocks (always-last; replace closer) ──────
-    "REFUSE_DIAGNOSIS":     "REFUSE: 'Specific bimari name karna shastra ke khilaf hai (jyotish diagnosis nahi karta — woh sirf doctor karte hain). Main vitality zones, tendency-areas, aur protective combinations bata sakta hu — diagnosis ke liye doctor se milo.'",
-    "REFUSE_DEATH":         "REFUSE: 'Death/longevity exact predict karna shastriya etiquette ke khilaf hai (mrityu-yog ka exact timing nahi bataya jata). Main vitality + protective yogas + caution-windows bata sakta hu — exact end-date nahi.'",
-    "REFUSE_CURE_GUARANTEE":"REFUSE: 'Cure-guarantee dena ya 100% recovery promise karna shastriya etiquette + medical ethics dono ke khilaf hai. Chart vitality + recovery-capacity bata sakta hai — cure ka final assurance sirf doctor de sakte hain.'",
-    "REFUSE_TIMING_DECLINE":"REFUSE: 'Bimari-aane ka exact date predict karna shastriya etiquette ke khilaf hai (jyotish exact illness-date nahi batata). Main vulnerability-windows aur protective tendencies bata sakta hu — exact date nahi.'",
-    "REFUSE_TIMING_RECOVERY":"REFUSE: 'Recovery ka exact date predict karna chart se possible nahi (recovery doctor compliance + body response pe depend karta hai). Main recovery-capacity + supportive yogas bata sakta hu — exact date nahi.'",
-    "REFUSE_SURGERY_MUHURAT":"REFUSE: 'Surgery muhurat dena medical decision hai — surgeon + family ke saath finalize karo. Main supportive period-character bata sakta hu (general benefic vs malefic phase) — exact date nahi.'",
-    "CRISIS_REDIRECT":      "OVERRIDE all other blocks: 'Bhai aap ke alfaz se lag raha hai aap bahut tough phase me ho. Please abhi iCall +91-9152987821 ya Vandrevala +91-1860-2662-345 pe baat karo — ye trained log 24/7 free me sun-te hain. Aap akele nahi ho. Chart baad me dekhenge — pehle aap safe.' Skip ALL chart talk.",
-}
-
-
-# ── FRAMEWORK HEADER (composition instructions) ──────────────────────
-_FRAMEWORK_HEADER = """FOCUS — HEALTH ANALYSIS (composable framework).
-
-You have D1 + (D9 if available) + KP cusps + Vimshottari Dasha + Transit
-in chart above. Health Qs vary widely (analyze/prevent/recover/chronic
-× digestive/cardio/nervous/mental/repro × static/quality/risk/remedy).
-Use this composable framework — do NOT try to apply every block.
-
-⚠️  HARD GUARDS (non-negotiable):
-  • NEVER name specific diseases (no "diabetes", "cancer", "tumor" etc.)
-  • NEVER predict death / lifespan / exact illness-date / recovery-date
-  • NEVER guarantee cure or 100% recovery
-  • Mental/reproductive/parent/addiction Qs → softer tone + extra
-    disclaimer (helpline / specialist consult primary).
-  • If user asks for diagnosis or date → use the matching REFUSE block
-    as the closer (it replaces remedy/closer line).
-
-STEP 1 — Read user's Q and detect axes:
-  ACTION:  analyze | prevent | recover | manage_chronic | mental_support
-           | repro_support
-  SYSTEM:  digestive | cardio | nervous | musculoskeletal | skin
-           | endocrine | respiratory | immune | reproductive
-  INTENT:  STATIC (vitality hai/kaisa) | QUALITY (tendency/aage risk)
-           | RISK | REMEDY  [TIMING is REFUSED, not answered]
-  EDGE:    parent_health | addiction | accident_risk | crisis
-
-STEP 2 — Pick atomic CHECK BLOCKS that match the detected axes:
-  • Pick ONE primary ACTION block.
-  • If a SYSTEM block applies, ADD it (info-only, no diagnosis).
-  • INTENT routing:
-      - STATIC ('vitality kaisi? immunity strong?') → ADD [STATIC_VITALITY]
-      - QUALITY ('aage chal ke kya risk? tendency batao?') → ADD [QUALITY_TENDENCY]
-      - TIMING ('kab beemar honga? kab thik?') → ADD matching REFUSE block
-  • RISK block: add if user's tone is worried OR asks 'dikkat / risk / khatra'.
-  • REMEDY block: add ONE remedy in the closer (skip for REFUSE/CRISIS Qs).
-
-STEP 3 — Apply ONLY the picked blocks (typical: 2-4 total). IGNORE the rest.
-        NEVER stack STATIC_VITALITY + TIMING blocks together — pick ONE
-        intent block based on what user actually asked.
-
-WORKED EXAMPLES (do NOT copy verbatim — use to calibrate routing):
-  ── STATIC (vitality existence) ──
-  Q: "meri sehat kaisi hai chart me?"           → ANALYZE + STATIC_VITALITY
-  Q: "vitality strong hai meri?"                → ANALYZE + STATIC_VITALITY
-  Q: "immunity weak hai kya?"                   → ANALYZE + IMMUNE + STATIC_VITALITY + REMEDY
-
-  ── QUALITY (tendency / aage risk) ──
-  Q: "aage chal ke kya health risk hai?"        → PREVENT + QUALITY_TENDENCY + REMEDY
-  Q: "kya kya bimariyon ki tendency hai?"       → PREVENT + QUALITY_TENDENCY + RISK
-  Q: "future me chronic risk hai?"              → MANAGE_CHRONIC + QUALITY_TENDENCY
-
-  ── SYSTEM-specific ──
-  Q: "digestive issue ki tendency hai?"         → PREVENT + DIGESTIVE + QUALITY_TENDENCY + REMEDY
-  Q: "stress aur anxiety ka chart me kya?"      → MENTAL_SUPPORT + STATIC_VITALITY + REMEDY
-  Q: "santaan yog hai chart me?"                → REPRO_SUPPORT + REPRO_SYS + STATIC_VITALITY
-
-  ── EDGE / SENSITIVE ──
-  Q: "papa ki tabiyat kharab, chart se bata"    → PARENT_HEALTH + REMEDY
-  Q: "sharab ki addiction se kaise nikalu?"     → ADDICTION + MENTAL_SUPPORT + REMEDY
-  Q: "accident ka risk hai chart me?"           → ACCIDENT_RISK + RISK + REMEDY
-
-  ── HARD REFUSALS ──
-  Q: "mujhe kaun si bimari hai chart se bata"   → ANALYZE + REFUSE_DIAGNOSIS
-  Q: "kab marunga main?"                        → REFUSE_DEATH (only)
-  Q: "mera cancer thik hoga 100%?"              → REFUSE_CURE_GUARANTEE
-  Q: "kab beemar honga?"                        → REFUSE_TIMING_DECLINE
-  Q: "kab thik honga main?"                     → REFUSE_TIMING_RECOVERY
-  Q: "operation kab karwau, muhurat?"           → REFUSE_SURGERY_MUHURAT
-  Q: "khatam kar lu life"                       → CRISIS_REDIRECT (only)
-
-ATOMIC CHECK BLOCKS (pick from these only):
-"""
-
-
-_ANSWER_STYLE = """
-ANSWER STYLE (mandatory):
-  • 100-150 words, 2-3 short Hinglish paragraphs. NO bullets. NO headers.
-  • Cite ACTUAL planet names + house numbers from THIS chart — never invent.
-    If a value is missing, say so honestly ('Lagnesh ka exact dignity nahi
-    mil raha').
-  • Translate Sanskrit inline: 'Lagnesh (1st lord)', 'Mangal (Mars)'.
-  • End with ONE practical line — Vedic remedy OR a 1-line summary insight
-    OR (for REFUSE blocks) the refuse-message itself as the closer.
-  • For STATIC_VITALITY / QUALITY_TENDENCY: do NOT name dasha periods or
-    use phrases like 'near term me movement', 'this phase me', 'abhi chal
-    raha hai' — those are TIMING-only (and TIMING is refused for health).
-    Stay on chart structure (Lagnesh, Sun-Moon, 6H/8H, karakas).
-  • DOCTRINAL HEDGES (do NOT overstate):
-      - Vargottama = STRONGLY supportive, not a guarantee.
-      - Affliction by Saturn/Rahu = TENDENCY, not certainty.
-      - 6H/8H involvement = vulnerability-zone, not diagnosis.
-  • FORBIDDEN VOCABULARY in body (will be stripped post-hoc):
-      - Specific disease names (diabetes, cancer, tumor, hiv, etc.)
-      - "100%", "guaranteed cure", "definitely thik hoga"
-      - Exact dates / months / years for illness or recovery
-"""
+from typing import Optional, Tuple
 
 
 # ── KILLSWITCH HELPERS ────────────────────────────────────────────────
-def _focus_block_enabled() -> bool:
-    """True UNLESS HEALTH_FOCUS_BLOCK explicitly disables. Default ON."""
-    val = _os.environ.get("HEALTH_FOCUS_BLOCK", "").strip().lower()
-    return val not in ("0", "false", "no", "off")
-
-
-def _focus_axes_enabled() -> bool:
-    """True UNLESS HEALTH_FOCUS_AXES explicitly disables. Default ON."""
-    val = _os.environ.get("HEALTH_FOCUS_AXES", "").strip().lower()
-    return val not in ("0", "false", "no", "off")
-
-
 def _chart_slice_enabled() -> bool:
     """True UNLESS HEALTH_CHART_SLICE explicitly disables. Default ON."""
     val = _os.environ.get("HEALTH_CHART_SLICE", "").strip().lower()
@@ -258,6 +64,8 @@ _DIAGNOSIS_DEMAND_RX = _re.compile(
     r"(mujhe\s+kya\s+(bimari|disease|illness)\s+(hai|hogi)|"
     r"kaun\s*si\s+(bimari|disease|illness)\s+(hai|hogi|hai\s+mujhe)|"
     r"mujhe\s+kaun\s*si\s+(bimari|disease|illness)|"
+    r"(?:mujhse|mujhe|mere).{0,20}kya\s+kya\s+(?:bimari|disease|rog|illness)\s+ho\s+sak|"
+    r"kya\s+kya\s+(?:bimari|disease|rog|illness)\s+ho\s+sak|"
     r"diagnose\s+me|diagnose\s+my\s+disease|diagnos\w*\s+(my\s+)?(disease|illness|condition)|"
     r"illness\s+name\s+from\s+(chart|kundli)|"
     r"tell\s+me\s+my\s+illness\s+name|"
@@ -365,149 +173,6 @@ def detect_hard_guard(question: str) -> Optional[str]:
     return None
 
 
-# ── ACTION axis (pick ONE; first match wins) ──────────────────────────
-_ACTION_PATTERNS = (
-    ("REPRO_SUPPORT", _re.compile(
-        r"\b(infertility|santaan|santan|baby|pregnan(?:cy|t)|conceive|"
-        r"miscarriage|garbh|bachcha\s+(nahi|hone)|fertility|"
-        r"reproductive|repro\b|maa\s+banna|pita\s+banna)\b",
-        _re.IGNORECASE)),
-    ("MENTAL_SUPPORT", _re.compile(
-        r"\b(stress|anxiety|depression|tension|"
-        r"mental\s+(health|peace|stress|state|wellness)|"
-        r"man\s+(ashaant|udas|thik\s+nahi|pareshan|bechain)|"
-        r"mood\s+(off|swing|low|depressed)|"
-        r"udaasi|chinta|ghabrahat|panic|"
-        r"neend\s+nahi|insomnia|sleep\s+(problem|nahi|kharab))\b",
-        _re.IGNORECASE)),
-    ("MANAGE_CHRONIC", _re.compile(
-        r"\b(chronic|long[\s-]?term\s+(illness|problem|bimari)|"
-        r"lambi\s+bimari|purani\s+bimari|"
-        r"genetic\s+(disease|risk|history)|"
-        r"family\s+history\s+(disease|illness)|hereditary|"
-        r"life[\s-]?long|hamesha\s+rehta|reh\s+jata)\b",
-        _re.IGNORECASE)),
-    ("RECOVER", _re.compile(
-        r"\b(recover|recovery|cure|healing|heal|"
-        r"thik\s+(honga|hounga|ho\s+jaunga)|"
-        r"bimari\s+(se\s+nikal|se\s+door)|"
-        r"swasth\s+(honga|hounga))\b",
-        _re.IGNORECASE)),
-    ("PREVENT", _re.compile(
-        r"\b(prevent|prevention|avoid|bachna|bachne|bachao|"
-        r"future\s+risk|aage\s+(chal\s+ke|jaake)|aane\s+wale|"
-        r"tendency|tendencies|kya\s+kya\s+(bimari|issues?)|"
-        r"kaun[\s-]?kaun\s+(se|si)?\s*(health|bimari|issues?)|"
-        r"probable|possible|likely\s+(health|illness|disease))\b",
-        _re.IGNORECASE)),
-)
-# ANALYZE = default (no explicit verb match)
-
-
-# ── SYSTEM axis (0+ matches, ADD modifiers) ───────────────────────────
-_SYSTEM_PATTERNS = (
-    ("DIGESTIVE", _re.compile(
-        r"\b(digest(?:ion|ive)?|pet|stomach|acidity|gas|"
-        r"intestine|aant|appetite|bhook|hazme|hajma|"
-        r"liver|jigar|kidney|gurda)\b",
-        _re.IGNORECASE)),
-    ("CARDIO", _re.compile(
-        r"\b(heart|dil|cardiac|cardio|"
-        r"blood\s+pressure|bp\b|hypertension|"
-        r"chest\s+(pain|discomfort)|seene\s+me)\b",
-        _re.IGNORECASE)),
-    ("NERVOUS", _re.compile(
-        r"\b(nerve|nerves|nervous|neurolog|"
-        r"jhanjhanahat|tingling|numbness|sunn\s+pad|"
-        r"brain|dimag|cognitive)\b",
-        _re.IGNORECASE)),
-    ("MUSCULOSKELETAL", _re.compile(
-        r"\b(joint|jod|jodo|knee|ghutna|back\s*pain|kamar|"
-        r"bone|haddi|haddiyan|spine|reedh|"
-        r"muscle|maans|cramp|akadan|stiffness|"
-        r"arthritis\b|gathiya|orthop)\b",
-        _re.IGNORECASE)),
-    ("SKIN", _re.compile(
-        r"\b(skin|chamdi|twacha|rash|allergy\s+(?:skin)?|"
-        r"acne|pimple|kil|muhase|"
-        r"eczema|psoriasis|daag|patch)\b",
-        _re.IGNORECASE)),
-    ("ENDOCRINE", _re.compile(
-        r"\b(thyroid|hormone|hormonal|"
-        r"sugar(?:\s+level)?|metabolism|metabolic|"
-        r"weight\s+(gain|loss)|wajan|motapa|"
-        r"pcod|pcos|endocrin)\b",
-        _re.IGNORECASE)),
-    ("RESPIRATORY", _re.compile(
-        r"\b(breath|breathing|saans|saans\s+phool|"
-        r"asthma|dama|"
-        r"lung|phephra|"
-        r"cough|khansi|cold|sardi|zukam|"
-        r"chest\s+infect|nasal|nose\s+block)\b",
-        _re.IGNORECASE)),
-    ("IMMUNE", _re.compile(
-        r"\b(immunity|immune|"
-        r"baar[\s-]?baar\s+(beemar|bimar|sick|ill)|"
-        r"jaldi[\s-]?jaldi\s+(beemar|bimar|sick)|"
-        r"frequently\s+(sick|ill)|"
-        r"rog[\s-]?pratirodh|"
-        r"resistance|stamina)\b",
-        _re.IGNORECASE)),
-    ("REPRO_SYS", _re.compile(
-        r"\b(reproductive|fertility|santaan|santan|"
-        r"period|menstrual|periods\s+(?:irregular|miss)|"
-        r"prostate|sperm|ovary|uterus|garbhashay)\b",
-        _re.IGNORECASE)),
-)
-
-
-# ── EDGE axis (0+ matches) ────────────────────────────────────────────
-_EDGE_PATTERNS = (
-    ("ACCIDENT_RISK", _re.compile(
-        r"\b(accident\s+(risk|chance|hoga|honga|ka\s+yog)?|"
-        r"injury\s+(risk|chance|hoga)?|"
-        r"chot\s+(lagne|ka\s+yog|risk)?|"
-        r"physical\s+(harm|safety|injury)|"
-        r"durghatna|fall\s+down|gir(?:na|enge|jaunga))\b",
-        _re.IGNORECASE)),
-    ("PARENT_HEALTH", _re.compile(
-        r"\b(papa|mummy|mother|father|maa|maaji|pita|pitaji|parent[s]?|"
-        r"mom\b|dad\b|mata\b|mataji)\s+"
-        r"(ki\s+|ke\s+|ka\s+)?"
-        r"(health|sehat|bimari|illness|tabiyat|swasthya|tabiyyat)",
-        _re.IGNORECASE)),
-    ("ADDICTION", _re.compile(
-        r"\b(addiction|nasha|nashedi|alcohol|sharab|"
-        r"smoking|cigarette|cigarrette|"
-        r"drug[s]?|tambaku|tobacco|gutka|paan\s+masala|"
-        r"substance\s+abuse|de[\s-]?addict)\b",
-        _re.IGNORECASE)),
-)
-
-
-# ── INTENT detection (STATIC vs QUALITY) ──────────────────────────────
-# TIMING is handled by hard-guards (REFUSE_TIMING_*). For non-refused
-# Qs we only need STATIC vs QUALITY split.
-_QUALITY_TRIGGER_RX = _re.compile(
-    r"\b(tendency|tendencies|aage\s+(chal\s+ke|jaake)|"
-    r"future\s+(me|risk)|aane\s+wale|"
-    r"kya\s+kya\s+(bimari|issues?|risk)|"
-    r"kaun[\s-]?kaun\s+(se|si)?\s*(health|bimari|issues?)|"
-    r"probable|possible|likely|"
-    r"prone\s+to|risk\s+(profile|areas?|zones?))\b",
-    _re.IGNORECASE,
-)
-
-_RISK_RX = _re.compile(
-    r"\b(dikkat|nuksan|nuqsan|risk|risky|jokhim|loss|"
-    r"problem|issue|trouble|danger|khatra|khatre|"
-    r"weak|kamzor|kamzori|kharab|"
-    r"worry|worried|chinta|tension|"
-    r"galat|wrong|unsafe)\b",
-    _re.IGNORECASE,
-)
-
-
 # ── SENSITIVE bucket detection (extra-soft tone signal) ───────────────
 _SENSITIVE_BUCKETS = (
     ("mental_health", _re.compile(
@@ -540,6 +205,15 @@ def detect_sensitive_bucket(question: str) -> Optional[str]:
     return None
 
 
+_NAMED_CONDITION_RX = _re.compile(
+    r"(?ix)\b("
+    r"asthma|asthama|diabetes|madhumeh|thyroid|thairoid|arthritis|epilepsy|"
+    r"pcod|pcos|hypertension|migraine|allergy|tuberculosis|\btb\b|"
+    r"cancer|kanser|tumor|tumour|hiv|aids|parkinson|schizophrenia|"
+    r"कैंसर|मधुमेह|ट्यूमर|अस्थमा"
+    r")\b"
+)
+
 # ── HEALTH-TOPIC GATE (port from health_static.health_routing) ────────
 _HEALTH_TOPIC_RX = _re.compile(
     r"\b("
@@ -570,7 +244,9 @@ _HEALTH_TOPIC_RX = _re.compile(
     r"infertility|santaan|santan|fertility|pregnancy|conceive|"
     r"addiction|nasha|sharab|smoking|"
     r"arishta|balarishta|vipreet[\s-]?recovery|"
-    r"swasthya|aarogya|arogya"
+    r"swasthya|aarogya|arogya|"
+    r"asthma|asthama|diabetes|thyroid|arthritis|epilepsy|pcod|pcos|"
+    r"hypertension|migraine|allergy"
     r")\b",
     _re.IGNORECASE,
 )
@@ -634,6 +310,9 @@ def is_health_question(question: str) -> bool:
     # 2. Hard-guard patterns ALWAYS owned by health (so refuse fires)
     if detect_hard_guard(question) is not None:
         return True
+    # 2a. User named a specific condition (e.g. "kya mujhse asthma hai")
+    if _NAMED_CONDITION_RX.search(question):
+        return True
     # 2b. Devanagari health words
     if _HINDI_HEALTH_RX.search(question):
         return True
@@ -648,176 +327,9 @@ def is_health_question(question: str) -> bool:
     return True
 
 
-# ── AXES DETECTOR ─────────────────────────────────────────────────────
-def detect_health_axes(question: str) -> Dict[str, Any]:
-    """Detect health Q axes server-side. Returns dict with keys:
-      action:    str   — exactly one ATOMIC_CHECKS ACTION key.
-      systems:   list  — 0+ SYSTEM keys.
-      intent:    str   — STATIC_VITALITY | QUALITY_TENDENCY.
-      edges:     list  — 0+ EDGE keys.
-      appendix:  list  — 0+ of {RISK, REMEDY}.
-      hard_guard:str|None — REFUSE_*/CRISIS_REDIRECT tag if any.
-      sensitive: str|None — sensitive-bucket name if any.
-
-    Defensive: invalid input → ANALYZE + STATIC_VITALITY + REMEDY."""
-    safe_default = {
-        "action":     "ANALYZE",
-        "systems":    [],
-        "intent":     "STATIC_VITALITY",
-        "edges":      [],
-        "appendix":   ["REMEDY"],
-        "hard_guard": None,
-        "sensitive":  None,
-    }
-    if not isinstance(question, str) or not question.strip():
-        return safe_default
-    q = question
-
-    # ── HARD GUARD (highest priority — short-circuits intent) ──
-    hard = detect_hard_guard(q)
-
-    # ── ACTION (first match wins; ANALYZE if none) ──
-    action = "ANALYZE"
-    for tag, rx in _ACTION_PATTERNS:
-        if rx.search(q):
-            action = tag
-            break
-
-    # ── SYSTEMS (collect all matches; preserve declaration order) ──
-    systems = [tag for tag, rx in _SYSTEM_PATTERNS if rx.search(q)]
-
-    # ── EDGES ──
-    edges = [tag for tag, rx in _EDGE_PATTERNS if rx.search(q)]
-
-    # ── INTENT (STATIC vs QUALITY; TIMING is hard-guarded above) ──
-    if _QUALITY_TRIGGER_RX.search(q):
-        intent = "QUALITY_TENDENCY"
-    else:
-        intent = "STATIC_VITALITY"
-
-    # ── APPENDIX ──
-    appendix = []
-    if _RISK_RX.search(q):
-        appendix.append("RISK")
-    # REMEDY: always-on EXCEPT for CRISIS (replaces everything) and
-    # REFUSE_DEATH (refuse line is the closer).
-    if hard not in ("CRISIS_REDIRECT", "REFUSE_DEATH"):
-        appendix.append("REMEDY")
-
-    return {
-        "action":     action,
-        "systems":    systems,
-        "intent":     intent,
-        "edges":      edges,
-        "appendix":   appendix,
-        "hard_guard": hard,
-        "sensitive":  detect_sensitive_bucket(q),
-    }
-
-
-# ── COMPOSER (axes-routed compact block) ──────────────────────────────
-_AXES_FRAMEWORK_HEADER = """FOCUS — HEALTH ANALYSIS (server pre-routed for this Q).
-
-You have D1 + (D9 if available) + KP cusps + Vimshottari Dasha + Transit
-in chart above. Server has detected this Q's axes and selected the
-relevant CHECK blocks below. Apply ONLY these blocks (not the full
-health doctrine). Cite ACTUAL planet names + house numbers from THIS
-chart — never invent.
-
-⚠️  HARD GUARDS still apply: NO disease names, NO death prediction,
-NO cure guarantee, NO illness/recovery dates. If a REFUSE_* block is
-present, USE its message as the closer (it replaces remedy/closer).
-
-ROUTED CHECK BLOCKS for this Q:
-"""
-
-
-def _atomic_blocks_dump() -> str:
-    """Render all atomic blocks as a [TAG] line list."""
-    return "\n".join(f"  [{k}] {v}" for k, v in ATOMIC_CHECKS.items())
-
-
-def _picked_atomic_blocks_dump(picked: List[str]) -> str:
-    """Render a subset of ATOMIC_CHECKS as [TAG] lines, preserving
-    caller-provided order. Unknown tags silently skipped."""
-    return "\n".join(
-        f"  [{k}] {ATOMIC_CHECKS[k]}" for k in picked if k in ATOMIC_CHECKS
-    )
-
-
-_AXES_FALLBACK_COUNT = 0
-
-
 def build_health_focus(question: str = "") -> str:
-    """Return the health-focus block.
-
-    When HEALTH_FOCUS_AXES is enabled (default ON) AND a non-empty
-    question is provided, returns a COMPACT axes-routed block (~1.5-2.5
-    KB) containing only the matched atomic CHECK blocks.
-
-    When disabled OR question is empty, returns the FAT block (~6 KB)
-    with all atomic blocks for the LLM to self-route.
-
-    Defensive: any detection error → fat-block fallback (NEVER blocks)."""
-    if not _focus_axes_enabled() or not (
-        isinstance(question, str) and question.strip()
-    ):
-        return _FRAMEWORK_HEADER + _atomic_blocks_dump() + "\n" + _ANSWER_STYLE
-
-    try:
-        axes = detect_health_axes(question)
-
-        # CRISIS → only the crisis block (skip all chart talk)
-        if axes["hard_guard"] == "CRISIS_REDIRECT":
-            return (
-                _AXES_FRAMEWORK_HEADER
-                + _picked_atomic_blocks_dump(["CRISIS_REDIRECT"])
-                + "\n"
-                + _ANSWER_STYLE
-            )
-
-        picked: List[str] = [axes["action"]]
-        picked.extend(axes["systems"])
-        picked.extend(axes["edges"])
-
-        # REFUSE_DEATH = closer-only (skip intent + remedy)
-        if axes["hard_guard"] == "REFUSE_DEATH":
-            picked.append("REFUSE_DEATH")
-        elif axes["hard_guard"] is not None:
-            # Other REFUSE blocks: keep intent + risk, replace remedy with refuse
-            picked.append(axes["intent"])
-            if "RISK" in axes["appendix"]:
-                picked.append("RISK")
-            picked.append(axes["hard_guard"])
-        else:
-            picked.append(axes["intent"])
-            picked.extend(axes["appendix"])
-
-        # Dedup preserving order
-        seen = set()
-        picked_unique = []
-        for tag in picked:
-            if tag in ATOMIC_CHECKS and tag not in seen:
-                seen.add(tag)
-                picked_unique.append(tag)
-
-        if not picked_unique:
-            return _FRAMEWORK_HEADER + _atomic_blocks_dump() + "\n" + _ANSWER_STYLE
-
-        return (
-            _AXES_FRAMEWORK_HEADER
-            + _picked_atomic_blocks_dump(picked_unique)
-            + "\n"
-            + _ANSWER_STYLE
-        )
-    except Exception as _exc:  # noqa: BLE001
-        global _AXES_FALLBACK_COUNT
-        _AXES_FALLBACK_COUNT += 1
-        print(
-            f"[health_focus_routing][AXES_FALLBACK={_AXES_FALLBACK_COUNT}] "
-            f"err={str(_exc)[:160]} → fat-block fallback"
-        )
-        return _FRAMEWORK_HEADER + _atomic_blocks_dump() + "\n" + _ANSWER_STYLE
+    """Permanently disabled — composable HEALTH FOCUS LLM prompt removed."""
+    return ""
 
 
 # ── CHART SLICER (drop dasha sections for STATIC/QUALITY) ─────────────
@@ -1030,9 +542,7 @@ def apply_health_postinjectors(answer_text: str, question: str) -> str:
 
 # ── PUBLIC API SUMMARY ────────────────────────────────────────────────
 __all__ = [
-    "ATOMIC_CHECKS",
     "build_health_focus",
-    "detect_health_axes",
     "detect_hard_guard",
     "detect_sensitive_bucket",
     "is_health_question",

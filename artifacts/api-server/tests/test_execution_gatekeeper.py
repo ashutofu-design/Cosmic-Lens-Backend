@@ -14,80 +14,108 @@ from ask_execution_gatekeeper import (
     dna_expectation,
     enforce_dna_routing_flags,
     gatekeeper_enabled,
+    gatekeeper_health_enabled,
     run_post_engine_gate,
+)
+
+_ALL_FLAGS = (
+    "education", "children", "property", "vehicle", "travel",
+    "litigation", "gap", "network", "luck", "career", "finance", "health", "mr",
 )
 
 
 class ExecutionGatekeeperTests(unittest.TestCase):
     def setUp(self):
         os.environ["ASK_EXECUTION_GATEKEEPER"] = "1"
+        os.environ.pop("ASK_EXECUTION_GATEKEEPER_HEALTH", None)
 
     def test_enabled_by_default(self):
         os.environ.pop("ASK_EXECUTION_GATEKEEPER", None)
         self.assertTrue(gatekeeper_enabled())
 
-    def test_dna_force_health_over_career(self):
-        admin = {
-            "dna_routing_applied": True,
-            "domain": "health",
-            "routed_domain": "health",
-            "dna_engine_archetype": "heart_blood_pressure",
-            "health_archetype": "heart_blood_pressure",
-            "question_dna": {
-                "source": "llm",
-                "questions": [{
-                    "domain": "health",
-                    "bucket": "heart_blood_pressure",
-                    "confidence": 0.9,
-                    "bucket_match_confidence": "high",
-                }],
-            },
-        }
-        flags = {k: False for k in (
-            "education", "children", "property", "vehicle", "travel",
-            "litigation", "gap", "network", "luck", "career", "finance", "health", "mr",
-        )}
-        flags["career"] = True
-        new_flags, note = enforce_dna_routing_flags(flags, admin, None)
-        self.assertEqual(note, "dna_force_engine:health")
-        self.assertTrue(new_flags["health"])
-        self.assertFalse(new_flags["career"])
-
-    def test_rule6_health_dna_career_engine_blocked(self):
-        admin = {
-            "dna_routing_applied": True,
-            "domain": "health",
-            "dna_engine_archetype": "heart_blood_pressure",
-            "question_dna": {
-                "source": "llm",
-                "questions": [{
-                    "domain": "health",
-                    "bucket": "heart_blood_pressure",
-                    "confidence": 0.88,
-                }],
-            },
-        }
-        meta = {
-            "slice": "career_engine_v1",
-            "archetype": "general_career",
-            "verdict": "Mixed career path",
-            "evidence": [],
-            "checks": {"rules_fired": []},
-        }
-        res = check_engine_output_gate(admin, slice_meta=meta)
-        self.assertFalse(res.ok)
-        self.assertEqual(res.rule, "rule_6_health_question_career_engine")
-
-    def test_rule2_zero_evidence_blocked(self):
+    def test_health_gatekeeper_off_by_default(self):
+        self.assertFalse(gatekeeper_health_enabled())
         meta = {
             "slice": "health_engine_v1",
-            "archetype": "heart_blood_pressure",
+            "archetype": "general_health",
             "evidence": [],
             "checks": {"rules_fired": []},
         }
         res = check_engine_output_gate(None, slice_meta=meta)
-        self.assertFalse(res.ok)
-        self.assertEqual(res.reason, "insufficient_evidence")
+        self.assertTrue(res.ok)
+        self.assertEqual(res.rule, "health_gatekeeper_off")
+
+    def test_dna_force_health_over_career(self):
+        os.environ["ASK_EXECUTION_GATEKEEPER_HEALTH"] = "1"
+        try:
+            admin = {
+                "dna_routing_applied": True,
+                "domain": "health",
+                "routed_domain": "health",
+                "dna_engine_archetype": "heart_blood_pressure",
+                "health_archetype": "heart_blood_pressure",
+                "question_dna": {
+                    "source": "llm",
+                    "questions": [{
+                        "domain": "health",
+                        "bucket": "heart_blood_pressure",
+                        "confidence": 0.9,
+                        "bucket_match_confidence": "high",
+                    }],
+                },
+            }
+            flags = {k: False for k in _ALL_FLAGS}
+            flags["career"] = True
+            new_flags, note = enforce_dna_routing_flags(flags, admin, None)
+            self.assertEqual(note, "dna_force_engine:health")
+            self.assertTrue(new_flags["health"])
+            self.assertFalse(new_flags["career"])
+        finally:
+            os.environ.pop("ASK_EXECUTION_GATEKEEPER_HEALTH", None)
+
+    def test_rule6_health_dna_career_engine_blocked(self):
+        os.environ["ASK_EXECUTION_GATEKEEPER_HEALTH"] = "1"
+        try:
+            admin = {
+                "dna_routing_applied": True,
+                "domain": "health",
+                "dna_engine_archetype": "heart_blood_pressure",
+                "question_dna": {
+                    "source": "llm",
+                    "questions": [{
+                        "domain": "health",
+                        "bucket": "heart_blood_pressure",
+                        "confidence": 0.88,
+                    }],
+                },
+            }
+            meta = {
+                "slice": "career_engine_v1",
+                "archetype": "general_career",
+                "verdict": "Mixed career path",
+                "evidence": [],
+                "checks": {"rules_fired": []},
+            }
+            res = check_engine_output_gate(admin, slice_meta=meta)
+            self.assertFalse(res.ok)
+            self.assertEqual(res.rule, "rule_6_health_question_career_engine")
+        finally:
+            os.environ.pop("ASK_EXECUTION_GATEKEEPER_HEALTH", None)
+
+    def test_rule2_zero_evidence_blocked(self):
+        os.environ["ASK_EXECUTION_GATEKEEPER_HEALTH"] = "1"
+        try:
+            meta = {
+                "slice": "health_engine_v1",
+                "archetype": "heart_blood_pressure",
+                "evidence": [],
+                "checks": {"rules_fired": []},
+            }
+            res = check_engine_output_gate(None, slice_meta=meta)
+            self.assertFalse(res.ok)
+            self.assertEqual(res.reason, "insufficient_evidence")
+        finally:
+            os.environ.pop("ASK_EXECUTION_GATEKEEPER_HEALTH", None)
 
     def test_health_engine_with_evidence_passes(self):
         meta = {
@@ -147,42 +175,52 @@ class ExecutionGatekeeperTests(unittest.TestCase):
         self.assertTrue(res.ok, res.to_dict())
 
     def test_routing_mismatch_detected(self):
-        admin = {
-            "dna_routing_applied": True,
-            "domain": "health",
-            "dna_engine_archetype": "heart_blood_pressure",
-            "question_dna": {
-                "source": "llm",
-                "questions": [{
-                    "domain": "health",
-                    "bucket": "heart_blood_pressure",
-                    "confidence": 0.9,
-                }],
-            },
-        }
+        os.environ["ASK_EXECUTION_GATEKEEPER_HEALTH"] = "1"
+        try:
+            admin = {
+                "dna_routing_applied": True,
+                "domain": "health",
+                "dna_engine_archetype": "heart_blood_pressure",
+                "question_dna": {
+                    "source": "llm",
+                    "questions": [{
+                        "domain": "health",
+                        "bucket": "heart_blood_pressure",
+                        "confidence": 0.9,
+                    }],
+                },
+            }
 
-        class _Route:
-            engine_key = "career"
-            archetype = "general_career"
+            class _Route:
+                engine_key = "career"
+                archetype = "general_career"
 
-        res = check_routing_gate(admin, engine_route=_Route(), flags={"career": True})
-        self.assertFalse(res.ok)
-        self.assertEqual(res.retry_engine_key, "health")
+            res = check_routing_gate(admin, engine_route=_Route(), flags={"career": True})
+            self.assertFalse(res.ok)
+            self.assertEqual(res.retry_engine_key, "health")
+        finally:
+            os.environ.pop("ASK_EXECUTION_GATEKEEPER_HEALTH", None)
 
     def test_final_verdict_mismatch_blocked(self):
-        meta = {
-            "slice": "health_engine_v1",
-            "archetype": "heart_blood_pressure",
-            "verdict": "Heart/BP mixed pattern — stress discipline help karega",
-        }
-        nj = {
-            "direct_answer": "Heart/BP mixed pattern — stress discipline help karega",
-            "final_verdict": "Heart/BP mixed pattern — stress discipline help karega",
-            "positive_indicators": ["Sun strong"],
-        }
-        bad_answer = "Aapki career me promotion strong dikhti hai office me growth milegi."
-        res = check_final_answer_gate(bad_answer, slice_meta=meta, narrator_json=nj)
-        self.assertFalse(res.ok)
+        os.environ["ASK_EXECUTION_GATEKEEPER_HEALTH"] = "1"
+        try:
+            meta = {
+                "slice": "health_engine_v1",
+                "archetype": "heart_blood_pressure",
+                "verdict": "Heart/BP mixed pattern — stress discipline help karega",
+            }
+            nj = {
+                "direct_answer": "Heart/BP mixed pattern — stress discipline help karega",
+                "final_verdict": "Heart/BP mixed pattern — stress discipline help karega",
+                "positive_indicators": ["Sun strong"],
+            }
+            bad_answer = (
+                "Aapki career me promotion strong dikhti hai office me growth milegi."
+            )
+            res = check_final_answer_gate(bad_answer, slice_meta=meta, narrator_json=nj)
+            self.assertFalse(res.ok)
+        finally:
+            os.environ.pop("ASK_EXECUTION_GATEKEEPER_HEALTH", None)
 
     def test_dna_expectation_reads_health_bucket(self):
         admin = {

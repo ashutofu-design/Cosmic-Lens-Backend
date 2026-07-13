@@ -324,12 +324,12 @@ function HealthSelectedBlocksPanel({
       <p className="detail-muted" style={{ marginBottom: 10 }}>
         Focus: <strong>{audit.focus_label || audit.focus || "Engine Execution"}</strong>
         {" — "}
-        sirf Engine Execution (D1/D9) blocks. LLM poora pack padhta hai aur question ke hisaab se
-        khud pick karta hai.
+        Engine Execution se <em>sirf question-relevant</em> blocks (poora EE dump nahi). LLM full
+        D1/D9 padhta hai; yahan specific check set dikhta hai.
       </p>
 
       <p className="detail-muted" style={{ margin: "8px 0 4px" }}>
-        <strong>Available in Engine Execution</strong> (LLM picks from these)
+        <strong>Question-relevant from Engine Execution</strong>
       </p>
       {expected.length === 0 ? (
         <p className="detail-muted">— (Engine Execution empty / missing)</p>

@@ -1,8 +1,8 @@
-"""LLM Selected JSON Blocks — ONLY from health Engine Execution (D1/D9).
+"""LLM Selected JSON Blocks — question-relevant subset FROM Engine Execution only.
 
-Admin Step 4 lists blocks that exist in health_engine_execution.
-LLM still receives the full pack and picks itself; this module never invents
-blocks outside Engine Execution.
+- Source of truth: health_engine_execution (D1/D9)
+- Never invents planets/houses outside EE
+- Does NOT dump entire EE — only question-relevant keys that exist in EE
 """
 
 from __future__ import annotations
@@ -14,6 +14,25 @@ _PLANET_NAMES = (
     "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu",
 )
 
+_TRAVEL_RX = re.compile(
+    r"(?ix)\b(travel|yatra|trip|tour|safar|videsh|abroad|flight|journey)\b"
+)
+_STRESS_RX = re.compile(
+    r"(?ix)\b(stress|anxiety|tension|mann|mental|depression|neend|sleep)\b"
+)
+_SURGERY_RX = re.compile(
+    r"(?ix)\b(operation|surgery|shastra[\s-]?kriya|hospital)\b"
+)
+_RESP_RX = re.compile(
+    r"(?ix)\b(thand|thandi|sardi|cold|khansi|saans|breath|chest|zukam|flu|allerg)\b"
+)
+_CHRONIC_RX = re.compile(
+    r"(?ix)\b(chronic|lambi|baar\s+baar|recurring|persistent)\b"
+)
+_OVERVIEW_RX = re.compile(
+    r"(?ix)(health ke bare|health ke baare|meri sehat|mere health|overall health|"
+    r"health overview|sehat ke bare)"
+)
 _HOUSE_RX = re.compile(
     r"(?ix)\b(?:(?:(\d{1,2})(?:st|nd|rd|th)?)\s*(?:ghar|house)|(?:ghar|house|h)\s*(\d{1,2})|"
     r"h\s*(\d{1,2}))\b"
@@ -23,23 +42,91 @@ _PLANET_IN_HOUSE_RX = re.compile(
     r".{0,40}?(?:(?:ghar|house|h)\s*(\d{1,2})|(\d{1,2})(?:st|nd|rd|th)?\s*(?:ghar|house))"
 )
 
-# Top-level chart keys we surface when present in Engine Execution.
-_CHART_BLOCK_KEYS: tuple[tuple[str, str], ...] = (
-    ("ascendant", "Ascendant"),
-    ("lagnesh", "Lagnesh (1st lord)"),
-    ("planets", "Planets"),
-    ("houses", "All houses"),
-    ("health_houses", "Health houses (1/6/8/12)"),
-    ("house_lords", "House lords (h1–h12)"),
-    ("karakas", "Karakas"),
-    ("shadbala", "Shadbala"),
-    ("aspects", "Aspects"),
-    ("afflictions", "Afflictions"),
-    ("dimensions", "Health dimensions"),
-    ("sub_flags", "Sub flags"),
-    ("vitality_score", "Vitality score"),
-    ("vitality_risk", "Vitality risk"),
-)
+# Question focus → preferred EE block id suffixes / patterns (must exist in EE).
+_FOCUS_WANT: dict[str, dict[str, Any]] = {
+    "travel_health": {
+        "label": "Travel + health — question-relevant EE blocks",
+        "lords": ("h3", "h6", "h9", "h12"),
+        "houses": (3, 6, 9, 12),
+        "dims": ("preventive_risk", "chronic_tendency", "overall_vitality"),
+        "want_keys": ("afflictions", "health_houses", "lagnesh", "sub_flags"),
+    },
+    "surgery_risk": {
+        "label": "Surgery risk — question-relevant EE blocks",
+        "lords": ("h6", "h8"),
+        "houses": (6, 8, 12),
+        "dims": ("surgery_risk_tone", "chronic_tendency", "recovery_capacity"),
+        "want_keys": ("afflictions", "health_houses"),
+        "planets": ("Mars", "Saturn"),
+    },
+    "mental_stress": {
+        "label": "Mental stress — question-relevant EE blocks",
+        "lords": ("h4", "h6"),
+        "houses": (4, 6),
+        "dims": ("mental_stress", "overall_vitality"),
+        "want_keys": ("afflictions", "sub_flags", "lagnesh"),
+        "planets": ("Moon",),
+    },
+    "respiratory": {
+        "label": "Cold / respiratory — question-relevant EE blocks",
+        "lords": ("h6",),
+        "houses": (3, 6),
+        "dims": ("preventive_risk", "chronic_tendency"),
+        "want_keys": ("afflictions", "health_houses"),
+        "planets": ("Moon", "Saturn", "Venus"),
+    },
+    "chronic": {
+        "label": "Chronic — question-relevant EE blocks",
+        "lords": ("h6", "h8"),
+        "houses": (6, 8, 12),
+        "dims": ("chronic_tendency", "recovery_capacity"),
+        "want_keys": ("afflictions", "health_houses"),
+    },
+    "overview": {
+        "label": "Overview — question-relevant EE blocks",
+        "lords": ("h1",),
+        "houses": (1, 6),
+        "dims": ("overall_vitality", "mental_stress", "chronic_tendency"),
+        "want_keys": ("sub_flags", "lagnesh", "vitality_score"),
+    },
+    "cause": {
+        "label": "Why / cause — question-relevant EE blocks",
+        "lords": ("h6", "h8"),
+        "houses": (6, 8, 12),
+        "dims": ("preventive_risk", "chronic_tendency", "overall_vitality"),
+        "want_keys": ("afflictions", "health_houses", "lagnesh"),
+    },
+    "general_health": {
+        "label": "General health — question-relevant EE blocks",
+        "lords": ("h1", "h6", "h8", "h12"),
+        "houses": (1, 6, 8, 12),
+        "dims": ("overall_vitality", "chronic_tendency", "preventive_risk"),
+        "want_keys": ("afflictions", "health_houses", "lagnesh", "sub_flags"),
+    },
+}
+
+
+def classify_health_question_focus(question: str) -> str:
+    q = (question or "").strip()
+    if not q:
+        return "general_health"
+    if _TRAVEL_RX.search(q) and re.search(
+        r"(?ix)\b(health|sehat|issue|problem|bimari|beemar|sick|tabiyat|immunity)\b", q
+    ):
+        return "travel_health"
+    if _SURGERY_RX.search(q):
+        return "surgery_risk"
+    if _STRESS_RX.search(q):
+        return "mental_stress"
+    if _RESP_RX.search(q):
+        return "respiratory"
+    if _CHRONIC_RX.search(q):
+        return "chronic"
+    if _OVERVIEW_RX.search(q):
+        return "overview"
+    if re.search(r"(?ix)\b(kyun|kyon|why|kaise|how)\b", q):
+        return "cause"
+    return "general_health"
 
 
 def _execution_from_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
@@ -49,7 +136,6 @@ def _execution_from_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
     pack = checks.get("health_engine_execution")
     if isinstance(pack, dict) and pack:
         return pack
-    # Direct pack passed as execution=
     if meta.get("d1") or meta.get("d9"):
         return {"d1": meta.get("d1") or {}, "d9": meta.get("d9") or {}}
     return {
@@ -62,71 +148,6 @@ def _chart_ok(chart: Any) -> dict[str, Any]:
     if not isinstance(chart, dict) or chart.get("error"):
         return {}
     return chart
-
-
-def _block_present(chart: dict[str, Any], key: str) -> bool:
-    val = chart.get(key)
-    if val is None:
-        return False
-    if isinstance(val, (list, dict)):
-        return bool(val)
-    if isinstance(val, (int, float)):
-        return True
-    return bool(str(val).strip())
-
-
-def available_blocks_from_execution(execution: dict[str, Any]) -> list[dict[str, str]]:
-    """Only keys that exist in Engine Execution D1/D9."""
-    out: list[dict[str, str]] = []
-    for chart_key in ("d1", "d9"):
-        chart = _chart_ok(execution.get(chart_key))
-        if not chart:
-            continue
-        prefix = chart_key.upper()
-        for key, label in _CHART_BLOCK_KEYS:
-            if not _block_present(chart, key):
-                continue
-            detail = ""
-            raw = chart.get(key)
-            if key == "dimensions" and isinstance(raw, dict):
-                detail = ", ".join(sorted(raw.keys()))
-            elif key == "house_lords" and isinstance(raw, dict):
-                detail = f"{len(raw)} lords"
-            elif key == "planets" and isinstance(raw, list):
-                names = [str(p.get("name") or "") for p in raw if isinstance(p, dict) and p.get("name")]
-                detail = ", ".join(n for n in names if n)[:120]
-            elif key == "afflictions" and isinstance(raw, list):
-                detail = f"{len(raw)} lines"
-            elif key == "health_houses" and isinstance(raw, list):
-                hs = [str(r.get("house")) for r in raw if isinstance(r, dict) and r.get("house")]
-                detail = "H" + ", H".join(hs) if hs else ""
-            block: dict[str, str] = {
-                "id": f"{chart_key}.{key}",
-                "label": f"{prefix} · {label}",
-                "why": "Present in Engine Execution",
-            }
-            if detail:
-                block["detail"] = detail
-            out.append(block)
-        # Dimension sub-keys as separate selectable rows when present
-        dims = chart.get("dimensions") if isinstance(chart.get("dimensions"), dict) else {}
-        for dim_key in sorted(dims.keys()):
-            out.append({
-                "id": f"{chart_key}.dimensions.{dim_key}",
-                "label": f"{prefix} · Dimension · {dim_key}",
-                "why": "Present in Engine Execution",
-            })
-        # House lord rows that exist
-        lords = chart.get("house_lords") if isinstance(chart.get("house_lords"), dict) else {}
-        for hk in ("h1", "h6", "h8", "h12", "h3", "h4", "h9"):
-            if hk in lords:
-                out.append({
-                    "id": f"{chart_key}.house_lords.{hk}",
-                    "label": f"{prefix} · {hk.upper()} lord",
-                    "why": "Present in Engine Execution",
-                    "detail": str((lords.get(hk) or {}).get("lord") or ""),
-                })
-    return out
 
 
 def _planet_house_map(execution: dict[str, Any]) -> dict[str, set[int]]:
@@ -143,24 +164,111 @@ def _planet_house_map(execution: dict[str, Any]) -> dict[str, set[int]]:
     return out
 
 
-def _dimension_keys(execution: dict[str, Any]) -> set[str]:
-    keys: set[str] = set()
+def question_relevant_blocks_from_execution(
+    question: str,
+    execution: dict[str, Any],
+) -> tuple[str, str, list[dict[str, str]]]:
+    """
+    Question-specific blocks that EXIST in Engine Execution only.
+    LLM still gets full EE; this list is the admin/telemetry focus set.
+    """
+    focus = classify_health_question_focus(question)
+    want = _FOCUS_WANT.get(focus) or _FOCUS_WANT["general_health"]
+    label = str(want["label"])
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def add(block_id: str, block_label: str, why: str, detail: str = "") -> None:
+        if block_id in seen:
+            return
+        seen.add(block_id)
+        row = {"id": block_id, "label": block_label, "why": why}
+        if detail:
+            row["detail"] = detail
+        out.append(row)
+
     for chart_key in ("d1", "d9"):
         chart = _chart_ok(execution.get(chart_key))
+        if not chart:
+            continue
+        prefix = chart_key.upper()
+
+        lords = chart.get("house_lords") if isinstance(chart.get("house_lords"), dict) else {}
+        for hk in want.get("lords") or ():
+            st = lords.get(hk)
+            if not isinstance(st, dict):
+                continue
+            lord = str(st.get("lord") or "").strip()
+            lord_h = st.get("lord_house")
+            detail = f"{lord}" + (f" in H{lord_h}" if lord_h else "")
+            add(
+                f"{chart_key}.house_lords.{hk}",
+                f"{prefix} · {hk.upper()} lord",
+                f"Question focus={focus}; present in EE",
+                detail,
+            )
+
+        planets = chart.get("planets") if isinstance(chart.get("planets"), list) else []
+        want_houses = set(want.get("houses") or ())
+        want_planets = {str(p).lower() for p in (want.get("planets") or ())}
+        for row in planets:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or "").strip()
+            house = int(row.get("house") or 0)
+            if not name:
+                continue
+            if house in want_houses or name.lower() in want_planets:
+                add(
+                    f"{chart_key}.planet.{name}.H{house}",
+                    f"{prefix} · {name} in H{house}",
+                    f"Question focus={focus}; planet placement in EE",
+                    str(row.get("sign") or ""),
+                )
+
+        for key in want.get("want_keys") or ():
+            val = chart.get(key)
+            if val is None or val == "" or val == [] or val == {}:
+                continue
+            detail = ""
+            if key == "afflictions" and isinstance(val, list):
+                detail = "; ".join(str(x) for x in val[:3])
+            elif key == "health_houses" and isinstance(val, list):
+                hs = [str(r.get("house")) for r in val if isinstance(r, dict) and r.get("house")]
+                detail = "H" + ", H".join(hs) if hs else ""
+            add(
+                f"{chart_key}.{key}",
+                f"{prefix} · {key}",
+                f"Question focus={focus}; present in EE",
+                detail,
+            )
+
         dims = chart.get("dimensions") if isinstance(chart.get("dimensions"), dict) else {}
-        keys.update(str(k) for k in dims.keys())
-    return keys
+        for dim in want.get("dims") or ():
+            if dim not in dims:
+                continue
+            st = dims.get(dim) if isinstance(dims.get(dim), dict) else {}
+            detail = str(st.get("verdict") or st.get("reason") or "")[:100]
+            add(
+                f"{chart_key}.dimensions.{dim}",
+                f"{prefix} · Dimension · {dim}",
+                f"Question focus={focus}; present in EE",
+                detail,
+            )
+
+    return focus, label, out
 
 
 def used_blocks_from_execution(
     answer: str,
     execution: dict[str, Any],
+    *,
+    relevant_ids: set[str] | None = None,
 ) -> dict[str, Any]:
-    """Only report answer cites that match planets/houses/dims in Engine Execution."""
+    """Answer cites that match EE — prefer highlighting ones in question-relevant set."""
     text = (answer or "").strip()
     planet_houses = _planet_house_map(execution)
-    dim_keys = _dimension_keys(execution)
-    available_ids = {b["id"] for b in available_blocks_from_execution(execution)}
+    relevant_ids = relevant_ids or set()
 
     planets: list[str] = []
     for name in _PLANET_NAMES:
@@ -187,6 +295,12 @@ def used_blocks_from_execution(
         if house in allowed:
             cites.append(f"{planet} H{house}")
 
+    dim_keys: set[str] = set()
+    for chart_key in ("d1", "d9"):
+        chart = _chart_ok(execution.get(chart_key))
+        dims = chart.get("dimensions") if isinstance(chart.get("dimensions"), dict) else {}
+        dim_keys.update(str(k) for k in dims.keys())
+
     dim_hits: list[str] = []
     for key, words in (
         ("overall_vitality", r"(?ix)vitality|energy|foundation"),
@@ -203,41 +317,49 @@ def used_blocks_from_execution(
     if cites:
         used_blocks.append({
             "id": "execution.planet_house_cites",
-            "label": "Planet + house (from Engine Execution)",
+            "label": "Planet + house (from EE)",
             "detail": ", ".join(cites),
-            "why": "Matched D1/D9 planets in Engine Execution",
+            "why": "Matched Engine Execution placements",
         })
     if planets and not cites:
         used_blocks.append({
             "id": "execution.planets",
-            "label": "Planets named (from Engine Execution)",
+            "label": "Planets named (from EE)",
             "detail": ", ".join(planets),
             "why": "Planet exists in Engine Execution",
         })
     if houses:
         used_blocks.append({
             "id": "execution.houses",
-            "label": "Houses referenced (from Engine Execution)",
+            "label": "Houses (from EE)",
             "detail": ", ".join(f"H{h}" for h in houses),
-            "why": "House placement exists in Engine Execution",
+            "why": "House exists in Engine Execution",
         })
     for dim in dim_hits:
-        bid = f"d1.dimensions.{dim}"
-        if bid in available_ids or f"d9.dimensions.{dim}" in available_ids:
-            used_blocks.append({
-                "id": bid if bid in available_ids else f"d9.dimensions.{dim}",
-                "label": f"Dimension · {dim}",
-                "detail": dim,
-                "why": "Dimension present in Engine Execution",
-            })
-    if not used_blocks and text and available_ids:
+        used_blocks.append({
+            "id": f"d1.dimensions.{dim}",
+            "label": f"Dimension · {dim}",
+            "detail": dim,
+            "why": "Dimension present in Engine Execution",
+        })
+    if not used_blocks and text:
         used_blocks.append({
             "id": "execution.plain_language",
             "label": "Plain-language answer",
-            "detail": "No explicit planet/house cite — LLM may still have used Engine Execution internally",
-            "why": "Full Engine Execution was available to LLM",
+            "detail": "No explicit EE planet/house cite in text",
+            "why": "Full EE still available to LLM",
         })
 
+    # Mark overlap with question-relevant set
+    relevant_hit = False
+    for c in cites:
+        # "Saturn H6" → look for planet.Saturn.H6
+        m = re.match(r"(\w+)\s+H(\d+)$", c)
+        if m and any(
+            f".planet.{m.group(1)}.H{m.group(2)}" in rid for rid in relevant_ids
+        ):
+            relevant_hit = True
+            break
     return {
         "planets": planets,
         "houses": houses,
@@ -245,6 +367,7 @@ def used_blocks_from_execution(
         "dimension_themes": dim_hits,
         "blocks": used_blocks,
         "source": "health_engine_execution",
+        "matched_question_relevant": relevant_hit,
     }
 
 
@@ -255,11 +378,13 @@ def build_health_selected_blocks(
     meta: dict[str, Any] | None = None,
     execution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Step-4 payload: available + used blocks — Engine Execution only."""
+    """Step-4: question-specific EE blocks only (not full EE dump)."""
     meta = meta if isinstance(meta, dict) else {}
     pack = execution if isinstance(execution, dict) and execution else _execution_from_meta(meta)
-    available = available_blocks_from_execution(pack)
-    used = used_blocks_from_execution(answer, pack)
+    focus, focus_label, relevant = question_relevant_blocks_from_execution(question, pack)
+    used = used_blocks_from_execution(
+        answer, pack, relevant_ids={b["id"] for b in relevant},
+    )
 
     contract: dict[str, str] = {}
     for key in ("user_wants", "intent", "normalized_question", "question_type"):
@@ -267,25 +392,25 @@ def build_health_selected_blocks(
         if val:
             contract[key] = val
 
-    notes: list[str] = [
-        "Source: health Engine Execution only (D1/D9). No blocks from outside this pack.",
-        "LLM receives full Engine Execution; it picks relevant parts for the question.",
+    notes = [
+        "Source: Engine Execution only — no invented blocks.",
+        f"Question focus={focus}: showing specific EE keys for this ask (not full EE dump).",
+        "LLM still receives full D1/D9; this list is the question-relevant check set.",
     ]
-    if not available:
-        notes.append("Engine Execution empty or missing — no blocks to list.")
+    if not relevant:
+        notes.append("No matching question-relevant keys found inside Engine Execution.")
 
     return {
         "applies": True,
         "source": "health_engine_execution",
-        "focus": "engine_execution",
-        "focus_label": "Engine Execution (D1 + D9) — LLM picks for the question",
-        # Prefer "available_blocks"; keep expected_blocks alias for older admin UI
-        "available_blocks": available,
-        "expected_blocks": available,
+        "focus": focus,
+        "focus_label": focus_label,
+        "available_blocks": relevant,
+        "expected_blocks": relevant,
         "used_in_answer": used,
         "overlap_notes": notes,
         "contract": contract,
-        "expected_block_ids": sorted({b["id"] for b in available}),
+        "expected_block_ids": sorted({b["id"] for b in relevant}),
         "has_d1": bool(_chart_ok(pack.get("d1"))),
         "has_d9": bool(_chart_ok(pack.get("d9"))),
         "question": (question or "").strip()[:200],

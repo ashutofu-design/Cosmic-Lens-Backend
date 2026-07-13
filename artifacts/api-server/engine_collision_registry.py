@@ -56,20 +56,21 @@ _TRAVEL_CTX_RX = re.compile(
     r")\b"
 )
 
+_TRAVEL_HEALTH_ISSUE_RX = re.compile(
+    r"(?ix)\b("
+    r"health\s+issue|sehat\s+(?:ki\s+)?(?:dikkat|problem)|tabiyat\s+(?:kharab|bigad)|"
+    r"health\s+problem|bimari|beemar|bimar|beemar|sick|illness|hospital|doctor|"
+    r"immunity|tabiyat"
+    r")\b"
+)
+
 
 def should_prioritize_health_over_travel(question: str) -> bool:
     """Travel-context health Qs (why sick when travelling) — health engine, not travel."""
     q = (question or "").strip()
-    if not q or not _TRAVEL_CTX_RX.search(q):
+    if not q:
         return False
-    try:
-        from ask_health.health_registry import _has_real_health_intent, is_health_static_question
-
-        if not _has_real_health_intent(q):
-            return False
-        return bool(is_health_static_question(q))
-    except Exception:
-        return False
+    return bool(_TRAVEL_CTX_RX.search(q) and _TRAVEL_HEALTH_ISSUE_RX.search(q))
 
 
 def should_suppress_health_for_question(question: str, *, llm_domain: str) -> bool:

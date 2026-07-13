@@ -19,18 +19,31 @@ _EXEC = {
     "d1": {
         "ascendant": "Leo",
         "planets": [
-            {"name": "Sun", "sign": "Leo", "house": 1},
-            {"name": "Saturn", "sign": "Capricorn", "house": 6},
-            {"name": "Mars", "sign": "Libra", "house": 9},
-            {"name": "Venus", "sign": "Virgo", "house": 2},
+            {"name": "Sun", "sign": "Leo", "house": 1, "dignity": "own", "strength_score": 2},
+            {
+                "name": "Saturn",
+                "sign": "Aries",
+                "house": 6,
+                "dignity": "debilitated",
+                "strength_score": -2,
+                "shadbala": {"strength_pct": 40},
+            },
+            {"name": "Mars", "sign": "Capricorn", "house": 9, "dignity": "exalted", "strength_score": 3},
+            {"name": "Venus", "sign": "Virgo", "house": 2, "dignity": "enemy", "strength_score": -1},
         ],
         "afflictions": ["Malefics in H6: Saturn"],
         "house_lords": {
-            "h1": {"lord": "Sun", "lord_house": 1},
-            "h3": {"lord": "Venus", "lord_house": 2},
-            "h6": {"lord": "Saturn", "lord_house": 6},
-            "h9": {"lord": "Mars", "lord_house": 9},
-            "h12": {"lord": "Moon", "lord_house": 4},
+            "h1": {"lord": "Sun", "lord_house": 1, "lord_dignity": "own", "lord_strength_score": 2},
+            "h3": {"lord": "Venus", "lord_house": 2, "lord_dignity": "enemy", "lord_strength_score": -1},
+            "h6": {
+                "lord": "Saturn",
+                "lord_house": 6,
+                "lord_dignity": "debilitated",
+                "lord_strength_score": -2,
+                "lord_in_dusthana": True,
+            },
+            "h9": {"lord": "Mars", "lord_house": 9, "lord_dignity": "exalted", "lord_strength_score": 3},
+            "h12": {"lord": "Moon", "lord_house": 4, "lord_dignity": "?", "lord_strength_score": 0},
         },
         "health_houses": [{"house": 6, "lord": "Saturn"}],
         "dimensions": {
@@ -40,13 +53,11 @@ _EXEC = {
             "mental_stress": {"verdict": "YELLOW"},
         },
         "sub_flags": {"immune_weak": False},
-        "shadbala": {"Sun": {"total": 1}},
-        "aspects": [{"planet": "Saturn"}],
-        "karakas": {"Moon": {}},
+        "lagnesh": {"lord": "Sun", "lord_house": 1, "lord_dignity": "own", "lord_strength_score": 2},
     },
     "d9": {
         "ascendant": "Aries",
-        "planets": [{"name": "Sun", "sign": "Leo", "house": 5}],
+        "planets": [{"name": "Sun", "sign": "Leo", "house": 5, "dignity": "own", "strength_score": 2}],
     },
 }
 
@@ -60,12 +71,20 @@ class HealthQuestionRelevantBlocksTests(unittest.TestCase):
         ids = {b["id"] for b in blocks}
         self.assertIn("d1.house_lords.h6", ids)
         self.assertIn("d1.house_lords.h9", ids)
-        # Full dump keys should NOT all appear
         self.assertNotIn("d1.shadbala", ids)
-        self.assertNotIn("d1.aspects", ids)
-        self.assertNotIn("d1.karakas", ids)
-        # Venus H2 not travel house — should not appear as planet pick
         self.assertFalse(any("Venus" in i and "H2" in i for i in ids))
+
+    def test_dignity_strength_in_selected_and_ranked(self):
+        q = "travel pe health issue kyun"
+        pack = build_health_selected_blocks(q, "", execution=_EXEC)
+        self.assertEqual(pack["source"], "health_engine_execution")
+        saturn = next(b for b in pack["expected_blocks"] if "Saturn" in (b.get("label") or "") or "h6" in b["id"])
+        self.assertIn("dignity=", saturn.get("detail") or "")
+        self.assertIn("debilitated", (saturn.get("detail") or "").lower())
+        # Weak Saturn / h6 should rank before exalted Mars H9 support
+        ranks = {b["id"]: b.get("rank") for b in pack["expected_blocks"]}
+        self.assertLess(ranks.get("d1.house_lords.h6", 99), ranks.get("d1.house_lords.h9", 1))
+        self.assertIn("QUESTION_PRIORITY_FACTS", pack.get("priority_facts_for_llm") or "")
 
     def test_source_still_engine_execution(self):
         pack = build_health_selected_blocks(

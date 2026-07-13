@@ -53,6 +53,9 @@ export interface ObservabilityHealthSelectedBlock {
   label?: string;
   why?: string;
   detail?: string;
+  rank?: number;
+  priority?: number;
+  role?: string;
 }
 
 export interface ObservabilityHealthSelectedBlocks {

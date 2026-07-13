@@ -329,7 +329,8 @@ function HealthSelectedBlocksPanel({
       </p>
 
       <p className="detail-muted" style={{ margin: "8px 0 4px" }}>
-        <strong>Question-relevant from Engine Execution</strong>
+        <strong>Question-relevant from Engine Execution</strong> (ranked: weak / high priority first —
+        dignity + strength included)
       </p>
       {expected.length === 0 ? (
         <p className="detail-muted">— (Engine Execution empty / missing)</p>
@@ -343,6 +344,14 @@ function HealthSelectedBlocksPanel({
                 </span>
               </div>
               {b.detail ? <p className="detail-muted obs-rule-reason">{b.detail}</p> : null}
+              {b.role || b.rank != null ? (
+                <p className="detail-muted obs-rule-reason">
+                  {b.rank != null ? `Rank #${b.rank}` : null}
+                  {b.rank != null && b.role ? " · " : null}
+                  {b.role ? `role=${b.role}` : null}
+                  {b.priority != null ? ` · priority=${b.priority}` : null}
+                </p>
+              ) : null}
               {b.why ? <p className="detail-muted obs-rule-reason">{b.why}</p> : null}
             </div>
           ))}

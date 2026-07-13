@@ -164,25 +164,107 @@ def _planet_house_map(execution: dict[str, Any]) -> dict[str, set[int]]:
     return out
 
 
+def _shadbala_pct(row: dict[str, Any]) -> str:
+    sb = row.get("shadbala")
+    if not isinstance(sb, dict):
+        return ""
+    pct = sb.get("strength_pct")
+    if pct is None and sb.get("total") is not None and sb.get("required"):
+        try:
+            pct = round(100.0 * float(sb["total"]) / float(sb["required"]), 1)
+        except (TypeError, ValueError, ZeroDivisionError):
+            pct = None
+    return f"shadbala={pct}%" if pct is not None else ""
+
+
+def _planet_strength_detail(row: dict[str, Any]) -> tuple[str, int]:
+    """Human detail + priority score (higher = speak first; weak > strong)."""
+    dignity = str(row.get("dignity") or "").strip().lower() or "?"
+    score = int(row.get("strength_score") or 0)
+    parts = [
+        str(row.get("sign") or ""),
+        f"dignity={dignity}",
+        f"strength_score={score}",
+    ]
+    sb = _shadbala_pct(row)
+    if sb:
+        parts.append(sb)
+    if row.get("retrograde"):
+        parts.append("retrograde")
+    if row.get("combust"):
+        parts.append("combust")
+    # Weak first for health "kyun" answers
+    priority = 50 - (score * 12)
+    dig = dignity
+    if dig in ("debilitated", "debility", "enemy", "fall"):
+        priority += 40
+    elif dig in ("exalted", "exaltation", "own", "moolatrikona", "friend"):
+        priority -= 25
+    if row.get("combust"):
+        priority += 15
+    if row.get("retrograde"):
+        priority += 8
+    return " | ".join(p for p in parts if p), priority
+
+
+def _lord_strength_detail(st: dict[str, Any]) -> tuple[str, int]:
+    lord = str(st.get("lord") or "").strip()
+    lord_h = st.get("lord_house")
+    dig = str(st.get("lord_dignity") or "").strip().lower() or "?"
+    score = int(st.get("lord_strength_score") or 0)
+    parts = [lord]
+    if lord_h:
+        parts.append(f"in H{lord_h}")
+    parts.append(f"dignity={dig}")
+    parts.append(f"strength_score={score}")
+    if st.get("lord_in_dusthana"):
+        parts.append("lord_in_dusthana")
+    sb = st.get("lord_shadbala")
+    if isinstance(sb, dict) and sb.get("strength_pct") is not None:
+        parts.append(f"shadbala={sb.get('strength_pct')}%")
+    priority = 50 - (score * 12)
+    if dig in ("debilitated", "debility", "enemy", "fall"):
+        priority += 40
+    elif dig in ("exalted", "exaltation", "own", "moolatrikona", "friend"):
+        priority -= 25
+    if st.get("lord_in_dusthana"):
+        priority += 30
+    return " | ".join(str(p) for p in parts if p), priority
+
+
 def question_relevant_blocks_from_execution(
     question: str,
     execution: dict[str, Any],
-) -> tuple[str, str, list[dict[str, str]]]:
+) -> tuple[str, str, list[dict[str, Any]]]:
     """
-    Question-specific blocks that EXIST in Engine Execution only.
-    LLM still gets full EE; this list is the admin/telemetry focus set.
+    Question-specific blocks that EXIST in Engine Execution only,
+    enriched with dignity/strength and sorted weak-first for LLM priority.
     """
     focus = classify_health_question_focus(question)
     want = _FOCUS_WANT.get(focus) or _FOCUS_WANT["general_health"]
     label = str(want["label"])
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def add(block_id: str, block_label: str, why: str, detail: str = "") -> None:
+    def add(
+        block_id: str,
+        block_label: str,
+        why: str,
+        detail: str = "",
+        *,
+        priority: int = 0,
+        role: str = "neutral",
+    ) -> None:
         if block_id in seen:
             return
         seen.add(block_id)
-        row = {"id": block_id, "label": block_label, "why": why}
+        row: dict[str, Any] = {
+            "id": block_id,
+            "label": block_label,
+            "why": why,
+            "priority": int(priority),
+            "role": role,
+        }
         if detail:
             row["detail"] = detail
         out.append(row)
@@ -198,14 +280,15 @@ def question_relevant_blocks_from_execution(
             st = lords.get(hk)
             if not isinstance(st, dict):
                 continue
-            lord = str(st.get("lord") or "").strip()
-            lord_h = st.get("lord_house")
-            detail = f"{lord}" + (f" in H{lord_h}" if lord_h else "")
+            detail, pr = _lord_strength_detail(st)
+            role = "weak" if pr >= 60 else ("strong" if pr <= 20 else "neutral")
             add(
                 f"{chart_key}.house_lords.{hk}",
                 f"{prefix} · {hk.upper()} lord",
-                f"Question focus={focus}; present in EE",
+                f"Question focus={focus}; lord dignity/strength from EE",
                 detail,
+                priority=pr + 10,
+                role=role,
             )
 
         planets = chart.get("planets") if isinstance(chart.get("planets"), list) else []
@@ -219,11 +302,15 @@ def question_relevant_blocks_from_execution(
             if not name:
                 continue
             if house in want_houses or name.lower() in want_planets:
+                detail, pr = _planet_strength_detail(row)
+                role = "weak" if pr >= 60 else ("strong" if pr <= 20 else "neutral")
                 add(
                     f"{chart_key}.planet.{name}.H{house}",
                     f"{prefix} · {name} in H{house}",
-                    f"Question focus={focus}; planet placement in EE",
-                    str(row.get("sign") or ""),
+                    f"Question focus={focus}; planet dignity/strength from EE",
+                    detail,
+                    priority=pr,
+                    role=role,
                 )
 
         for key in want.get("want_keys") or ():
@@ -231,16 +318,23 @@ def question_relevant_blocks_from_execution(
             if val is None or val == "" or val == [] or val == {}:
                 continue
             detail = ""
+            pr = 40
             if key == "afflictions" and isinstance(val, list):
                 detail = "; ".join(str(x) for x in val[:3])
+                pr = 70
             elif key == "health_houses" and isinstance(val, list):
                 hs = [str(r.get("house")) for r in val if isinstance(r, dict) and r.get("house")]
                 detail = "H" + ", H".join(hs) if hs else ""
+                pr = 45
+            elif key == "lagnesh" and isinstance(val, dict):
+                detail, pr = _lord_strength_detail(val)
             add(
                 f"{chart_key}.{key}",
                 f"{prefix} · {key}",
                 f"Question focus={focus}; present in EE",
                 detail,
+                priority=pr,
+                role="weak" if pr >= 60 else "neutral",
             )
 
         dims = chart.get("dimensions") if isinstance(chart.get("dimensions"), dict) else {}
@@ -248,15 +342,42 @@ def question_relevant_blocks_from_execution(
             if dim not in dims:
                 continue
             st = dims.get(dim) if isinstance(dims.get(dim), dict) else {}
-            detail = str(st.get("verdict") or st.get("reason") or "")[:100]
+            verdict = str(st.get("verdict") or "").upper()
+            detail = f"verdict={verdict}"
+            if st.get("reason"):
+                detail += f" | {str(st.get('reason'))[:80]}"
+            pr = 55 if verdict == "RED" else (45 if verdict == "YELLOW" else 25)
             add(
                 f"{chart_key}.dimensions.{dim}",
                 f"{prefix} · Dimension · {dim}",
-                f"Question focus={focus}; present in EE",
+                f"Question focus={focus}; dimension from EE",
                 detail,
+                priority=pr,
+                role="weak" if verdict in ("RED", "YELLOW") else "strong",
             )
 
+    out.sort(key=lambda b: (-int(b.get("priority") or 0), str(b.get("id") or "")))
+    for i, block in enumerate(out, start=1):
+        block["rank"] = i
     return focus, label, out
+
+
+def format_priority_facts_for_llm(blocks: list[dict[str, Any]], *, limit: int = 5) -> str:
+    """Compact ranked facts for narrator — weak / question-relevant first."""
+    if not blocks:
+        return ""
+    lines = [
+        "QUESTION_PRIORITY_FACTS (from Engine Execution only — use in this order):",
+        "Rules: #1 = main reason for this question; max 2–3 facts; weak/dignity pressure > exalted support;",
+        "do not invent planets outside this list; exalted/strong = support only, not illness claim.",
+    ]
+    for b in blocks[: max(1, limit)]:
+        rank = b.get("rank") or "?"
+        role = b.get("role") or "neutral"
+        lines.append(
+            f"#{rank} [{role}] {b.get('label')}: {b.get('detail') or b.get('why')}"
+        )
+    return "\n".join(lines)
 
 
 def used_blocks_from_execution(
@@ -385,6 +506,7 @@ def build_health_selected_blocks(
     used = used_blocks_from_execution(
         answer, pack, relevant_ids={b["id"] for b in relevant},
     )
+    priority_text = format_priority_facts_for_llm(relevant, limit=5)
 
     contract: dict[str, str] = {}
     for key in ("user_wants", "intent", "normalized_question", "question_type"):
@@ -393,9 +515,9 @@ def build_health_selected_blocks(
             contract[key] = val
 
     notes = [
-        "Source: Engine Execution only — no invented blocks.",
-        f"Question focus={focus}: showing specific EE keys for this ask (not full EE dump).",
-        "LLM still receives full D1/D9; this list is the question-relevant check set.",
+        "Source: Engine Execution only — dignity/strength included; ranked weak-first.",
+        f"Question focus={focus}: top facts are for LLM priority reading (not full EE dump).",
+        "LLM still receives full D1/D9; QUESTION_PRIORITY_FACTS tell pehle kya bolna.",
     ]
     if not relevant:
         notes.append("No matching question-relevant keys found inside Engine Execution.")
@@ -408,6 +530,7 @@ def build_health_selected_blocks(
         "available_blocks": relevant,
         "expected_blocks": relevant,
         "used_in_answer": used,
+        "priority_facts_for_llm": priority_text,
         "overlap_notes": notes,
         "contract": contract,
         "expected_block_ids": sorted({b["id"] for b in relevant}),

@@ -57,8 +57,10 @@ export interface ObservabilityHealthSelectedBlock {
 
 export interface ObservabilityHealthSelectedBlocks {
   applies?: boolean;
+  source?: string;
   focus?: string;
   focus_label?: string;
+  available_blocks?: ObservabilityHealthSelectedBlock[];
   expected_blocks?: ObservabilityHealthSelectedBlock[];
   used_in_answer?: {
     planets?: string[];

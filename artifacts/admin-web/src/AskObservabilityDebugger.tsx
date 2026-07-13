@@ -316,23 +316,23 @@ function HealthSelectedBlocksPanel({
     return <p className="detail-muted">Selected blocks error: {audit.error}</p>;
   }
 
-  const expected = audit.expected_blocks || [];
+  const expected = audit.available_blocks || audit.expected_blocks || [];
   const used = audit.used_in_answer?.blocks || [];
 
   return (
     <div className="obs-validator">
       <p className="detail-muted" style={{ marginBottom: 10 }}>
-        Focus: <strong>{audit.focus_label || audit.focus || "—"}</strong>
+        Focus: <strong>{audit.focus_label || audit.focus || "Engine Execution"}</strong>
         {" — "}
-        full HEALTH JSON bheja, LLM ne sawal ke hisaab se yeh blocks pick karne chahiye / answer me
-        yeh dikhe.
+        sirf Engine Execution (D1/D9) blocks. LLM poora pack padhta hai aur question ke hisaab se
+        khud pick karta hai.
       </p>
 
       <p className="detail-muted" style={{ margin: "8px 0 4px" }}>
-        <strong>Expected for this question</strong> (LLM should select)
+        <strong>Available in Engine Execution</strong> (LLM picks from these)
       </p>
       {expected.length === 0 ? (
-        <p className="detail-muted">—</p>
+        <p className="detail-muted">— (Engine Execution empty / missing)</p>
       ) : (
         <div className="obs-rule-decisions">
           {expected.map((b) => (
@@ -342,6 +342,7 @@ function HealthSelectedBlocksPanel({
                   <code>{b.id}</code> — {b.label}
                 </span>
               </div>
+              {b.detail ? <p className="detail-muted obs-rule-reason">{b.detail}</p> : null}
               {b.why ? <p className="detail-muted obs-rule-reason">{b.why}</p> : null}
             </div>
           ))}
@@ -349,7 +350,7 @@ function HealthSelectedBlocksPanel({
       )}
 
       <p className="detail-muted" style={{ margin: "12px 0 4px" }}>
-        <strong>Detected in final answer</strong> (what LLM used)
+        <strong>Matched in answer from Engine Execution</strong>
       </p>
       {used.length === 0 ? (
         <p className="detail-muted">—</p>

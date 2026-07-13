@@ -293,12 +293,14 @@ def run_health_llm_with_dna_judge(
     try:
         from .selected_blocks import build_health_selected_blocks
 
+        # Pass full meta (incl. checks.health_engine_execution) — blocks only from EE
         audit["selected_blocks"] = build_health_selected_blocks(
-            question, text, meta=contract,
+            question, text, meta=meta,
         )
     except Exception as exc:
         audit["selected_blocks"] = {
             "applies": True,
+            "source": "health_engine_execution",
             "error": str(exc)[:120],
         }
 

@@ -1331,19 +1331,32 @@ def _health_selected_blocks_section(
             else None
         )
     )
-    if isinstance(stored, dict) and stored.get("applies") and stored.get("expected_blocks"):
+    if isinstance(stored, dict) and stored.get("applies") and (
+        stored.get("available_blocks") or stored.get("expected_blocks")
+    ) and stored.get("source") == "health_engine_execution":
         return stored
-    meta: dict[str, Any] = {}
+    meta: dict[str, Any] = {
+        "checks": _merged_checks(ctx),
+    }
     for key in ("user_wants", "intent", "normalized_question", "question_type"):
         val = sm.get(key) if isinstance(sm, dict) else None
         if val not in (None, ""):
             meta[key] = val
+    execution = _dig(ctx, sm, key="health_engine_execution")
+    if not isinstance(execution, dict):
+        checks = meta.get("checks") if isinstance(meta.get("checks"), dict) else {}
+        execution = checks.get("health_engine_execution") if isinstance(checks, dict) else None
     try:
         from ask_health.selected_blocks import build_health_selected_blocks
 
-        return build_health_selected_blocks(question_text, answer_text, meta=meta)
+        return build_health_selected_blocks(
+            question_text,
+            answer_text,
+            meta=meta,
+            execution=execution if isinstance(execution, dict) else None,
+        )
     except Exception as exc:
-        return {"applies": True, "error": str(exc)[:120]}
+        return {"applies": True, "source": "health_engine_execution", "error": str(exc)[:120]}
 
 
 def _health_dna_judge_section(

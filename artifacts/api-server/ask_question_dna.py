@@ -139,6 +139,32 @@ DNA_EMOTIONS: tuple[str, ...] = (
 
 DNA_RISK_LEVELS: tuple[str, ...] = ("low", "medium", "high")
 
+DNA_ANSWER_STYLES: frozenset[str] = frozenset({
+    "short_2_3_lines",
+    "short_paragraph",
+    "detailed_explain",
+})
+
+DNA_ANSWER_STYLE_LABELS: dict[str, str] = {
+    "short_2_3_lines": "Short (2-3 lines)",
+    "short_paragraph": "Short paragraph (4-6 lines)",
+    "detailed_explain": "Detailed explanation",
+}
+
+DNA_ANSWER_STYLE_HINTS: dict[str, str] = {
+    "short_2_3_lines": "Exactly 2-3 short sentences; direct answer first; no extra sections.",
+    "short_paragraph": "One short paragraph, 4-6 sentences; direct answer first.",
+    "detailed_explain": "2-3 short paragraphs with explanation; stay on-topic.",
+}
+
+_HEALTH_OVERVIEW_Q_RX = re.compile(
+    r"(?ix)(health ke bare|health ke baare|meri sehat|mere health|overall health)"
+)
+_SURGERY_Q_RX = re.compile(r"(?ix)(operation|surgery|shastra[\s-]?kriya)")
+_OVERVIEW_PLAN_RX = re.compile(
+    r"(?ix)(general overview|overall health|without specific prediction|key health indicator)"
+)
+
 DNA_MODULES: tuple[str, ...] = (
     "D1", "D9", "D10", "D7", "DASHA", "TRANSIT", "KP", "ASHTAKAVARGA",
 )
@@ -162,6 +188,7 @@ def question_dna_routing_enabled() -> bool:
 _DOMAIN_ARCHETYPE_KEY: dict[str, str] = {
     "marriage": "mr_archetype",
     "love": "mr_archetype",
+    "relationship": "mr_archetype",
     "career": "career_archetype",
     "finance": "finance_archetype",
     "health": "health_archetype",
@@ -187,9 +214,14 @@ def resolve_engine_archetype_from_dna_item(item: dict[str, Any]) -> str | None:
     bucket = str(item.get("bucket") or "").strip().lower()
     if not domain or not bucket:
         return None
-    if domain == "love":
+    if domain in ("love", "relationship"):
         arch = str(item.get("engine_archetype") or "").strip().lower()
         return arch or map_love_bucket_to_mr(bucket)
+    if domain == "marriage":
+        if bucket == "marriage_timing":
+            return "general_mr"
+        arch = str(item.get("engine_archetype") or "").strip().lower()
+        return arch or bucket or None
     if domain in _DOMAIN_ARCHETYPE_KEY:
         return bucket
     return None
@@ -294,7 +326,7 @@ def apply_question_dna_to_routing(
         arch_key = _DOMAIN_ARCHETYPE_KEY.get(domain)
         if arch_key:
             admin[arch_key] = archetype
-        if domain in ("love", "marriage"):
+        if domain in ("love", "marriage", "relationship"):
             admin["mr_archetype"] = archetype
         admin["routed_archetype"] = archetype
 
@@ -310,7 +342,7 @@ def apply_question_dna_to_routing(
             arch_key = _DOMAIN_ARCHETYPE_KEY.get(domain)
             if arch_key:
                 llm_intent[arch_key] = archetype
-            if domain in ("love", "marriage"):
+            if domain in ("love", "marriage", "relationship"):
                 llm_intent["mr_archetype"] = archetype
         llm_intent["source"] = "question_dna"
         llm_intent["routing_override"] = "question_dna"
@@ -403,11 +435,19 @@ QUESTION_DNA_JSON_SCHEMA: dict = {
                     "is_followup":   {"type": "boolean"},
                     "followup_of":   {"type": "string"},
                     "confidence":    {"type": "number"},
+                    "user_wants":    {"type": "string"},
+                    "understanding_confidence": {"type": "number"},
+                    "answer_style":  {
+                        "type": "string",
+                        "enum": list(DNA_ANSWER_STYLES),
+                    },
+                    "answer_approach": {"type": "string"},
                 },
                 "required": [
                     "normalized_question", "domain", "bucket", "intent",
                     "subject", "target", "question_type", "timing", "tense",
                     "emotion", "risk", "confidence",
+                    "user_wants", "answer_style", "answer_approach",
                 ],
             },
         },
@@ -511,16 +551,16 @@ _ROUTING_PRIORITY_RULES = """ROUTING PRIORITY RULES (HIGHEST PRIORITY — overri
 _FEW_SHOTS = """EXAMPLES (input → output JSON):
 
 Q: "Kya mera boyfriend kisi aur ke saath flirt kar raha hai?"
-{"questions":[{"normalized_question":"Kya mera boyfriend kisi aur ke saath flirt kar raha hai?","domain":"love","bucket":"third_person_infidelity","intent":"partner flirting with someone else","subject":"boyfriend","target":"self_relationship","question_type":"current_state","timing":false,"tense":"present","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97}]}
+{"questions":[{"normalized_question":"Kya mera boyfriend kisi aur ke saath flirt kar raha hai?","domain":"love","bucket":"third_person_infidelity","intent":"partner flirting with someone else","subject":"boyfriend","target":"self_relationship","question_type":"current_state","timing":false,"tense":"present","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97,"user_wants":"User wants to know if her boyfriend is currently flirting with another person.","understanding_confidence":0.97,"answer_style":"short_2_3_lines","answer_approach":"Direct present-state read — say clearly whether flirting/third-person energy is active now, with 1-2 chart reasons; keep tone calm."}]}
 
 Q: "Kya mera boyfriend mujhe cheat karega?"
-{"questions":[{"normalized_question":"Kya mera boyfriend mujhe cheat karega?","domain":"love","bucket":"third_person_infidelity","intent":"cheating prediction for current boyfriend","subject":"boyfriend","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97}]}
+{"questions":[{"normalized_question":"Kya mera boyfriend mujhe cheat karega?","domain":"love","bucket":"third_person_infidelity","intent":"cheating prediction for current boyfriend","subject":"boyfriend","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97,"user_wants":"User wants to know if her boyfriend will cheat on her in the future.","understanding_confidence":0.97,"answer_style":"short_paragraph","answer_approach":"Cautious risk read — likelihood of cheating with supporting factors; avoid absolute yes/no unless chart is very clear."}]}
 
 Q: "Meri shaadi kab hogi?"
-{"questions":[{"normalized_question":"Meri shaadi kab hogi?","domain":"marriage","bucket":"general_mr","intent":"marriage timing for self","subject":"self","target":"self","question_type":"timing","timing":true,"tense":"future","emotion":"curiosity","risk":"low","is_followup":false,"followup_of":"","confidence":0.98}]}
+{"questions":[{"normalized_question":"Meri shaadi kab hogi?","domain":"marriage","bucket":"marriage_timing","intent":"marriage timing for self","subject":"self","target":"self","question_type":"timing","timing":true,"tense":"future","emotion":"curiosity","risk":"low","is_followup":false,"followup_of":"","confidence":0.98,"user_wants":"User wants to know when she will get married.","understanding_confidence":0.98,"answer_style":"short_paragraph","answer_approach":"Lead with marriage timing window (year/month range from dasha/transit), then 1-2 supporting chart factors."}]}
 
 History: user:"Meri shaadi kab hogi?" assistant:"2027 ka window..." — Q: "Exact month batao"
-{"questions":[{"normalized_question":"Meri shaadi kis month me hogi?","domain":"marriage","bucket":"general_mr","intent":"refine marriage timing to exact month","subject":"self","target":"self","question_type":"timing","timing":true,"tense":"future","emotion":"curiosity","risk":"low","is_followup":true,"followup_of":"Meri shaadi kab hogi?","confidence":0.95}]}
+{"questions":[{"normalized_question":"Meri shaadi kis month me hogi?","domain":"marriage","bucket":"marriage_timing","intent":"refine marriage timing to exact month","subject":"self","target":"self","question_type":"timing","timing":true,"tense":"future","emotion":"curiosity","risk":"low","is_followup":true,"followup_of":"Meri shaadi kab hogi?","confidence":0.95}]}
 
 History: user:"Kya mera partner loyal hai?" — Q: "Uska nature kaisa hai?"
 {"questions":[{"normalized_question":"Mere partner ka nature kaisa hai?","domain":"love","bucket":"partner_nature","intent":"partner personality/nature","subject":"partner","target":"subject_person","question_type":"personality","timing":false,"tense":"present","emotion":"curiosity","risk":"low","is_followup":true,"followup_of":"Kya mera partner loyal hai?","confidence":0.93}]}
@@ -624,6 +664,15 @@ KEY RULES:
 - Apply ROUTING PRIORITY RULES above before any generic bucket choice.
 - intent: one short free-text phrase describing EXACTLY what the user wants.
 - confidence: 0.0–1.0 for YOUR classification certainty.
+- user_wants: 1–2 plain-language sentences — FULL decode of what the user wants to
+  know (who/what/when/why). Not just the bucket label.
+- understanding_confidence: 0.0–1.0 — how confidently you understood the question
+  (may equal confidence when unambiguous; lower if typos/pronouns/multi-intent).
+- answer_style: short_2_3_lines | short_paragraph | detailed_explain — how long the
+  final answer should be (simple yes/no state → short_2_3_lines; timing/decision →
+  short_paragraph; why/how/explain → detailed_explain).
+- answer_approach: 1–2 sentences — HOW the answer LLM should respond (structure, tone,
+  what to lead with). Do NOT predict the astrological answer itself.
 
 {_FEW_SHOTS}
 {history_block}"""
@@ -656,6 +705,179 @@ def _coerce_confidence(value: Any) -> float:
     if c > 1.0:  # tolerate 0-100 style
         c = c / 100.0
     return max(0.0, min(1.0, c))
+
+
+def format_answer_style_display(style: str) -> str:
+    s = str(style or "").strip().lower().replace(" ", "_").replace("-", "_")
+    if not s:
+        return "—"
+    return DNA_ANSWER_STYLE_LABELS.get(s, s.replace("_", " ").title())
+
+
+def format_understanding_confidence(value: Any) -> str:
+    if value is None or value == "":
+        return "—"
+    conf = _coerce_confidence(value)
+    pct = int(round(conf * 100))
+    if conf >= 0.95:
+        level = "Very high"
+    elif conf >= 0.85:
+        level = "High"
+    elif conf >= 0.70:
+        level = "Moderate"
+    else:
+        level = "Low"
+    return f"{pct}% ({level} — question understood clearly)"
+
+
+def build_question_dna_narrator_rules(
+    llm_intent: dict[str, Any] | None,
+    *,
+    question: str = "",
+    health_validator: bool = False,
+) -> str:
+    """Narrator extra_rules from Question DNA — answer_style + answer_approach every ask."""
+    if not question_dna_enabled():
+        return ""
+    item = dna_primary_item(
+        llm_intent.get("question_dna") if isinstance(llm_intent, dict) else None
+    )
+    if not item:
+        return ""
+
+    style = str(item.get("answer_style") or "").strip()
+    plan = str(item.get("answer_approach") or "").strip()
+    wants = str(item.get("user_wants") or "").strip()
+
+    is_health_overview = bool(_HEALTH_OVERVIEW_Q_RX.search(question or ""))
+    if health_validator or is_health_overview:
+        try:
+            from ask_health.answer_validator import _is_general_health_overview_question
+
+            is_health_overview = is_health_overview or _is_general_health_overview_question(
+                question
+            )
+        except Exception:
+            pass
+        if is_health_overview:
+            plan = (
+                "Provide a general overview of health aspects based on the chart, "
+                "focusing on key health indicators without specific predictions or remedies."
+            )
+            style = style or "short_paragraph"
+            wants = wants or "User wants a general overview of their health."
+
+    if not (style or plan or wants):
+        return ""
+
+    if health_validator:
+        header = (
+            "=== QUESTION DNA (MUST follow every time — validator will reject mismatch) ==="
+        )
+    else:
+        header = (
+            "=== QUESTION DNA (MUST follow every time — overrides default length/style rules) ==="
+        )
+    lines: list[str] = [f"\n\n{header}"]
+    if wants:
+        lines.append(f"User wants: {wants}")
+    if style:
+        norm = style.strip().lower().replace(" ", "_").replace("-", "_")
+        label = format_answer_style_display(norm)
+        hint = DNA_ANSWER_STYLE_HINTS.get(norm, "")
+        lines.append(f"Answer Style: {norm} ({label})")
+        if hint:
+            lines.append(f"Length lock: {hint}")
+    if plan:
+        lines.append(f"LLM Answer Plan: {plan}")
+    if plan and _OVERVIEW_PLAN_RX.search(plan):
+        lines.append(
+            "GENERAL OVERVIEW MODE (strict): soft paragraph only — overall health foundation, "
+            "stress/energy/digestion themes, healthy routine + sleep + exercise. "
+            "NO vitality score /100, NO planet+ghar list, NO H1/H8 jargon, NO remedies. "
+            "End with: long-term tendencies only, not medical diagnosis."
+        )
+    if _SURGERY_Q_RX.search(question or ""):
+        lines.append(
+            "SURGERY RISK MODE (strict): answer probability only, never certainty. "
+            "No date/month/year/muhurat. Use HEALTH_ENGINE_EXECUTION_JSON for one natural "
+            "chart proof if a risk tendency is mentioned. Always include doctor/surgeon "
+            "clearance advice and say this is not medical diagnosis."
+        )
+    lines.append(
+        "BINDING: Final answer MUST match Answer Style length AND follow LLM Answer Plan "
+        "structure. Do NOT use a longer or different format than Answer Style specifies."
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _coerce_answer_style(
+    value: Any,
+    *,
+    question_type: str,
+    timing: bool,
+    is_followup: bool,
+) -> str:
+    s = str(value or "").strip().lower().replace(" ", "_").replace("-", "_")
+    if s in DNA_ANSWER_STYLES:
+        return s
+    if question_type in ("explanation", "cause", "chart_fact"):
+        return "detailed_explain"
+    if question_type in ("decision", "compatibility", "verification") or timing:
+        return "short_paragraph"
+    if question_type in ("current_state", "risk", "prediction") and not timing:
+        return "short_2_3_lines"
+    if is_followup:
+        return "short_2_3_lines"
+    return "short_paragraph"
+
+
+def _derive_user_wants(item: dict[str, Any], *, intent: str, normalized_question: str) -> str:
+    raw = str(item.get("user_wants") or "").strip()[:400]
+    if raw:
+        return raw
+    if intent:
+        return f"User wants to know: {intent}"
+    if normalized_question:
+        return f"User wants to know: {normalized_question}"
+    return "User question could not be fully decoded."
+
+
+def _derive_answer_approach(
+    item: dict[str, Any],
+    *,
+    domain: str,
+    question_type: str,
+    timing: bool,
+    intent: str,
+    risk: str,
+) -> str:
+    raw = str(item.get("answer_approach") or "").strip()[:400]
+    if raw:
+        return raw
+    parts: list[str] = []
+    if domain == "health":
+        parts.append(
+            "Use D1/D9 health chart JSON — plain language, supportive tone; "
+            "no disease diagnosis or cure guarantees."
+        )
+    else:
+        parts.append("Answer from chart evidence for the routed engine/archetype.")
+    if timing:
+        parts.append("Lead with timing window (dasha/transit), then brief supporting reason.")
+    elif question_type == "decision":
+        parts.append("Balanced guidance — avoid absolute yes/no unless chart is very clear.")
+    elif question_type == "current_state":
+        parts.append("Direct present-state read — what is happening now.")
+    elif question_type == "risk":
+        parts.append("Acknowledge emotional sensitivity; cautious wording.")
+    elif question_type in ("explanation", "cause"):
+        parts.append("Explain why/how with 2–4 supporting chart factors.")
+    else:
+        parts.append(f"Focus on: {intent or 'user intent'}.")
+    if risk == "high":
+        parts.append("Keep tone gentle and non-alarmist.")
+    return " ".join(parts)
 
 
 def validate_question_dna_item(raw: Any, original_question: str = "") -> dict:
@@ -713,11 +935,39 @@ def validate_question_dna_item(raw: Any, original_question: str = "") -> dict:
     if qtype in ("prediction", "risk", "compatibility") and tense == "unspecified":
         tense = "future"
 
+    if domain == "marriage" and timing and bucket == "general_mr":
+        bucket = "marriage_timing"
+
     confidence = _coerce_confidence(item.get("confidence"))
     if coercions:
         confidence = max(0.0, confidence - _CONF_PENALTY * coercions)
 
     nq = str(item.get("normalized_question") or "").strip() or (original_question or "").strip()
+    intent = str(item.get("intent") or "").strip()[:200]
+    is_followup = bool(item.get("is_followup"))
+
+    if item.get("understanding_confidence") is not None:
+        understanding_confidence = _coerce_confidence(item.get("understanding_confidence"))
+    else:
+        understanding_confidence = confidence
+    if coercions:
+        understanding_confidence = max(0.0, understanding_confidence - _CONF_PENALTY * coercions)
+
+    user_wants = _derive_user_wants(item, intent=intent, normalized_question=nq)
+    answer_style = _coerce_answer_style(
+        item.get("answer_style"),
+        question_type=qtype,
+        timing=timing,
+        is_followup=is_followup,
+    )
+    answer_approach = _derive_answer_approach(
+        item,
+        domain=domain,
+        question_type=qtype,
+        timing=timing,
+        intent=intent,
+        risk=risk,
+    )
 
     engine_archetype = map_love_bucket_to_mr(bucket) if domain == "love" else None
     bucket_match_score, bucket_match_confidence = derive_bucket_match(
@@ -736,7 +986,7 @@ def validate_question_dna_item(raw: Any, original_question: str = "") -> dict:
         "bucket_coerced": bucket_coerced,
         "bucket_match_score": bucket_match_score,
         "bucket_match_confidence": bucket_match_confidence,
-        "intent": str(item.get("intent") or "").strip()[:200],
+        "intent": intent,
         "subject": subject,
         "target": target,
         "question_type": qtype,
@@ -744,9 +994,13 @@ def validate_question_dna_item(raw: Any, original_question: str = "") -> dict:
         "tense": tense,
         "emotion": emotion,
         "risk": risk,
-        "is_followup": bool(item.get("is_followup")),
+        "is_followup": is_followup,
         "followup_of": str(item.get("followup_of") or "").strip()[:300],
         "confidence": round(confidence, 3),
+        "user_wants": user_wants,
+        "understanding_confidence": round(understanding_confidence, 3),
+        "answer_style": answer_style,
+        "answer_approach": answer_approach,
         "required_modules": derive_required_modules(domain, bucket, timing=timing, tense=tense),
         "coercions": coercions,
     }

@@ -7,6 +7,7 @@ from ask_question_dna import (
     DNA_BUCKETS_BY_DOMAIN,
     DNA_DEFAULT_BUCKET,
     DNA_DOMAINS,
+    build_question_dna_narrator_rules,
     derive_required_modules,
     validate_question_dna,
     validate_question_dna_item,
@@ -43,8 +44,9 @@ class TaxonomyConsistencyTests(unittest.TestCase):
         # Love bucket enum is NOT dumped in prompt
         self.assertNotIn("trust_loyalty, love_feelings, partner_nature", p)
         # Few-shots present
-        self.assertIn("cheat karega", p)
-        self.assertIn("Exact month", p)
+        self.assertIn("user_wants", p)
+        self.assertIn("answer_style", p)
+        self.assertIn("answer_approach", p)
 
 
 class ValidationTests(unittest.TestCase):
@@ -70,6 +72,44 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(item["subject"], "boyfriend")
         self.assertEqual(item["coercions"], 0)
         self.assertAlmostEqual(item["confidence"], 0.97)
+
+    def test_llm_understanding_fields_validated(self):
+        item = validate_question_dna_item({
+            "normalized_question": "Meri health kaisi rahegi?",
+            "domain": "health",
+            "bucket": "general_health",
+            "intent": "overall health outlook",
+            "subject": "self",
+            "target": "self",
+            "question_type": "prediction",
+            "timing": False,
+            "tense": "future",
+            "emotion": "curiosity",
+            "risk": "low",
+            "confidence": 0.92,
+            "user_wants": "User wants to know how her overall health will be.",
+            "understanding_confidence": 0.94,
+            "answer_style": "short_paragraph",
+            "answer_approach": "Use D1/D9 health chart — supportive general wellness tone.",
+        })
+        self.assertIn("User wants to know", item["user_wants"])
+        self.assertAlmostEqual(item["understanding_confidence"], 0.94)
+        self.assertEqual(item["answer_style"], "short_paragraph")
+        self.assertIn("D1/D9", item["answer_approach"])
+
+    def test_llm_understanding_fields_derived_when_missing(self):
+        item = validate_question_dna_item({
+            "domain": "love",
+            "bucket": "third_person_infidelity",
+            "intent": "partner cheating check",
+            "question_type": "current_state",
+            "timing": False,
+            "confidence": 0.9,
+        })
+        self.assertIn("partner cheating", item["user_wants"])
+        self.assertAlmostEqual(item["understanding_confidence"], 0.9)
+        self.assertEqual(item["answer_style"], "short_2_3_lines")
+        self.assertIn("present-state", item["answer_approach"].lower())
 
     def test_invented_bucket_coerced_to_domain_default(self):
         item = validate_question_dna_item({
@@ -248,6 +288,54 @@ class DnaRoutingTests(unittest.TestCase):
         applied = apply_question_dna_to_routing("some q", admin, dna)
         self.assertFalse(applied)
         self.assertEqual(admin["mr_archetype"], "partner_nature")
+
+
+class NarratorRulesTests(unittest.TestCase):
+    def test_builds_rules_for_love_question(self):
+        dna = validate_question_dna({
+            "questions": [{
+                "normalized_question": "Kya mera boyfriend cheat kar raha hai?",
+                "domain": "love",
+                "bucket": "third_person_infidelity",
+                "intent": "cheating check",
+                "question_type": "current_state",
+                "timing": False,
+                "confidence": 0.95,
+                "user_wants": "User wants to know if boyfriend is cheating now.",
+                "answer_style": "short_2_3_lines",
+                "answer_approach": "Direct present-state read with 1-2 chart reasons.",
+            }],
+        })
+        rules = build_question_dna_narrator_rules(
+            {"question_dna": dna},
+            question="Kya mera boyfriend cheat kar raha hai?",
+        )
+        self.assertIn("MUST follow every time", rules)
+        self.assertIn("short_2_3_lines", rules)
+        self.assertIn("LLM Answer Plan", rules)
+        self.assertIn("Direct present-state read", rules)
+        self.assertIn("overrides default length/style rules", rules)
+
+    def test_health_validator_note_when_enabled(self):
+        dna = validate_question_dna({
+            "questions": [{
+                "domain": "health",
+                "bucket": "general_health",
+                "answer_style": "short_paragraph",
+                "answer_approach": "Soft overview from chart JSON.",
+                "user_wants": "User wants health overview.",
+                "confidence": 0.9,
+            }],
+        })
+        rules = build_question_dna_narrator_rules(
+            {"question_dna": dna},
+            question="Meri health kaisi hai?",
+            health_validator=True,
+        )
+        self.assertIn("validator will reject mismatch", rules)
+
+    def test_empty_when_no_dna(self):
+        self.assertEqual(build_question_dna_narrator_rules(None), "")
 
 
 class FallbackTests(unittest.TestCase):

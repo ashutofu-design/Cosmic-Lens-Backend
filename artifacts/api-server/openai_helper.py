@@ -7930,17 +7930,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
                     _ni_checks = dict(_health_engine_result.checks or {})
                     _ni_checks["narrator_input"] = {
-                        "archetype": _health_engine_result.archetype,
-                        "verdict": _health_engine_result.verdict,
-                        "confidence": _health_engine_result.confidence,
-                        "evidence": list(_health_engine_result.evidence or []),
-                        "evidence_positive": list(_health_engine_result.evidence_positive or []),
-                        "evidence_negative": list(_health_engine_result.evidence_negative or []),
-                        "answer_plan": _health_engine_result.answer_plan,
-                        "ignore": list(_health_engine_result.ignore or []),
-                        "d1_health_facts": _ni_checks.get("d1_health_facts") or {},
-                        "d9_health_facts": _ni_checks.get("d9_health_facts") or {},
-                        "health_engine_execution": _ni_checks.get("health_engine_execution") or {},
+                        "question": question or "",
+                        "d1": (_ni_checks.get("health_engine_execution") or {}).get("d1")
+                        or _ni_checks.get("d1_health_facts")
+                        or {},
+                        "d9": (_ni_checks.get("health_engine_execution") or {}).get("d9")
+                        or _ni_checks.get("d9_health_facts")
+                        or {},
                     }
                     _health_engine_result.checks = _ni_checks
                     if isinstance(dcr_love_meta, dict):
@@ -8372,17 +8368,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
             _ni_checks = dict(_health_engine_result.checks or {})
             _ni_checks["narrator_input"] = {
-                "archetype": _health_engine_result.archetype,
-                "verdict": _health_engine_result.verdict,
-                "confidence": _health_engine_result.confidence,
-                "evidence": list(_health_engine_result.evidence or []),
-                "evidence_positive": list(_health_engine_result.evidence_positive or []),
-                "evidence_negative": list(_health_engine_result.evidence_negative or []),
-                "answer_plan": _health_engine_result.answer_plan,
-                "ignore": list(_health_engine_result.ignore or []),
-                "d1_health_facts": _ni_checks.get("d1_health_facts") or {},
-                "d9_health_facts": _ni_checks.get("d9_health_facts") or {},
-                "health_engine_execution": _ni_checks.get("health_engine_execution") or {},
+                "question": question or "",
+                "d1": (_ni_checks.get("health_engine_execution") or {}).get("d1")
+                or _ni_checks.get("d1_health_facts")
+                or {},
+                "d9": (_ni_checks.get("health_engine_execution") or {}).get("d9")
+                or _ni_checks.get("d9_health_facts")
+                or {},
             }
             _health_engine_result.checks = _ni_checks
             dcr_love_meta = {
@@ -9671,6 +9663,24 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             f"{_user_intent_hint}\n"
         )
 
+    _dna_narrator_rules = ""
+    try:
+        from ask_question_dna import build_question_dna_narrator_rules
+
+        _is_health_slice = (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "health_engine_v1"
+        )
+        _dna_narrator_rules = build_question_dna_narrator_rules(
+            _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+            question=question or "",
+            health_validator=_is_health_slice,
+        )
+    except Exception as _dna_rules_exc:
+        print(f"[raw_passthrough] question_dna narrator rules skipped: {_dna_rules_exc}", flush=True)
+    if _dna_narrator_rules:
+        extra_rules += _dna_narrator_rules
+
     # Open relationship question with no dedicated engine — narrator reads the
     # full D1 chart facts and answers the exact question itself.
     _open_chart_qa = False
@@ -9717,6 +9727,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     user_intent=_user_intent_hint,
                     open_chart_qa=_open_chart_qa,
                     concise=_batch_concise,
+                    question=question or "",
                 )
             print(
                 f"[raw_passthrough] MR_NARRATOR archetype={_archetype_mr} "
@@ -9783,6 +9794,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     user_intent=_user_intent_hint,
                     open_chart_qa=_open_chart_qa,
                     concise=_is_batch_concise_mode_safe(),
+                    question=question or "",
                 )
         else:
             system_prompt = _build_universal_ask_system_prompt(
@@ -9794,10 +9806,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 is_decision=False,
                 is_finance=False,
                 reply_lang=eff_lang,
-                extra_rules="",
+                extra_rules=extra_rules or _dna_narrator_rules,
                 dcr_love_rule="",
                 is_partner_nature=_is_pn_minimal,
             )
+
+    if _dna_narrator_rules and _mr_engine_narrator and _dna_narrator_rules not in system_prompt:
+        system_prompt += _dna_narrator_rules
 
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
@@ -10240,15 +10255,44 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     resp = None
     _use_health_validator = (
         isinstance(dcr_love_meta, dict)
-        and dcr_love_meta.get("slice") == "health_engine_v1"
-        and not (
-            _health_engine_result is not None
-            and getattr(_health_engine_result, "skip_llm", False)
-        )
+        and str(dcr_love_meta.get("slice") or "") == "health_engine_v1"
+        and not bool(dcr_love_meta.get("skip_llm"))
     )
     try:
         if _use_health_validator:
             from ask_health.answer_validator import run_health_llm_validator_loop
+
+            _health_meta = (
+                dict(dcr_love_meta) if isinstance(dcr_love_meta, dict) else {}
+            )
+            if isinstance(_llm_intent_admin, dict):
+                _qd = _llm_intent_admin.get("question_dna")
+                if isinstance(_qd, dict):
+                    _health_meta["question_dna"] = _qd
+                    _qs = _qd.get("questions")
+                    if isinstance(_qs, list) and _qs and isinstance(_qs[0], dict):
+                        _q0 = _qs[0]
+                        for _dk in (
+                            "answer_style",
+                            "answer_approach",
+                            "user_wants",
+                            "intent",
+                            "question_type",
+                            "normalized_question",
+                        ):
+                            if _q0.get(_dk) not in (None, ""):
+                                _health_meta[_dk] = _q0[_dk]
+
+            if re.search(
+                r"(?ix)(health ke bare|health ke baare|meri sehat|mere health|overall health)",
+                question or "",
+            ):
+                _health_meta["answer_approach"] = (
+                    "Provide a general overview of health aspects based on the chart, "
+                    "focusing on key health indicators without specific predictions or remedies."
+                )
+                _health_meta.setdefault("answer_style", "short_paragraph")
+                _health_meta.setdefault("user_wants", "User wants a general overview of their health.")
 
             _llm_raw_text, _health_validator_audit = run_health_llm_validator_loop(
                 client,
@@ -10256,12 +10300,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 messages=_llm_messages,
                 max_tokens=_max_tok,
                 question=question or "",
-                meta=dcr_love_meta,
+                meta=_health_meta,
             )
             if not _llm_raw_text:
                 print(
-                    f"[raw_passthrough] HEALTH_VALIDATOR empty "
-                    f"issues={_health_validator_audit.get('issues')}",
+                    f"[raw_passthrough] HEALTH_VALIDATOR blocked "
+                    f"issues={_health_validator_audit.get('final_issues') or _health_validator_audit.get('issues')}",
                     flush=True,
                 )
                 return {
@@ -10496,30 +10540,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _fag:
                 print(f"[raw_passthrough] FINANCE_ANSWER_GUARD skipped: {_fag}", flush=True)
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "health_engine_v1":
-            try:
-                from ask_health.answer_guard import guard_health_answer
-
-                text, _hguard = guard_health_answer(
-                    question or "",
-                    text,
-                    dcr_love_meta,
-                )
-                text = _strip_decision_template_labels(text)
-                if _hguard.get("repaired"):
-                    print(
-                        f"[raw_passthrough] HEALTH_ANSWER_GUARD repaired "
-                        f"issues={_hguard.get('issues')}",
-                        flush=True,
-                    )
-                elif not _hguard.get("ok"):
-                    print(
-                        f"[raw_passthrough] HEALTH_ANSWER_GUARD warn "
-                        f"issues={_hguard.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _hag:
-                print(f"[raw_passthrough] HEALTH_ANSWER_GUARD skipped: {_hag}", flush=True)
+        # health answer_guard disabled — only health_engine_execution_v1 D1/D9 → LLM
         # ── Execution Gatekeeper — final answer must match engine verdict ──
         if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice", "").endswith("_engine_v1"):
             try:

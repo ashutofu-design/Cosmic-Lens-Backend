@@ -49,6 +49,29 @@ def is_love_relationship_context(text: str) -> bool:
     return bool(_LOVE_CTX_RX.search(text or ""))
 
 
+_TRAVEL_CTX_RX = re.compile(
+    r"(?ix)\b("
+    r"travel|yatra|trip|tour|safar|safar\s+pe|safar\s+me|"
+    r"videsh|abroad|foreign|overseas|international|flight|journey"
+    r")\b"
+)
+
+
+def should_prioritize_health_over_travel(question: str) -> bool:
+    """Travel-context health Qs (why sick when travelling) — health engine, not travel."""
+    q = (question or "").strip()
+    if not q or not _TRAVEL_CTX_RX.search(q):
+        return False
+    try:
+        from ask_health.health_registry import _has_real_health_intent, is_health_static_question
+
+        if not _has_real_health_intent(q):
+            return False
+        return bool(is_health_static_question(q))
+    except Exception:
+        return False
+
+
 def should_suppress_health_for_question(question: str, *, llm_domain: str) -> bool:
     """Emotional 'dil' / love reciprocity — not cardio health."""
     q = (question or "").strip()

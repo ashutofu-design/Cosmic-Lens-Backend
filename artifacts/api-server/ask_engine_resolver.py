@@ -9,6 +9,7 @@ from engine_collision_registry import (
     DOMAIN_MUTEX_CLEAR,
     DOMAIN_PRIMARY_ENGINE,
     should_force_mr_for_question,
+    should_prioritize_health_over_travel,
     should_suppress_health_for_question,
 )
 
@@ -168,6 +169,9 @@ def resolve_static_engine_route(
     domain = _llm_domain(llm_intent, llm_intent_admin)
     archetype = _llm_archetype(llm_intent, llm_intent_admin)
 
+    if should_prioritize_health_over_travel(question or ""):
+        domain = "health"
+
     try:
         from ask_routing_policy import should_bypass_static_engines_for_direct_llm
 
@@ -202,6 +206,9 @@ def resolve_static_engine_route(
         return dict(flags), route
 
     normalized = {k: bool(flags.get(k)) for k in ALL_FLAG_KEYS}
+    if should_prioritize_health_over_travel(question or ""):
+        normalized["health"] = True
+        normalized["travel"] = False
     mutexed, suppressed = _apply_domain_mutex(
         normalized,
         domain=domain,

@@ -163,5 +163,18 @@ class EngineResolverGoldenTests(unittest.TestCase):
                 res = run_mr_static_engine(k, q, wants_explain=False)
                 self.assertEqual(res.archetype, "general_mr")
 
+    def test_travel_context_health_beats_travel_engine(self):
+        q = "me jab bhi travel karta hun koi na koi health issue aa jaata he aisa kyun"
+        final, route, active = self._resolve(
+            q,
+            flags={"health": True, "travel": True},
+            domain="travel",
+            archetype="general_travel",
+        )
+        self.assertEqual(active, ["health"], active)
+        self.assertEqual(route.engine_key, "health")
+        self.assertFalse(final["travel"])
+
+
 if __name__ == "__main__":
     unittest.main()

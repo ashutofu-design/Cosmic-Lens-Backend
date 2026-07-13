@@ -105,6 +105,8 @@ FAIL PRIMARY if:
   when user asked a specific cause like travel+health only).
 - Answer is a generic health overview when user asked a specific why/how/when question.
 - Answer avoids the core question or answers a different question.
+- For non-overview health asks: answer has NO chart proof at all (no planet/house/dignity/affliction
+  cite tied to the reason). Fail with issue "missing_question_proof". Overview soft answers OK without cites.
 
 === SECONDARY — style and plan ===
 REQUIRED ANSWER STYLE: {style or "—"}
@@ -261,7 +263,7 @@ def run_health_llm_with_dna_judge(
     question: str,
     meta: dict[str, Any],
 ) -> tuple[str, dict[str, Any]]:
-    """Single narrator LLM call + post-answer DNA judge (observability only — never blocks)."""
+    """Narrator LLM + DNA judge. Soft one-shot rewrite if question proof missing; never hard-blocks."""
     from .answer_guard import guard_health_answer
     from .answer_validator import _enrich_dna_contract
 
@@ -317,6 +319,50 @@ def run_health_llm_with_dna_judge(
         audit["issues"] = list(j_issues)
         if fix_hint:
             audit["fix_hint"] = fix_hint
+
+        # Soft one-shot rewrite when proof for the asked question is missing.
+        # Still never hard-blocks — if rewrite fails, original (or rewritten) answer releases.
+        issues_l = [str(x).lower() for x in j_issues]
+        needs_proof = (not ok_j) and any(
+            "missing_question_proof" in x or "missing_chart_proof" in x or "no chart proof" in x
+            for x in issues_l
+        )
+        if needs_proof:
+            hint = (fix_hint or "").strip() or (
+                "Add 1 natural chart proof for the asked question: cite #1 QUESTION_PRIORITY_FACTS "
+                "(planet + house/dignity). Keep answer short; no planet dump."
+            )
+            retry_msgs = list(messages) + [
+                {"role": "assistant", "content": text},
+                {
+                    "role": "user",
+                    "content": (
+                        "Rewrite: user ke sawal ka 1 natural chart proof add karo "
+                        f"(planet + ghar/dignity). Fix: {hint}"
+                    ),
+                },
+            ]
+            try:
+                resp2 = client.chat.completions.create(
+                    model=model, messages=retry_msgs, max_tokens=max_tokens,
+                )
+                text2 = (resp2.choices[0].message.content or "").strip()
+                if text2:
+                    text2, guard_meta2 = guard_health_answer(question, text2, meta)
+                    audit["guard"] = guard_meta2
+                    text = text2
+                    audit["attempts"] = 2
+                    audit["proof_retry"] = True
+                    ok2, iss2, hint2, j2 = llm_judge_health_dna_alignment(
+                        client, model, question=question, answer=text, contract=contract,
+                    )
+                    audit["dna_judge"] = j2
+                    audit["passed"] = ok2 if j2.get("passed") is not None else True
+                    audit["issues"] = list(iss2)
+                    if hint2:
+                        audit["fix_hint"] = hint2
+            except Exception as exc:
+                audit["proof_retry_error"] = str(exc)[:120]
     else:
         audit["dna_judge"] = {"enabled": False, "skipped": "ASK_HEALTH_DNA_JUDGE=0"}
 

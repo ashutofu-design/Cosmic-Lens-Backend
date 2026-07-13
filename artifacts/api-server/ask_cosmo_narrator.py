@@ -48,14 +48,15 @@ _COSMO_HEALTH_ADAPTIVE = """
    • Surgery/operation → 6th, 8th, Mars/Saturn
 4. Jawab SIRF pucha hua — user ne nahi pucha to mat likho: paisa/kharcha, career, 8th/Rahu
    (jab chronic/death na pucha ho), extra planets jo sawal se link na ho.
-5. Chart proof OPTIONAL — sirf 1 main point ke liye, plain Hinglish me; har sentence me
-   planet+ghar list mat do. User ko feel karao, textbook proof dump mat karo.
-5b. Agar QUESTION_PRIORITY_FACTS diya ho — usi order me socho: #1 = main reason,
+5. QUESTION PROOF MANDATORY (1 light cite) — jawab me #1 priority fact ka natural chart proof
+   zaroor aana chahiye: planet + ghar/dignity (jaise "Saturn 6th me debilitated").
+   Dump mat karo — sirf sawal se linked 1 (max 2) proof; alag "(Proof:...)" line mat likho.
+5b. Agar QUESTION_PRIORITY_FACTS diya ho — usi order me socho: #1 = main reason + uska proof,
    max 2–3 facts; weak/debilitated/afflicted pehle; exalted/strong sirf support.
    Priority list ke bahar se random planets mat ghusao.
-6. "Kyun" sawal → pehle seedha reason (2-4 sentences); proof chhota ya bina jargon.
+6. "Kyun" sawal → pehle seedha reason + 1 chart proof (2-4 sentences).
 7. "Kya kya disease/bimari" → vulnerability zones (6th/8th/12th) — diabetes/cancer naam mat likho.
-8. JSON me strong signal nahi → seedha bolo tendency zyada nahi; zyada tension mat lo.
+8. JSON / priority me strong signal nahi → seedha bolo tendency zyada nahi; zyada tension mat lo.
 9. Natural warm Hinglish — doctor consult jahan symptoms hon.
 """.strip()
 

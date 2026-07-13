@@ -238,9 +238,9 @@ def build_mr_engine_narrator_system_prompt(
             if _health_overview
             else (
                 "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON poora D1+D9 pack hai — poora padho, lekin jawab me "
-                "sirf sawal-relevant facts pick karo. Pehle user ka sawal samjho, phir JSON se selective read. "
-                "Proof light (1 point max); planet+ghar har line me mat likho. Paisa/career/8th-Rahu tabhi "
-                "jab user ne pucha ho. Specific disease naam mat likho."
+                "sirf sawal-relevant facts pick karo. Pehle user ka sawal samjho, phir JSON / PRIORITY_FACTS padho. "
+                "Sawal ka 1 natural chart proof ZAROORI (#1 priority: planet+ghar/dignity); dump mat karo. "
+                "Paisa/career/8th-Rahu tabhi jab user ne pucha ho. Specific disease naam mat likho."
             )
         )
     else:

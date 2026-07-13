@@ -368,14 +368,19 @@ def format_priority_facts_for_llm(blocks: list[dict[str, Any]], *, limit: int = 
         return ""
     lines = [
         "QUESTION_PRIORITY_FACTS (from Engine Execution only — use in this order):",
-        "Rules: #1 = main reason for this question; max 2–3 facts; weak/dignity pressure > exalted support;",
-        "do not invent planets outside this list; exalted/strong = support only, not illness claim.",
+        "Rules: #1 = main reason + MUST include its natural chart proof in the answer",
+        "(planet + house/dignity, e.g. Saturn 6th debilitated). Max 2–3 facts total.",
+        "Weak/dignity pressure > exalted support; exalted/strong = support only, not illness claim.",
+        "Do not invent planets outside this list; do not dump every fact.",
     ]
     for b in blocks[: max(1, limit)]:
         rank = b.get("rank") or "?"
         role = b.get("role") or "neutral"
+        proof_hint = ""
+        if rank == 1 or rank == "1":
+            proof_hint = " ← CITE THIS as proof"
         lines.append(
-            f"#{rank} [{role}] {b.get('label')}: {b.get('detail') or b.get('why')}"
+            f"#{rank} [{role}] {b.get('label')}: {b.get('detail') or b.get('why')}{proof_hint}"
         )
     return "\n".join(lines)
 

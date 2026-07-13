@@ -18,14 +18,7 @@ def _is_health_archetype(archetype: str) -> bool:
 
         return arch in HEALTH_ARCHETYPES
     except Exception:
-        return arch in {
-            "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
-            "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
-            "addiction_support", "reproductive_support", "general_health",
-            "digestive_health", "heart_blood_pressure", "cardio_health", "nervous_health",
-            "musculoskeletal_health", "skin_health", "endocrine_health", "respiratory_health",
-            "immune_health",
-        }
+        return arch in {"health_engine_execution_v1"}
 
 _MR_CONFIDENT_TONE = """
 TONE — confident chart reading (engine already decided; do NOT sound doubtful):
@@ -179,6 +172,7 @@ def build_mr_engine_narrator_system_prompt(
     user_intent: str = "",
     open_chart_qa: bool = False,
     concise: bool = False,
+    question: str = "",
 ) -> str:
     """Cosmo Ask narrator — expand engine facts into deep markdown Hinglish."""
     rl = (reply_lang or "hn").strip().lower()
@@ -227,14 +221,26 @@ def build_mr_engine_narrator_system_prompt(
         )
 
     if _is_health_archetype(arch):
+        try:
+            from ask_health.answer_validator import _is_general_health_overview_question
+
+            _health_overview = _is_general_health_overview_question(question)
+        except Exception:
+            _health_overview = False
         length_block = build_health_ask_length_block(
             wants_explain=wants_explain,
             extra_rules=extras,
+            overview_mode=_health_overview,
         )
         engine_lock = (
-            "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON poora D1+D9 pack hai — planets, health_houses, "
-            "afflictions, dimensions sab yahi se. Sawal samjho, JSON padho, planet+ghar proof ke saath "
-            "jawab do. 3 retry tak sudharo; specific disease naam mat likho; paisa/career tabhi jab user ne pucha ho."
+            "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON poora D1+D9 pack hai — overall tendency samjho. "
+            "Soft overview paragraph do; planet+ghar list mat do."
+            if _health_overview
+            else (
+                "HEALTH JSON: HEALTH_ENGINE_EXECUTION_JSON poora D1+D9 pack hai — planets, health_houses, "
+                "afflictions, dimensions sab yahi se. Sawal samjho, JSON padho, planet+ghar proof ke saath "
+                "jawab do. 3 retry tak sudharo; specific disease naam mat likho; paisa/career tabhi jab user ne pucha ho."
+            )
         )
     else:
         try:

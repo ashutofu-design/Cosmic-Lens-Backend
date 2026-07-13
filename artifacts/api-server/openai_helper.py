@@ -5239,6 +5239,17 @@ def _is_batch_concise_mode_safe() -> bool:
         return False
 
 
+def _build_mr_engine_narrator_system_prompt_safe(**kwargs) -> str:
+    """Drop kwargs older ask_mr.narrator builds do not accept (e.g. question)."""
+    from ask_mr.narrator import build_mr_engine_narrator_system_prompt
+    import inspect
+
+    sig = inspect.signature(build_mr_engine_narrator_system_prompt)
+    return build_mr_engine_narrator_system_prompt(
+        **{k: v for k, v in kwargs.items() if k in sig.parameters}
+    )
+
+
 def _attach_admin_llm_context(result: dict, **kwargs) -> dict:
     """Attach admin-only LLM debug payload (stripped before mobile response)."""
     if not isinstance(result, dict):
@@ -9101,6 +9112,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         if _m17_late is not None:
             return _m17_late
 
+    eff_lang = _resolve_response_lang(question, lang, None)
+
     # ── Execution Gatekeeper — block LLM when DNA/engine/narrator pipeline invalid ──
     if (
         not _direct_llm_bypass
@@ -9573,7 +9586,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         _topic_hint = ""
 
-    eff_lang = _resolve_response_lang(question, lang, None)
+    if "eff_lang" not in locals():
+        eff_lang = _resolve_response_lang(question, lang, None)
 
     dcr_love_rule = ""
     if (
@@ -9714,9 +9728,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 else:
                     raise ValueError("non-relationship mr archetype")
             except Exception:
-                from ask_mr.narrator import build_mr_engine_narrator_system_prompt
-
-                system_prompt = build_mr_engine_narrator_system_prompt(
+                system_prompt = _build_mr_engine_narrator_system_prompt_safe(
                     chart_text=chart_text,
                     reply_lang=eff_lang,
                     wants_explain=wants_explain,
@@ -9781,9 +9793,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 else:
                     raise ValueError("non-relationship mr archetype")
             except Exception:
-                from ask_mr.narrator import build_mr_engine_narrator_system_prompt
-
-                system_prompt = build_mr_engine_narrator_system_prompt(
+                system_prompt = _build_mr_engine_narrator_system_prompt_safe(
                     chart_text=chart_text or "(no engine facts)",
                     reply_lang=eff_lang,
                     wants_explain=wants_explain,

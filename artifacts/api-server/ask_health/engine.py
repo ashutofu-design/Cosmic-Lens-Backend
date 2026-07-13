@@ -53,7 +53,7 @@ def run_health_static_engine(
         return run_hard_guard(kundli, question, archetype=archetype, wants_explain=wants_explain)
 
     result = EngineResult(
-        archetype="health_engine_execution_v1",
+        archetype=archetype,
         verdict="",
         confidence="medium",
         word_budget=75 if not wants_explain else 120,
@@ -67,7 +67,7 @@ def run_health_static_engine(
         ignore=["exact death date", "suicide/self-harm encouragement"],
         checks={
             "slice_type": "health_engine_v1",
-            "archetype": "health_engine_execution_v1",
+            "archetype": archetype,
         },
     )
     return _attach_health_engine_execution(result, kundli)

@@ -7,7 +7,12 @@ import re
 from health_focus_routing import detect_hard_guard, is_health_question
 
 HEALTH_ARCHETYPES = frozenset({
+    "health_engine_execution_v1",
+    "health_chart",
+    "general_health",
     "overall_vitality",
+    "respiratory_health",
+    "immune_health",
     "chronic_tendency",
     "mental_stress",
     "surgery_risk_tone",
@@ -17,15 +22,7 @@ HEALTH_ARCHETYPES = frozenset({
     "parent_health",
     "addiction_support",
     "reproductive_support",
-    "digestive_health",
     "heart_blood_pressure",
-    "cardio_health",
-    "nervous_health",
-    "musculoskeletal_health",
-    "skin_health",
-    "endocrine_health",
-    "respiratory_health",
-    "immune_health",
     "refuse_diagnosis",
     "refuse_death",
     "refuse_cure_guarantee",
@@ -33,7 +30,6 @@ HEALTH_ARCHETYPES = frozenset({
     "refuse_timing_recovery",
     "refuse_surgery_muhurat",
     "crisis_redirect",
-    "general_health",
 })
 
 _HARD_GUARD_ARCH = {
@@ -344,13 +340,6 @@ def is_health_static_question(question: str) -> bool:
     if is_love_emotional_dil_question(q):
         return False
     try:
-        from .engines.heart_blood_pressure import detect_heart_blood_pressure_archetype
-
-        if detect_heart_blood_pressure_archetype(q):
-            return True
-    except Exception:
-        pass
-    try:
         from ask_children.timing_registry import is_children_timing_question  # type: ignore
 
         if is_children_timing_question(q):
@@ -427,67 +416,6 @@ def detect_health_archetype(question: str) -> str | None:
     if hard:
         return _HARD_GUARD_ARCH.get(hard)
 
-    if _REPRO_RX.search(q):
-        try:
-            from ask_children.timing_registry import is_children_timing_question  # type: ignore
-
-            if is_children_timing_question(q):
-                return None
-        except Exception:
-            pass
-        try:
-            from ask_children.children_registry import is_children_static_question
-
-            if is_children_static_question(q):
-                return None
-        except Exception:
-            pass
-        return "reproductive_support"
-    if _HEALTH_MEDICAL_RX.search(q) and re.search(
-        r"(?ix)\b(sperm|uterus|hormon|complication|diagnosis|test\s+result|medicine|treatment|hospital)\b",
-        q,
-    ) and re.search(
-        r"(?ix)\b(pregnan|fertility|infertil|garbh|conceive|santan|reproductive|sperm|uterus)\b",
-        q,
-    ):
-        return "reproductive_support"
-    if _PARENT_RX.search(q):
-        return "parent_health"
-    if _ADDICTION_RX.search(q):
-        return "addiction_support"
-    if _ACCIDENT_RX.search(q):
-        return "accident_risk"
-    if _RECOVERY_RX.search(q):
-        return "recovery_capacity"
-    # Heart/BP — dedicated engine before generic body-system detect
-    try:
-        from .engines.heart_blood_pressure import detect_heart_blood_pressure_archetype
-
-        if detect_heart_blood_pressure_archetype(q):
-            return "heart_blood_pressure"
-    except Exception:
-        pass
-    # Body-system subdomains (pet/breath etc.) before generic mental/chronic
-    try:
-        from .engines.system_health import detect_system_archetype
-
-        sys_arch = detect_system_archetype(q)
-        if sys_arch:
-            return sys_arch
-    except Exception:
-        pass
-    if _MENTAL_RX.search(q):
-        return "mental_stress"
-    if _ISSUE_NOW_RX.search(q):
-        return "general_health"
-    if _CHRONIC_RX.search(q):
-        return "chronic_tendency"
-    if _SURGERY_TONE_RX.search(q):
-        return "surgery_risk_tone"
-    if _PREVENT_RX.search(q):
-        return "preventive_risk"
-    if _GENERAL_RX.search(q):
-        return "general_health"
-    if _VITALITY_RX.search(q):
-        return "overall_vitality"
+    if is_health_question(q):
+        return "health_engine_execution_v1"
     return None

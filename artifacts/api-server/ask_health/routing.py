@@ -1,18 +1,13 @@
-"""Health archetype routing — question patterns beat LLM mis-routes."""
+"""Health routing — hard guards only; all other health Qs use D1/D9 chart JSON."""
 
 from __future__ import annotations
 
 from .classifier import classify_health_archetype
-from .health_registry import (
-    HEALTH_ARCHETYPES,
-    detect_health_archetype,
-    is_health_static_question,
-)
+from .health_registry import HEALTH_ARCHETYPES, is_health_static_question
 
 __all__ = [
     "HEALTH_ARCHETYPES",
     "classify_health_archetype",
-    "detect_health_archetype",
     "health_overrides_career",
     "is_health_static_question",
     "resolve_health_archetype",
@@ -20,30 +15,8 @@ __all__ = [
 
 
 def health_overrides_career(question: str) -> bool:
-    """Health subdomain Qs beat generic career keyword overlap (medical/problem/kundli)."""
-    q = (question or "").strip()
-    if not q:
-        return False
-    try:
-        from .engines.heart_blood_pressure import detect_heart_blood_pressure_archetype
-
-        if detect_heart_blood_pressure_archetype(q):
-            return True
-    except Exception:
-        pass
-    detected = detect_health_archetype(q)
-    if detected and detected not in {
-        "general_health",
-        "refuse_diagnosis",
-        "refuse_death",
-        "refuse_cure_guarantee",
-        "refuse_timing_decline",
-        "refuse_timing_recovery",
-        "refuse_surgery_muhurat",
-        "crisis_redirect",
-    }:
-        return True
-    return bool(is_health_static_question(q))
+    """Health subdomain Qs beat generic career keyword overlap."""
+    return bool(is_health_static_question((question or "").strip()))
 
 
 def resolve_health_archetype(
@@ -57,23 +30,17 @@ def resolve_health_archetype(
         from chart_fact_answer import is_domain_life_area_interpretation_question
 
         if is_domain_life_area_interpretation_question(q):
-            return "general_health", "blocked_love_life_interpretation"
+            return "health_engine_execution_v1", "blocked_love_life_interpretation"
     except Exception:
         pass
-    interp = (interpretation or "").strip().lower()
-    combined = f"{q} {interp}".strip()
 
-    regex_arch = classify_health_archetype(q)
-    detected = detect_health_archetype(q) or detect_health_archetype(interp)
+    arch = classify_health_archetype(q)
+    if arch != "health_engine_execution_v1":
+        return arch, "hard_guard"
 
     llm = (llm_archetype or "").strip().lower()
-    if llm and llm in HEALTH_ARCHETYPES:
-        if detected and detected != llm:
-            return detected, f"regex_override_llm:{llm}->{detected}"
-        if regex_arch != "general_health" and regex_arch != llm:
-            return regex_arch, f"regex_override_llm:{llm}->{regex_arch}"
+    if llm and llm in HEALTH_ARCHETYPES and llm != "health_engine_execution_v1":
+        if llm.startswith("refuse_") or llm == "crisis_redirect":
+            return llm, "llm_hard_guard"
         return llm, "llm_archetype"
-
-    if detected:
-        return detected, "regex_detect"
-    return regex_arch, "regex_classify"
+    return "health_engine_execution_v1", "d1_d9_chart"

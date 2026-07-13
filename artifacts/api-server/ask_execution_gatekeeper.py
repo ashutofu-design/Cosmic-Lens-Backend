@@ -361,14 +361,16 @@ def check_engine_output_gate(
                 retry_engine_key=exp.engine_key,
             )
         if dom_dna == dom_exec == "health" and exp.archetype != executed:
-            return GatekeeperResult(
-                ok=False,
-                stage="engine",
-                reason="routing_error",
-                rule="rule_1_health_archetype_mismatch",
-                failed_checks=[f"dna={exp.archetype}", f"executed={executed}"],
-                retry_engine_key=exp.engine_key,
-            )
+            # DNA bucket (e.g. general_health) vs unified D1/D9 executor label — OK on health slice.
+            if slice_id != "health_engine_v1":
+                return GatekeeperResult(
+                    ok=False,
+                    stage="engine",
+                    reason="routing_error",
+                    rule="rule_1_health_archetype_mismatch",
+                    failed_checks=[f"dna={exp.archetype}", f"executed={executed}"],
+                    retry_engine_key=exp.engine_key,
+                )
 
     # Rule 6 — health DNA + career engine
     if exp.trusted and (exp.domain == "health" or exp.archetype in HEALTH_ARCHETYPES):
@@ -679,17 +681,13 @@ def try_recover_engine_from_dna(
             chart_text = to_health_llm_payload(res, question=q)
             checks = dict(res.checks or {})
             checks["narrator_input"] = {
-                "archetype": res.archetype,
-                "verdict": res.verdict,
-                "confidence": res.confidence,
-                "evidence": list(res.evidence or []),
-                "evidence_positive": list(res.evidence_positive or []),
-                "evidence_negative": list(res.evidence_negative or []),
-                "answer_plan": res.answer_plan,
-                "ignore": list(res.ignore or []),
-                "d1_health_facts": checks.get("d1_health_facts") or {},
-                "d9_health_facts": checks.get("d9_health_facts") or {},
-                "health_engine_execution": checks.get("health_engine_execution") or {},
+                "question": q,
+                "d1": (checks.get("health_engine_execution") or {}).get("d1")
+                or checks.get("d1_health_facts")
+                or {},
+                "d9": (checks.get("health_engine_execution") or {}).get("d9")
+                or checks.get("d9_health_facts")
+                or {},
             }
             checks["gatekeeper_recovered"] = True
             meta = {

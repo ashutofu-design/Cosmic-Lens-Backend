@@ -4,8 +4,7 @@ import { formatInr } from "./api";
 import {
   OBS_DEBUGGER_VERSION,
   resolveAskObservability,
-  type ObservabilityEvidence,
-  type ObservabilityHealthValidatorAudit,
+  type ObservabilityHealthDnaJudgeAudit,
   type ObservabilityRule,
 } from "./askObservability";
 
@@ -61,38 +60,6 @@ function DnaPipelineGrid({ steps }: { steps: { label: string; value: string }[] 
         ))}
       </tbody>
     </table>
-  );
-}
-
-function EvidenceColumn({
-  title,
-  items,
-  icon,
-}: {
-  title: string;
-  items: ObservabilityEvidence[];
-  icon: string;
-}) {
-  return (
-    <div>
-      <strong>{title}</strong>
-      {items.length === 0 ? (
-        <p className="detail-muted">—</p>
-      ) : (
-        <ul className="obs-evidence-list">
-          {items.map((e, i) => (
-            <li key={`${title}-${i}`}>
-              <span>
-                {icon} {e.label}
-              </span>
-              {e.weight !== 0 ? (
-                <span className="obs-weight">{e.weight > 0 ? `+${e.weight}` : e.weight}</span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
 
@@ -235,66 +202,96 @@ function buildEngineExecutionSteps(
   return steps;
 }
 
-function HealthValidatorPanel({ audit }: { audit: ObservabilityHealthValidatorAudit | undefined }) {
+function HealthDnaJudgePanel({ audit }: { audit: ObservabilityHealthDnaJudgeAudit | undefined }) {
   if (!audit?.applies) {
     return (
       <p className="detail-muted">
-        Health answer validator applies only to health questions. Re-ask a health question after API
-        deploy (v{OBS_DEBUGGER_VERSION}+).
+        Question DNA Judge applies only to health questions. Re-ask a health question after API
+        deploy.
       </p>
     );
   }
 
-  const checks = audit.checks || [];
+  const contract = audit.contract || {};
+  const ran = audit.enabled && audit.passed != null;
+
   return (
     <div className="obs-validator">
-      <div className="obs-validator-summary">
-        <span className={audit.passed ? "obs-rule-pass" : audit.released_anyway ? "obs-rule-skip" : "obs-rule-fail"}>
-          {audit.passed
-            ? "RELEASED"
-            : audit.released_anyway
-              ? "RELEASED (with issues)"
-              : audit.final_block
-                ? "BLOCKED"
-                : "FAILED"}
-        </span>
-        <span className="detail-muted">
-          Attempts: {audit.attempts ?? "—"}
-          {audit.source ? ` · ${audit.source}` : ""}
-          {audit.enabled === false ? " · validator off" : ""}
-        </span>
-      </div>
-      {checks.length === 0 ? (
-        <p className="detail-muted">No validator checks — re-ask after API deploy.</p>
-      ) : (
-        <div className="obs-rule-decisions">
-          {checks.map((chk) => (
-            <div key={chk.id || chk.label} className="obs-rule-decision-row">
-              <div className="obs-rule-decision-head">
-                <span>{chk.label || chk.id || "Check"}</span>
-                <span className={chk.passed ? "obs-rule-pass" : "obs-rule-fail"}>
-                  {chk.passed ? "PASS" : "FAIL"}
-                </span>
-              </div>
-              {(chk.issues || []).length > 0 ? (
-                <p className="detail-muted obs-rule-reason">
-                  {(chk.issues || []).join(" · ")}
-                </p>
-              ) : null}
-            </div>
-          ))}
+      <div
+        className={`obs-validator-judge ${audit.passed ? "obs-validator-judge-pass" : "obs-validator-judge-fail"}`}
+        style={{
+          padding: "12px 14px",
+          borderRadius: 8,
+          marginBottom: 12,
+          border: `1px solid ${audit.passed ? "#2e7d32" : "#c62828"}`,
+          background: audit.passed ? "rgba(46,125,50,0.08)" : "rgba(198,40,40,0.08)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <strong>Question DNA LLM Judge</strong>
+          <span className={audit.passed ? "obs-rule-pass" : "obs-rule-fail"}>
+            {!ran ? "—" : audit.passed ? "PASS" : "FAIL"}
+          </span>
         </div>
-      )}
-      {(audit.issues || []).length > 0 ? (
-        <p className="detail-muted obs-validator-issues">
-          Combined issues: {(audit.issues || []).join(", ")}
+        <p className="detail-muted" style={{ margin: "6px 0 0" }}>
+          Did the answer match what the user asked? (user_wants + intent + normalized question)
         </p>
+        {!audit.passed && (audit.issues || []).length > 0 ? (
+          <p className="obs-rule-reason" style={{ margin: "8px 0 0", color: "#c62828" }}>
+            {(audit.issues || []).join(" · ")}
+          </p>
+        ) : null}
+        {!audit.passed && audit.fix_hint ? (
+          <p className="detail-muted" style={{ margin: "6px 0 0" }}>
+            Fix hint: {audit.fix_hint}
+          </p>
+        ) : null}
+        {audit.skipped ? (
+          <p className="detail-muted" style={{ margin: "6px 0 0" }}>
+            Skipped: {audit.skipped}
+          </p>
+        ) : null}
+      </div>
+
+      {contract.user_wants || contract.normalized_question ? (
+        <div className="obs-rule-decisions" style={{ marginBottom: 10 }}>
+          {contract.normalized_question ? (
+            <p className="detail-muted">
+              <strong>Normalized Q:</strong> {contract.normalized_question}
+            </p>
+          ) : null}
+          {contract.user_wants ? (
+            <p className="detail-muted">
+              <strong>User wants:</strong> {contract.user_wants}
+            </p>
+          ) : null}
+          {contract.intent ? (
+            <p className="detail-muted">
+              <strong>Intent:</strong> {contract.intent}
+            </p>
+          ) : null}
+          {contract.question_type ? (
+            <p className="detail-muted">
+              <strong>Type:</strong> {contract.question_type}
+            </p>
+          ) : null}
+          {contract.answer_style ? (
+            <p className="detail-muted">
+              <strong>Style:</strong> {contract.answer_style}
+            </p>
+          ) : null}
+          {contract.answer_approach ? (
+            <p className="detail-muted">
+              <strong>Plan:</strong> {contract.answer_approach}
+            </p>
+          ) : null}
+        </div>
       ) : null}
-      {(audit.chart_support_signals || []).length > 0 ? (
-        <p className="detail-muted obs-validator-issues">
-          Chart signals: {(audit.chart_support_signals || []).join(" · ")}
-        </p>
-      ) : null}
+
+      <p className="detail-muted">
+        Observability only — answer is never blocked by DNA Judge.
+        {audit.source ? ` Source: ${audit.source}` : ""}
+      </p>
     </div>
   );
 }
@@ -311,11 +308,8 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
       ? row.llm_context
       : null;
   const exec = obs.engine_execution || {};
-  const evidence = obs.planet_evidence || {};
   const perf = obs.performance || {};
-  const trace = obs.final_trace || [];
-  const hallSummary = obs.hallucination_summary;
-  const validatorAudit = obs.health_validator_audit;
+  const dnaJudgeAudit = obs.health_dna_judge_audit || obs.health_validator_audit;
 
   return (
     <div className="obs-debugger">
@@ -373,80 +367,8 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         <PipelineList steps={buildEngineExecutionSteps(exec, row, ctx)} />
       </Section>
 
-      <Section title="3. Health Answer Validator" stars={5}>
-        <HealthValidatorPanel audit={validatorAudit} />
-      </Section>
-
-      <Section title="4. Planet Evidence" stars={5}>
-        <div className="obs-evidence-cols">
-          <EvidenceColumn title="Positive" items={evidence.positive || []} icon="✅" />
-          <EvidenceColumn title="Negative" items={evidence.negative || []} icon="❌" />
-        </div>
-      </Section>
-
-      <Section title="5. Hallucination Check" stars={5}>
-        {hallSummary ? (
-          <ul className="obs-hallucination-summary">
-            <li className={hallSummary.engine_facts_used?.ok ? "obs-ok" : "obs-bad"}>
-              Engine facts used {hallSummary.engine_facts_used?.ok ? "✅" : "❌"}
-              {hallSummary.engine_facts_used?.detail ? (
-                <span className="detail-muted"> — {hallSummary.engine_facts_used.detail}</span>
-              ) : null}
-            </li>
-            <li className={hallSummary.unused_engine_evidence?.ok ? "obs-ok" : "obs-bad"}>
-              Unused engine evidence {hallSummary.unused_engine_evidence?.ok ? "✅" : "❌"}
-              {(hallSummary.unused_engine_evidence?.items || []).map((item) => (
-                <span key={item} className="obs-hallucination-chip">
-                  {item}
-                </span>
-              ))}
-            </li>
-            <li className={hallSummary.extra_llm_assumptions?.ok ? "obs-ok" : "obs-bad"}>
-              Extra LLM assumptions {hallSummary.extra_llm_assumptions?.ok ? "✅" : "❌"}
-              {(hallSummary.extra_llm_assumptions?.items || []).map((item) => (
-                <span key={item} className="obs-hallucination-chip">
-                  {item}
-                </span>
-              ))}
-            </li>
-            <li className={hallSummary.missing_engine_evidence?.ok ? "obs-ok" : "obs-bad"}>
-              Missing engine evidence {hallSummary.missing_engine_evidence?.ok ? "✅" : "❌"}
-              {(hallSummary.missing_engine_evidence?.items || []).map((item) => (
-                <span key={item} className="obs-hallucination-chip">
-                  {item}
-                </span>
-              ))}
-            </li>
-          </ul>
-        ) : null}
-        {(obs.hallucination_checks || []).length === 0 ? (
-          <p className="detail-muted">No field-level mismatches detected.</p>
-        ) : (
-          <table className="obs-hallucination-table">
-            <thead>
-              <tr>
-                <th>Field</th>
-                <th>Engine</th>
-                <th>Narrator</th>
-                <th>OK?</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(obs.hallucination_checks || []).map((h) => (
-                <tr key={h.field} className={h.ok ? "obs-ok" : "obs-bad"}>
-                  <td>{h.field}</td>
-                  <td>{h.engine}</td>
-                  <td>{h.narrator}</td>
-                  <td>{h.ok ? "✅" : "❌ Hallucination"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Section>
-
-      <Section title="6. Final Trace" stars={4} defaultOpen>
-        <PipelineList steps={trace} />
+      <Section title="3. Question DNA Judge" stars={5}>
+        <HealthDnaJudgePanel audit={dnaJudgeAudit} />
       </Section>
     </div>
   );

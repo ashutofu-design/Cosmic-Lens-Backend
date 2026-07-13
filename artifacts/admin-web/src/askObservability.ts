@@ -45,20 +45,40 @@ export interface ObservabilityHealthValidatorCheck {
   label?: string;
   passed?: boolean;
   issues?: string[];
+  detail?: string;
 }
 
-export interface ObservabilityHealthValidatorAudit {
+export interface ObservabilityHealthDnaJudge {
+  enabled?: boolean;
+  passed?: boolean | null;
+  issues?: string[];
+  fix_hint?: string | null;
+  skipped?: string;
+}
+
+export interface ObservabilityHealthDnaJudgeAudit {
   applies?: boolean;
   enabled?: boolean;
   passed?: boolean;
+  issues?: string[];
+  fix_hint?: string | null;
+  contract?: Record<string, string>;
+  judge_version?: string;
+  contract_keys?: string[];
+  skipped?: string;
+  error?: string;
+  source?: string;
+}
+
+/** @deprecated use ObservabilityHealthDnaJudgeAudit */
+export interface ObservabilityHealthValidatorAudit extends ObservabilityHealthDnaJudgeAudit {
   attempts?: number;
   final_block?: boolean;
   released_anyway?: boolean;
   final_issues?: string[];
-  issues?: string[];
   checks?: ObservabilityHealthValidatorCheck[];
   chart_support_signals?: string[];
-  source?: string;
+  dna_judge?: ObservabilityHealthDnaJudge;
 }
 
 export interface ObservabilityEngineHealth {
@@ -169,7 +189,9 @@ export interface AskObservability {
   routing_warning?: string | null;
   engine_health?: ObservabilityEngineHealth;
   rule_decisions?: ObservabilityRuleDecision[];
-  health_validator_audit?: ObservabilityHealthValidatorAudit;
+  health_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
+  /** @deprecated alias — same payload as health_dna_judge_audit */
+  health_validator_audit?: ObservabilityHealthDnaJudgeAudit;
   engine_execution?: {
     display_mode?: "health_charts" | "engine_rules";
     health_engine_execution?: ObservabilityHealthEngineExecution | null;
@@ -399,6 +421,110 @@ function dnaBucketMatch(
   return bmc.toUpperCase();
 }
 
+const DNA_ANSWER_STYLE_LABEL: Record<string, string> = {
+  short_2_3_lines: "Short (2-3 lines)",
+  short_paragraph: "Short paragraph (4-6 lines)",
+  detailed_explain: "Detailed explanation",
+};
+
+function dnaUnderstandingConfidence(v?: number | null): string {
+  if (typeof v !== "number" || Number.isNaN(v)) return "—";
+  const n = v <= 1 ? v : v / 100;
+  const pct = Math.round(n * 100);
+  let level = "Low";
+  if (n >= 0.95) level = "Very high";
+  else if (n >= 0.85) level = "High";
+  else if (n >= 0.70) level = "Moderate";
+  return `${pct}% (${level} — question understood clearly)`;
+}
+
+function dnaAnswerStyleLabel(style?: string | null): string {
+  const s = String(style || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (!s) return "—";
+  return DNA_ANSWER_STYLE_LABEL[s] || s.replace(/_/g, " ");
+}
+
+function deriveUserWants(
+  dnaItem: Record<string, unknown>,
+  li: Record<string, unknown>,
+  normalized: string,
+): string {
+  const raw = String(dnaItem.user_wants || li.user_wants || "").trim();
+  if (raw) return raw;
+  const intent = String(dnaItem.intent || li.intent || li.question_intent || "").trim();
+  if (intent) return `User wants to know: ${intent}`;
+  if (normalized && normalized !== "—") return `User wants to know: ${normalized}`;
+  return "User question could not be fully decoded.";
+}
+
+function deriveAnswerApproach(
+  dnaItem: Record<string, unknown>,
+  li: Record<string, unknown>,
+  domain: string,
+  questionType: string,
+  timing: boolean,
+  intent: string,
+  risk: string,
+): string {
+  const raw = String(dnaItem.answer_approach || li.answer_approach || "").trim();
+  if (raw) return raw;
+  const parts: string[] = [];
+  if (domain === "health") {
+    parts.push(
+      "Use D1/D9 health chart JSON — plain language, supportive tone; no disease diagnosis or cure guarantees.",
+    );
+  } else {
+    parts.push("Answer from chart evidence for the routed engine/archetype.");
+  }
+  if (timing) {
+    parts.push("Lead with timing window (dasha/transit), then brief supporting reason.");
+  } else if (questionType === "decision") {
+    parts.push("Balanced guidance — avoid absolute yes/no unless chart is very clear.");
+  } else if (questionType === "current_state") {
+    parts.push("Direct present-state read — what is happening now.");
+  } else if (questionType === "risk") {
+    parts.push("Acknowledge emotional sensitivity; cautious wording.");
+  } else if (questionType === "explanation" || questionType === "cause") {
+    parts.push("Explain why/how with 2–4 supporting chart factors.");
+  } else if (intent) {
+    parts.push(`Focus on: ${intent}.`);
+  }
+  if (risk === "high") parts.push("Keep tone gentle and non-alarmist.");
+  return parts.join(" ") || "—";
+}
+
+function deriveAnswerStyle(
+  dnaItem: Record<string, unknown>,
+  li: Record<string, unknown>,
+  questionType: string,
+  timing: boolean,
+  isFollowup: boolean,
+): string {
+  const raw = String(dnaItem.answer_style || li.answer_style || "").trim();
+  if (raw) return dnaAnswerStyleLabel(raw);
+  if (questionType === "explanation" || questionType === "cause" || questionType === "chart_fact") {
+    return DNA_ANSWER_STYLE_LABEL.detailed_explain;
+  }
+  if (
+    questionType === "decision" ||
+    questionType === "compatibility" ||
+    questionType === "verification" ||
+    timing
+  ) {
+    return DNA_ANSWER_STYLE_LABEL.short_paragraph;
+  }
+  if (
+    (questionType === "current_state" ||
+      questionType === "risk" ||
+      questionType === "prediction") &&
+    !timing
+  ) {
+    return DNA_ANSWER_STYLE_LABEL.short_2_3_lines;
+  }
+  if (isFollowup) return DNA_ANSWER_STYLE_LABEL.short_2_3_lines;
+  return DNA_ANSWER_STYLE_LABEL.short_paragraph;
+}
+
 export function buildFullDnaPipeline(
   ctx: AskLlmContext | null,
   row: AskQuestionItem,
@@ -446,6 +572,20 @@ export function buildFullDnaPipeline(
     Array.isArray(mods) && mods.length > 0
       ? mods.map((m) => String(m).trim().toUpperCase()).filter(Boolean).join(", ")
       : "—";
+  const questionType = String(dnaItem.question_type || ctx?.question_type || "").trim().toLowerCase();
+  const intent = String(dnaItem.intent || li.intent || li.question_intent || "").trim();
+  const risk = String(dnaItem.risk || li.risk || "").trim().toLowerCase();
+  const isFollowup = dnaItem.is_followup === true;
+  const understandingConf =
+    typeof dnaItem.understanding_confidence === "number"
+      ? (dnaItem.understanding_confidence as number)
+      : typeof dnaItem.confidence === "number"
+        ? (dnaItem.confidence as number)
+        : typeof li.understanding_confidence === "number"
+          ? (li.understanding_confidence as number)
+          : typeof li.confidence === "number"
+            ? (li.confidence as number)
+            : null;
 
   return [
     { label: "Normalized", value: normalized },
@@ -492,6 +632,30 @@ export function buildFullDnaPipeline(
         typeof dnaItem.bucket_match_score === "number"
           ? dnaItem.bucket_match_score
           : null,
+      ),
+    },
+    {
+      label: "LLM Understand Question",
+      value: deriveUserWants(dnaItem, li, normalized),
+    },
+    {
+      label: "Understanding Confidence",
+      value: dnaUnderstandingConfidence(understandingConf),
+    },
+    {
+      label: "Answer Style",
+      value: deriveAnswerStyle(dnaItem, li, questionType, timingVal === true, isFollowup),
+    },
+    {
+      label: "LLM Answer Plan",
+      value: deriveAnswerApproach(
+        dnaItem,
+        li,
+        domain,
+        questionType,
+        timingVal === true,
+        intent,
+        risk,
       ),
     },
   ];
@@ -798,10 +962,18 @@ function enrichObservability(
     },
     engine_health: obs.engine_health,
     rule_decisions: obs.rule_decisions,
-    health_validator_audit:
+    health_dna_judge_audit:
+      obs.health_dna_judge_audit ||
+      (checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+      (smChecks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
       obs.health_validator_audit ||
-      (checks.health_validator_audit as ObservabilityHealthValidatorAudit | undefined) ||
-      (smChecks.health_validator_audit as ObservabilityHealthValidatorAudit | undefined),
+      (checks.health_validator_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+      (smChecks.health_validator_audit as ObservabilityHealthDnaJudgeAudit | undefined),
+    health_validator_audit:
+      obs.health_dna_judge_audit ||
+      obs.health_validator_audit ||
+      (checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+      (checks.health_validator_audit as ObservabilityHealthDnaJudgeAudit | undefined),
     astrology_checks: astro,
     engine_execution: exec,
     planet_evidence: planetEvidence,
@@ -1027,7 +1199,6 @@ function formatEvidenceList(
 export function buildAskDetailCopyText(row: AskQuestionItem): string {
   const obs = resolveAskObservability(row);
   const exec = obs.engine_execution || {};
-  const evidence = obs.planet_evidence || {};
   const perf = obs.performance || {};
 
   const lines: string[] = [
@@ -1102,63 +1273,35 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   }
   lines.push("");
 
-  lines.push("=== 3. HEALTH ANSWER VALIDATOR ===");
-  const validator = obs.health_validator_audit;
-  if (!validator?.applies) {
+  lines.push("=== 3. QUESTION DNA JUDGE (health) ===");
+  const judgeObs = obs.health_dna_judge_audit || obs.health_validator_audit;
+  if (!judgeObs?.applies) {
     lines.push("— (health questions only)", "");
   } else {
     lines.push(
-      `Enabled: ${validator.enabled ? "yes" : "no"} | Passed: ${validator.passed ? "yes" : "no"} | Attempts: ${validator.attempts ?? "—"} | Source: ${validator.source || "—"}`,
+      `Enabled: ${judgeObs.enabled ? "yes" : "no"} | Passed: ${judgeObs.passed ? "yes" : "no"} | Source: ${judgeObs.source || "—"}`,
     );
-    if (validator.final_block) {
-      lines.push("Final block: YES");
+    const contract = judgeObs.contract || {};
+    if (contract.user_wants) {
+      lines.push(`User wants: ${contract.user_wants}`);
     }
-    for (const chk of validator.checks || []) {
-      const mark = chk.passed ? "PASS" : "FAIL";
-      lines.push(`${chk.label || chk.id || "?"} | ${mark}`);
-      for (const issue of chk.issues || []) {
-        lines.push(`  - ${issue}`);
-      }
+    if (contract.normalized_question) {
+      lines.push(`Normalized Q: ${contract.normalized_question}`);
     }
-    if ((validator.issues || []).length) {
-      lines.push(`Issues: ${(validator.issues || []).join(", ")}`);
+    if (contract.answer_style) {
+      lines.push(`Answer style: ${contract.answer_style}`);
+    }
+    if (contract.answer_approach) {
+      lines.push(`Answer plan: ${contract.answer_approach}`);
+    }
+    if ((judgeObs.issues || []).length) {
+      lines.push(`Issues: ${(judgeObs.issues || []).join(", ")}`);
+    }
+    if (judgeObs.fix_hint) {
+      lines.push(`Fix hint: ${judgeObs.fix_hint}`);
     }
     lines.push("");
   }
-
-  lines.push("=== 4. PLANET EVIDENCE ===");
-  lines.push(...formatEvidenceList("Positive", evidence.positive));
-  lines.push(...formatEvidenceList("Negative", evidence.negative));
-  if ((evidence.neutral || []).length) {
-    lines.push(...formatEvidenceList("Neutral", evidence.neutral));
-  }
-  lines.push("");
-
-  lines.push("=== 5. HALLUCINATION CHECK ===");
-  const hall = obs.hallucination_summary;
-  if (hall) {
-    lines.push(
-      `Engine facts used: ${hall.engine_facts_used?.ok ? "OK" : "FAIL"} — ${hall.engine_facts_used?.detail || ""}`,
-      `Unused engine evidence: ${hall.unused_engine_evidence?.ok ? "OK" : "FAIL"}`,
-    );
-    for (const item of hall.unused_engine_evidence?.items || []) {
-      lines.push(`  • ${item}`);
-    }
-    lines.push(
-      `Extra LLM assumptions: ${hall.extra_llm_assumptions?.ok ? "OK" : "FAIL"}`,
-    );
-    for (const item of hall.extra_llm_assumptions?.items || []) {
-      lines.push(`  • ${item}`);
-    }
-  }
-  for (const h of obs.hallucination_checks || []) {
-    lines.push(
-      `${h.field}: engine=${h.engine} | narrator=${h.narrator} | ${h.ok ? "OK" : "HALLUCINATION"}`,
-    );
-  }
-  lines.push("");
-
-  lines.push(...formatPipelineSection("6. FINAL TRACE", obs.final_trace));
 
   return lines.join("\n").trim() + "\n";
 }

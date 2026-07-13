@@ -325,6 +325,51 @@ def _format_confidence(value: Any) -> str:
         pass
     return str(value)
 
+
+def _llm_understanding_pipeline_steps(
+    dna_item: dict[str, Any],
+    li: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Final Question DNA rows — LLM question decode + answer plan."""
+    try:
+        from ask_question_dna import format_answer_style_display, format_understanding_confidence
+    except Exception:
+        format_answer_style_display = lambda s: str(s or "—")  # noqa: E731
+        format_understanding_confidence = _format_confidence
+
+    user_wants = (
+        dna_item.get("user_wants")
+        or li.get("user_wants")
+        or dna_item.get("intent")
+        or li.get("intent")
+        or li.get("question_intent")
+        or "—"
+    )
+    understanding_conf = (
+        dna_item.get("understanding_confidence")
+        if dna_item.get("understanding_confidence") is not None
+        else dna_item.get("confidence")
+        if dna_item.get("confidence") is not None
+        else li.get("understanding_confidence")
+        if li.get("understanding_confidence") is not None
+        else li.get("confidence")
+    )
+    answer_style = dna_item.get("answer_style") or li.get("answer_style") or ""
+    answer_approach = dna_item.get("answer_approach") or li.get("answer_approach") or "—"
+
+    return [
+        _pipeline_step("LLM Understand Question", user_wants),
+        _pipeline_step(
+            "Understanding Confidence",
+            format_understanding_confidence(understanding_conf),
+        ),
+        _pipeline_step(
+            "Answer Style",
+            format_answer_style_display(str(answer_style)),
+        ),
+        _pipeline_step("LLM Answer Plan", answer_approach),
+    ]
+
 def _dig(*sources: dict[str, Any] | None, key: str, default: Any = None) -> Any:
     for src in sources:
         if not isinstance(src, dict):
@@ -419,7 +464,7 @@ def _question_dna_pipeline(
     time_context = tense if tense and tense != "unspecified" else "—"
     multi_q = len(questions) > 1 if questions else False
 
-    return [
+    base_steps = [
         _pipeline_step("Normalized", normalized),
         _pipeline_step("Domain", domain_display),
         _pipeline_step("Bucket", bucket_display),
@@ -446,6 +491,7 @@ def _question_dna_pipeline(
         _pipeline_step("Confidence", _format_confidence(dna_item.get("confidence") or li.get("confidence"))),
         _pipeline_step("Bucket Match", _format_dna_bucket_match(dna_item)),
     ]
+    return base_steps + _llm_understanding_pipeline_steps(dna_item, li)
 
 
 def _dna_engine_archetype(ctx: dict[str, Any]) -> str:
@@ -1269,7 +1315,7 @@ def _hallucination_summary(
     }
 
 
-def _health_validator_section(
+def _health_dna_judge_section(
     ctx: dict[str, Any],
     question_text: str,
     answer_text: str,
@@ -1277,22 +1323,54 @@ def _health_validator_section(
     if not _is_health_observability_ctx(ctx, question_text):
         return {"applies": False}
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
-    stored = _dig(ctx, sm, key="health_validator_audit")
+    stored = (
+        _dig(ctx, sm, key="health_dna_judge_audit")
+        or _dig(ctx, sm, key="health_validator_audit")
+    )
     meta = {
         "archetype": sm.get("archetype"),
         "checks": _merged_checks(ctx),
     }
+    qd = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else None
+    if qd:
+        meta["question_dna"] = qd
+    for key in (
+        "normalized_question", "intent", "user_wants", "question_type",
+        "domain", "bucket", "answer_style", "answer_approach", "question_dna_item",
+    ):
+        val = sm.get(key) if isinstance(sm, dict) else None
+        if val not in (None, "") and key not in meta:
+            meta[key] = val
     try:
-        from ask_health.answer_validator import build_health_validator_display
+        from ask_health.dna_judge import build_health_dna_judge_display
 
-        return build_health_validator_display(
+        display = build_health_dna_judge_display(
             question_text,
             answer_text,
             meta,
             stored_audit=stored if isinstance(stored, dict) else None,
         )
+        # Legacy rows stored full validator audit — surface dna_judge sub-block if present
+        if isinstance(stored, dict) and stored.get("dna_judge") and not display.get("issues"):
+            legacy_j = stored.get("dna_judge") or {}
+            if legacy_j.get("passed") is False:
+                display["passed"] = False
+                display["issues"] = list(legacy_j.get("issues") or [])
+                hint = str((legacy_j.get("parsed") or {}).get("fix_hint") or "").strip()
+                if hint:
+                    display["fix_hint"] = hint
+        return display
     except Exception:
-        return {"applies": True, "enabled": False, "passed": False, "issues": ["validator_error"]}
+        return {"applies": True, "enabled": False, "passed": False, "issues": ["dna_judge_error"]}
+
+
+def _health_validator_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    """Deprecated — use _health_dna_judge_section."""
+    return _health_dna_judge_section(ctx, question_text, answer_text)
 
 
 def build_observability_debug(
@@ -1335,7 +1413,7 @@ def build_observability_debug(
         health_engine_execution
         and _is_health_observability_ctx(ctx, question_text)
     )
-    health_validator_audit = _health_validator_section(ctx, question_text, answer_text)
+    health_dna_judge_audit = _health_dna_judge_section(ctx, question_text, answer_text)
     trace_labels = [
         "Question",
         "DNA",
@@ -1362,7 +1440,8 @@ def build_observability_debug(
         "routing_decision": routing,
         "routing_warning": _routing_warning(question_text, archetype, _dna_engine_archetype(ctx)),
         "engine_health": engine_health,
-        "health_validator_audit": health_validator_audit,
+        "health_dna_judge_audit": health_dna_judge_audit,
+        "health_validator_audit": health_dna_judge_audit,
         "rule_decisions": decision_table,
         "engine_execution": {
             "display_mode": "health_charts" if health_charts_mode else "engine_rules",
@@ -1523,25 +1602,24 @@ def build_ask_debug_export_text(row: dict[str, Any]) -> str:
                     f"{rule.get('note') or rule.get('module') or ''}"
                 )
     lines.append("")
-    lines.append("=== 4. HEALTH ANSWER VALIDATOR ===")
-    validator = obs.get("health_validator_audit") or {}
-    if not validator.get("applies"):
+    lines.append("=== 4. QUESTION DNA JUDGE (health) ===")
+    judge_obs = obs.get("health_dna_judge_audit") or obs.get("health_validator_audit") or {}
+    if not judge_obs.get("applies"):
         lines.append("— (health questions only)")
     else:
         lines.append(
-            f"Enabled: {validator.get('enabled')} | Passed: {validator.get('passed')} | "
-            f"Attempts: {validator.get('attempts')} | Source: {validator.get('source') or '—'}"
+            f"Enabled: {judge_obs.get('enabled')} | Passed: {judge_obs.get('passed')} | "
+            f"Source: {judge_obs.get('source') or '—'}"
         )
-        if validator.get("final_block"):
-            lines.append("Final block: YES")
-        for chk in validator.get("checks") or []:
-            if isinstance(chk, dict):
-                mark = "PASS" if chk.get("passed") else "FAIL"
-                lines.append(f"  {chk.get('label') or chk.get('id') or '?'} | {mark}")
-                for issue in chk.get("issues") or []:
-                    lines.append(f"    - {issue}")
-        if validator.get("issues"):
-            lines.append("Issues: " + ", ".join(str(i) for i in validator.get("issues") or []))
+        contract = judge_obs.get("contract") if isinstance(judge_obs.get("contract"), dict) else {}
+        if contract.get("user_wants"):
+            lines.append(f"User wants: {contract.get('user_wants')}")
+        if contract.get("normalized_question"):
+            lines.append(f"Normalized Q: {contract.get('normalized_question')}")
+        if judge_obs.get("issues"):
+            lines.append("Issues: " + ", ".join(str(i) for i in judge_obs.get("issues") or []))
+        if judge_obs.get("fix_hint"):
+            lines.append(f"Fix hint: {judge_obs.get('fix_hint')}")
     lines.append("")
     lines.append("=== 5. PLANET EVIDENCE ===")
     lines.append("Positive:")

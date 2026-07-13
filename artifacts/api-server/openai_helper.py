@@ -10273,16 +10273,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
 
     _llm_raw_text = ""
-    _health_validator_audit: dict = {}
+    _health_dna_judge_audit: dict = {}
     resp = None
-    _use_health_validator = (
+    _use_health_dna_judge = (
         isinstance(dcr_love_meta, dict)
         and str(dcr_love_meta.get("slice") or "") == "health_engine_v1"
         and not bool(dcr_love_meta.get("skip_llm"))
     )
     try:
-        if _use_health_validator:
-            from ask_health.answer_validator import run_health_llm_validator_loop
+        if _use_health_dna_judge:
+            from ask_health.dna_judge import run_health_llm_with_dna_judge
 
             _health_meta = (
                 dict(dcr_love_meta) if isinstance(dcr_love_meta, dict) else {}
@@ -10327,7 +10327,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _health_meta.setdefault("answer_style", "short_paragraph")
                 _health_meta.setdefault("user_wants", "User wants a general overview of their health.")
 
-            _llm_raw_text, _health_validator_audit = run_health_llm_validator_loop(
+            _llm_raw_text, _health_dna_judge_audit = run_health_llm_with_dna_judge(
                 client,
                 model=model,
                 messages=_llm_messages,
@@ -10335,64 +10335,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 question=question or "",
                 meta=_health_meta,
             )
-            if not _llm_raw_text:
-                _blocked_preview = str(
-                    _health_validator_audit.get("blocked_answer_preview") or ""
-                ).strip()
-                if _blocked_preview:
-                    try:
-                        from ask_health.answer_guard import guard_health_answer
-
-                        _released, _guard_meta = guard_health_answer(
-                            question or "",
-                            _blocked_preview,
-                            _health_meta,
-                        )
-                        if str(_released or "").strip():
-                            _llm_raw_text = str(_released).strip()
-                            _health_validator_audit["released_anyway"] = True
-                            _health_validator_audit["release_path"] = "guard_after_block"
-                            _health_validator_audit["guard"] = _guard_meta
-                            print(
-                                "[raw_passthrough] HEALTH_VALIDATOR released guarded draft "
-                                f"issues={_health_validator_audit.get('final_issues')}",
-                                flush=True,
-                            )
-                    except Exception as _guard_exc:
-                        print(
-                            f"[raw_passthrough] HEALTH_VALIDATOR guard release skipped: "
-                            f"{_guard_exc}",
-                            flush=True,
-                        )
-            if not _llm_raw_text:
+            if _health_dna_judge_audit.get("passed") is False:
                 print(
-                    f"[raw_passthrough] HEALTH_VALIDATOR blocked "
-                    f"issues={_health_validator_audit.get('final_issues') or _health_validator_audit.get('issues')}",
-                    flush=True,
-                )
-                return {
-                    "text": (
-                        "Abhi is sawal ka verified jawab generate nahi ho paaya. "
-                        "Thodi der baad dobara try karein."
-                    ),
-                    "topic": "health",
-                    "question_type": qtype,
-                    "confidence": 0.0,
-                    "source": "health_validator_blocked",
-                    "engine_tag": "ans-gate",
-                    "follow_ups": [],
-                }
-            if _health_validator_audit.get("released_anyway"):
-                print(
-                    f"[raw_passthrough] HEALTH_VALIDATOR released_with_issues "
-                    f"attempts={_health_validator_audit.get('attempts')} "
-                    f"issues={_health_validator_audit.get('final_issues')}",
-                    flush=True,
-                )
-            elif _health_validator_audit.get("attempts", 0) > 1:
-                print(
-                    f"[raw_passthrough] HEALTH_VALIDATOR ok "
-                    f"attempts={_health_validator_audit.get('attempts')}",
+                    "[raw_passthrough] HEALTH_DNA_JUDGE observability_fail "
+                    f"issues={_health_dna_judge_audit.get('issues')}",
                     flush=True,
                 )
         else:
@@ -10981,8 +10927,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             ):
                 if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
                     _pt_checks[_ck] = _sm_checks[_ck]
-            if _health_validator_audit:
-                _pt_checks["health_validator_audit"] = _health_validator_audit
+            if _health_dna_judge_audit:
+                _pt_checks["health_dna_judge_audit"] = _health_dna_judge_audit
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
             _pt_checks["career_engine"] = "v1"
             _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (

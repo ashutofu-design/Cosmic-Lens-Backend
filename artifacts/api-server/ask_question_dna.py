@@ -775,7 +775,7 @@ def build_question_dna_narrator_rules(
 
     if health_validator:
         header = (
-            "=== QUESTION DNA (MUST follow every time — validator will reject mismatch) ==="
+            "=== QUESTION DNA (MUST follow every time — DNA Judge checks alignment) ==="
         )
     else:
         header = (

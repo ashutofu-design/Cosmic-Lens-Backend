@@ -200,7 +200,7 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertEqual(len(pack["d1"]["planets"]), 2)
         self.assertEqual(obs["engine_execution"]["display_mode"], "health_charts")
 
-    def test_health_validator_audit_in_observability(self):
+    def test_health_dna_judge_audit_in_observability(self):
         facts = compute_health_engine_execution({
             "ascendant": "Leo",
             "planets": [
@@ -221,11 +221,21 @@ class TestAskObservabilityDebug(unittest.TestCase):
                 "archetype": "respiratory_health",
                 "checks": {
                     "health_engine_execution": facts,
-                    "health_validator_audit": {
+                    "health_dna_judge_audit": {
+                        "mode": "dna_judge_only",
                         "enabled": True,
-                        "attempts": 2,
                         "passed": True,
                         "issues": [],
+                        "dna_judge": {
+                            "judge": "health_dna_v2",
+                            "enabled": True,
+                            "passed": True,
+                            "issues": [],
+                        },
+                        "contract": {
+                            "user_wants": "User wants to know why they feel cold often.",
+                            "normalized_question": "Why do I feel cold so often?",
+                        },
                     },
                 },
             },
@@ -236,16 +246,12 @@ class TestAskObservabilityDebug(unittest.TestCase):
             question_text=ctx["question"],
             answer_text="Saturn 6th ghar me hai, isliye thandi tendency dikhti hai. Rest rakho.",
         )
-        audit = obs.get("health_validator_audit") or {}
+        audit = obs.get("health_dna_judge_audit") or {}
         self.assertTrue(audit.get("applies"))
         self.assertTrue(audit.get("passed"))
-        self.assertEqual(audit.get("attempts"), 2)
         self.assertEqual(audit.get("source"), "live_audit")
-        check_ids = {c.get("id") for c in audit.get("checks") or []}
-        self.assertIn("safety", check_ids)
-        self.assertIn("json_facts", check_ids)
-        self.assertNotIn("question_drift", check_ids)
-        self.assertNotIn("chart_proof", check_ids)
+        self.assertIn("contract", audit)
+        self.assertEqual(obs.get("health_validator_audit"), audit)
 
 
 if __name__ == "__main__":

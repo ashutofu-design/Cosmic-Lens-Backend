@@ -195,5 +195,115 @@ def llm_judge_health_dna_alignment(
     except Exception as exc:
         audit["error"] = str(exc)[:180]
         audit["passed"] = None
-        # Judge failure must not block — deterministic rules still apply
+        # Judge failure must not block — release answer anyway
         return True, [], "", audit
+
+
+def build_health_dna_judge_display(
+    question: str,
+    answer: str,
+    meta: dict[str, Any],
+    stored_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Admin observability — Question DNA LLM Judge only (no validator retry loop)."""
+    from .answer_validator import _enrich_dna_contract, _resolve_dna_contract
+
+    audit = stored_audit if isinstance(stored_audit, dict) else {}
+    contract = _resolve_dna_contract(meta)
+    if not contract and question:
+        contract = _enrich_dna_contract(dict(meta), question)
+    judge_audit = audit.get("dna_judge") if isinstance(audit.get("dna_judge"), dict) else {}
+    if not judge_audit and audit.get("judge"):
+        judge_audit = audit
+
+    fix_hint = str(audit.get("fix_hint") or "").strip()
+    if not fix_hint:
+        fix_hint = str((judge_audit.get("parsed") or {}).get("fix_hint") or "").strip()
+
+    passed = judge_audit.get("passed")
+    if passed is None:
+        passed = audit.get("passed")
+    enabled = judge_audit.get("enabled", audit.get("enabled", health_dna_judge_enabled()))
+    issues = list(audit.get("issues") or judge_audit.get("issues") or [])
+
+    contract_summary = dict(audit.get("contract") or {})
+    if not contract_summary:
+        contract_summary = {
+            k: contract[k]
+            for k in (
+                "normalized_question", "intent", "user_wants", "question_type",
+                "domain", "bucket", "answer_style", "answer_approach",
+            )
+            if contract.get(k)
+        }
+
+    return {
+        "applies": True,
+        "enabled": enabled,
+        "passed": passed if passed is not None else True,
+        "issues": issues,
+        "fix_hint": fix_hint or None,
+        "contract": contract_summary,
+        "judge_version": judge_audit.get("judge") or "health_dna_v2",
+        "contract_keys": list(judge_audit.get("contract_keys") or contract_summary.keys()),
+        "skipped": judge_audit.get("skipped"),
+        "error": judge_audit.get("error"),
+        "source": "live_audit" if audit else "recomputed",
+    }
+
+
+def run_health_llm_with_dna_judge(
+    client: Any,
+    *,
+    model: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    question: str,
+    meta: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Single narrator LLM call + post-answer DNA judge (observability only — never blocks)."""
+    from .answer_guard import guard_health_answer
+    from .answer_validator import _enrich_dna_contract
+
+    audit: dict[str, Any] = {
+        "mode": "dna_judge_only",
+        "enabled": health_dna_judge_enabled(),
+        "attempts": 1,
+        "passed": True,
+        "issues": [],
+    }
+
+    resp = client.chat.completions.create(
+        model=model, messages=messages, max_tokens=max_tokens,
+    )
+    text = (resp.choices[0].message.content or "").strip()
+    text, guard_meta = guard_health_answer(question, text, meta)
+    audit["guard"] = guard_meta
+
+    contract = _enrich_dna_contract(meta, question)
+    audit["contract"] = {
+        k: contract[k]
+        for k in (
+            "normalized_question", "intent", "user_wants", "question_type",
+            "domain", "bucket", "answer_style", "answer_approach",
+        )
+        if contract.get(k)
+    }
+
+    if health_dna_judge_enabled():
+        ok_j, j_issues, fix_hint, j_audit = llm_judge_health_dna_alignment(
+            client,
+            model,
+            question=question,
+            answer=text,
+            contract=contract,
+        )
+        audit["dna_judge"] = j_audit
+        audit["passed"] = ok_j if j_audit.get("passed") is not None else True
+        audit["issues"] = list(j_issues)
+        if fix_hint:
+            audit["fix_hint"] = fix_hint
+    else:
+        audit["dna_judge"] = {"enabled": False, "skipped": "ASK_HEALTH_DNA_JUDGE=0"}
+
+    return text, audit

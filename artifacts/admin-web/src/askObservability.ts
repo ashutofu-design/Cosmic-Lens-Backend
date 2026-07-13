@@ -71,6 +71,8 @@ export interface ObservabilityHealthSelectedBlocks {
   contract?: Record<string, string>;
   error?: string;
 }
+
+export interface ObservabilityHealthDnaJudge {
   enabled?: boolean;
   passed?: boolean | null;
   issues?: string[];

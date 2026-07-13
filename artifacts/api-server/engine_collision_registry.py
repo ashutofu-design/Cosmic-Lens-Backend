@@ -78,6 +78,15 @@ def should_suppress_health_for_question(question: str, *, llm_domain: str) -> bo
     q = (question or "").strip()
     if not q:
         return False
+    if should_prioritize_health_over_travel(q):
+        return False
+    try:
+        from ask_health.health_registry import _has_real_health_intent
+
+        if _has_real_health_intent(q):
+            return False
+    except Exception:
+        pass
     try:
         from ask_marriage_relationship_slice import is_marriage_relationship_static_question
 
@@ -121,6 +130,15 @@ def should_force_mr_for_question(question: str, *, llm_domain: str) -> bool:
     q = (question or "").strip()
     if not q:
         return False
+    if should_prioritize_health_over_travel(q):
+        return False
+    try:
+        from ask_health.health_registry import _has_real_health_intent
+
+        if _has_real_health_intent(q):
+            return False
+    except Exception:
+        pass
     try:
         from ask_intent_fidelity import is_partner_relationship_question
 

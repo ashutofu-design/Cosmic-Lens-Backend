@@ -113,6 +113,11 @@ def _apply_domain_mutex(
     out = dict(flags)
     suppressed: list[str] = []
 
+    if should_prioritize_health_over_travel(question):
+        out["health"] = True
+        out["travel"] = False
+        out["mr"] = False
+
     if should_suppress_health_for_question(question, llm_domain=domain):
         if out.get("health"):
             out["health"] = False
@@ -126,7 +131,10 @@ def _apply_domain_mutex(
                 suppressed.append(f"{key}:domain_mutex_{domain}")
 
     primary = DOMAIN_PRIMARY_ENGINE.get(domain)
-    if should_force_mr_for_question(question, llm_domain=domain):
+    if (
+        not should_prioritize_health_over_travel(question)
+        and should_force_mr_for_question(question, llm_domain=domain)
+    ):
         out["mr"] = True
     elif primary and domain in ("love", "marriage"):
         out["mr"] = out.get("mr") or should_force_mr_for_question(question, llm_domain=domain)

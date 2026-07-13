@@ -9,13 +9,10 @@ from typing import Any
 from .answer_guard import verify_health_answer
 from .chart_proof import (
     answer_cites_chart_proof,
-    answer_honest_low_tension,
     chart_support_signals,
-    is_disease_list_question,
-    proof_retry_hint,
-    validate_chart_proof_requirement,
 )
 from .classifier import classify_health_archetype
+from .dna_judge import health_dna_judge_enabled, llm_judge_health_dna_alignment
 
 _PLANET_NAMES = (
     "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu",
@@ -33,54 +30,33 @@ _ACTION_RX = re.compile(
 _SIMPLE_Q_RX = re.compile(
     r"(?ix)^(mujhse|meri|mera|mujhe|kya\s+karu|kya\s+karein|kaise|kyun|kya\s+ho)\b"
 )
-_FINANCE_Q_RX = re.compile(
-    r"(?ix)(paisa|paise|money|kharcha|kharche|expense|expenses|financial|finance|"
-    r"bachat|saving|savings|loan|debt|wealth|emi|karz|udhar|insurance|fd\b)"
+_GENERAL_HEALTH_OVERVIEW_Q_RX = re.compile(
+    r"(?ix)(health ke bare|health ke baare|meri sehat|mere health|overall health|"
+    r"health overview|sehat ke bare|sehat ke baare|health ke baare me|health ke bare me)"
 )
-_FINANCE_A_RX = re.compile(
-    r"(?ix)(paisa|paise|money|kharcha|kharche|expense|expenses|financial|finance|"
-    r"bachat|saving|savings|loan|debt|wealth|emi|karz|udhar|insurance|"
-    r"unexpected\s+expenses|financial\s+planning)"
+_SURGERY_RISK_Q_RX = re.compile(
+    r"(?ix)(operation|surgery|shastra[\s-]?kriya).{0,50}?"
+    r"(padega|pad sak|samna|saamna|zarurat|need|required|risk|chance|possibil|future|kabhi|hoga)"
+    r"|"
+    r"(padega|pad sak|samna|saamna|zarurat|need|required|risk|chance|possibil|future|kabhi|hoga)"
+    r".{0,50}?(operation|surgery|shastra[\s-]?kriya)"
 )
-_CAREER_Q_RX = re.compile(
-    r"(?ix)(naukri|job|promotion|salary|boss|office|business|startup|"
-    r"career|profession|government\s+job|private\s+job|kaam)"
+_SURGERY_RISK_A_RX = re.compile(
+    r"(?ix)(operation|surgery|procedure|medical\s+procedure|doctor|surgeon|hospital|"
+    r"risk|chance|possibil|zarurat|padega|pad\s+sakt|medical\s+intervention)"
 )
-_CAREER_A_RX = re.compile(
-    r"(?ix)(naukri|job|promotion|salary|boss|office|business|startup|"
-    r"career|profession|government\s+job|private\s+job)"
+_DEFAULT_OVERVIEW_PLAN = (
+    "Provide a general overview of health aspects based on the chart, "
+    "focusing on key health indicators without specific predictions or remedies."
 )
-_TRAVEL_Q_RX = re.compile(
-    r"(?ix)(travel|safar|yatra|trip|ghum|foreign|abroad|videsh|safar\s+ke|travel\s+ke)"
-)
-_TRAVEL_A_RX = re.compile(
-    r"(?ix)(travel|safar|yatra|trip|ghum|foreign|abroad|videsh|safar\s+ke|travel\s+ke|"
-    r"travel\s+stress|safar\s+me)"
-)
-
-_ARCH_ANSWER_HINTS: dict[str, re.Pattern[str]] = {
-    "respiratory_health": re.compile(
-        r"(?ix)(sardi|thand|khansi|saans|breath|chest|cold|zukam|immune|nose|nin|flu)"
-    ),
-    "immune_health": re.compile(
-        r"(?ix)(immun|baar\s*baar|weak|vitality|rog|tendency|care|rest)"
-    ),
-    "heart_blood_pressure": re.compile(
-        r"(?ix)(bp|blood\s*pressure|heart|dil|circulat|pressure)"
-    ),
-    "mental_stress": re.compile(r"(?ix)(stress|tension|anxiety|mann|mind|sleep|neend)"),
-    "chronic_tendency": re.compile(r"(?ix)(chronic|purani|lamba|baar|tendency|weak)"),
-    "digestive_health": re.compile(r"(?ix)(digest|pet|stomach|acidity|gas|liver)"),
-    "general_health": re.compile(
-        r"(?ix)(sehat|health|tendency|constitution|vitality|weak|strong|care|zone|ghar|rog|dikkat)"
-    ),
-    "preventive_risk": re.compile(r"(?ix)(risk|tendency|weak|care|monitor|prevent)"),
-    "overall_vitality": re.compile(r"(?ix)(vitality|energy|sehat|strong|weak|constitution)"),
-}
 
 
 def health_validator_enabled() -> bool:
     return (os.environ.get("ASK_HEALTH_VALIDATOR") or "1").strip() != "0"
+
+
+def health_validator_block_on_fail() -> bool:
+    return (os.environ.get("ASK_HEALTH_VALIDATOR_BLOCK") or "1").strip() != "0"
 
 
 def health_validator_max_retries() -> int:
@@ -88,64 +64,6 @@ def health_validator_max_retries() -> int:
         return max(0, min(3, int(os.environ.get("ASK_HEALTH_VALIDATOR_RETRIES", "3"))))
     except (TypeError, ValueError):
         return 3
-
-
-def _user_asked_finance(question: str) -> bool:
-    return bool(_FINANCE_Q_RX.search(question or ""))
-
-
-def _answer_mentions_finance(answer: str) -> bool:
-    return bool(_FINANCE_A_RX.search(answer or ""))
-
-
-def _user_asked_career(question: str) -> bool:
-    return bool(_CAREER_Q_RX.search(question or ""))
-
-
-def _answer_mentions_career(answer: str) -> bool:
-    return bool(_CAREER_A_RX.search(answer or ""))
-
-
-def _user_asked_travel(question: str) -> bool:
-    return bool(_TRAVEL_Q_RX.search(question or ""))
-
-
-def _answer_mentions_travel(answer: str) -> bool:
-    return bool(_TRAVEL_A_RX.search(answer or ""))
-
-
-def _unasked_topic_issues(question: str, answer: str) -> list[str]:
-    q = (question or "").strip()
-    text = (answer or "").strip()
-    issues: list[str] = []
-    if _answer_mentions_finance(text) and not _user_asked_finance(q):
-        issues.append("unasked_finance")
-    if _answer_mentions_career(text) and not _user_asked_career(q):
-        issues.append("unasked_career")
-    return issues
-
-
-def _question_topic_matches(question: str, answer: str, archetype: str) -> bool:
-    q = (question or "").strip()
-    text = (answer or "").strip()
-    if not q or not text:
-        return False
-    if _unasked_topic_issues(q, text):
-        return False
-    if _user_asked_travel(q) and not _answer_mentions_travel(text):
-        return False
-    if is_disease_list_question(q):
-        return bool(re.search(
-            r"(?ix)(zone|tendency|ghar|rog|vulner|monitor|weak|6th|8th|12th|pressure|chart|lord|afflict)",
-            text,
-        ))
-    if re.search(r"(?ix)(thand|thandi|sardi|cold|khansi|saans|breath|chest|zukam)", q):
-        return bool(
-            re.search(r"(?ix)(thand|thandi|sardi|cold|khansi|saans|breath|chest|zukam)", text)
-            or answer_honest_low_tension(text)
-        )
-    hint_rx = _ARCH_ANSWER_HINTS.get(archetype) or _ARCH_ANSWER_HINTS.get("general_health")
-    return not hint_rx or bool(hint_rx.search(text))
 
 
 def _execution_from_meta(meta: dict[str, Any]) -> dict[str, Any]:
@@ -190,6 +108,222 @@ def _chart_signs(execution: dict[str, Any]) -> set[str]:
     return signs
 
 
+def _answer_word_limit(meta: dict[str, Any], question: str) -> int | None:
+    """Max words for simple/direct health questions (None = no length gate)."""
+    if _resolve_dna_contract(meta).get("answer_style"):
+        return None
+    q = (question or "").strip()
+    if not _SIMPLE_Q_RX.search(q):
+        return None
+    budget = int(meta.get("word_budget") or 0)
+    return max(60, min(110, budget if budget > 0 else 80))
+
+
+_DNA_STYLE_LIMITS: dict[str, dict[str, int]] = {
+    "short_2_3_lines": {"min_words": 8, "max_words": 55, "max_sentences": 3},
+    "short_paragraph": {"min_words": 28, "max_words": 95, "max_sentences": 6},
+    "detailed_explain": {"min_words": 65, "max_words": 220, "max_sentences": 12},
+}
+
+
+def _resolve_dna_contract(meta: dict[str, Any]) -> dict[str, str]:
+    """Question DNA fields used to gate health answers."""
+    out: dict[str, str] = {}
+    if not isinstance(meta, dict):
+        return out
+    for key in ("answer_style", "answer_approach", "user_wants", "intent"):
+        val = str(meta.get(key) or "").strip()
+        if val:
+            out[key] = val
+    item = meta.get("question_dna_item")
+    if isinstance(item, dict):
+        for key in ("answer_style", "answer_approach", "user_wants", "intent"):
+            val = str(item.get(key) or "").strip()
+            if val and key not in out:
+                out[key] = val
+    qd = meta.get("question_dna")
+    if isinstance(qd, dict):
+        qs = qd.get("questions")
+        if isinstance(qs, list) and qs and isinstance(qs[0], dict):
+            for key in ("answer_style", "answer_approach", "user_wants", "intent"):
+                val = str(qs[0].get(key) or "").strip()
+                if val and key not in out:
+                    out[key] = val
+    return out
+
+
+def _is_general_health_overview_question(question: str) -> bool:
+    return bool(_GENERAL_HEALTH_OVERVIEW_Q_RX.search(question or ""))
+
+
+def _is_surgery_risk_question(question: str) -> bool:
+    return bool(_SURGERY_RISK_Q_RX.search(question or ""))
+
+
+def _enrich_dna_contract(meta: dict[str, Any], question: str) -> dict[str, str]:
+    """Fill overview contract when Question DNA missing or mismatched on overview asks."""
+    contract = _resolve_dna_contract(meta)
+    is_overview_q = _is_general_health_overview_question(question) or (
+        _SIMPLE_Q_RX.search(question or "") and "health" in (question or "").lower()
+    )
+    if is_overview_q:
+        contract["answer_approach"] = _DEFAULT_OVERVIEW_PLAN
+        contract.setdefault("answer_style", "short_paragraph")
+        if not contract.get("user_wants"):
+            contract["user_wants"] = "User wants a general overview of their health."
+    for key, val in contract.items():
+        if val:
+            meta[key] = val
+    return contract
+
+
+def _should_skip_chart_proof(meta: dict[str, Any], question: str) -> bool:
+    contract = _resolve_dna_contract(meta)
+    if _is_general_overview_plan(contract.get("answer_approach", "")):
+        return True
+    if _is_general_health_overview_question(question):
+        return True
+    return False
+
+
+def _issues_after_judge_pass(issues: list[str]) -> list[str]:
+    """Judge PASS = DNA style/plan OK; drop soft alignment issues only."""
+    soft_exact = frozenset({
+        "answer_too_long",
+        "missing_action_guidance",
+    })
+    kept: list[str] = []
+    for issue in issues:
+        if issue.startswith(("dna_style_", "dna_plan_", "dna_judge:")):
+            continue
+        if issue in soft_exact:
+            continue
+        kept.append(issue)
+    return kept
+
+
+def _sentence_count(text: str) -> int:
+    parts = [p.strip() for p in re.split(r"[.!?।]+", text or "") if p.strip()]
+    return len(parts) if parts else (1 if (text or "").strip() else 0)
+
+
+def validate_dna_answer_style(answer: str, meta: dict[str, Any]) -> tuple[bool, list[str]]:
+    contract = _resolve_dna_contract(meta)
+    style = str(contract.get("answer_style") or "").strip().lower().replace(" ", "_").replace("-", "_")
+    if not style or style not in _DNA_STYLE_LIMITS:
+        return True, []
+    limits = _DNA_STYLE_LIMITS[style]
+    words = len((answer or "").split())
+    sentences = _sentence_count(answer or "")
+    issues: list[str] = []
+    if words > limits["max_words"]:
+        issues.append(f"dna_style_too_long:{style}")
+    if words < limits["min_words"]:
+        issues.append(f"dna_style_too_short:{style}")
+    if sentences > limits["max_sentences"]:
+        issues.append(f"dna_style_too_many_sentences:{style}")
+    return len(issues) == 0, issues
+
+
+_GENERAL_OVERVIEW_PLAN_RX = re.compile(
+    r"(?ix)(general overview|overall health|key health indicator|"
+    r"health aspect|without specific prediction|without.*remed|"
+    r"long[- ]term health tendenc)"
+)
+_TECHNICAL_JARGON_RX = re.compile(
+    r"(?ix)(vitality\s*score|\d+\s*/\s*100|recovery\s+capacity|"
+    r"enemy\s+sign|malefic|aspect\s+kar|H\d+\b|immunity\s+issues|"
+    r"chronic\s+aur|vitality\s+low\s*\()"
+)
+
+
+def _is_general_overview_plan(plan: str) -> bool:
+    return bool(_GENERAL_OVERVIEW_PLAN_RX.search(plan or ""))
+
+
+def _planet_house_citation_count(text: str) -> int:
+    return len(
+        re.findall(
+            r"(?ix)\b(Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn|Rahu|Ketu)\b"
+            r".{0,40}(?:ghar|house|H\s*\d|\d(?:st|nd|rd|th)\s+ghar)",
+            text or "",
+        )
+    )
+
+
+def _validate_general_overview_answer(text: str) -> tuple[bool, list[str]]:
+    """General overview plan — soft lifestyle tone, not planet-by-planet breakdown."""
+    issues: list[str] = []
+    if _TECHNICAL_JARGON_RX.search(text):
+        issues.append("dna_plan_too_technical")
+    if _planet_house_citation_count(text) >= 2:
+        issues.append("dna_plan_too_detailed_breakdown")
+    if not re.search(
+        r"(?ix)(foundation|overall|tendenc|stress|energy|digestion|balance|"
+        r"routine|neend|sleep|exercise|dhyan|sehat|health|wellness|beneficial|"
+        r"long[- ]term|kundli)",
+        text,
+    ):
+        issues.append("dna_plan_missing_overview_tone")
+    if re.search(r"(?ix)(remedy|upay|mantra|puja|daan|path)\b", text):
+        issues.append("dna_plan_has_remedies")
+    return len(issues) == 0, issues
+
+
+def validate_dna_answer_plan(answer: str, meta: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Regex fallback when LLM DNA judge is off. Primary plan check = dna_judge."""
+    if health_dna_judge_enabled():
+        return True, []
+    contract = _resolve_dna_contract(meta)
+    plan = str(contract.get("answer_approach") or "").strip()
+    if not plan:
+        return True, []
+    text = (answer or "").strip()
+    if not text:
+        return False, ["dna_plan_empty_answer"]
+    plan_l = plan.lower()
+    issues: list[str] = []
+
+    if _is_general_overview_plan(plan_l):
+        ok_ov, ov_issues = _validate_general_overview_answer(text)
+        if not ok_ov:
+            issues.extend(ov_issues)
+        return len(issues) == 0, issues
+
+    if re.search(r"(?ix)(present[- ]state|what is happening now|abhi)", plan_l):
+        if not re.search(r"(?ix)(abhi|filhal|currently|chal\s*raha|present|haal|dikh(ta|ti|raha|rahi))", text):
+            issues.append("dna_plan_present_state")
+
+    if re.search(r"(?ix)(timing|dasha|transit|window|lead with timing)", plan_l):
+        if not re.search(r"(?ix)(dasha|transit|window|saal|mahina|month|period|samay|phase|kab|timing)", text):
+            issues.append("dna_plan_timing_lead")
+
+    if re.search(r"(?ix)(cautious|avoid absolute|non-alarmist|gentle)", plan_l):
+        if re.search(r"(?ix)(pakka|100%|definitely|guarantee|zaroor\s+hoga|bilkul\s+hoga)", text):
+            issues.append("dna_plan_too_absolute")
+
+    if re.search(r"(?ix)(balanced|pros/cons|yes/no unless)", plan_l):
+        if re.search(r"(?ix)^(haan|nahi|yes|no)[.!]?\s*$", text.strip(), re.I):
+            issues.append("dna_plan_not_balanced")
+
+    if re.search(r"(?ix)(plain language|d1/d9|chart json|chart evidence)", plan_l):
+        execution = _execution_from_meta(meta)
+        if execution and not answer_cites_chart_proof(text, execution):
+            issues.append("dna_plan_missing_chart_cite")
+
+    if re.search(r"(?ix)(2[-–]4 short|short sentence|2-3 line)", plan_l):
+        words = len(text.split())
+        if words > 60 or _sentence_count(text) > 4:
+            issues.append("dna_plan_length_mismatch")
+
+    user_wants = str(contract.get("user_wants") or "").lower()
+    if user_wants and re.search(r"(?ix)(health|sehat|vitality|wellness)", user_wants):
+        if not re.search(r"(?ix)(health|sehat|vitality|chart|sharir|body|rog|immune|stress)", text):
+            issues.append("dna_plan_user_wants_miss")
+
+    return len(issues) == 0, issues
+
+
 def validate_health_llm_answer(
     question: str,
     answer: str,
@@ -207,16 +341,11 @@ def validate_health_llm_answer(
     if _SECTION_HEADER_RX.search(text):
         issues.append("template_sections")
 
-    archetype = str(meta.get("archetype") or classify_health_archetype(q) or "")
-    unasked = _unasked_topic_issues(q, text)
-    issues.extend(unasked)
-    if not _question_topic_matches(q, text, archetype) and not unasked:
-        issues.append("question_drift")
-
     if re.search(r"(?ix)\bkya\s+kar", q) and not _ACTION_RX.search(text):
         issues.append("missing_action_guidance")
 
-    if _SIMPLE_Q_RX.search(q) and len(text.split()) > 110:
+    word_limit = _answer_word_limit(meta, q)
+    if word_limit is not None and len(text.split()) > word_limit:
         issues.append("answer_too_long")
 
     execution = _execution_from_meta(meta)
@@ -251,9 +380,14 @@ def validate_health_llm_answer(
                 issues.append(f"invented_sign:{raw_sign}")
                 break
 
-    ok_proof, proof_issues = validate_chart_proof_requirement(q, text, archetype, execution)
-    if not ok_proof:
-        issues.extend(proof_issues)
+    if not health_dna_judge_enabled():
+        ok_style, style_issues = validate_dna_answer_style(text, meta)
+        if not ok_style:
+            issues.extend(style_issues)
+
+        ok_plan, plan_issues = validate_dna_answer_plan(text, meta)
+        if not ok_plan:
+            issues.extend(plan_issues)
 
     return len(issues) == 0, issues
 
@@ -271,23 +405,18 @@ def build_health_validator_display(
 
     ok_safe, safe_issues = verify_health_answer(q, text, meta)
     tpl_ok = not _SECTION_HEADER_RX.search(text)
-    archetype = str(meta.get("archetype") or classify_health_archetype(q) or "")
-    drift_ok = _question_topic_matches(q, text, archetype)
-    unasked = _unasked_topic_issues(q, text)
     action_ok = not re.search(r"(?ix)\bkya\s+kar", q) or bool(_ACTION_RX.search(text))
-    length_ok = not (_SIMPLE_Q_RX.search(q) and len(text.split()) > 110)
+    length_ok = True
+    word_limit = _answer_word_limit(meta, q)
+    if word_limit is not None:
+        length_ok = len(text.split()) <= word_limit
+    dna_contract = _resolve_dna_contract(meta)
+    style_ok, style_issues = validate_dna_answer_style(text, meta)
+    plan_ok, plan_issues = validate_dna_answer_plan(text, meta)
     json_issues = [
         i for i in issues
         if i.startswith(("invented_planet", "wrong_house", "invented_sign"))
     ]
-    proof_issues = [i for i in issues if i in (
-        "missing_chart_proof", "unsupported_claim_without_proof", "generic_advice_without_proof",
-    )]
-    execution = _execution_from_meta(meta)
-    supported, signals = chart_support_signals(q, archetype, execution)
-    has_proof = answer_cites_chart_proof(text, execution)
-    honest_low = answer_honest_low_tension(text)
-
     checks: list[dict[str, Any]] = [
         {
             "id": "safety",
@@ -302,18 +431,6 @@ def build_health_validator_display(
             "issues": ["template_sections"] if not tpl_ok else [],
         },
         {
-            "id": "unasked_topics",
-            "label": "No unasked finance/career topics",
-            "passed": not unasked,
-            "issues": unasked,
-        },
-        {
-            "id": "question_drift",
-            "label": "Answer matches question topic",
-            "passed": drift_ok,
-            "issues": ["question_drift"] if not drift_ok and not unasked else [],
-        },
-        {
             "id": "missing_action_guidance",
             "label": "Action guidance (kya karu)",
             "passed": action_ok,
@@ -326,25 +443,48 @@ def build_health_validator_display(
             "issues": ["answer_too_long"] if not length_ok else [],
         },
         {
+            "id": "dna_answer_style",
+            "label": "Matches Question DNA Answer Style",
+            "passed": style_ok,
+            "issues": style_issues,
+            "detail": dna_contract.get("answer_style") or "—",
+        },
+        {
+            "id": "dna_answer_plan",
+            "label": "Matches Question DNA LLM Answer Plan",
+            "passed": plan_ok,
+            "issues": plan_issues,
+            "detail": (dna_contract.get("answer_approach") or "—")[:160],
+        },
+        {
             "id": "json_facts",
             "label": "Chart JSON facts (D1 + D9)",
             "passed": not json_issues,
             "issues": json_issues,
         },
-        {
-            "id": "chart_proof",
-            "label": "Chart-backed proof cited",
-            "passed": not proof_issues,
-            "issues": proof_issues,
-            "detail": (
-                f"signals={len(signals)} proof={has_proof} honest_low={honest_low}"
-                if supported or proof_issues
-                else "n/a"
-            ),
-        },
     ]
 
     audit = stored_audit if isinstance(stored_audit, dict) else {}
+    judge_audit = audit.get("dna_judge") if isinstance(audit.get("dna_judge"), dict) else {}
+    judge_passed = judge_audit.get("passed") if judge_audit.get("enabled") else None
+    judge_fix_hint = str((judge_audit.get("parsed") or {}).get("fix_hint") or "").strip()
+
+    display_checks = list(checks)
+    if judge_passed is not None:
+        display_checks = [
+            c for c in display_checks
+            if c.get("id") not in ("dna_answer_style", "dna_answer_plan")
+        ]
+        display_checks.insert(0, {
+            "id": "dna_llm_judge",
+            "label": "Question DNA LLM Judge",
+            "passed": bool(judge_passed),
+            "issues": list(judge_audit.get("issues") or []),
+            "detail": judge_fix_hint[:200] if judge_fix_hint else "—",
+        })
+        if judge_passed is False:
+            ok = False
+
     return {
         "applies": True,
         "enabled": audit.get("enabled", health_validator_enabled()),
@@ -354,9 +494,15 @@ def build_health_validator_display(
         "released_anyway": bool(audit.get("released_anyway")),
         "final_issues": list(audit.get("final_issues") or []),
         "issues": issues,
-        "checks": checks,
-        "chart_support_signals": signals[:6],
+        "checks": display_checks,
         "source": "live_audit" if audit else "recomputed",
+        "dna_judge": {
+            "enabled": bool(judge_audit.get("enabled")),
+            "passed": judge_passed,
+            "issues": list(judge_audit.get("issues") or []),
+            "fix_hint": judge_fix_hint or None,
+            "skipped": judge_audit.get("skipped"),
+        },
     }
 
 
@@ -366,25 +512,62 @@ def build_health_validator_retry_feedback(
     meta: dict[str, Any] | None = None,
 ) -> str:
     meta = meta or {}
-    execution = _execution_from_meta(meta)
-    archetype = str(meta.get("archetype") or classify_health_archetype(question) or "")
-    _, signals = chart_support_signals(question, archetype, execution)
+    dna_contract = _resolve_dna_contract(meta)
     issue_hints = {
-        "question_drift": "Jawab me user ke sawal ki language/topic clearly cover karo.",
-        "unasked_finance": "User ne paisa/kharcha/insurance nahi pucha — finance topic hatao, sirf health/travel jawab do.",
-        "unasked_career": "User ne career/naukri nahi pucha — career topic mat add karo.",
-        "missing_chart_proof": "JSON se planet + ghar/sign/affliction cite karo (6th/8th/12th).",
         "disease_name": "Specific disease naam mat likho — vulnerability zones batao.",
+        "surgery_muhurat": "Operation/surgery ka date ya muhurat mat do — sirf cautious probability + doctor advice.",
+        "surgery_date_leak": "Surgery date/muhurat leak mat karo — probability only, surgeon clearance mandatory.",
+        "unsolicited_timing": "User ne exact timing nahi puchi — month/year/date hatao.",
         "missing_action_guidance": "Practical steps add karo (rest, doctor, routine).",
+        "answer_too_long": (
+            "Jawab bahut lamba hai — 2-4 chhote sentences (max ~60-80 words). "
+            "Sirf user ke sawal ka direct jawab; extra topics mat add karo."
+        ),
+        "dna_style_too_long": "Question DNA Answer Style ke hisaab se jawab chhota karo (style limit exceed).",
+        "dna_style_too_short": "Question DNA Answer Style ke hisaab se thoda detail badhao.",
+        "dna_style_too_many_sentences": "Question DNA Answer Style ke hisaab se kam sentences likho.",
+        "dna_plan_present_state": "LLM Answer Plan ke mutabiq present-state / abhi wala read do.",
+        "dna_plan_timing_lead": "LLM Answer Plan ke mutabiq pehle timing window (dasha/transit) batao.",
+        "dna_plan_too_absolute": "LLM Answer Plan cautious hai — pakka/guarantee wording hatao.",
+        "dna_plan_not_balanced": "LLM Answer Plan balanced guidance maangta hai — sirf haan/nahi mat do.",
+        "dna_plan_missing_chart_cite": "LLM Answer Plan chart JSON cite maangta hai — planet + ghar likho.",
+        "dna_plan_length_mismatch": "LLM Answer Plan short answer maangta hai — lamba mat likho.",
+        "dna_plan_user_wants_miss": "User wants (Question DNA) cover nahi hua — user_wants ke mutabiq jawab do.",
+        "dna_plan_too_technical": (
+            "LLM Answer Plan = general overview. Vitality score /100, H1/H8, enemy sign, "
+            "aspect laundry-list MAT likho. Soft overview do: stress, energy, digestion, routine."
+        ),
+        "dna_plan_too_detailed_breakdown": (
+            "Planet+ghar ki list mat do. 1 soft theme enough — overall health foundation, "
+            "stress/energy balance, lifestyle tips. Example tone: 'overall health foundation theek, "
+            "stress aur energy par dhyan dena zaroori'."
+        ),
+        "dna_plan_missing_overview_tone": (
+            "General overview chahiye — foundation/tendencies + lifestyle (routine, neend, exercise). "
+            "Medical diagnosis ya remedy mat do."
+        ),
+        "dna_plan_has_remedies": "LLM Answer Plan remedies forbid karta hai — upay/mantra hatao.",
+        "dna_judge": "Question DNA LLM judge — answer style/plan semantic match fail.",
+        "dna_judge_mismatch": "Answer Style ya LLM Answer Plan se clearly match nahi ho raha.",
     }
     lines = [
         "CORRECTION REQUIRED — previous answer failed validation.",
         f"User question: {question.strip()}",
+    ]
+    if dna_contract.get("answer_style"):
+        lines.append(f"Question DNA Answer Style (MUST match): {dna_contract['answer_style']}")
+    if dna_contract.get("answer_approach"):
+        lines.append(f"Question DNA LLM Answer Plan (MUST follow): {dna_contract['answer_approach']}")
+    if dna_contract.get("user_wants"):
+        lines.append(f"User wants: {dna_contract['user_wants']}")
+    judge_hint = str(meta.get("dna_judge_hint") or "").strip()
+    if judge_hint:
+        lines.append(f"DNA Judge fix hint: {judge_hint}")
+    lines.extend([
         "Rewrite using ONLY HEALTH_ENGINE_EXECUTION_JSON facts.",
         "Answer ONLY what was asked; no template sections; no invented planets/houses/signs.",
-        proof_retry_hint(signals, question),
         "Issues:",
-    ]
+    ])
     if "disease_name" in issues:
         lines.insert(
             5,
@@ -397,6 +580,49 @@ def build_health_validator_retry_feedback(
             lines.append(f"  → {hint}")
     lines.append("Return the corrected final answer only.")
     return "\n".join(lines)
+
+
+def _build_overview_final_repair_prompt(question: str, contract: dict[str, str]) -> str:
+    return f"""FINAL REWRITE — previous attempts failed validation.
+
+USER QUESTION: {question.strip()}
+USER WANTS: {contract.get("user_wants") or "General health overview"}
+ANSWER STYLE: {contract.get("answer_style") or "short_paragraph"}
+ANSWER PLAN: {contract.get("answer_approach") or _DEFAULT_OVERVIEW_PLAN}
+
+Write ONE soft health overview paragraph (4-6 sentences, Hinglish):
+- Overall health foundation / long-term tendencies
+- Stress, energy, digestion or balance themes (pick 1-2)
+- Healthy routine, sleep, exercise tip
+- End: tendencies only, not medical diagnosis
+- NO vitality score /100, NO planet+ghar list, NO remedies, NO disease names
+
+Return ONLY the final answer paragraph."""
+
+
+def _build_surgery_final_repair_prompt(
+    question: str,
+    contract: dict[str, str],
+    signals: list[str],
+) -> str:
+    signal_text = "; ".join(signals[:3]) if signals else "No strong surgery-specific signal in JSON."
+    return f"""FINAL REWRITE — previous surgery-risk attempts failed validation.
+
+USER QUESTION: {question.strip()}
+USER WANTS: {contract.get("user_wants") or "User asks whether operation/surgery may be needed in future."}
+ANSWER STYLE: {contract.get("answer_style") or "short_paragraph"}
+ANSWER PLAN: {contract.get("answer_approach") or "Give cautious probability, not certainty."}
+HEALTH_ENGINE_EXECUTION_JSON SIGNALS: {signal_text}
+
+Write ONE cautious Hinglish paragraph (4-6 sentences):
+- Directly answer operation/surgery possibility as probability only, never certainty
+- Use one natural chart proof from the JSON signals if available
+- No date, no muhurat, no month/year, no specific disease name
+- Do not say surgery is guaranteed or impossible
+- Add doctor/checkup advice
+- End with: this is not medical diagnosis
+
+Return ONLY the final answer paragraph."""
 
 
 def run_health_llm_validator_loop(
@@ -428,6 +654,7 @@ def run_health_llm_validator_loop(
     thread = list(messages)
     max_retries = health_validator_max_retries()
     text = ""
+    _enrich_dna_contract(meta, question)
 
     for attempt in range(max_retries + 1):
         audit["attempts"] = attempt + 1
@@ -436,14 +663,114 @@ def run_health_llm_validator_loop(
         )
         text = (resp.choices[0].message.content or "").strip()
         ok, issues = validate_health_llm_answer(question, text, meta)
+        contract = _enrich_dna_contract(meta, question)
+        ok_j = True
+        if health_dna_judge_enabled() and (
+            contract.get("answer_style") or contract.get("answer_approach")
+        ):
+            ok_j, j_issues, judge_hint, j_audit = llm_judge_health_dna_alignment(
+                client,
+                model,
+                question=question,
+                answer=text,
+                contract=contract,
+            )
+            audit["dna_judge"] = j_audit
+            if judge_hint:
+                meta["dna_judge_hint"] = judge_hint
+            if ok_j:
+                issues = _issues_after_judge_pass(issues)
+            else:
+                issues.extend([f"dna_judge:{i}" for i in j_issues])
+        ok = len(issues) == 0
         audit["issues"] = issues
         if ok:
             audit["passed"] = True
             return text, audit
         if attempt >= max_retries:
+            # Last-chance overview repair for general health asks
+            if _should_skip_chart_proof(meta, question):
+                try:
+                    repair_resp = client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": "Health astrology narrator. Plain Hinglish."},
+                            {"role": "user", "content": _build_overview_final_repair_prompt(question, contract)},
+                        ],
+                        temperature=0.2,
+                        max_tokens=max_tokens,
+                    )
+                    repaired = (repair_resp.choices[0].message.content or "").strip()
+                    if repaired:
+                        ok_r, issues_r = validate_health_llm_answer(question, repaired, meta)
+                        ok_j_r = True
+                        if health_dna_judge_enabled():
+                            ok_j_r, j_issues_r, _, j_audit_r = llm_judge_health_dna_alignment(
+                                client, model, question=question, answer=repaired, contract=contract,
+                            )
+                            audit["dna_judge"] = j_audit_r
+                            if ok_j_r:
+                                issues_r = _issues_after_judge_pass(issues_r)
+                            else:
+                                issues_r.extend([f"dna_judge:{i}" for i in j_issues_r])
+                        if len(issues_r) == 0:
+                            audit["passed"] = True
+                            audit["final_repair"] = "overview_rewrite"
+                            return repaired, audit
+                        text = repaired
+                        issues = issues_r
+                except Exception as exc:
+                    audit["final_repair_error"] = str(exc)[:120]
+
+            if _is_surgery_risk_question(question):
+                try:
+                    _, repair_signals = chart_support_signals(
+                        question,
+                        str(meta.get("archetype") or classify_health_archetype(question) or ""),
+                        _execution_from_meta(meta),
+                    )
+                    repair_resp = client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": "Health astrology narrator. Plain Hinglish. Medical-safe."},
+                            {
+                                "role": "user",
+                                "content": _build_surgery_final_repair_prompt(question, contract, repair_signals),
+                            },
+                        ],
+                        temperature=0.2,
+                        max_tokens=max_tokens,
+                    )
+                    repaired = (repair_resp.choices[0].message.content or "").strip()
+                    if repaired:
+                        ok_r, issues_r = validate_health_llm_answer(question, repaired, meta)
+                        ok_j_r = True
+                        if health_dna_judge_enabled():
+                            ok_j_r, j_issues_r, _, j_audit_r = llm_judge_health_dna_alignment(
+                                client, model, question=question, answer=repaired, contract=contract,
+                            )
+                            audit["dna_judge"] = j_audit_r
+                            if ok_j_r:
+                                issues_r = _issues_after_judge_pass(issues_r)
+                            else:
+                                issues_r.extend([f"dna_judge:{i}" for i in j_issues_r])
+                        if len(issues_r) == 0:
+                            audit["passed"] = True
+                            audit["final_repair"] = "surgery_risk_rewrite"
+                            return repaired, audit
+                        text = repaired
+                        issues = issues_r
+                except Exception as exc:
+                    audit["final_repair_error"] = str(exc)[:120]
+
             audit["passed"] = False
-            audit["released_anyway"] = bool(text)
             audit["final_issues"] = list(issues)
+            if health_validator_block_on_fail():
+                audit["final_block"] = True
+                audit["released_anyway"] = False
+                audit["blocked_answer_preview"] = text[:240] if text else ""
+                return "", audit
+            audit["released_anyway"] = bool(text)
             audit["final_block"] = not bool(text)
             return text, audit
         thread = thread + [

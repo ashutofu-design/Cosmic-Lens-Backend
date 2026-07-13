@@ -39,6 +39,10 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertIn("Intent", dna_labels)
         self.assertIn("Engine Archetype", dna_labels)
         self.assertIn("Bucket Match", dna_labels)
+        self.assertIn("LLM Understand Question", dna_labels)
+        self.assertIn("Understanding Confidence", dna_labels)
+        self.assertIn("Answer Style", dna_labels)
+        self.assertIn("LLM Answer Plan", dna_labels)
         self.assertIn("modules_skipped", obs["engine_execution"])
         self.assertIn("neutral", obs["planet_evidence"])
         self.assertIn("hallucination_summary", obs)
@@ -66,6 +70,10 @@ class TestAskObservabilityDebug(unittest.TestCase):
             "confidence": 0.97,
             "bucket_match_confidence": "high",
             "bucket_match_score": 0.97,
+            "user_wants": "User wants to know if her partner is interested in someone else.",
+            "understanding_confidence": 0.97,
+            "answer_style": "short_2_3_lines",
+            "answer_approach": "Direct present-state read — say clearly whether third-person interest is active now.",
         }
         ctx = {
             "question": q,
@@ -84,6 +92,14 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertEqual(pipeline["Modules"], "D1, D9, DASHA, TRANSIT")
         self.assertEqual(pipeline["Confidence"], "97%")
         self.assertEqual(pipeline["Bucket Match"], "HIGH (97%)")
+        self.assertEqual(
+            pipeline["LLM Understand Question"],
+            "User wants to know if her partner is interested in someone else.",
+        )
+        self.assertIn("97%", pipeline["Understanding Confidence"])
+        self.assertIn("Very high", pipeline["Understanding Confidence"])
+        self.assertEqual(pipeline["Answer Style"], "Short (2-3 lines)")
+        self.assertIn("present-state", pipeline["LLM Answer Plan"])
         self.assertEqual(pipeline["Timing Required"], "No")
         self.assertEqual(pipeline["Time Context"], "present")
 
@@ -227,9 +243,9 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertEqual(audit.get("source"), "live_audit")
         check_ids = {c.get("id") for c in audit.get("checks") or []}
         self.assertIn("safety", check_ids)
-        self.assertIn("question_drift", check_ids)
         self.assertIn("json_facts", check_ids)
-        self.assertIn("chart_proof", check_ids)
+        self.assertNotIn("question_drift", check_ids)
+        self.assertNotIn("chart_proof", check_ids)
 
 
 if __name__ == "__main__":

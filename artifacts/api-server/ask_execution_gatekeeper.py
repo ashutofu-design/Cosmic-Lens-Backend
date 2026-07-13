@@ -106,38 +106,6 @@ def gatekeeper_enabled() -> bool:
     return (os.environ.get("ASK_EXECUTION_GATEKEEPER") or "1").strip() != "0"
 
 
-def gatekeeper_health_enabled() -> bool:
-    """Opt-in: health execution gatekeeper (default OFF — DNA + health validator)."""
-    return (os.environ.get("ASK_EXECUTION_GATEKEEPER_HEALTH") or "0").strip() == "1"
-
-
-def skip_execution_gatekeeper_for_health(
-    admin: dict[str, Any] | None = None,
-    *,
-    slice_meta: dict[str, Any] | None = None,
-    question: str = "",
-) -> bool:
-    """True when health Qs should bypass execution gatekeeper (pre + post LLM)."""
-    if gatekeeper_health_enabled():
-        return False
-    meta = slice_meta if isinstance(slice_meta, dict) else {}
-    sl = str(meta.get("slice") or "").strip()
-    if sl == "health_engine_v1":
-        return True
-    if str(meta.get("topic") or "").strip().lower() == "health":
-        return True
-    exp = dna_expectation(admin, question=question)
-    if (exp.domain or "").strip().lower() == "health":
-        return True
-    if _question_health_expectation((question or "").strip()):
-        return True
-    return False
-
-
-def _health_gatekeeper_off_result(stage: str) -> GatekeeperResult:
-    return GatekeeperResult(True, stage, "ok", "health_gatekeeper_off")
-
-
 def _primary_item(admin: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(admin, dict):
         return {}
@@ -249,8 +217,6 @@ def enforce_dna_routing_flags(
     """When trusted DNA domain disagrees with resolver winner, force primary engine."""
     if not gatekeeper_enabled():
         return flags, None
-    if skip_execution_gatekeeper_for_health(admin, question=question):
-        return flags, None
     exp = dna_expectation(admin, question=question)
     if not exp.trusted or not exp.engine_key:
         return flags, None
@@ -333,8 +299,6 @@ def check_routing_gate(
 ) -> GatekeeperResult:
     if not gatekeeper_enabled():
         return GatekeeperResult(True, "routing", "disabled", "gate_off")
-    if skip_execution_gatekeeper_for_health(admin, question=question):
-        return _health_gatekeeper_off_result("routing")
     exp = dna_expectation(admin, question=question)
     if not exp.trusted or not exp.engine_key:
         return GatekeeperResult(True, "routing", "dna_not_trusted", "skip")
@@ -377,12 +341,12 @@ def check_engine_output_gate(
 ) -> GatekeeperResult:
     if not gatekeeper_enabled():
         return GatekeeperResult(True, "engine", "disabled", "gate_off")
-    if skip_execution_gatekeeper_for_health(admin, slice_meta=slice_meta, question=question):
-        return _health_gatekeeper_off_result("engine")
     meta = slice_meta if isinstance(slice_meta, dict) else {}
+    slice_id = str(meta.get("slice") or "").strip()
+    if slice_id == "health_engine_v1":
+        return GatekeeperResult(True, "engine", "exempt", "health_no_gatekeeper")
     exp = dna_expectation(admin, question=question)
     executed = str(meta.get("archetype") or "").strip().lower()
-    slice_id = str(meta.get("slice") or "").strip()
     failed: list[str] = []
 
     # Rule 1 — DNA archetype vs executed archetype
@@ -398,17 +362,6 @@ def check_engine_output_gate(
                 failed_checks=[f"dna={exp.archetype}", f"executed={executed}"],
                 retry_engine_key=exp.engine_key,
             )
-        if dom_dna == dom_exec == "health" and exp.archetype != executed:
-            # DNA bucket (e.g. general_health) vs unified D1/D9 executor label — OK on health slice.
-            if slice_id != "health_engine_v1":
-                return GatekeeperResult(
-                    ok=False,
-                    stage="engine",
-                    reason="routing_error",
-                    rule="rule_1_health_archetype_mismatch",
-                    failed_checks=[f"dna={exp.archetype}", f"executed={executed}"],
-                    retry_engine_key=exp.engine_key,
-                )
 
     # Rule 6 — health DNA + career engine
     if exp.trusted and (exp.domain == "health" or exp.archetype in HEALTH_ARCHETYPES):
@@ -515,10 +468,9 @@ def check_final_answer_gate(
 ) -> GatekeeperResult:
     if not gatekeeper_enabled():
         return GatekeeperResult(True, "final", "disabled", "gate_off")
-    if skip_execution_gatekeeper_for_health(
-        admin, slice_meta=slice_meta, question=question
-    ):
-        return _health_gatekeeper_off_result("final")
+    meta = slice_meta if isinstance(slice_meta, dict) else {}
+    if str(meta.get("slice") or "").strip() == "health_engine_v1":
+        return GatekeeperResult(True, "final", "exempt", "health_no_gatekeeper")
     text = (answer or "").strip()
     if not text:
         return GatekeeperResult(
@@ -527,8 +479,6 @@ def check_final_answer_gate(
             reason="empty_answer",
             rule="rule_8_empty",
         )
-    meta = slice_meta if isinstance(slice_meta, dict) else {}
-
     # Rule 5 — banned hedging / obvious hallucination tone
     if _HALLUCINATION_RX.search(text):
         return GatekeeperResult(
@@ -540,13 +490,6 @@ def check_final_answer_gate(
 
     # Rule 7 — domain leak in final text
     sl_dom = _slice_domain(meta)
-    if sl_dom == "health" and _CAREER_LEAK_RX.search(text) and not _HEALTH_LEAK_RX.search(text):
-        return GatekeeperResult(
-            ok=False,
-            stage="final",
-            reason="hallucination_detected",
-            rule="rule_7_career_leak_in_health_answer",
-        )
     if sl_dom == "career" and _HEALTH_LEAK_RX.search(text) and not _CAREER_LEAK_RX.search(text):
         return GatekeeperResult(
             ok=False,
@@ -558,12 +501,6 @@ def check_final_answer_gate(
     # Rule 8 — verdict alignment (soft: skip when answer is gatekeeper block text)
     if "execution_gatekeeper" in str(meta.get("source") or ""):
         return GatekeeperResult(True, "final", "ok", "blocked_message_ok")
-    # Health answers are quality-gated by the dedicated health answer validator
-    # (topic-match + chart-proof + safety). The old verbatim verdict-substring
-    # match conflicts with natural astrologer-tone answers, so we skip it for
-    # health and trust the validator instead.
-    if sl_dom == "health":
-        return GatekeeperResult(True, "final", "ok", "health_validator_owns_quality")
 
     return GatekeeperResult(True, "final", "ok", "final_ok")
 
@@ -660,10 +597,9 @@ def run_post_engine_gate(
     chart_text: str = "",
     question: str = "",
 ) -> GatekeeperResult:
-    if skip_execution_gatekeeper_for_health(
-        admin, slice_meta=slice_meta, question=question
-    ):
-        return _health_gatekeeper_off_result("engine")
+    meta = slice_meta if isinstance(slice_meta, dict) else {}
+    if str(meta.get("slice") or "").strip() == "health_engine_v1":
+        return GatekeeperResult(True, "engine", "exempt", "health_no_gatekeeper")
     eng = check_engine_output_gate(admin, slice_meta=slice_meta, question=question)
     if not eng.ok:
         return eng
@@ -696,62 +632,5 @@ def try_recover_engine_from_dna(
     *,
     wants_explain: bool = False,
 ) -> tuple[dict[str, Any], str] | None:
-    """One-shot recovery: re-run the DNA-locked engine when wrong engine executed."""
-    q = (question or "").strip()
-    exp = dna_expectation(admin, question=q)
-    if not exp.engine_key:
-        qexp = _question_health_expectation(q)
-        if qexp:
-            exp = qexp
-    if not exp.archetype and exp.engine_key == "health":
-        exp = DnaExpectation(
-            trusted=True,
-            domain="health",
-            archetype=_question_health_archetype(q) or "general_health",
-            bucket=_question_health_archetype(q) or "general_health",
-            source="question_regex",
-        )
-    if not exp.engine_key:
-        return None
-    if exp.engine_key == "health" and exp.archetype:
-        try:
-            from ask_health import run_health_static_engine
-            from ask_health.presenter import to_health_llm_payload
-
-            res = run_health_static_engine(
-                kundli,
-                q,
-                wants_explain=wants_explain,
-                archetype=exp.archetype,
-            )
-            chart_text = to_health_llm_payload(res, question=q)
-            checks = dict(res.checks or {})
-            checks["narrator_input"] = {
-                "question": q,
-                "d1": (checks.get("health_engine_execution") or {}).get("d1")
-                or checks.get("d1_health_facts")
-                or {},
-                "d9": (checks.get("health_engine_execution") or {}).get("d9")
-                or checks.get("d9_health_facts")
-                or {},
-            }
-            checks["gatekeeper_recovered"] = True
-            meta = {
-                "slice": "health_engine_v1",
-                "topic": "health",
-                "archetype": res.archetype,
-                "verdict": res.verdict,
-                "summary": list(res.summary or []),
-                "evidence": list(res.evidence or []),
-                "evidence_positive": list(res.evidence_positive or []),
-                "evidence_negative": list(res.evidence_negative or []),
-                "ignore": list(res.ignore or []),
-                "checks": checks,
-                "skip_llm": bool(res.skip_llm),
-                "word_budget": int(res.word_budget or 95),
-                "narrator_mode": "adaptive_d1_health_context",
-            }
-            return meta, chart_text
-        except Exception:
-            return None
+    """Gatekeeper DNA recovery — health has no execution gatekeeper."""
     return None

@@ -9115,24 +9115,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     eff_lang = _resolve_response_lang(question, lang, None)
 
     # ── Execution Gatekeeper — block LLM when DNA/engine/narrator pipeline invalid ──
-    _gk_skip_health_pre = False
-    try:
-        from ask_execution_gatekeeper import skip_execution_gatekeeper_for_health
-
-        _gk_skip_health_pre = skip_execution_gatekeeper_for_health(
-            _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else None,
-            question=question or "",
-        )
-    except Exception:
-        _gk_skip_health_pre = (
-            isinstance(dcr_love_meta, dict)
-            and dcr_love_meta.get("slice") == "health_engine_v1"
-        )
+    _gk_skip_health_pre = bool(_is_health_static) or (
+        isinstance(dcr_love_meta, dict)
+        and dcr_love_meta.get("slice") == "health_engine_v1"
+    )
     if _gk_skip_health_pre:
         print(
-            "[raw_passthrough] EXECUTION_GATEKEEPER skipped for health "
-            "(DNA + health validator)",
+            "[raw_passthrough] health — execution gatekeeper not used "
+            "(health validator only)",
             flush=True,
         )
 
@@ -10603,17 +10593,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 print(f"[raw_passthrough] FINANCE_ANSWER_GUARD skipped: {_fag}", flush=True)
         # health answer_guard disabled — only health_engine_execution_v1 D1/D9 → LLM
         # ── Execution Gatekeeper — final answer must match engine verdict ──
-        _gk_skip_health_post = False
-        try:
-            from ask_execution_gatekeeper import skip_execution_gatekeeper_for_health
-
-            _gk_skip_health_post = skip_execution_gatekeeper_for_health(
-                _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
-                slice_meta=dcr_love_meta,
-                question=question or "",
-            )
-        except Exception:
-            _gk_skip_health_post = dcr_love_meta.get("slice") == "health_engine_v1"
+        _gk_skip_health_post = bool(_is_health_static) or (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "health_engine_v1"
+        )
         if (
             isinstance(dcr_love_meta, dict)
             and dcr_love_meta.get("slice", "").endswith("_engine_v1")

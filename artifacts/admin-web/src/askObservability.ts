@@ -48,7 +48,29 @@ export interface ObservabilityHealthValidatorCheck {
   detail?: string;
 }
 
-export interface ObservabilityHealthDnaJudge {
+export interface ObservabilityHealthSelectedBlock {
+  id?: string;
+  label?: string;
+  why?: string;
+  detail?: string;
+}
+
+export interface ObservabilityHealthSelectedBlocks {
+  applies?: boolean;
+  focus?: string;
+  focus_label?: string;
+  expected_blocks?: ObservabilityHealthSelectedBlock[];
+  used_in_answer?: {
+    planets?: string[];
+    houses?: number[];
+    planet_house_cites?: string[];
+    dimension_themes?: string[];
+    blocks?: ObservabilityHealthSelectedBlock[];
+  };
+  overlap_notes?: string[];
+  contract?: Record<string, string>;
+  error?: string;
+}
   enabled?: boolean;
   passed?: boolean | null;
   issues?: string[];
@@ -68,6 +90,7 @@ export interface ObservabilityHealthDnaJudgeAudit {
   skipped?: string;
   error?: string;
   source?: string;
+  selected_blocks?: ObservabilityHealthSelectedBlocks;
 }
 
 /** Map legacy health_validator_audit rows → DNA Judge-only display shape. */
@@ -235,6 +258,7 @@ export interface AskObservability {
   engine_health?: ObservabilityEngineHealth;
   rule_decisions?: ObservabilityRuleDecision[];
   health_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
+  health_selected_blocks?: ObservabilityHealthSelectedBlocks;
   /** @deprecated alias — same payload as health_dna_judge_audit */
   health_validator_audit?: ObservabilityHealthDnaJudgeAudit;
   engine_execution?: {
@@ -1007,6 +1031,16 @@ function enrichObservability(
     },
     engine_health: obs.engine_health,
     rule_decisions: obs.rule_decisions,
+    health_selected_blocks:
+      (obs.health_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      ((obs.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined)?.selected_blocks as
+        | ObservabilityHealthSelectedBlocks
+        | undefined) ||
+      (checks.health_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.health_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      ((checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined)?.selected_blocks as
+        | ObservabilityHealthSelectedBlocks
+        | undefined),
     health_dna_judge_audit: normalizeHealthDnaJudgeAudit(
       obs.health_dna_judge_audit ||
         (checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
@@ -1346,6 +1380,26 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
     }
     if (judgeObs.fix_hint) {
       lines.push(`Fix hint: ${judgeObs.fix_hint}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("=== 4. LLM SELECTED JSON BLOCKS ===");
+  const blocksObs = obs.health_selected_blocks || obs.health_dna_judge_audit?.selected_blocks;
+  if (!blocksObs?.applies) {
+    lines.push("— (health questions only)", "");
+  } else {
+    lines.push(`Focus: ${blocksObs.focus_label || blocksObs.focus || "—"}`);
+    lines.push("Expected blocks:");
+    for (const b of blocksObs.expected_blocks || []) {
+      lines.push(`  • ${b.id}: ${b.label} — ${b.why || ""}`);
+    }
+    lines.push("Used in answer:");
+    for (const b of blocksObs.used_in_answer?.blocks || []) {
+      lines.push(`  • ${b.label}: ${b.detail || ""}`);
+    }
+    for (const note of blocksObs.overlap_notes || []) {
+      lines.push(`Note: ${note}`);
     }
     lines.push("");
   }

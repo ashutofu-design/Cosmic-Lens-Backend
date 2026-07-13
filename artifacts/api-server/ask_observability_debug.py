@@ -1315,6 +1315,37 @@ def _hallucination_summary(
     }
 
 
+def _health_selected_blocks_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    if not _is_health_observability_ctx(ctx, question_text):
+        return {"applies": False}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    stored = (
+        _dig(ctx, sm, key="health_selected_blocks")
+        or (
+            (_dig(ctx, sm, key="health_dna_judge_audit") or {}).get("selected_blocks")
+            if isinstance(_dig(ctx, sm, key="health_dna_judge_audit"), dict)
+            else None
+        )
+    )
+    if isinstance(stored, dict) and stored.get("applies") and stored.get("expected_blocks"):
+        return stored
+    meta: dict[str, Any] = {}
+    for key in ("user_wants", "intent", "normalized_question", "question_type"):
+        val = sm.get(key) if isinstance(sm, dict) else None
+        if val not in (None, ""):
+            meta[key] = val
+    try:
+        from ask_health.selected_blocks import build_health_selected_blocks
+
+        return build_health_selected_blocks(question_text, answer_text, meta=meta)
+    except Exception as exc:
+        return {"applies": True, "error": str(exc)[:120]}
+
+
 def _health_dna_judge_section(
     ctx: dict[str, Any],
     question_text: str,
@@ -1414,6 +1445,17 @@ def build_observability_debug(
         and _is_health_observability_ctx(ctx, question_text)
     )
     health_dna_judge_audit = _health_dna_judge_section(ctx, question_text, answer_text)
+    health_selected_blocks = _health_selected_blocks_section(ctx, question_text, answer_text)
+    if (
+        isinstance(health_dna_judge_audit, dict)
+        and isinstance(health_dna_judge_audit.get("selected_blocks"), dict)
+        and not health_selected_blocks.get("expected_blocks")
+    ):
+        health_selected_blocks = health_dna_judge_audit["selected_blocks"]
+    # Keep selected_blocks on judge audit for admin convenience
+    if isinstance(health_dna_judge_audit, dict) and health_selected_blocks.get("applies"):
+        health_dna_judge_audit = dict(health_dna_judge_audit)
+        health_dna_judge_audit.setdefault("selected_blocks", health_selected_blocks)
     trace_labels = [
         "Question",
         "DNA",
@@ -1442,6 +1484,7 @@ def build_observability_debug(
         "engine_health": engine_health,
         "health_dna_judge_audit": health_dna_judge_audit,
         "health_validator_audit": health_dna_judge_audit,
+        "health_selected_blocks": health_selected_blocks,
         "rule_decisions": decision_table,
         "engine_execution": {
             "display_mode": "health_charts" if health_charts_mode else "engine_rules",
@@ -1621,7 +1664,25 @@ def build_ask_debug_export_text(row: dict[str, Any]) -> str:
         if judge_obs.get("fix_hint"):
             lines.append(f"Fix hint: {judge_obs.get('fix_hint')}")
     lines.append("")
-    lines.append("=== 5. PLANET EVIDENCE ===")
+    lines.append("=== 5. LLM SELECTED JSON BLOCKS (question-aware) ===")
+    blocks_obs = obs.get("health_selected_blocks") or {}
+    if not blocks_obs.get("applies"):
+        lines.append("— (health questions only)")
+    else:
+        lines.append(f"Focus: {blocks_obs.get('focus_label') or blocks_obs.get('focus') or '—'}")
+        lines.append("Expected blocks (LLM should pick for this question):")
+        for b in blocks_obs.get("expected_blocks") or []:
+            if isinstance(b, dict):
+                lines.append(f"  • {b.get('id')}: {b.get('label')} — {b.get('why')}")
+        used = blocks_obs.get("used_in_answer") or {}
+        lines.append("Used in answer:")
+        for b in used.get("blocks") or []:
+            if isinstance(b, dict):
+                lines.append(f"  • {b.get('label')}: {b.get('detail')}")
+        for note in blocks_obs.get("overlap_notes") or []:
+            lines.append(f"Note: {note}")
+    lines.append("")
+    lines.append("=== 6. PLANET EVIDENCE ===")
     lines.append("Positive:")
     pos = evidence.get("positive") or []
     if not pos:
@@ -1639,11 +1700,11 @@ def build_ask_debug_export_text(row: dict[str, Any]) -> str:
             lines.append(f"  • {item.get('label') or '?'}")
     lines.extend([
         "",
-        "=== 6. CONFLICT RESOLUTION ===",
+        "=== 7. CONFLICT RESOLUTION ===",
         f"Conflict: {conflict.get('conflict') or conflict.get('final_result') or 'None'}",
         f"Reason: {conflict.get('reason') or '—'}",
         "",
-        "=== 7. SCORECARD ===",
+        "=== 8. SCORECARD ===",
     ])
     if scorecard:
         for key, val in scorecard.items():
@@ -1651,7 +1712,7 @@ def build_ask_debug_export_text(row: dict[str, Any]) -> str:
     else:
         lines.append("—")
     lines.append("")
-    lines.append("=== 8. NARRATOR INPUT (JSON) ===")
+    lines.append("=== 9. NARRATOR INPUT (JSON) ===")
     narrator_input = obs.get("narrator_input")
     if narrator_input:
         try:
@@ -1663,10 +1724,10 @@ def build_ask_debug_export_text(row: dict[str, Any]) -> str:
         lines.append("—")
     lines.append("")
     lines.extend([
-        "=== 9. NARRATOR OUTPUT ===",
+        "=== 10. NARRATOR OUTPUT ===",
         str(obs.get("narrator_output") or row.get("answer_text") or "—"),
         "",
-        "=== 10. HALLUCINATION CHECK ===",
+        "=== 11. HALLUCINATION CHECK ===",
     ])
     hall = obs.get("hallucination_summary") if isinstance(obs.get("hallucination_summary"), dict) else {}
     for key, label in (

@@ -290,6 +290,18 @@ def run_health_llm_with_dna_judge(
         if contract.get(k)
     }
 
+    try:
+        from .selected_blocks import build_health_selected_blocks
+
+        audit["selected_blocks"] = build_health_selected_blocks(
+            question, text, meta=contract,
+        )
+    except Exception as exc:
+        audit["selected_blocks"] = {
+            "applies": True,
+            "error": str(exc)[:120],
+        }
+
     if health_dna_judge_enabled():
         ok_j, j_issues, fix_hint, j_audit = llm_judge_health_dna_alignment(
             client,

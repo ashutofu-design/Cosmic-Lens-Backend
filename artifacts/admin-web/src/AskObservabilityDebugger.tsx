@@ -6,6 +6,7 @@ import {
   resolveAskObservability,
   normalizeHealthDnaJudgeAudit,
   type ObservabilityHealthDnaJudgeAudit,
+  type ObservabilityHealthSelectedBlocks,
   type ObservabilityRule,
 } from "./askObservability";
 
@@ -297,6 +298,83 @@ function HealthDnaJudgePanel({ audit }: { audit: ObservabilityHealthDnaJudgeAudi
   );
 }
 
+function HealthSelectedBlocksPanel({
+  audit,
+}: {
+  audit: ObservabilityHealthSelectedBlocks | undefined;
+}) {
+  if (!audit?.applies) {
+    return (
+      <p className="detail-muted">
+        Question-selected JSON blocks apply only to health questions. Re-ask a health question
+        after API deploy.
+      </p>
+    );
+  }
+
+  if (audit.error) {
+    return <p className="detail-muted">Selected blocks error: {audit.error}</p>;
+  }
+
+  const expected = audit.expected_blocks || [];
+  const used = audit.used_in_answer?.blocks || [];
+
+  return (
+    <div className="obs-validator">
+      <p className="detail-muted" style={{ marginBottom: 10 }}>
+        Focus: <strong>{audit.focus_label || audit.focus || "—"}</strong>
+        {" — "}
+        full HEALTH JSON bheja, LLM ne sawal ke hisaab se yeh blocks pick karne chahiye / answer me
+        yeh dikhe.
+      </p>
+
+      <p className="detail-muted" style={{ margin: "8px 0 4px" }}>
+        <strong>Expected for this question</strong> (LLM should select)
+      </p>
+      {expected.length === 0 ? (
+        <p className="detail-muted">—</p>
+      ) : (
+        <div className="obs-rule-decisions">
+          {expected.map((b) => (
+            <div key={b.id || b.label} className="obs-rule-decision-row">
+              <div className="obs-rule-decision-head">
+                <span>
+                  <code>{b.id}</code> — {b.label}
+                </span>
+              </div>
+              {b.why ? <p className="detail-muted obs-rule-reason">{b.why}</p> : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="detail-muted" style={{ margin: "12px 0 4px" }}>
+        <strong>Detected in final answer</strong> (what LLM used)
+      </p>
+      {used.length === 0 ? (
+        <p className="detail-muted">—</p>
+      ) : (
+        <div className="obs-rule-decisions">
+          {used.map((b) => (
+            <div key={b.id || b.label} className="obs-rule-decision-row">
+              <div className="obs-rule-decision-head">
+                <span>{b.label || b.id}</span>
+              </div>
+              {b.detail ? <p className="detail-muted obs-rule-reason">{b.detail}</p> : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(audit.overlap_notes || []).length > 0 ? (
+        <p className="detail-muted" style={{ marginTop: 10 }}>
+          {(audit.overlap_notes || []).join(" · ")}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function formatMs(ms: number | null | undefined): string {
   if (ms == null) return "—";
   return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${ms}ms`;
@@ -313,6 +391,9 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
   const dnaJudgeAudit = normalizeHealthDnaJudgeAudit(
     obs.health_dna_judge_audit || obs.health_validator_audit,
   );
+  const selectedBlocks =
+    obs.health_selected_blocks ||
+    (dnaJudgeAudit as ObservabilityHealthDnaJudgeAudit | undefined)?.selected_blocks;
 
   return (
     <div className="obs-debugger">
@@ -372,6 +453,10 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
 
       <Section title="3. Question DNA Judge" stars={5}>
         <HealthDnaJudgePanel audit={dnaJudgeAudit} />
+      </Section>
+
+      <Section title="4. LLM Selected JSON Blocks" stars={5}>
+        <HealthSelectedBlocksPanel audit={selectedBlocks} />
       </Section>
     </div>
   );

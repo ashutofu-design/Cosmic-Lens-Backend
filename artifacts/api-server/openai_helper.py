@@ -10929,6 +10929,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _pt_checks[_ck] = _sm_checks[_ck]
             if _health_dna_judge_audit:
                 _pt_checks["health_dna_judge_audit"] = _health_dna_judge_audit
+                if isinstance(_health_dna_judge_audit.get("selected_blocks"), dict):
+                    _pt_checks["health_selected_blocks"] = _health_dna_judge_audit[
+                        "selected_blocks"
+                    ]
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
             _pt_checks["career_engine"] = "v1"
             _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (

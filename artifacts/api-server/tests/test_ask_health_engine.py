@@ -38,7 +38,7 @@ _FOUNDATION_10 = [
     ("Recovery capacity strong hai?", "recovery_capacity"),
     ("Accident ka risk chart me?", "accident_risk"),
     ("Papa ki tabiyat kharab hai chart se batao", "parent_health"),
-    ("Mujhe kaun si bimari hai chart se bata", "refuse_diagnosis"),
+    ("Mujhe kaun si bimari hai chart se bata", "health_engine_execution_v1"),
 ]
 
 
@@ -139,12 +139,12 @@ class TestAskHealthEngine(unittest.TestCase):
         dom, _b, is_t = resolve_timing_domain("kab thik honga main?")
         self.assertTrue(is_t and dom == "health")
 
-    def test_timing_decline_hard_guard_in_scope(self):
+    def test_timing_decline_routes_to_health_engine(self):
         from ask_health.timing_registry import is_health_timing_question
 
         self.assertFalse(is_health_timing_question("kab beemar honga?"))
         self.assertTrue(is_health_static_question("kab beemar honga?"))
-        self.assertEqual(classify_health_archetype("kab beemar honga?"), "refuse_timing_decline")
+        self.assertEqual(classify_health_archetype("kab beemar honga?"), "health_engine_execution_v1")
 
     def test_static_health_outlook_not_timing(self):
         from ask_health.timing_registry import is_health_timing_question
@@ -209,13 +209,13 @@ class TestAskHealthEngine(unittest.TestCase):
 
     def test_hard_guards_cancer_death(self):
         cancer_cases = [
-            ("kya mujhe cancer hai chart me?", "refuse_diagnosis"),
-            ("Do I have cancer in my kundli?", "refuse_diagnosis"),
-            ("mera cancer hoga kya?", "refuse_diagnosis"),
+            "kya mujhe cancer hai chart me?",
+            "Do I have cancer in my kundli?",
+            "mera cancer hoga kya?",
         ]
-        for q, expected in cancer_cases:
+        for q in cancer_cases:
             with self.subTest(q=q):
-                self.assertEqual(classify_health_archetype(q), expected)
+                self.assertEqual(classify_health_archetype(q), "health_engine_execution_v1")
         death_cases = [
             ("kab marunga main?", "refuse_death"),
             ("death kab hogi meri?", "refuse_death"),
@@ -282,16 +282,24 @@ class TestAskHealthEngine(unittest.TestCase):
         checks = res.checks or {}
         self.assertIn(checks.get("severity"), ("Low", "Moderate", "High"))
 
-    def test_hard_guard_skips_llm(self):
+    def test_hard_guard_skips_llm_only_for_death(self):
         res = run_health_static_engine(
             _SAMPLE_KUNDLI,
-            "mujhe kaun si bimari hai",
-            archetype="refuse_diagnosis",
+            "kab marunga main?",
+            archetype="refuse_death",
         )
         self.assertTrue(res.skip_llm)
         self.assertTrue(res.template_text)
 
-    def test_asthma_question_routes_to_health(self):
+    def test_only_death_and_crisis_hard_guards(self):
+        from health_focus_routing import detect_hard_guard
+
+        self.assertEqual(detect_hard_guard("kab marunga main?"), "REFUSE_DEATH")
+        self.assertEqual(detect_hard_guard("mujhe marna hai"), "CRISIS_REDIRECT")
+        self.assertIsNone(detect_hard_guard("kya mujhe asthma he"))
+        self.assertIsNone(detect_hard_guard("kya mujhe cancer hai"))
+        self.assertIsNone(detect_hard_guard("kab thik hounga"))
+        self.assertIsNone(detect_hard_guard("operation kab hoga"))
         q = "kya mujhse asthma he"
         self.assertTrue(is_health_static_question(q))
         self.assertEqual(classify_health_archetype(q), "health_engine_execution_v1")

@@ -47,8 +47,6 @@ ACCEPTABLE = frozenset({
     "cross_domain:foreign_education",
     "cross_domain:love",
     "hard_guard:REFUSE_DEATH",
-    "hard_guard:REFUSE_DIAGNOSIS",
-    "hard_guard:REFUSE_CURE_GUARANTEE",
 })
 
 

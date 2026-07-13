@@ -6,7 +6,7 @@ ANSWER STYLE rules) was permanently removed 2026-07-12. Health answers now
 use ask_health engine + generic MR narrator only.
 
 This module retains:
-  • Hard-guard detection (CRISIS, REFUSE_*)
+  • Hard-guard detection (CRISIS + death/lifespan only)
   • is_health_question scope gate
   • Medical disclaimer + forbidden-vocab post-injectors
 """
@@ -36,7 +36,9 @@ _CRISIS_RX = _re.compile(
     r"(suicide|khud[\s-]?kushi|atm[\s-]?hatya|atmhatya|"
     r"khatam\s+kar\s+(lu|du|dunga|loon)|"
     r"jeena\s+nahi\s+chahta|marna\s+chahta|mujhe\s+marna\s+hai|"
-    r"end\s+(my\s+)?life|kill\s+(myself|me))",
+    r"end\s+(my\s+)?life|kill\s+(myself|me)|"
+    r"kisi\s+ko\s+maar|kisi\s+ko\s+mar\s+du|kill\s+(him|her|them|someone)|"
+    r"khud\s+ko\s+nuksan|self[\s-]?harm|hurt\s+myself)",
     _re.IGNORECASE,
 )
 
@@ -135,41 +137,13 @@ _CURE_GUARANTEE_RX = _re.compile(
 
 
 def detect_hard_guard(question: str) -> Optional[str]:
-    """Returns the matching REFUSE/CRISIS block tag if Q hits a hard
-    guard, else None. Order = severity priority (CRISIS first).
-
-    Order rationale: RECOVERY checked BEFORE DECLINE because phrases like
-    "bimari kab jayegi" (bimari going away = recovery) are ambiguous
-    against DECLINE's "bimari kab" pattern. RECOVERY's positive-direction
-    cues take precedence."""
+    """Only block crisis/self-harm and death/lifespan asks — all other health Qs answer."""
     if not isinstance(question, str) or not question.strip():
         return None
     if _CRISIS_RX.search(question):
         return "CRISIS_REDIRECT"
     if _DEATH_RX.search(question):
         return "REFUSE_DEATH"
-    if _DISEASE_NAME_DEMAND_RX.search(question):
-        return "REFUSE_DIAGNOSIS"
-    if _DIAGNOSIS_DEMAND_RX.search(question):
-        return "REFUSE_DIAGNOSIS"
-    # Timing windows → health_engine_v1 (dasha + disclaimer), not static refuse
-    try:
-        from ask_health.timing_registry import is_health_timing_question  # type: ignore
-
-        if is_health_timing_question(question):
-            if _CURE_GUARANTEE_RX.search(question):
-                return "REFUSE_CURE_GUARANTEE"
-            return None
-    except Exception:
-        pass
-    if _TIMING_RECOVERY_RX.search(question):
-        return "REFUSE_TIMING_RECOVERY"
-    if _TIMING_DECLINE_RX.search(question):
-        return "REFUSE_TIMING_DECLINE"
-    if _TIMING_SURGERY_RX.search(question):
-        return "REFUSE_SURGERY_MUHURAT"
-    if _CURE_GUARANTEE_RX.search(question):
-        return "REFUSE_CURE_GUARANTEE"
     return None
 
 

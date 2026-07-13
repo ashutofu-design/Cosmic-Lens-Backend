@@ -75,10 +75,6 @@ def verify_health_answer(
         return False, ["empty_answer"]
     if _BANNED_LABEL_RX.search(text):
         issues.append("template_labels")
-    answer_diseases = _disease_tokens_in(text)
-    question_diseases = _disease_tokens_in(q)
-    if answer_diseases and not answer_diseases.issubset(question_diseases):
-        issues.append("disease_name")
     if _DEATH_PRED_RX.search(text):
         issues.append("death_prediction")
     if _CURE_GUARANTEE_RX.search(text):

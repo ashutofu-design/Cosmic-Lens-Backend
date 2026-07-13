@@ -350,17 +350,6 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         )
         self.assertTrue(ok, issues)
 
-    def test_blocks_unasked_disease_name_in_answer(self):
-        from ask_health.answer_guard import verify_health_answer
-
-        ok, issues = verify_health_answer(
-            "kya mujhse asthma he",
-            "Aapko diabetes ki tendency dikh rahi hai chart me.",
-            {"archetype": "health_engine_execution_v1"},
-        )
-        self.assertFalse(ok)
-        self.assertIn("disease_name", issues)
-
 
 if __name__ == "__main__":
     unittest.main()

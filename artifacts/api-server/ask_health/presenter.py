@@ -11,7 +11,7 @@ QUESTION_PRIORITY_FACTS_LABEL = "QUESTION_PRIORITY_FACTS:"
 
 
 def to_health_llm_payload(result: EngineResult, *, question: str = "") -> str:
-    """Full D1/D9 Engine Execution + compact ranked facts for this question."""
+    """Full D1/D9 Engine Execution + compact ranked facts (+ timing dasha if any)."""
     checks = dict(result.checks or {})
     execution = checks.get("health_engine_execution") or {}
     payload = {
@@ -19,6 +19,9 @@ def to_health_llm_payload(result: EngineResult, *, question: str = "") -> str:
         "d1": execution.get("d1") or checks.get("d1_health_facts") or {},
         "d9": execution.get("d9") or checks.get("d9_health_facts") or {},
     }
+    dasha = execution.get("dasha_timing_compact") if isinstance(execution, dict) else None
+    if isinstance(dasha, dict) and (dasha.get("current") or dasha.get("top_windows")):
+        payload["dasha_timing_compact"] = dasha
     parts = [
         HEALTH_ENGINE_EXECUTION_JSON_LABEL + "\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

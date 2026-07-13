@@ -16,12 +16,20 @@ _HARD_GUARD_ARCHETYPES = frozenset({
 })
 
 
-def _attach_health_engine_execution(result: EngineResult, kundli: dict) -> EngineResult:
+def _attach_health_engine_execution(
+    result: EngineResult,
+    kundli: dict,
+    *,
+    question: str = "",
+) -> EngineResult:
     """Persist fixed D1 + D9 health chart pack for LLM + admin Engine Execution."""
     try:
         from health_static.health_facts import compute_health_engine_execution
 
-        pack = compute_health_engine_execution(kundli if isinstance(kundli, dict) else {})
+        pack = compute_health_engine_execution(
+            kundli if isinstance(kundli, dict) else {},
+            question=question or "",
+        )
         checks = dict(result.checks or {})
         checks["health_engine_execution"] = pack
         checks["d1_health_facts"] = pack.get("d1") or {}
@@ -70,4 +78,4 @@ def run_health_static_engine(
             "archetype": archetype,
         },
     )
-    return _attach_health_engine_execution(result, kundli)
+    return _attach_health_engine_execution(result, kundli, question=question or "")

@@ -8771,6 +8771,27 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             f"verdict={_timing_ctx.verdict!r}",
                             flush=True,
                         )
+                        if _td == "health" and isinstance(kundli, dict):
+                            try:
+                                from health_static.health_facts import (
+                                    compute_health_engine_execution,
+                                )
+
+                                _hee = compute_health_engine_execution(
+                                    kundli, question=question or "",
+                                )
+                                if isinstance(dcr_love_meta, dict):
+                                    _hc = dict(dcr_love_meta.get("checks") or {})
+                                    _hc["health_engine_execution"] = _hee
+                                    _hc["d1_health_facts"] = _hee.get("d1") or {}
+                                    _hc["d9_health_facts"] = _hee.get("d9") or {}
+                                    dcr_love_meta["checks"] = _hc
+                            except Exception as _hee_exc:
+                                print(
+                                    f"[raw_passthrough] health EE dasha attach "
+                                    f"skipped: {_hee_exc}",
+                                    flush=True,
+                                )
         except Exception as _ute:
             print(f"[raw_passthrough] unified timing skipped: {_ute}")
 

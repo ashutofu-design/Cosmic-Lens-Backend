@@ -702,10 +702,20 @@ def compute_d9_health_facts(kundli: dict) -> Dict[str, Any]:
     )
 
 
-def compute_health_engine_execution(kundli: dict) -> Dict[str, Any]:
-    """Fixed D1 + D9 health chart pack for admin Engine Execution and LLM context."""
-    d1 = compute_health_facts(kundli if isinstance(kundli, dict) else {})
-    d9 = compute_d9_health_facts(kundli if isinstance(kundli, dict) else {})
+def compute_health_engine_execution(
+    kundli: dict,
+    *,
+    question: str = "",
+    llm_intent: Optional[dict] = None,
+) -> Dict[str, Any]:
+    """Fixed D1 + D9 health chart pack for admin Engine Execution and LLM context.
+
+    Timing questions only: also attaches ``dasha_timing_compact`` (current MD/AD/PD
+    + top windows from a 10y internal scan — not the full dasha tree).
+    """
+    chart = kundli if isinstance(kundli, dict) else {}
+    d1 = compute_health_facts(chart)
+    d9 = compute_d9_health_facts(chart)
 
     d1_map = {
         str(p.get("name") or ""): p
@@ -732,7 +742,7 @@ def compute_health_engine_execution(kundli: dict) -> Dict[str, Any]:
             "vargottama": is_vargottama,
         })
 
-    return {
+    pack: Dict[str, Any] = {
         "schema_version": "health_engine_execution_v1",
         "d1": d1,
         "d9": d9,
@@ -745,3 +755,13 @@ def compute_health_engine_execution(kundli: dict) -> Dict[str, Any]:
         ],
         "vargottama_details": vargottama_details,
     }
+    if (question or "").strip():
+        try:
+            from ask_health.dasha_compact import maybe_attach_dasha_compact
+
+            maybe_attach_dasha_compact(
+                pack, chart, question, llm_intent=llm_intent,
+            )
+        except Exception:
+            pass
+    return pack

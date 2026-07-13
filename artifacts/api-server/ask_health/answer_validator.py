@@ -56,7 +56,8 @@ def health_validator_enabled() -> bool:
 
 
 def health_validator_block_on_fail() -> bool:
-    return (os.environ.get("ASK_HEALTH_VALIDATOR_BLOCK") or "1").strip() != "0"
+    """Default OFF — release last LLM draft rather than empty block (mobile needs text)."""
+    return (os.environ.get("ASK_HEALTH_VALIDATOR_BLOCK") or "0").strip() == "1"
 
 
 def health_validator_max_retries() -> int:
@@ -352,33 +353,30 @@ def validate_health_llm_answer(
     planet_houses = _planet_house_map(execution)
     allowed_signs = _chart_signs(execution)
 
-    for name in _PLANET_NAMES:
-        if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
-            if name.lower() not in planet_houses:
-                issues.append(f"invented_planet:{name}")
+    # Only enforce chart-fact JSON when execution pack is present — empty
+    # execution used to mark every planet/sign mention as hallucinated.
+    if planet_houses:
+        for name in _PLANET_NAMES:
+            if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
+                if name.lower() not in planet_houses:
+                    issues.append(f"invented_planet:{name}")
 
-    for match in _PLANET_IN_HOUSE_RX.finditer(text):
-        planet = str(match.group(1) or "").strip().lower()
-        house = int(match.group(2) or 0)
-        houses = planet_houses.get(planet) or set()
-        if houses and house not in houses:
-            issues.append(f"wrong_house:{match.group(1)}:H{house}")
+        for match in _PLANET_IN_HOUSE_RX.finditer(text):
+            planet = str(match.group(1) or "").strip().lower()
+            house = int(match.group(2) or 0)
+            houses = planet_houses.get(planet) or set()
+            if houses and house not in houses:
+                issues.append(f"wrong_house:{match.group(1)}:H{house}")
 
-    for sign in allowed_signs:
-        if not sign or len(sign) < 3:
-            continue
-        sign_title = sign.title()
-        if re.search(rf"\b{re.escape(sign_title)}\b", text, re.IGNORECASE):
-            continue
-    # Signs in answer not in chart (common hallucination)
-    for raw_sign in (
-        "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-        "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
-    ):
-        if re.search(rf"\b{raw_sign}\b", text, re.IGNORECASE):
-            if raw_sign.lower() not in allowed_signs:
-                issues.append(f"invented_sign:{raw_sign}")
-                break
+    if allowed_signs:
+        for raw_sign in (
+            "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+            "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+        ):
+            if re.search(rf"\b{raw_sign}\b", text, re.IGNORECASE):
+                if raw_sign.lower() not in allowed_signs:
+                    issues.append(f"invented_sign:{raw_sign}")
+                    break
 
     if not health_dna_judge_enabled():
         ok_style, style_issues = validate_dna_answer_style(text, meta)

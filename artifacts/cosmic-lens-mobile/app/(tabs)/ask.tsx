@@ -118,11 +118,10 @@ const STARTERS = [
 
 // ── Recent-Questions formatters ──────────────────────────────────────────
 // `verdict_summary` is a structured tag emitted by the engine layer (e.g.
-// "answered:health", "yellow_wait", "love_likely"). Map a small known set
-// to user-friendly Hinglish labels; fall back to title-casing otherwise.
+// "yellow_wait", "love_likely"). Map a small known set to user-friendly
+// Hinglish labels; fall back to title-casing otherwise.
 const VERDICT_LABELS: Record<string, string> = {
   "answered":         "Reply mila",
-  "answered:health":  "Health update",
   "answered:career":  "Career update",
   "answered:love":    "Love update",
   "answered:marriage":"Marriage update",
@@ -142,6 +141,7 @@ const VERDICT_LABELS: Record<string, string> = {
 };
 function prettyVerdict(raw: string): string {
   const v = (raw || "").trim().toLowerCase();
+  if (v === "answered:health") return "Reply mila";
   if (VERDICT_LABELS[v]) return VERDICT_LABELS[v];
   // Generic fallback: drop "answered:" prefix and title-case rest.
   const clean = v.replace(/^answered:/, "").replace(/[_:]/g, " ");
@@ -1401,6 +1401,16 @@ export default function AskScreen() {
         // ── Auth error (401) — restore on regenerate, error bubble on fresh
         if (res.status === 401) {
           failQuietly("Session expired — kripya logout karke phir login karein.");
+          return;
+        }
+
+        // ── Kundli missing (412) — profile birth details needed
+        if (res.status === 412) {
+          const json = await res.json().catch(() => ({} as any));
+          failQuietly(
+            json?.message ||
+              "Aapki kundli save nahi hai. Profile me birth details save karke dubara try karein.",
+          );
           return;
         }
 

@@ -8216,7 +8216,6 @@ def ask_route():
     # postinjectors can run. Killswitch: HEALTH_CRISIS_PREGATE=0 disables.
     try:
         if os.environ.get("HEALTH_CRISIS_PREGATE", "1") != "0":
-            from health_focus_routing import ATOMIC_CHECKS as _hfr_atomic
             from health_focus_routing import (
                 detect_hard_guard as _hfr_detect_hg,
             )  # type: ignore
@@ -8922,8 +8921,6 @@ def tts_route():
 def ask_stream_route():
     import itertools
 
-    from subscription_helper import consume_question, effective_plan
-
     data = request.get_json(force=True, silent=True) or {}
     question = data.get("question", "")
     kundli = data.get("kundli")
@@ -9263,6 +9260,32 @@ def ask_stream_route():
     # ── Auth + quota — identical contract to /api/ask ────────────────────────
     user = None
     _api_key_stream = request.headers.get("X-API-Key", "").strip()
+    try:
+        from subscription_helper import consume_question, effective_plan
+    except Exception as _sub_legacy_imp:
+        import traceback
+
+        print(
+            f"[ask/stream] subscription_helper import failed (legacy path): "
+            f"{_sub_legacy_imp}",
+            flush=True,
+        )
+        traceback.print_exc()
+        return (
+            jsonify(
+                {
+                    "text": (
+                        "Server update incomplete (subscription_helper). "
+                        "Deploy subscription_helper.py and restart."
+                    ),
+                    "topic": "general",
+                    "confidence": 0.0,
+                    "source": "subscription_helper_import_error",
+                    "follow_ups": [],
+                }
+            ),
+            503,
+        )
     if user_id or _api_key_stream:
         from question_history import resolve_user_for_ask_request
 

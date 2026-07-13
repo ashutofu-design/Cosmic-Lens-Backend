@@ -286,6 +286,65 @@ class HealthAnswerValidatorTests(unittest.TestCase):
         self.assertIn("unsolicited_timing", issues)
 
     def test_blocks_after_max_retries(self):
+        os.environ["ASK_HEALTH_VALIDATOR_BLOCK"] = "1"
+        try:
+            class _Msg:
+                def __init__(self, content):
+                    self.content = content
+
+            class _Choice:
+                def __init__(self, content):
+                    self.message = _Msg(content)
+
+            class _Resp:
+                def __init__(self, content):
+                    self.choices = [_Choice(content)]
+
+            class _Client:
+                def __init__(self):
+                    self.n = 0
+
+                class chat:
+                    class completions:
+                        @staticmethod
+                        def create(**_kwargs):
+                            return _Client._next()
+
+                _answers = [
+                    "Pollution se bacho aur pranayama karo.",
+                    "Pollution se bacho aur pranayama karo.",
+                    "Pollution se bacho aur pranayama karo.",
+                    "Pollution se bacho aur pranayama karo.",
+                ]
+                _i = 0
+
+                @classmethod
+                def _next(cls):
+                    content = cls._answers[min(cls._i, len(cls._answers) - 1)]
+                    cls._i += 1
+                    return _Resp(content)
+
+            meta = {
+                "archetype": "respiratory_health",
+                "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
+            }
+            text, audit = run_health_llm_validator_loop(
+                _Client(),
+                model="test",
+                messages=[{"role": "user", "content": "test"}],
+                max_tokens=100,
+                question="mujhse thandi bahut rehti hai kya karu",
+                meta=meta,
+            )
+            self.assertFalse(text)
+            self.assertFalse(audit.get("passed"))
+            self.assertTrue(audit.get("final_block"))
+            self.assertFalse(audit.get("released_anyway"))
+            self.assertTrue(audit.get("final_issues") or audit.get("issues"))
+        finally:
+            os.environ.pop("ASK_HEALTH_VALIDATOR_BLOCK", None)
+
+    def test_releases_draft_when_block_disabled(self):
         class _Msg:
             def __init__(self, content):
                 self.content = content
@@ -299,46 +358,40 @@ class HealthAnswerValidatorTests(unittest.TestCase):
                 self.choices = [_Choice(content)]
 
         class _Client:
-            def __init__(self):
-                self.n = 0
-
             class chat:
                 class completions:
                     @staticmethod
                     def create(**_kwargs):
-                        return _Client._next()
+                        return _Resp("Pollution se bacho aur pranayama karo.")
 
-            _answers = [
-                "Pollution se bacho aur pranayama karo.",
-                "Pollution se bacho aur pranayama karo.",
-                "Pollution se bacho aur pranayama karo.",
-                "Pollution se bacho aur pranayama karo.",
-            ]
-            _i = 0
+        os.environ["ASK_HEALTH_VALIDATOR_BLOCK"] = "0"
+        try:
+            meta = {
+                "archetype": "respiratory_health",
+                "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
+            }
+            text, audit = run_health_llm_validator_loop(
+                _Client(),
+                model="test",
+                messages=[{"role": "user", "content": "test"}],
+                max_tokens=100,
+                question="mujhse thandi bahut rehti hai kya karu",
+                meta=meta,
+            )
+            self.assertTrue(text)
+            self.assertTrue(audit.get("released_anyway"))
+        finally:
+            os.environ.pop("ASK_HEALTH_VALIDATOR_BLOCK", None)
 
-            @classmethod
-            def _next(cls):
-                content = cls._answers[min(cls._i, len(cls._answers) - 1)]
-                cls._i += 1
-                return _Resp(content)
-
-        meta = {
-            "archetype": "respiratory_health",
-            "checks": {"health_engine_execution": _SAMPLE_EXECUTION},
-        }
-        text, audit = run_health_llm_validator_loop(
-            _Client(),
-            model="test",
-            messages=[{"role": "user", "content": "test"}],
-            max_tokens=100,
-            question="mujhse thandi bahut rehti hai kya karu",
-            meta=meta,
+    def test_skips_invented_planet_when_execution_missing(self):
+        meta = {"archetype": "general_health", "checks": {}}
+        ok, issues = validate_health_llm_answer(
+            "mere health ke bare me kuch batao",
+            "Sun 1st ghar me strong hai, overall vitality achhi lagti hai.",
+            meta,
         )
-        self.assertFalse(text)
-        self.assertFalse(audit.get("passed"))
-        self.assertTrue(audit.get("final_block"))
-        self.assertFalse(audit.get("released_anyway"))
-        self.assertTrue(audit.get("final_issues") or audit.get("issues"))
+        self.assertTrue(ok, issues)
+        self.assertFalse(any("invented" in i for i in issues))
 
     def test_allows_asthma_in_answer_when_user_asked_asthma(self):
         from ask_health.answer_guard import verify_health_answer

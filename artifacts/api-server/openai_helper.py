@@ -10303,6 +10303,35 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 meta=_health_meta,
             )
             if not _llm_raw_text:
+                _blocked_preview = str(
+                    _health_validator_audit.get("blocked_answer_preview") or ""
+                ).strip()
+                if _blocked_preview:
+                    try:
+                        from ask_health.answer_guard import guard_health_answer
+
+                        _released, _guard_meta = guard_health_answer(
+                            question or "",
+                            _blocked_preview,
+                            _health_meta,
+                        )
+                        if str(_released or "").strip():
+                            _llm_raw_text = str(_released).strip()
+                            _health_validator_audit["released_anyway"] = True
+                            _health_validator_audit["release_path"] = "guard_after_block"
+                            _health_validator_audit["guard"] = _guard_meta
+                            print(
+                                "[raw_passthrough] HEALTH_VALIDATOR released guarded draft "
+                                f"issues={_health_validator_audit.get('final_issues')}",
+                                flush=True,
+                            )
+                    except Exception as _guard_exc:
+                        print(
+                            f"[raw_passthrough] HEALTH_VALIDATOR guard release skipped: "
+                            f"{_guard_exc}",
+                            flush=True,
+                        )
+            if not _llm_raw_text:
                 print(
                     f"[raw_passthrough] HEALTH_VALIDATOR blocked "
                     f"issues={_health_validator_audit.get('final_issues') or _health_validator_audit.get('issues')}",

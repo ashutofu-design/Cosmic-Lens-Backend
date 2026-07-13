@@ -153,7 +153,7 @@ def _archetype_extra_rules(
         )
     elif arch == "job_vs_business":
         rules.append(
-            "Job vs business — Big Picture = clear JOB or BUSINESS pick per VERDICT "
+            "Job vs business — open with clear JOB or BUSINESS pick per VERDICT "
             "(include ~% split if engine gives it). Do NOT say pehle job phir business unless Hybrid."
         )
 
@@ -213,11 +213,11 @@ def build_mr_engine_narrator_system_prompt(
     if (is_partner_nature or arch == "partner_nature") and question_focus != "partnership_attachment":
         extras = (
             "IF user asked a SPECIFIC trait (gussa, expressive, dominant, respect) — "
-            "open Big Picture with clear haan/nahi from matching evidence.\n" + extras
+            "open with clear haan/nahi from matching evidence.\n" + extras
         )
     if arch == "love_vs_arranged" or "arrange" in arch:
         extras += (
-            "\nIf engine gives love vs arranged % split — LEAD Big Picture with those numbers only."
+            "\nIf engine gives love vs arranged % split — LEAD with those numbers in the first sentence only."
         )
 
     if _is_health_archetype(arch):
@@ -259,8 +259,8 @@ def build_mr_engine_narrator_system_prompt(
         engine_lock = (
             "ENGINE LOCK: Facts below are final — narrate and EXPAND them; never recalculate or contradict VERDICT.\n"
             "Do NOT add new planets/houses/dasha reasons beyond ENGINE FACTS.\n"
-            "If user asked for % / kitna / ratio, lead Big Picture with engine numbers only — do not invent figures.\n"
-            "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष — use the Markdown section headers given."
+            "If user asked for % / kitna / ratio, lead with engine numbers in the opening line only — do not invent figures.\n"
+            "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष, Big Picture, Kyun aisa, Ab kya karein."
         )
 
     intent_block = ""

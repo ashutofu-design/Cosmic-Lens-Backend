@@ -382,22 +382,14 @@ def format_engine_rich_plain(
         except Exception:
             return body
 
-    use_hi = (lang or "").strip().lower() in ("hi", "hn") or bool(re.search(r"[\u0900-\u097F]", q))
-    if use_hi:
-        return (
-            f"**मुख्य बात**\n{big}\n\n"
-            f"---\n\n"
-            f"**क्यों ऐसा लगता है**\n" + "\n".join(why_parts) + "\n\n"
-            f"---\n\n"
-            f"**अब क्या करें**\n" + "\n".join(practical[:3])
-        )
-    return (
-        f"**The Big Picture**\n{big}\n\n"
-        f"---\n\n"
-        f"**Kyun aisa lagta hai**\n" + "\n".join(why_parts) + "\n\n"
-        f"---\n\n"
-        f"**Ab kya karein**\n" + "\n".join(practical[:3])
+    why_text = " ".join(
+        re.sub(r"^[*•]\s+", "", p).strip() for p in why_parts if p.strip()
     )
+    practical_text = " ".join(
+        re.sub(r"^[*•]\s+", "", p).strip() for p in practical[:3] if p.strip()
+    )
+    parts = [big.strip(), why_text, practical_text]
+    return "\n\n".join(p for p in parts if p)
 
 
 def _mr_engine_llm_narrator_enabled(arch: str) -> bool:

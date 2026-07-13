@@ -122,7 +122,8 @@ def build_no_engine_llm_rules(
         "No dedicated engine ran for this question — YOU answer fully.\n"
         "Read the question carefully; answer ONLY what was asked (not a generic lecture).\n"
         "Use chart data for facts; never invent placements, signs, houses, or calendar dates.\n"
-        "Warm Hinglish markdown: **The Big Picture** → **Kyun** → **Ab kya karein**.\n"
+        "Warm Hinglish natural paragraphs — direct answer first, then reasons, then practical tip.\n"
+        "NO section headers, NO 'Big Picture / Kyun / Ab kya karein' template.\n"
     )
 
 

@@ -33,7 +33,7 @@ CONTENT EXPANSION (mandatory — never give a one-liner):
 _COSMO_ASK_MARKDOWN_BATCH = """
 STRUCTURE (batch test — short direct answer only):
 • 2–4 sentences total: direct stance (haan / nahi / mixed) + 1–2 plain reasons from engine evidence.
-• NO section headers (no "The Big Picture", no "---", no bullet lists).
+• NO section headers, NO "---" dividers, NO bullet lists.
 • Plain paragraph(s) only. No planet/house/sign jargon in the reply.
 """.strip()
 
@@ -42,7 +42,9 @@ _COSMO_HEALTH_ADAPTIVE = """
 2. HEALTH_ENGINE_EXECUTION_JSON POORA padho — d1/d9 planets, health_houses, house_lords,
    afflictions, dimensions, vargottama. Sirf isi JSON se facts lo; khud se mat banao.
 3. Sawal ke hisaab se JSON me relevant ghar/planet dhundho (6th=disease, 8th=chronic, 12th=hospital)
-   aur jawab me wahi planet + ghar/sign/affliction cite karo.
+   aur jawab me wahi planet + ghar/sign/affliction cite karo — MANDATORY.
+   Example: "Moon 6th ghar me weak hai, isliye immunity kamzor lag sakti hai."
+   Bina planet+ghar cite kiye health claim mat likho.
 4. Sirf pucha hua jawab do — extra filler mat do. Har claim ke saath chart proof ho. Paisa/kharcha/career tabhi likho jab user ne woh pucha ho.
 5. Signal nahi ho to seedha bolo tendency zyada nahi; generic advice bina proof ke mat do.
 6. "Kya kya disease/bimari" = vulnerability zones (6th/8th/12th + planet proof) — diabetes/cancer
@@ -51,26 +53,22 @@ _COSMO_HEALTH_ADAPTIVE = """
 8. Natural Hinglish astrologer tone.
 """.strip()
 
+_COSMO_HEALTH_OVERVIEW = """
+1. User ne general health overview maanga hai — soft paragraph do, technical breakdown nahi.
+2. HEALTH_ENGINE_EXECUTION_JSON padho sirf overall tendency samajhne ke liye — user ko planet+ghar list mat do.
+3. Jawab me overall health foundation, stress/energy/digestion themes (1-2), healthy routine/sleep/exercise tip do.
+4. NO vitality score /100, NO Mars H1 / Rahu H8 jaisi listing, NO remedies/upay, NO specific disease naam.
+5. End me likho: yeh long-term health tendencies hain, medical diagnosis nahi.
+6. Natural warm Hinglish — 4-6 sentences, short_paragraph style.
+""".strip()
+
 _COSMO_ASK_MARKDOWN = """
-STRUCTURE & SCANNABILITY (strict Markdown — never a dense wall of text):
-
-**The Big Picture**
-1–2 sentences: direct answer to what the user asked (verdict tone from engine).
-
----
-
-**Kyun aisa lagta hai (deep breakdown)**
-2–4 short paragraphs expanding the strongest engine evidence — daily life meaning,
-relatable examples, honest nuance if mixed.
-
----
-
-**Ab kya karein (practical)**
-• 2–4 bullet action steps or habits/remedies grounded in the evidence (no invented rituals).
-
-> One motivational takeaway or gentle warning — honest, warm, memorable.
-
-Use **bold** for key phrases. Use * bullets only in the practical section. Use --- between sections.
+STRUCTURE (natural paragraph — never use section headers or template labels):
+• Open with a direct answer to what the user asked (verdict tone from engine).
+• Then 2–4 short paragraphs: expand strongest engine evidence in daily-life language.
+• End with 1–2 practical habits or next steps woven into prose (no bullet list required).
+• NO section headers, NO "---" dividers, NO "Big Picture / Kyun / Ab kya karein" labels.
+• Hide planet/house/sign jargon — plain Hinglish the user can feel and use.
 """.strip()
 
 _ENGINE_SLICE_IDS = frozenset({
@@ -106,12 +104,14 @@ def build_health_ask_length_block(
     *,
     wants_explain: bool = False,
     extra_rules: str = "",
+    overview_mode: bool = False,
 ) -> str:
     rules = f"\n{extra_rules.strip()}\n" if extra_rules.strip() else ""
+    adaptive = _COSMO_HEALTH_OVERVIEW if overview_mode else _COSMO_HEALTH_ADAPTIVE
     return f"""
 You are Cosmo Ask — Vedic health chart par natural jawab dete ho.
 
-{_COSMO_HEALTH_ADAPTIVE}
+{adaptive}
 {rules}
 """.strip()
 
@@ -147,6 +147,11 @@ _AI_FILLER_RX = re.compile(
     r")\b[,.]?\s*"
 )
 
+_COSMO_SECTION_HEADER_RX = re.compile(
+    r"(?im)^\*\*(?:The Big Picture|Kyun aisa(?:\s+lagta\s+hai)?(?:\s*\(deep breakdown\))?|"
+    r"Ab kya karein(?:\s*\(practical\))?|मुख्य बात|क्यों ऐसा लगता है|अब क्या करें)\*\*\s*\n?"
+)
+
 
 def enforce_cosmo_engine_answer(
     text: str,
@@ -161,6 +166,8 @@ def enforce_cosmo_engine_answer(
     raw = _AI_FILLER_RX.sub("", raw).strip()
     if "👉" in raw:
         raw = raw.split("👉")[0].strip()
+    raw = _COSMO_SECTION_HEADER_RX.sub("", raw)
+    raw = re.sub(r"\n*---+\n*", "\n\n", raw).strip()
     if concise:
         raw = re.sub(r"\*\*[^*]+\*\*", "", raw)
         raw = re.sub(r"\n*---+\n*", " ", raw)

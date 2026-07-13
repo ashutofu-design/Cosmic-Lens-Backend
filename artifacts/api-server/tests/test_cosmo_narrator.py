@@ -22,15 +22,16 @@ class TestCosmoNarrator(unittest.TestCase):
         self.assertTrue(is_cosmo_engine_slice("health_engine_v1"))
         self.assertFalse(is_cosmo_engine_slice("timing_v1"))
 
-    def test_prompt_has_markdown_sections(self):
+    def test_prompt_uses_paragraph_structure_not_big_picture(self):
         prompt = build_mr_engine_narrator_system_prompt(
             chart_text="VERDICT: test\n+ Venus in 9th",
             archetype="open_chart_qa",
             open_chart_qa=True,
         )
         self.assertIn("Cosmo Ask", prompt)
-        self.assertIn("The Big Picture", prompt)
-        self.assertIn("Ab kya karein", prompt)
+        self.assertNotIn("The Big Picture", prompt)
+        self.assertNotIn("Ab kya karein", prompt)
+        self.assertIn("natural paragraph", prompt.lower())
 
     def test_batch_concise_prompt_is_short_form(self):
         prompt = build_mr_engine_narrator_system_prompt(
@@ -43,7 +44,7 @@ class TestCosmoNarrator(unittest.TestCase):
         self.assertIn("35", prompt)
         self.assertIn("90", prompt)
 
-    def test_enforce_preserves_markdown(self):
+    def test_enforce_strips_legacy_big_picture_headers(self):
         md = (
             "**The Big Picture**\n"
             "Bhai, tera love style warm aur expressive hai.\n\n"
@@ -56,13 +57,16 @@ class TestCosmoNarrator(unittest.TestCase):
             "> Patience se bond strong hota hai."
         )
         out = enforce_cosmo_engine_answer(md)
-        self.assertIn("---", out)
-        self.assertIn("* Baat-cheet", out)
+        self.assertNotIn("The Big Picture", out)
+        self.assertNotIn("Kyun aisa", out)
+        self.assertNotIn("Ab kya karein", out)
+        self.assertIn("warm aur expressive", out)
 
     def test_length_block_word_range(self):
         block = build_cosmo_ask_length_block(wants_explain=False, topic="love")
         self.assertIn("180", block)
         self.assertIn("280", block)
+        self.assertNotIn("The Big Picture", block)
 
 
 if __name__ == "__main__":

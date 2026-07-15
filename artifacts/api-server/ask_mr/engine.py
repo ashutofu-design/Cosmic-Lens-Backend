@@ -11,23 +11,18 @@ def _legacy_slice_enabled() -> bool:
     return (os.environ.get("ASK_MR_ENGINE") or "1").strip() == "0"
 
 
-def run_mr_static_engine(
-    kundli: dict,
+def _legacy_archetype_engines_enabled() -> bool:
+    """Escape hatch: per-archetype score engines (pre-unified Execution)."""
+    return (os.environ.get("ASK_MR_LEGACY_ARCHETYPE_ENGINES") or "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _resolve_mr_archetype_label(
     question: str,
-    *,
-    birth: Any = None,
-    wants_explain: bool = False,
-    archetype: str | None = None,
-) -> EngineResult:
-    """MR static engine entrypoint. Set ASK_MR_ENGINE=0 to force legacy slice upstream.
-
-    When `archetype` is provided (e.g. from the LLM-first intent classifier)
-    it is used directly instead of the regex `classify_mr_archetype`, letting
-    the caller route nuanced questions the regex would mislabel.
-    """
-    if _legacy_slice_enabled():
-        raise RuntimeError("ASK_MR_ENGINE=0 — caller should use legacy marriage slice")
-
+    archetype: str | None,
+) -> str:
+    """Classify routing label only — does not run score engines."""
     archetype = (archetype or "").strip().lower()
     try:
         from ask_chart_open_qa import should_use_open_chart_qa
@@ -41,8 +36,6 @@ def run_mr_static_engine(
     try:
         from ask_route_from_understanding import is_native_love_chart_question
 
-        # Native love-yog reads: only bump archetypes already in the dating/romance lane.
-        # Promise Qs (general_mr, partner_nature, love-life success) keep classifier choice.
         if is_native_love_chart_question(question or "") and archetype in (
             "dating_courtship",
             "chemistry",
@@ -68,8 +61,52 @@ def run_mr_static_engine(
         except Exception:
             pass
     if not archetype:
-        archetype = classify_mr_archetype(question)
+        archetype = classify_mr_archetype(question) or "general_mr"
+    return archetype
 
+
+def _attach_relationship_engine_execution(
+    result: EngineResult,
+    kundli: dict,
+    *,
+    question: str = "",
+    llm_intent: dict | None = None,
+) -> EngineResult:
+    """Persist fixed D1 + D9 relationship chart pack (health-style)."""
+    try:
+        from relationship_static.relationship_facts import (
+            compute_relationship_engine_execution,
+        )
+
+        pack = compute_relationship_engine_execution(
+            kundli if isinstance(kundli, dict) else {},
+            question=question or "",
+            routing_label=result.archetype or "",
+            llm_intent=llm_intent,
+        )
+        checks = dict(result.checks or {})
+        checks["relationship_engine_execution"] = pack
+        checks["d1_relationship_facts"] = pack.get("d1") or {}
+        checks["d9_relationship_facts"] = pack.get("d9") or {}
+        checks["engine_version"] = "relationship_engine_execution_v1"
+        checks["routing_label"] = result.archetype
+        result.checks = checks
+    except Exception as exc:
+        checks = dict(result.checks or {})
+        checks["relationship_engine_execution_error"] = str(exc)[:180]
+        result.checks = checks
+    return result
+
+
+def _run_legacy_archetype_engines(
+    kundli: dict,
+    question: str,
+    *,
+    birth: Any = None,
+    wants_explain: bool = False,
+    archetype: str,
+) -> EngineResult:
+    """Pre-unified path: dispatch to 31 archetype score engines / v2."""
     if archetype:
         try:
             from ask_mr.v2 import run_engine_v2, v2_enabled_for
@@ -243,6 +280,73 @@ def run_mr_static_engine(
     return run_general_mr(kundli, question, wants_explain=wants_explain)
 
 
+def run_mr_static_engine(
+    kundli: dict,
+    question: str,
+    *,
+    birth: Any = None,
+    wants_explain: bool = False,
+    archetype: str | None = None,
+    llm_intent: dict | None = None,
+) -> EngineResult:
+    """MR static engine entrypoint — unified relationship_engine_execution_v1 by default.
+
+    Archetype is a routing label (question focus). Set
+    ASK_MR_LEGACY_ARCHETYPE_ENGINES=1 to restore per-archetype score engines.
+    Set ASK_MR_ENGINE=0 to force legacy marriage slice upstream.
+    """
+    if _legacy_slice_enabled():
+        raise RuntimeError("ASK_MR_ENGINE=0 — caller should use legacy marriage slice")
+
+    label = _resolve_mr_archetype_label(question, archetype)
+
+    # Open-chart Q&A stays on its dedicated path (locked topic facts).
+    if label == "open_chart_qa":
+        from ask_chart_open_qa import run_open_chart_qa
+
+        return run_open_chart_qa(kundli, question, wants_explain=wants_explain)
+
+    if _legacy_archetype_engines_enabled():
+        result = _run_legacy_archetype_engines(
+            kundli,
+            question,
+            birth=birth,
+            wants_explain=wants_explain,
+            archetype=label,
+        )
+        return _attach_relationship_engine_execution(
+            result, kundli, question=question or "", llm_intent=llm_intent,
+        )
+
+    # Unified path (health-style): one D1+D9 pack; archetype = routing label only.
+    result = EngineResult(
+        archetype=label,
+        verdict="",
+        confidence="medium",
+        word_budget=85 if wants_explain else 65,
+        answer_plan=(
+            "Read RELATIONSHIP_ENGINE_EXECUTION_JSON (D1 + D9). "
+            f"routing_label={label} is the answer focus only — answer the user's exact "
+            "relationship question in warm Hinglish using pack facts, not invented placements."
+        ),
+        summary=[
+            "Unified relationship pack: D1 + D9 axes (7L / Venus / Moon / manglik).",
+            f"Routing label (focus): {label}",
+        ],
+        evidence=[],
+        ignore=["exact marriage date", "death prediction", "medical diagnosis"],
+        checks={
+            "slice_type": "mr_engine_v1",
+            "archetype": label,
+            "routing_label": label,
+            "unified_execution": True,
+        },
+    )
+    return _attach_relationship_engine_execution(
+        result, kundli, question=question or "", llm_intent=llm_intent,
+    )
+
+
 def mr_engine_slice_meta(result: EngineResult) -> dict[str, Any]:
     """Admin/debug slice_meta for MR engine — includes positive/negative evidence split."""
     pos, neg, neu = result._finalize_evidence_split()
@@ -269,6 +373,7 @@ def mr_engine_slice_meta(result: EngineResult) -> dict[str, Any]:
         "skip_llm": bool(result.skip_llm),
         "word_budget": int(result.word_budget or 55),
         "narrator_mode": "engine_facts_only",
+        "engine_version": checks.get("engine_version") or "mr_engine_v1",
     }
     if step_audit:
         meta["step_audit"] = step_audit

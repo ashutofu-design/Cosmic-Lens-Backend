@@ -688,6 +688,16 @@ def run_post_engine_gate(
     meta = slice_meta if isinstance(slice_meta, dict) else {}
     if str(meta.get("slice") or "").strip() == "health_engine_v1":
         return GatekeeperResult(True, "engine", "exempt", "health_no_gatekeeper")
+    _mr_checks = meta.get("checks") if isinstance(meta.get("checks"), dict) else {}
+    if (
+        str(meta.get("slice") or "").strip() == "mr_engine_v1"
+        and (
+            _mr_checks.get("unified_execution")
+            or _mr_checks.get("relationship_engine_execution")
+            or str(_mr_checks.get("engine_version") or "") == "relationship_engine_execution_v1"
+        )
+    ):
+        return GatekeeperResult(True, "engine", "exempt", "relationship_unified_execution")
     eng = check_engine_output_gate(admin, slice_meta=slice_meta, question=question)
     if not eng.ok:
         return eng

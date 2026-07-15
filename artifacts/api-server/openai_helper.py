@@ -8218,14 +8218,32 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             flush=True,
                         )
                     if not _is_open_chart_qa:
-                        from ask_mr.relationship_narrator import attach_narrator_json_to_result
+                        import os as _os_mr
 
-                        attach_narrator_json_to_result(
-                            _mr_engine_result,
-                            question=question or "",
-                            llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                        _mr_checks = dict(getattr(_mr_engine_result, "checks", None) or {})
+                        _mr_unified = bool(
+                            _mr_checks.get("relationship_engine_execution")
+                            or _mr_checks.get("unified_execution")
                         )
-                        chart_text = _mr_engine_result.to_narrator_payload()
+                        _mr_legacy_arch = (
+                            _os_mr.environ.get("ASK_MR_LEGACY_ARCHETYPE_ENGINES") or ""
+                        ).strip().lower() in ("1", "true", "yes", "on")
+                        if _mr_unified and not _mr_legacy_arch:
+                            from ask_mr.presenter import to_relationship_llm_payload
+
+                            chart_text = to_relationship_llm_payload(
+                                _mr_engine_result,
+                                question=question or "",
+                            )
+                        else:
+                            from ask_mr.relationship_narrator import attach_narrator_json_to_result
+
+                            attach_narrator_json_to_result(
+                                _mr_engine_result,
+                                question=question or "",
+                                llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                            )
+                            chart_text = _mr_engine_result.to_narrator_payload()
                         if _mr_engine_result.archetype == "open_chart_qa":
                             from ask_chart_open_qa import open_chart_qa_slice_meta
 
@@ -9384,7 +9402,23 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # ── Unified relationship MR narrator (all engines) ──
     from ask_mr.engine_presenter import human_narrator_enabled
 
-    if _is_mr_static and _mr_engine_result is not None and human_narrator_enabled():
+    _mr_unified_exec = bool(
+        isinstance(_mr_engine_result, object)
+        and _mr_engine_result is not None
+        and (
+            (getattr(_mr_engine_result, "checks", None) or {}).get("unified_execution")
+            or (getattr(_mr_engine_result, "checks", None) or {}).get(
+                "relationship_engine_execution"
+            )
+        )
+    )
+
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and human_narrator_enabled()
+        and not _mr_unified_exec
+    ):
         try:
             from ask_mr.static_answer import try_human_presenter_mr_answer
 

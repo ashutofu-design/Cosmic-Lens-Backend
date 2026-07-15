@@ -1,12 +1,12 @@
 """Ask: Marriage/Relationship non-timing engine.
 
-Engine computes deterministic signals + evidence lines.
-LLM is used only as a narrator (language + warmth), not as a chart calculator.
+Default (health-style): one unified ``relationship_engine_execution_v1`` pack
+(D1 + D9). Archetypes are routing labels only.
 
-Rollback / fallback:
-  - Set ASK_MR_ENGINE=0 to force legacy ask_marriage_relationship_slice.
-  - If the new engine raises, openai_helper auto-falls back to legacy slice.
-  - Simple yes/no (manglik without explain) can skip LLM via template_text.
+Rollback:
+  - ASK_MR_LEGACY_ARCHETYPE_ENGINES=1 → old per-archetype score engines
+  - ASK_MR_ENGINE=0 → force legacy ask_marriage_relationship_slice upstream
+  - If the engine raises, openai_helper auto-falls back to legacy slice
 """
 
 from .engine import run_mr_static_engine

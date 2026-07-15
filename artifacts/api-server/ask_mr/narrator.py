@@ -258,12 +258,21 @@ def build_mr_engine_narrator_system_prompt(
                 topic=topic_hint,
                 extra_rules=extras,
             )
-        engine_lock = (
-            "ENGINE LOCK: Facts below are final — narrate and EXPAND them; never recalculate or contradict VERDICT.\n"
-            "Do NOT add new planets/houses/dasha reasons beyond ENGINE FACTS.\n"
-            "If user asked for % / kitna / ratio, lead with engine numbers in the opening line only — do not invent figures.\n"
-            "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष, Big Picture, Kyun aisa, Ab kya karein."
-        )
+        if "RELATIONSHIP_ENGINE_EXECUTION_JSON" in (chart_text or ""):
+            engine_lock = (
+                "RELATIONSHIP JSON: RELATIONSHIP_ENGINE_EXECUTION_JSON is the full D1+D9 pack — "
+                "read axes (7L/Venus/Moon), manglik, relationship_signals, vargottama. "
+                f"routing_label ({arch or 'general_mr'}) = answer FOCUS only, not a separate engine. "
+                "Answer the user's exact relationship question; never invent placements/dates. "
+                "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष, Big Picture, Kyun aisa, Ab kya karein."
+            )
+        else:
+            engine_lock = (
+                "ENGINE LOCK: Facts below are final — narrate and EXPAND them; never recalculate or contradict VERDICT.\n"
+                "Do NOT add new planets/houses/dasha reasons beyond ENGINE FACTS.\n"
+                "If user asked for % / kitna / ratio, lead with engine numbers in the opening line only — do not invent figures.\n"
+                "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष, Big Picture, Kyun aisa, Ab kya karein."
+            )
 
     intent_block = ""
     if (user_intent or "").strip():

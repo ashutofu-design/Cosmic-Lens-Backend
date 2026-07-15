@@ -57,6 +57,22 @@ class TestNeedsLlmChartAnswer(unittest.TestCase):
         self.assertIsNotNone(det)
         self.assertIn("D10", det.get("text", ""))
 
+    def test_hypothetical_lord_place_needs_llm_not_house_lookup(self):
+        q = (
+            "kya placement change ho sakta he like 6th lord ko 10th me "
+            "place kar sakta hun kya"
+        )
+        self.assertTrue(needs_llm_chart_answer(q))
+        self.assertFalse(is_pure_chart_fact_lookup(q))
+        self.assertIsNone(try_deterministic_chart_fact(q, _KUNDLI))
+
+    def test_pure_tenth_house_occupants_still_chart_fact(self):
+        q = "Mere 10th house mein kaun se graha hain"
+        self.assertFalse(needs_llm_chart_answer(q))
+        det = try_deterministic_chart_fact(q, _KUNDLI)
+        self.assertIsNotNone(det)
+        self.assertIn("10", det.get("text", ""))
+
 
 if __name__ == "__main__":
     unittest.main()

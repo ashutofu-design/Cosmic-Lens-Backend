@@ -217,6 +217,22 @@ _NEEDS_LLM_RX = re.compile(
     r")\b",
 )
 
+# "6th lord ko 10th me place kar sakta hun?", "placement change ho sakta?"
+# — conceptual / hypothetical — must NOT hit deterministic house_lookup.
+_HYPOTHETICAL_PLACEMENT_RX = re.compile(
+    r"(?ix)\b("
+    r"placement\s+change|change\s+(?:ho\s+)?sakta|change\s+(?:kar\s+)?sakta|"
+    r"place\s+kar\s+sak|place\s+kar\s+sakt|"
+    r"(?:ko|se)\s+\d{1,2}(?:st|nd|rd|th)?\s*(?:house|ghar|bhav)?\s*(?:me|mein)\s+place|"
+    r"\d{1,2}(?:st|nd|rd|th)?\s*(?:lord|swami).{0,50}place|"
+    r"lord.{0,40}(?:ko|se).{0,30}(?:me|mein)\s+place|"
+    r"shift\s+kar|move\s+(?:to|into|kar)|"
+    r"hypothetical|what\s+if|"
+    r"graha\s+(?:badal|shift)|lord\s+(?:badal|shift)|"
+    r"rashi\s+change\s+kar|kundli\s+(?:mein\s+)?(?:change|badal)"
+    r")\b",
+)
+
 
 _PURE_PLACEMENT_LOOKUP_RX = re.compile(
     r"(?ix)\b("
@@ -242,6 +258,8 @@ def needs_llm_chart_answer(question: str) -> bool:
     q = normalize_ask_typos((question or "").strip())
     if not q:
         return False
+    if _HYPOTHETICAL_PLACEMENT_RX.search(q):
+        return True
     if _detect_divisional(q) and not _is_pure_divisional_placement_lookup(q):
         return True
     if is_domain_life_area_interpretation_question(q):

@@ -5,6 +5,7 @@ import {
   OBS_DEBUGGER_VERSION,
   resolveAskObservability,
   normalizeHealthDnaJudgeAudit,
+  isHealthAskRow,
   type ObservabilityHealthDnaJudgeAudit,
   type ObservabilityHealthSelectedBlocks,
   type ObservabilityRule,
@@ -95,16 +96,32 @@ function formatLagneshLine(lagnesh: Record<string, unknown> | null | undefined):
   return `${lagnesh.lord} → H${lagnesh.lord_house || "?"} · ${lagnesh.lord_sign || "?"} · ${lagnesh.lord_dignity || "?"} · strength ${lagnesh.lord_strength_score ?? "?"}${shadbalaText}${lagnesh.lord_in_dusthana ? " · dusthana" : ""}${lagnesh.lord_retrograde ? " · retrograde" : ""}`;
 }
 
+function formatHouseRows(
+  rows: NonNullable<import("./askObservability").ObservabilityHealthChartFacts["health_houses"]>,
+): string {
+  return rows
+    .map((h) => {
+      const lord = h.lord_state || {};
+      const aspects = (h.aspects_received || [])
+        .map((a) => `${a.planet || "?"} H${a.from_house || "?"}`)
+        .join(", ");
+      return `H${h.house || "?"} ${h.sign || "?"} · lord ${lord.lord || h.lord || "?"} → H${lord.lord_house || "?"}, ${lord.lord_dignity || "?"} · occupants ${(h.occupants || []).join(", ") || "none"}${aspects ? ` · aspects ${aspects}` : ""}`;
+    })
+    .join("\n\n");
+}
+
 function formatHealthChartFactsSteps(
   facts: import("./askObservability").ObservabilityHealthChartFacts | null | undefined,
   chartLabel: "D1" | "D9",
+  opts?: { domain?: "health" | "relationship" },
 ): { label: string; value: string }[] {
   if (!facts || facts.error) {
     return [{ label: `${chartLabel}`, value: facts?.error || "data missing" }];
   }
 
+  const domain = opts?.domain || "health";
   const lagnaLine =
-    chartLabel === "D1"
+    chartLabel === "D1" && domain === "health"
       ? `Lagna ${facts.ascendant || "?"} · Vitality ${facts.vitality_score ?? "?"}/100 (${facts.vitality_risk || "?"})\nLagnesh: ${formatLagneshLine(facts.lagnesh as Record<string, unknown>)}`
       : `Lagna ${facts.ascendant || "?"}\nLagnesh: ${formatLagneshLine(facts.lagnesh as Record<string, unknown>)}`;
 
@@ -119,30 +136,33 @@ function formatHealthChartFactsSteps(
     return `${p.name || "?"}: ${p.sign || "?"} · H${p.house || "?"} · ${p.dignity || "?"}${strength}${shadbala}${flags.length ? ` · ${flags.join(", ")}` : ""}`;
   });
 
-  const healthHouses = (facts.health_houses || []).map((h) => {
-    const lord = h.lord_state || {};
-    const aspects = (h.aspects_received || [])
-      .map((a) => `${a.planet || "?"} H${a.from_house || "?"}`)
-      .join(", ");
-    return `H${h.house || "?"} ${h.sign || "?"} · lord ${lord.lord || h.lord || "?"} → H${lord.lord_house || "?"}, ${lord.lord_dignity || "?"} · occupants ${(h.occupants || []).join(", ") || "none"}${aspects ? ` · aspects ${aspects}` : ""}`;
-  });
+  const houseRows =
+    domain === "relationship"
+      ? facts.relationship_houses || facts.health_houses || []
+      : facts.health_houses || [];
+  const houseLabel =
+    domain === "relationship"
+      ? `${chartLabel} · Relationship Houses`
+      : `${chartLabel} · Health Houses (6)`;
 
   return [
     { label: `${chartLabel} · Lagna + Lagnesh`, value: lagnaLine },
     { label: `${chartLabel} · Planets (9)`, value: planets.join("\n") || "—" },
-    { label: `${chartLabel} · Health Houses (6)`, value: healthHouses.join("\n\n") || "—" },
+    { label: houseLabel, value: formatHouseRows(houseRows) || "—" },
     { label: `${chartLabel} · Afflictions`, value: (facts.afflictions || []).join("\n") || "none" },
   ];
 }
 
 function formatHealthEngineExecutionSteps(
   pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
+  opts?: { domain?: "health" | "relationship" },
 ): { label: string; value: string }[] {
   if (!pack?.schema_version && !pack?.d1) return [];
+  const domain = opts?.domain || "health";
 
   const steps: { label: string; value: string }[] = [
-    ...formatHealthChartFactsSteps(pack.d1, "D1"),
-    ...formatHealthChartFactsSteps(pack.d9, "D9"),
+    ...formatHealthChartFactsSteps(pack.d1, "D1", { domain }),
+    ...formatHealthChartFactsSteps(pack.d9, "D9", { domain }),
   ];
 
   const vargottama = (pack.vargottama_details || []).map((row) => {
@@ -179,6 +199,23 @@ function buildEngineExecutionSteps(
     }];
   }
 
+  const relationshipSteps = formatHealthEngineExecutionSteps(exec?.relationship_engine_execution, {
+    domain: "relationship",
+  });
+  if (
+    relationshipSteps.length ||
+    exec?.display_mode === "relationship_charts" ||
+    exec?.relationship_engine_execution
+  ) {
+    if (relationshipSteps.length) {
+      return relationshipSteps;
+    }
+    return [{
+      label: "Relationship Chart Pack",
+      value: `D1 + D9 data abhi load nahi hua. Naya relationship question pucho ya admin/API deploy check karo (v${OBS_DEBUGGER_VERSION}+).`,
+    }];
+  }
+
   const modules = exec?.modules || [];
   const modLines =
     modules.length > 0
@@ -204,12 +241,18 @@ function buildEngineExecutionSteps(
   return steps;
 }
 
-function HealthDnaJudgePanel({ audit }: { audit: ObservabilityHealthDnaJudgeAudit | undefined }) {
+function HealthDnaJudgePanel({
+  audit,
+  domainLabel = "health",
+}: {
+  audit: ObservabilityHealthDnaJudgeAudit | undefined;
+  domainLabel?: string;
+}) {
   if (!audit?.applies) {
     return (
       <p className="detail-muted">
-        Question DNA Judge applies only to health questions. Re-ask a health question after API
-        deploy.
+        Question DNA Judge applies to health and relationship (unified) questions. Re-ask after
+        API deploy ({domainLabel}).
       </p>
     );
   }
@@ -300,14 +343,16 @@ function HealthDnaJudgePanel({ audit }: { audit: ObservabilityHealthDnaJudgeAudi
 
 function HealthSelectedBlocksPanel({
   audit,
+  domainLabel = "health",
 }: {
   audit: ObservabilityHealthSelectedBlocks | undefined;
+  domainLabel?: string;
 }) {
   if (!audit?.applies) {
     return (
       <p className="detail-muted">
-        Question-selected JSON blocks apply only to health questions. Re-ask a health question
-        after API deploy.
+        Question-selected JSON blocks apply to health and relationship (unified) questions. Re-ask
+        after API deploy ({domainLabel}).
       </p>
     );
   }
@@ -399,11 +444,19 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
   const exec = obs.engine_execution || {};
   const perf = obs.performance || {};
   const dnaJudgeAudit = normalizeHealthDnaJudgeAudit(
-    obs.health_dna_judge_audit || obs.health_validator_audit,
+    obs.health_dna_judge_audit ||
+      obs.health_validator_audit ||
+      obs.relationship_dna_judge_audit,
   );
   const selectedBlocks =
     obs.health_selected_blocks ||
+    obs.relationship_selected_blocks ||
     (dnaJudgeAudit as ObservabilityHealthDnaJudgeAudit | undefined)?.selected_blocks;
+  const domainLabel = obs.health_dna_judge_audit?.applies
+    ? "health"
+    : obs.relationship_dna_judge_audit?.applies
+      ? "relationship"
+      : "health/relationship";
 
   return (
     <div className="obs-debugger">
@@ -451,6 +504,14 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
                 ? ` · ${exec.health_engine_execution.schema_version}`
                 : null}
             </>
+          ) : exec.display_mode === "relationship_charts" ||
+            exec.relationship_engine_execution ? (
+            <>
+              Relationship charts: <code>D1 + D9</code>
+              {exec.relationship_engine_execution?.schema_version
+                ? ` · ${exec.relationship_engine_execution.schema_version}`
+                : null}
+            </>
           ) : (
             <>
               Engine: <code>{exec.engine_name || "—"}</code>
@@ -462,11 +523,11 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
       </Section>
 
       <Section title="3. Question DNA Judge" stars={5}>
-        <HealthDnaJudgePanel audit={dnaJudgeAudit} />
+        <HealthDnaJudgePanel audit={dnaJudgeAudit} domainLabel={domainLabel} />
       </Section>
 
       <Section title="4. LLM Selected JSON Blocks" stars={5}>
-        <HealthSelectedBlocksPanel audit={selectedBlocks} />
+        <HealthSelectedBlocksPanel audit={selectedBlocks} domainLabel={domainLabel} />
       </Section>
     </div>
   );

@@ -253,6 +253,68 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertIn("contract", audit)
         self.assertEqual(obs.get("health_validator_audit"), audit)
 
+    def test_relationship_ee_and_selected_in_observability(self):
+        from relationship_static.relationship_facts import (
+            compute_relationship_engine_execution,
+        )
+
+        pack = compute_relationship_engine_execution(
+            {
+                "ascendant": "Leo",
+                "planets": [
+                    {"name": "Sun", "sign": "Leo", "house": 1},
+                    {"name": "Venus", "sign": "Libra", "house": 3},
+                    {"name": "Mars", "sign": "Aquarius", "house": 7},
+                ],
+                "divisionalCharts": {
+                    "D9": {
+                        "ascendant": "Aries",
+                        "planets": [{"name": "Venus", "sign": "Virgo", "house": 6}],
+                    }
+                },
+            },
+            question="Mera partner loyal hai kya?",
+            routing_label="loyalty_trust",
+        )
+        ctx = {
+            "question": "Mera partner loyal hai kya?",
+            "slice_meta": {
+                "slice": "mr_engine_v1",
+                "archetype": "loyalty_trust",
+                "checks": {
+                    "relationship_engine_execution": pack,
+                    "unified_execution": True,
+                    "engine_version": "relationship_engine_execution_v1",
+                    "relationship_dna_judge_audit": {
+                        "mode": "dna_judge_only",
+                        "enabled": True,
+                        "passed": True,
+                        "issues": [],
+                        "dna_judge": {
+                            "judge": "relationship_dna_v1",
+                            "enabled": True,
+                            "passed": True,
+                        },
+                        "contract": {"user_wants": "Loyalty check"},
+                    },
+                },
+            },
+            "llm_intent": {"domain": "love"},
+        }
+        obs = build_observability_debug(
+            ctx,
+            question_text=ctx["question"],
+            answer_text="Venus 3rd me hai, Saturn trust pe pressure — loyalty mixed hai.",
+        )
+        self.assertEqual(obs["engine_execution"]["display_mode"], "relationship_charts")
+        self.assertIsNotNone(obs["engine_execution"].get("relationship_engine_execution"))
+        judge = obs.get("relationship_dna_judge_audit") or {}
+        self.assertTrue(judge.get("applies"))
+        blocks = obs.get("relationship_selected_blocks") or {}
+        self.assertTrue(blocks.get("applies"))
+        self.assertEqual(blocks.get("source"), "relationship_engine_execution")
+        self.assertTrue(blocks.get("expected_blocks") or blocks.get("available_blocks"))
+
 
 if __name__ == "__main__":
     unittest.main()

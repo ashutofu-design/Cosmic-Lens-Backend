@@ -211,6 +211,28 @@ export interface ObservabilityHealthChartFacts {
     }>;
     health_roles?: string[];
   }>;
+  /** Relationship engine pack uses this key instead of health_houses */
+  relationship_houses?: Array<{
+    house?: number;
+    sign?: string;
+    lord?: string;
+    lord_state?: {
+      lord?: string;
+      lord_house?: number;
+      lord_dignity?: string;
+      lord_strength_score?: number;
+      lord_shadbala?: { strength_pct?: number } | null;
+      lord_in_dusthana?: boolean;
+    };
+    occupants?: string[];
+    aspects_received?: Array<{
+      planet?: string;
+      from_house?: number;
+      to_house?: number;
+      polarity?: string;
+    }>;
+    health_roles?: string[];
+  }>;
   house_lords?: Record<string, Record<string, unknown>>;
   karakas?: Record<string, Record<string, unknown>>;
   shadbala?: Record<string, Record<string, unknown>>;
@@ -268,9 +290,12 @@ export interface AskObservability {
   health_selected_blocks?: ObservabilityHealthSelectedBlocks;
   /** @deprecated alias — same payload as health_dna_judge_audit */
   health_validator_audit?: ObservabilityHealthDnaJudgeAudit;
+  relationship_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
+  relationship_selected_blocks?: ObservabilityHealthSelectedBlocks;
   engine_execution?: {
-    display_mode?: "health_charts" | "engine_rules";
+    display_mode?: "health_charts" | "relationship_charts" | "engine_rules";
     health_engine_execution?: ObservabilityHealthEngineExecution | null;
+    relationship_engine_execution?: ObservabilityHealthEngineExecution | null;
     engine_name?: string;
     engine_version?: string;
     modules?: ObservabilityModule[];
@@ -355,7 +380,7 @@ export const ASTRO_MODULE_LABELS: Record<string, string> = {
   bcp: "BCP me kya check hua",
 };
 
-function isHealthAskRow(row: AskQuestionItem, ctx: AskLlmContext | null, exec: AskObservability["engine_execution"]): boolean {
+export function isHealthAskRow(row: AskQuestionItem, ctx: AskLlmContext | null, exec: AskObservability["engine_execution"]): boolean {
   if (exec?.display_mode === "health_charts" || exec?.health_engine_execution) {
     return true;
   }
@@ -976,6 +1001,27 @@ function enrichObservability(
   if (isHealthAskRow(row, ctx, exec) && exec.health_engine_execution) {
     exec.display_mode = "health_charts";
   }
+  if (!exec.relationship_engine_execution) {
+    const relPack =
+      checks.relationship_engine_execution ||
+      smChecks.relationship_engine_execution ||
+      null;
+    if (relPack && typeof relPack === "object") {
+      exec.relationship_engine_execution = relPack as ObservabilityHealthEngineExecution;
+      if (exec.display_mode !== "health_charts") {
+        exec.display_mode = "relationship_charts";
+      }
+    }
+  }
+  if (
+    exec.display_mode !== "health_charts" &&
+    exec.relationship_engine_execution &&
+    (String(sm.slice || "") === "mr_engine_v1" ||
+      checks.unified_execution ||
+      smChecks.unified_execution)
+  ) {
+    exec.display_mode = "relationship_charts";
+  }
   if (!exec.d1_health_facts) {
     const d1HealthFacts =
       exec.health_engine_execution?.d1 ||
@@ -1061,6 +1107,19 @@ function enrichObservability(
         obs.health_validator_audit ||
         (checks.health_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
         (checks.health_validator_audit as ObservabilityHealthValidatorAudit | undefined),
+    ),
+    relationship_selected_blocks:
+      (obs.relationship_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      ((obs.relationship_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined)
+        ?.selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (checks.relationship_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.relationship_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (checks.relationship_selected_blocks_preview as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.relationship_selected_blocks_preview as ObservabilityHealthSelectedBlocks | undefined),
+    relationship_dna_judge_audit: normalizeHealthDnaJudgeAudit(
+      obs.relationship_dna_judge_audit ||
+        (checks.relationship_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+        (smChecks.relationship_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined),
     ),
     astrology_checks: astro,
     engine_execution: exec,
@@ -1352,6 +1411,12 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
       "Health Engine Execution (D1 + D9):",
       JSON.stringify(exec.health_engine_execution, null, 2),
     );
+  } else if (exec.relationship_engine_execution) {
+    lines.push(
+      "",
+      "Relationship Engine Execution (D1 + D9):",
+      JSON.stringify(exec.relationship_engine_execution, null, 2),
+    );
   } else if (exec.d1_health_facts) {
     lines.push(
       "",
@@ -1361,10 +1426,13 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   }
   lines.push("");
 
-  lines.push("=== 3. QUESTION DNA JUDGE (health) ===");
-  const judgeObs = obs.health_dna_judge_audit || obs.health_validator_audit;
+  lines.push("=== 3. QUESTION DNA JUDGE ===");
+  const judgeObs =
+    obs.health_dna_judge_audit ||
+    obs.health_validator_audit ||
+    obs.relationship_dna_judge_audit;
   if (!judgeObs?.applies) {
-    lines.push("— (health questions only)", "");
+    lines.push("— (health / relationship unified questions only)", "");
   } else {
     lines.push(
       `Enabled: ${judgeObs.enabled ? "yes" : "no"} | Passed: ${judgeObs.passed ? "yes" : "no"} | Source: ${judgeObs.source || "—"}`,
@@ -1392,9 +1460,13 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   }
 
   lines.push("=== 4. LLM SELECTED JSON BLOCKS ===");
-  const blocksObs = obs.health_selected_blocks || obs.health_dna_judge_audit?.selected_blocks;
+  const blocksObs =
+    obs.health_selected_blocks ||
+    obs.relationship_selected_blocks ||
+    obs.health_dna_judge_audit?.selected_blocks ||
+    obs.relationship_dna_judge_audit?.selected_blocks;
   if (!blocksObs?.applies) {
-    lines.push("— (health questions only)", "");
+    lines.push("— (health / relationship unified questions only)", "");
   } else {
     lines.push(`Focus: ${blocksObs.focus_label || blocksObs.focus || "—"}`);
     lines.push("Expected blocks:");

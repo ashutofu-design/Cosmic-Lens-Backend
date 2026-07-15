@@ -221,7 +221,7 @@ _NEEDS_LLM_RX = re.compile(
 # — conceptual / hypothetical — must NOT hit deterministic house_lookup.
 _HYPOTHETICAL_PLACEMENT_RX = re.compile(
     r"(?ix)\b("
-    r"placement\s+change|change\s+(?:ho\s+)?sakta|change\s+(?:kar\s+)?sakta|"
+    r"placememt\s+change|placement\s+change|change\s+(?:ho\s+)?sakta|change\s+(?:kar\s+)?sakta|"
     r"place\s+kar\s+sak|place\s+kar\s+sakt|"
     r"(?:ko|se)\s+\d{1,2}(?:st|nd|rd|th)?\s*(?:house|ghar|bhav)?\s*(?:me|mein)\s+place|"
     r"\d{1,2}(?:st|nd|rd|th)?\s*(?:lord|swami).{0,50}place|"

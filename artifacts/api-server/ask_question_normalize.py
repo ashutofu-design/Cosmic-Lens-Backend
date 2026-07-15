@@ -51,6 +51,8 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bse+h+at+\b", re.I), "sehat"),
     (re.compile(r"\bhel+th+\b", re.I), "health"),
     (re.compile(r"\bheath+\b", re.I), "health"),
+    (re.compile(r"\bplacememt\b", re.I), "placement"),
+    (re.compile(r"\bplace?ment\b", re.I), "placement"),
     (re.compile(r"\bhealt+h+\b", re.I), "health"),
     (re.compile(r"\btab+iat+\b", re.I), "tabiyat"),
     (re.compile(r"\btab+iyat+\b", re.I), "tabiyat"),

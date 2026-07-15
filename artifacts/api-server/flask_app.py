@@ -7950,6 +7950,16 @@ def ask_route():
     except Exception as _sg_exc:
         print(f"[ask] scope_gate error (non-fatal): {_sg_exc}", flush=True)
 
+    try:
+        from ask_privacy_guard import apply_privacy_guard
+
+        _priv = apply_privacy_guard(question or "", lang=lang or "hn")
+        if _priv:
+            print(f"[ask] privacy_hard_guard blocked q={question[:60]!r}", flush=True)
+            return jsonify(_priv)
+    except Exception as _priv_exc:
+        print(f"[ask] privacy_guard error (non-fatal): {_priv_exc}", flush=True)
+
     # ════════════════════════════════════════════════════════════════════════
     # RAW PASSTHROUGH MODE (2026-05-06) — user-requested nuclear path.
     # Skips length-cap, layer3-clarifier,
@@ -8996,6 +9006,19 @@ def ask_stream_route():
             print(f"[ask/stream] scope_llm normalized q={question[:60]!r}", flush=True)
     except Exception as _sg_exc_s:
         print(f"[ask/stream] scope_gate error (non-fatal): {_sg_exc_s}", flush=True)
+
+    try:
+        from ask_privacy_guard import apply_privacy_guard
+
+        _priv_s = apply_privacy_guard(question or "", lang=lang or "hn")
+        if _priv_s:
+            print(
+                f"[ask/stream] privacy_hard_guard blocked q={question[:60]!r}",
+                flush=True,
+            )
+            return jsonify(_priv_s)
+    except Exception as _priv_exc_s:
+        print(f"[ask/stream] privacy_guard error (non-fatal): {_priv_exc_s}", flush=True)
 
     # ════════════════════════════════════════════════════════════════════════
     # RAW PASSTHROUGH MODE (2026-05-06, stream parity) — see /api/ask above

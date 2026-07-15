@@ -315,6 +315,71 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertEqual(blocks.get("source"), "relationship_engine_execution")
         self.assertTrue(blocks.get("expected_blocks") or blocks.get("available_blocks"))
 
+    def test_finance_ee_and_selected_in_observability(self):
+        from finance_static.finance_facts import compute_finance_engine_execution
+
+        pack = compute_finance_engine_execution(
+            {
+                "ascendant": "Leo",
+                "planets": [
+                    {"name": "Sun", "sign": "Leo", "house": 1},
+                    {"name": "Mercury", "sign": "Virgo", "house": 2},
+                    {"name": "Jupiter", "sign": "Sagittarius", "house": 5},
+                    {"name": "Venus", "sign": "Libra", "house": 3},
+                    {"name": "Saturn", "sign": "Aquarius", "house": 7},
+                    {"name": "Moon", "sign": "Taurus", "house": 10},
+                    {"name": "Mars", "sign": "Capricorn", "house": 6},
+                    {"name": "Rahu", "sign": "Aries", "house": 9},
+                    {"name": "Ketu", "sign": "Libra", "house": 3},
+                ],
+                "divisionalCharts": {
+                    "D9": {
+                        "ascendant": "Aries",
+                        "planets": [{"name": "Jupiter", "sign": "Cancer", "house": 4}],
+                    }
+                },
+            },
+            question="meri wealth potential kaisi hai?",
+            routing_label="wealth_potential",
+        )
+        ctx = {
+            "question": "meri wealth potential kaisi hai?",
+            "slice_meta": {
+                "slice": "finance_engine_v1",
+                "archetype": "wealth_potential",
+                "checks": {
+                    "finance_engine_execution": pack,
+                    "unified_execution": True,
+                    "engine_version": "finance_engine_execution_v1",
+                    "finance_dna_judge_audit": {
+                        "mode": "dna_judge_only",
+                        "enabled": True,
+                        "passed": True,
+                        "issues": [],
+                        "dna_judge": {
+                            "judge": "finance_dna_v1",
+                            "enabled": True,
+                            "passed": True,
+                        },
+                        "contract": {"user_wants": "Wealth potential"},
+                    },
+                },
+            },
+            "llm_intent": {"domain": "finance"},
+        }
+        obs = build_observability_debug(
+            ctx,
+            question_text=ctx["question"],
+            answer_text="Jupiter 5th me strong — wealth potential supportive dikhti hai.",
+        )
+        self.assertEqual(obs["engine_execution"]["display_mode"], "finance_charts")
+        self.assertIsNotNone(obs["engine_execution"].get("finance_engine_execution"))
+        judge = obs.get("finance_dna_judge_audit") or {}
+        self.assertTrue(judge.get("applies"))
+        blocks = obs.get("finance_selected_blocks") or {}
+        self.assertTrue(blocks.get("applies"))
+        self.assertEqual(blocks.get("source"), "finance_engine_execution")
+
 
 if __name__ == "__main__":
     unittest.main()

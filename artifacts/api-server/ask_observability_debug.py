@@ -217,6 +217,22 @@ def _is_relationship_observability_ctx(ctx: dict[str, Any], question_text: str =
     return False
 
 
+def _is_finance_observability_ctx(ctx: dict[str, Any], question_text: str = "") -> bool:
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    if str(sm.get("slice") or "").strip() == "finance_engine_v1":
+        return True
+    checks = _merged_checks(ctx)
+    if checks.get("finance_engine_execution"):
+        return True
+    if str(checks.get("engine_version") or "") == "finance_engine_execution_v1":
+        return True
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    dom = str(li.get("domain") or li.get("routed_domain") or "").strip().lower()
+    if dom == "finance":
+        return True
+    return False
+
+
 def _inject_health_engine_execution(
     ctx: dict[str, Any],
     kundli: dict[str, Any] | None,
@@ -394,6 +410,114 @@ def _inject_relationship_engine_execution(
     return ctx
 
 
+def _inject_finance_engine_execution(
+    ctx: dict[str, Any],
+    kundli: dict[str, Any] | None,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    if not isinstance(ctx, dict):
+        return ctx
+    if not _is_finance_observability_ctx(ctx):
+        return ctx
+    checks = _merged_checks(ctx)
+    question = str(ctx.get("question") or ctx.get("question_raw") or "").strip()
+    existing = checks.get("finance_engine_execution")
+    has_core = (
+        isinstance(existing, dict)
+        and isinstance(existing.get("d1"), dict)
+        and existing["d1"].get("planets")
+        and isinstance(existing.get("d9"), dict)
+    )
+    if not force and has_core:
+        # Timing ask: ensure compact dasha is present even if D1/D9 already injected
+        if question and isinstance(existing, dict) and "dasha_timing_compact" not in existing:
+            chart = kundli if isinstance(kundli, dict) else None
+            if chart is None:
+                for key in ("kundli", "chart", "chart_json"):
+                    candidate = ctx.get(key)
+                    if isinstance(candidate, dict) and (
+                        candidate.get("planets") or candidate.get("dashas")
+                    ):
+                        chart = candidate
+                        break
+            if chart is not None:
+                try:
+                    from ask_finance.dasha_compact import maybe_attach_dasha_compact
+
+                    li = (
+                        ctx.get("llm_intent")
+                        if isinstance(ctx.get("llm_intent"), dict)
+                        else None
+                    )
+                    maybe_attach_dasha_compact(
+                        existing, chart, question, llm_intent=li,
+                    )
+                    checks = dict(checks)
+                    checks["finance_engine_execution"] = existing
+                    ctx["checks"] = checks
+                    sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+                    sm_checks = dict(sm.get("checks") or {}) if isinstance(sm.get("checks"), dict) else {}
+                    sm_checks["finance_engine_execution"] = existing
+                    sm["checks"] = sm_checks
+                    ctx["slice_meta"] = sm
+                except Exception:
+                    pass
+        return ctx
+    chart = kundli if isinstance(kundli, dict) else None
+    if chart is None:
+        for key in ("kundli", "chart", "chart_json"):
+            candidate = ctx.get(key)
+            if isinstance(candidate, dict) and candidate.get("planets"):
+                chart = candidate
+                break
+    if chart is None:
+        return ctx
+    try:
+        from finance_static.finance_facts import compute_finance_engine_execution
+
+        sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+        label = str(
+            checks.get("routing_label")
+            or sm.get("archetype")
+            or ""
+        ).strip().lower()
+        li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else None
+        pack = compute_finance_engine_execution(
+            chart,
+            question=question,
+            routing_label=label,
+            llm_intent=li,
+        )
+        checks = dict(checks)
+        checks["finance_engine_execution"] = pack
+        checks["d1_finance_facts"] = pack.get("d1") or {}
+        checks["d9_finance_facts"] = pack.get("d9") or {}
+        checks["engine_version"] = "finance_engine_execution_v1"
+        checks["unified_execution"] = True
+        if label:
+            checks["routing_label"] = label
+        ctx["checks"] = checks
+        sm_checks = dict(sm.get("checks") or {}) if isinstance(sm.get("checks"), dict) else {}
+        for key in (
+            "finance_engine_execution",
+            "d1_finance_facts",
+            "d9_finance_facts",
+            "engine_version",
+            "unified_execution",
+            "routing_label",
+        ):
+            if key in checks:
+                sm_checks[key] = checks[key]
+        sm["checks"] = sm_checks
+        if not sm.get("slice"):
+            sm["slice"] = "finance_engine_v1"
+        ctx["slice_meta"] = sm
+    except Exception:
+        pass
+    return ctx
+
+
 def _prepare_ctx_for_observability(
     ctx: dict[str, Any],
     question_text: str = "",
@@ -452,6 +576,7 @@ def _prepare_ctx_for_observability(
 
     out = _inject_health_engine_execution(out, kundli)
     out = _inject_relationship_engine_execution(out, kundli)
+    out = _inject_finance_engine_execution(out, kundli)
     return out
 
 
@@ -1654,6 +1779,100 @@ def _relationship_dna_judge_section(
         }
 
 
+def _finance_selected_blocks_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    if not _is_finance_observability_ctx(ctx, question_text):
+        return {"applies": False}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    stored = (
+        _dig(ctx, sm, key="finance_selected_blocks")
+        or (
+            (_dig(ctx, sm, key="finance_dna_judge_audit") or {}).get("selected_blocks")
+            if isinstance(_dig(ctx, sm, key="finance_dna_judge_audit"), dict)
+            else None
+        )
+        or _dig(ctx, sm, key="finance_selected_blocks_preview")
+    )
+    if isinstance(stored, dict) and stored.get("applies") and (
+        stored.get("available_blocks") or stored.get("expected_blocks")
+    ) and stored.get("source") == "finance_engine_execution":
+        return stored
+    meta: dict[str, Any] = {
+        "checks": _merged_checks(ctx),
+        "routing_label": sm.get("archetype") or _dig(ctx, sm, key="routing_label"),
+        "archetype": sm.get("archetype"),
+    }
+    for key in ("user_wants", "intent", "normalized_question", "question_type"):
+        val = sm.get(key) if isinstance(sm, dict) else None
+        if val not in (None, ""):
+            meta[key] = val
+    execution = _dig(ctx, sm, key="finance_engine_execution")
+    if not isinstance(execution, dict):
+        checks = meta.get("checks") if isinstance(meta.get("checks"), dict) else {}
+        execution = (
+            checks.get("finance_engine_execution") if isinstance(checks, dict) else None
+        )
+    try:
+        from ask_finance.selected_blocks import build_finance_selected_blocks
+
+        return build_finance_selected_blocks(
+            question_text,
+            answer_text,
+            meta=meta,
+            execution=execution if isinstance(execution, dict) else None,
+        )
+    except Exception as exc:
+        return {
+            "applies": True,
+            "source": "finance_engine_execution",
+            "error": str(exc)[:120],
+        }
+
+
+def _finance_dna_judge_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    if not _is_finance_observability_ctx(ctx, question_text):
+        return {"applies": False}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    stored = _dig(ctx, sm, key="finance_dna_judge_audit")
+    meta = {
+        "archetype": sm.get("archetype"),
+        "checks": _merged_checks(ctx),
+    }
+    qd = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else None
+    if qd:
+        meta["question_dna"] = qd
+    for key in (
+        "normalized_question", "intent", "user_wants", "question_type",
+        "domain", "bucket", "answer_style", "answer_approach", "question_dna_item",
+    ):
+        val = sm.get(key) if isinstance(sm, dict) else None
+        if val not in (None, "") and key not in meta:
+            meta[key] = val
+    try:
+        from ask_finance.dna_judge import build_finance_dna_judge_display
+
+        return build_finance_dna_judge_display(
+            question_text,
+            answer_text,
+            meta,
+            stored_audit=stored if isinstance(stored, dict) else None,
+        )
+    except Exception:
+        return {
+            "applies": True,
+            "enabled": False,
+            "passed": False,
+            "issues": ["dna_judge_error"],
+        }
+
+
 def build_observability_debug(
     ctx: dict[str, Any] | None,
     *,
@@ -1736,10 +1955,42 @@ def build_observability_debug(
             "selected_blocks", relationship_selected_blocks,
         )
 
+    finance_engine_execution = _dig(ctx, sm, key="finance_engine_execution")
+    if not isinstance(finance_engine_execution, dict):
+        finance_engine_execution = None
+    finance_charts_mode = bool(
+        finance_engine_execution
+        and _is_finance_observability_ctx(ctx, question_text)
+        and not health_charts_mode
+        and not relationship_charts_mode
+    )
+    finance_dna_judge_audit = _finance_dna_judge_section(
+        ctx, question_text, answer_text,
+    )
+    finance_selected_blocks = _finance_selected_blocks_section(
+        ctx, question_text, answer_text,
+    )
+    if (
+        isinstance(finance_dna_judge_audit, dict)
+        and isinstance(finance_dna_judge_audit.get("selected_blocks"), dict)
+        and not finance_selected_blocks.get("expected_blocks")
+    ):
+        finance_selected_blocks = finance_dna_judge_audit["selected_blocks"]
+    if (
+        isinstance(finance_dna_judge_audit, dict)
+        and finance_selected_blocks.get("applies")
+    ):
+        finance_dna_judge_audit = dict(finance_dna_judge_audit)
+        finance_dna_judge_audit.setdefault(
+            "selected_blocks", finance_selected_blocks,
+        )
+
     if health_charts_mode:
         display_mode = "health_charts"
     elif relationship_charts_mode:
         display_mode = "relationship_charts"
+    elif finance_charts_mode:
+        display_mode = "finance_charts"
     else:
         display_mode = "engine_rules"
 
@@ -1774,11 +2025,14 @@ def build_observability_debug(
         "health_selected_blocks": health_selected_blocks,
         "relationship_dna_judge_audit": relationship_dna_judge_audit,
         "relationship_selected_blocks": relationship_selected_blocks,
+        "finance_dna_judge_audit": finance_dna_judge_audit,
+        "finance_selected_blocks": finance_selected_blocks,
         "rule_decisions": decision_table,
         "engine_execution": {
             "display_mode": display_mode,
             "health_engine_execution": health_engine_execution,
             "relationship_engine_execution": relationship_engine_execution,
+            "finance_engine_execution": finance_engine_execution,
             "engine_name": archetype,
             "engine_version": _dig(ctx.get("checks") or {}, sm or {}, key="engine_version"),
             "modules": modules,
@@ -1936,20 +2190,27 @@ def build_ask_debug_export_text(row: dict[str, Any]) -> str:
                 )
     lines.append("")
     lines.append("=== 4. QUESTION DNA JUDGE ===")
-    judge_obs = (
-        obs.get("health_dna_judge_audit")
-        or obs.get("health_validator_audit")
-        or obs.get("relationship_dna_judge_audit")
-        or {}
+    judge_candidates = [
+        obs.get("health_dna_judge_audit"),
+        obs.get("health_validator_audit"),
+        obs.get("relationship_dna_judge_audit"),
+        obs.get("finance_dna_judge_audit"),
+    ]
+    judge_obs = next(
+        (j for j in judge_candidates if isinstance(j, dict) and j.get("applies")),
+        next((j for j in judge_candidates if isinstance(j, dict)), {}) or {},
     )
     if not judge_obs.get("applies"):
-        lines.append("— (health / relationship unified questions only)")
+        lines.append("— (health / relationship / finance unified questions only)")
     else:
-        domain_tag = (
-            "health"
-            if obs.get("health_dna_judge_audit", {}).get("applies")
-            else "relationship"
-        )
+        if obs.get("health_dna_judge_audit", {}).get("applies"):
+            domain_tag = "health"
+        elif obs.get("relationship_dna_judge_audit", {}).get("applies"):
+            domain_tag = "relationship"
+        elif obs.get("finance_dna_judge_audit", {}).get("applies"):
+            domain_tag = "finance"
+        else:
+            domain_tag = "—"
         lines.append(f"Domain: {domain_tag}")
         lines.append(
             f"Enabled: {judge_obs.get('enabled')} | Passed: {judge_obs.get('passed')} | "
@@ -1966,13 +2227,17 @@ def build_ask_debug_export_text(row: dict[str, Any]) -> str:
             lines.append(f"Fix hint: {judge_obs.get('fix_hint')}")
     lines.append("")
     lines.append("=== 5. LLM SELECTED JSON BLOCKS (question-aware) ===")
-    blocks_obs = (
-        obs.get("health_selected_blocks")
-        or obs.get("relationship_selected_blocks")
-        or {}
+    blocks_candidates = [
+        obs.get("health_selected_blocks"),
+        obs.get("relationship_selected_blocks"),
+        obs.get("finance_selected_blocks"),
+    ]
+    blocks_obs = next(
+        (b for b in blocks_candidates if isinstance(b, dict) and b.get("applies")),
+        next((b for b in blocks_candidates if isinstance(b, dict)), {}) or {},
     )
     if not blocks_obs.get("applies"):
-        lines.append("— (health / relationship unified questions only)")
+        lines.append("— (health / relationship / finance unified questions only)")
     else:
         lines.append(f"Focus: {blocks_obs.get('focus_label') or blocks_obs.get('focus') or '—'}")
         lines.append("Expected blocks (LLM should pick for this question):")

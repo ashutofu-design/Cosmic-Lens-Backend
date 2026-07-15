@@ -732,3 +732,232 @@ def compute_finance_facts(kundli: dict) -> Dict[str, Any]:
         "kp_csl": kp_csl,  # Phase 2.8.80: None if KP unavailable
         "engine_version": "finance_facts_v1.2_kp_vedic_conflict_resolver",
     }
+
+
+# ── Engine Execution pack (health / relationship parity) ────────────────────
+
+_SIGN_NAMES_FIN = (
+    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+)
+_FINANCE_FOCUS_HOUSES = (2, 5, 6, 8, 9, 11, 12)
+
+
+def _normalize_finance_planet_list(raw: Any) -> List[dict]:
+    out: List[dict] = []
+    if not isinstance(raw, list):
+        return out
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("planet") or "").strip()
+        if not name or name.lower() in ("ascendant", "lagna"):
+            continue
+        canon = {
+            "surya": "Sun", "chandra": "Moon", "mangal": "Mars", "budh": "Mercury",
+            "budha": "Mercury", "guru": "Jupiter", "brihaspati": "Jupiter",
+            "shukra": "Venus", "shani": "Saturn",
+        }.get(name.lower(), name)
+        if canon[:1].islower():
+            canon = canon[:1].upper() + canon[1:]
+        row = dict(item)
+        row["name"] = canon
+        if not row.get("house") and row.get("House"):
+            row["house"] = row.get("House")
+        out.append(row)
+    return out
+
+
+def _resolve_d9_finance_chart(
+    kundli: dict,
+) -> Tuple[Optional[List[dict]], Optional[int], Optional[str], Optional[str]]:
+    if not isinstance(kundli, dict):
+        return None, None, None, "invalid kundli"
+    divs = kundli.get("divisionalCharts") or kundli.get("divisional_charts") or {}
+    d9_chart = None
+    if isinstance(divs, dict):
+        d9_chart = divs.get("D9")
+    if not isinstance(d9_chart, dict):
+        d9_chart = kundli.get("D9") or kundli.get("navamsa") or kundli.get("D-9")
+    if not isinstance(d9_chart, dict):
+        return None, None, None, "d9 missing"
+
+    asc_si: Optional[int] = None
+    asc_sign: Optional[str] = None
+    for key in ("ascendantSignIndex", "ascendantSignIdx", "ascendant", "lagna", "lagnaSign"):
+        v = d9_chart.get(key)
+        if isinstance(v, int):
+            asc_si = int(v) % 12
+            asc_sign = _SIGN_NAMES_FIN[asc_si]
+            break
+        if isinstance(v, str):
+            asc_si = _sign_idx(v)
+            if asc_si is not None:
+                asc_sign = v if v in _SIGN_NAMES_FIN else _SIGN_NAMES_FIN[asc_si]
+                break
+    if asc_si is None:
+        return None, None, None, "d9 lagna missing"
+
+    planets = _normalize_finance_planet_list(d9_chart.get("planets") or [])
+    if not planets:
+        return None, None, None, "d9 planets missing"
+
+    for planet in planets:
+        if planet.get("house"):
+            continue
+        sign_idx = _sign_idx(str(planet.get("sign") or ""))
+        if sign_idx is None:
+            raw_idx = planet.get("signIndex") or planet.get("sign_idx")
+            if isinstance(raw_idx, int):
+                sign_idx = int(raw_idx) % 12
+        if sign_idx is not None:
+            planet["house"] = ((sign_idx - asc_si) % 12) + 1
+            if not planet.get("sign"):
+                planet["sign"] = _SIGN_NAMES_FIN[sign_idx]
+    return planets, asc_si, asc_sign, None
+
+
+def _planet_rows_from_karakas(facts: Dict[str, Any]) -> List[dict]:
+    rows: List[dict] = []
+    for name, k in (facts.get("karakas") or {}).items():
+        if not isinstance(k, dict):
+            continue
+        rows.append({
+            "name": name,
+            "sign": k.get("sign"),
+            "house": k.get("house"),
+            "dignity": k.get("dignity"),
+            "retrograde": bool(k.get("retro")),
+            "combust": bool(k.get("combust")),
+        })
+    return rows
+
+
+def _finance_house_rows(facts: Dict[str, Any]) -> List[dict]:
+    lords = facts.get("house_lords") or {}
+    occupants = facts.get("house_occupants") or {}
+    out: List[dict] = []
+    for hn in _FINANCE_FOCUS_HOUSES:
+        st = lords.get(f"h{hn}") or {}
+        occ = occupants.get(str(hn)) or occupants.get(hn) or []
+        out.append({
+            "house": hn,
+            "sign": st.get("lord_sign"),
+            "lord": st.get("lord"),
+            "lord_state": st,
+            "occupants": list(occ) if isinstance(occ, list) else [],
+            "finance_relevant": True,
+        })
+    return out
+
+
+def _tag_finance_chart_pack(facts: Dict[str, Any], *, chart: str) -> Dict[str, Any]:
+    if not isinstance(facts, dict):
+        return {"error": "invalid facts", "chart": chart, "schema_version": f"finance_{chart.lower()}_facts_v1"}
+    if facts.get("error"):
+        out = dict(facts)
+        out["chart"] = chart
+        out["schema_version"] = f"finance_{chart.lower()}_facts_v1"
+        return out
+    out = dict(facts)
+    out["chart"] = chart
+    out["schema_version"] = (
+        "finance_d1_facts_v1" if chart == "D1" else "finance_d9_facts_v1"
+    )
+    out["planets"] = _planet_rows_from_karakas(out)
+    out["finance_houses"] = _finance_house_rows(out)
+    out["lagnesh"] = (out.get("house_lords") or {}).get("h1") or {}
+    return out
+
+
+def compute_d9_finance_facts(kundli: dict) -> Dict[str, Any]:
+    planets, asc_si, asc_sign, err = _resolve_d9_finance_chart(kundli)
+    if err:
+        return {"error": err, "chart": "D9", "schema_version": "finance_d9_facts_v1"}
+    d9_kundli: Dict[str, Any] = {
+        "ascendant": asc_sign or (kundli.get("ascendant") if isinstance(kundli, dict) else None),
+        "planets": planets,
+    }
+    # Keep KP cusps from parent if present (read-only nudge)
+    if isinstance(kundli, dict):
+        for key in ("kp", "KP", "cuspal", "cusps", "planetary_ashtakavarga"):
+            if key in kundli:
+                d9_kundli[key] = kundli[key]
+    pack = compute_finance_facts(d9_kundli)
+    return _tag_finance_chart_pack(pack, chart="D9")
+
+
+def compute_finance_engine_execution(
+    kundli: dict,
+    *,
+    question: str = "",
+    routing_label: str = "",
+    llm_intent: Optional[dict] = None,
+) -> Dict[str, Any]:
+    """Fixed D1 + D9 finance pack for admin Engine Execution and LLM context.
+
+    Timing questions only: also attaches ``dasha_timing_compact``.
+    """
+    chart = kundli if isinstance(kundli, dict) else {}
+    d1_raw = compute_finance_facts(chart)
+    d1 = _tag_finance_chart_pack(d1_raw, chart="D1")
+    d9 = compute_d9_finance_facts(chart)
+
+    d1_map = {
+        str(p.get("name") or ""): p
+        for p in (d1.get("planets") or [])
+        if p.get("name")
+    }
+    d9_map = {
+        str(p.get("name") or ""): p
+        for p in (d9.get("planets") or [])
+        if p.get("name") and not d9.get("error")
+    }
+    vargottama_details: List[dict] = []
+    for name, d1p in d1_map.items():
+        d9p = d9_map.get(name)
+        if not d9p:
+            continue
+        is_vargottama = d1p.get("sign") == d9p.get("sign")
+        vargottama_details.append({
+            "planet": name,
+            "d1_sign": d1p.get("sign"),
+            "d1_house": d1p.get("house"),
+            "d9_sign": d9p.get("sign"),
+            "d9_house": d9p.get("house"),
+            "vargottama": is_vargottama,
+        })
+
+    pack: Dict[str, Any] = {
+        "schema_version": "finance_engine_execution_v1",
+        "d1": d1,
+        "d9": d9,
+        "lagnesh": {
+            "d1": d1.get("lagnesh") or (d1.get("house_lords") or {}).get("h1") or {},
+            "d9": d9.get("lagnesh") or (d9.get("house_lords") or {}).get("h1") or {},
+        },
+        "vargottama_planets": [
+            row["planet"] for row in vargottama_details if row.get("vargottama")
+        ],
+        "vargottama_details": vargottama_details,
+        "dimensions": d1.get("dimensions") or {},
+        "wealth_yogas": d1.get("wealth_yogas") or [],
+        "sub_flags": d1.get("sub_flags") or {},
+        "afflictions": d1.get("afflictions") or [],
+        "routing_label": (routing_label or "").strip().lower(),
+        "question": (question or "").strip()[:400],
+    }
+    if llm_intent and isinstance(llm_intent, dict):
+        pack["intent_domain"] = str(
+            llm_intent.get("routed_domain") or llm_intent.get("domain") or ""
+        ).strip().lower()
+    if (question or "").strip():
+        try:
+            from ask_finance.dasha_compact import maybe_attach_dasha_compact
+
+            maybe_attach_dasha_compact(
+                pack, chart, question, llm_intent=llm_intent,
+            )
+        except Exception:
+            pass
+    return pack

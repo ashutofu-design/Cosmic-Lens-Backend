@@ -113,7 +113,7 @@ function formatHouseRows(
 function formatHealthChartFactsSteps(
   facts: import("./askObservability").ObservabilityHealthChartFacts | null | undefined,
   chartLabel: "D1" | "D9",
-  opts?: { domain?: "health" | "relationship" },
+  opts?: { domain?: "health" | "relationship" | "finance" },
 ): { label: string; value: string }[] {
   if (!facts || facts.error) {
     return [{ label: `${chartLabel}`, value: facts?.error || "data missing" }];
@@ -139,11 +139,15 @@ function formatHealthChartFactsSteps(
   const houseRows =
     domain === "relationship"
       ? facts.relationship_houses || facts.health_houses || []
-      : facts.health_houses || [];
+      : domain === "finance"
+        ? facts.finance_houses || facts.health_houses || []
+        : facts.health_houses || [];
   const houseLabel =
     domain === "relationship"
       ? `${chartLabel} · Relationship Houses`
-      : `${chartLabel} · Health Houses (6)`;
+      : domain === "finance"
+        ? `${chartLabel} · Finance Houses`
+        : `${chartLabel} · Health Houses (6)`;
 
   return [
     { label: `${chartLabel} · Lagna + Lagnesh`, value: lagnaLine },
@@ -237,9 +241,45 @@ function formatRelationshipPackExtras(
   return steps;
 }
 
+function formatFinancePackExtras(
+  pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
+): { label: string; value: string }[] {
+  if (!pack) return [];
+  const steps: { label: string; value: string }[] = [];
+  const dims =
+    pack.dimensions ||
+    pack.d1?.dimensions ||
+    null;
+  if (dims && typeof dims === "object") {
+    const lines = Object.entries(dims).map(([key, val]) => {
+      const row = (val || {}) as {
+        verdict?: string;
+        reason?: string;
+        tier?: string;
+        score?: number;
+      };
+      const score = row.score != null ? ` · score ${row.score}` : "";
+      const tier = row.tier ? ` · ${row.tier}` : "";
+      const reason = row.reason ? `\n  ${row.reason}` : "";
+      return `${key}: ${row.verdict || "?"}${tier}${score}${reason}`;
+    });
+    steps.push({
+      label: "Dimensions",
+      value: lines.join("\n") || "—",
+    });
+  }
+  const yogas = pack.wealth_yogas || pack.d1?.wealth_yogas || [];
+  if (yogas.length) {
+    steps.push({ label: "Wealth Yogas", value: yogas.join(", ") });
+  } else {
+    steps.push({ label: "Wealth Yogas", value: "none" });
+  }
+  return steps;
+}
+
 function formatHealthEngineExecutionSteps(
   pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
-  opts?: { domain?: "health" | "relationship" },
+  opts?: { domain?: "health" | "relationship" | "finance" },
 ): { label: string; value: string }[] {
   if (!pack?.schema_version && !pack?.d1) return [];
   const domain = opts?.domain || "health";
@@ -259,6 +299,9 @@ function formatHealthEngineExecutionSteps(
   });
   if (domain === "relationship") {
     steps.push(...formatRelationshipPackExtras(pack));
+  }
+  if (domain === "finance") {
+    steps.push(...formatFinancePackExtras(pack));
   }
   steps.push(...formatDashaTimingCompactSteps(pack.dasha_timing_compact));
 
@@ -304,6 +347,23 @@ function buildEngineExecutionSteps(
     }];
   }
 
+  const financeSteps = formatHealthEngineExecutionSteps(exec?.finance_engine_execution, {
+    domain: "finance",
+  });
+  if (
+    financeSteps.length ||
+    exec?.display_mode === "finance_charts" ||
+    exec?.finance_engine_execution
+  ) {
+    if (financeSteps.length) {
+      return financeSteps;
+    }
+    return [{
+      label: "Finance Chart Pack",
+      value: `D1 + D9 data abhi load nahi hua. Naya finance question pucho ya admin/API deploy check karo (v${OBS_DEBUGGER_VERSION}+).`,
+    }];
+  }
+
   const modules = exec?.modules || [];
   const modLines =
     modules.length > 0
@@ -339,8 +399,8 @@ function HealthDnaJudgePanel({
   if (!audit?.applies) {
     return (
       <p className="detail-muted">
-        Question DNA Judge applies to health and relationship (unified) questions. Re-ask after
-        API deploy ({domainLabel}).
+        Question DNA Judge applies to health, relationship, and finance (unified) questions. Re-ask
+        after API deploy ({domainLabel}).
       </p>
     );
   }
@@ -439,8 +499,8 @@ function HealthSelectedBlocksPanel({
   if (!audit?.applies) {
     return (
       <p className="detail-muted">
-        Question-selected JSON blocks apply to health and relationship (unified) questions. Re-ask
-        after API deploy ({domainLabel}).
+        Question-selected JSON blocks apply to health, relationship, and finance (unified) questions.
+        Re-ask after API deploy ({domainLabel}).
       </p>
     );
   }
@@ -531,20 +591,31 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
       : null;
   const exec = obs.engine_execution || {};
   const perf = obs.performance || {};
+  const dnaJudgeCandidates = [
+    obs.health_dna_judge_audit,
+    obs.health_validator_audit,
+    obs.relationship_dna_judge_audit,
+    obs.finance_dna_judge_audit,
+  ];
   const dnaJudgeAudit = normalizeHealthDnaJudgeAudit(
-    obs.health_dna_judge_audit ||
-      obs.health_validator_audit ||
-      obs.relationship_dna_judge_audit,
+    dnaJudgeCandidates.find((a) => a?.applies) || dnaJudgeCandidates.find(Boolean),
   );
+  const selectedBlocksCandidates = [
+    obs.health_selected_blocks,
+    obs.relationship_selected_blocks,
+    obs.finance_selected_blocks,
+    (dnaJudgeAudit as ObservabilityHealthDnaJudgeAudit | undefined)?.selected_blocks,
+  ];
   const selectedBlocks =
-    obs.health_selected_blocks ||
-    obs.relationship_selected_blocks ||
-    (dnaJudgeAudit as ObservabilityHealthDnaJudgeAudit | undefined)?.selected_blocks;
+    selectedBlocksCandidates.find((b) => b?.applies) ||
+    selectedBlocksCandidates.find(Boolean);
   const domainLabel = obs.health_dna_judge_audit?.applies
     ? "health"
     : obs.relationship_dna_judge_audit?.applies
       ? "relationship"
-      : "health/relationship";
+      : obs.finance_dna_judge_audit?.applies
+        ? "finance"
+        : "health/relationship/finance";
 
   return (
     <div className="obs-debugger">
@@ -598,6 +669,13 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
               Relationship charts: <code>D1 + D9</code>
               {exec.relationship_engine_execution?.schema_version
                 ? ` · ${exec.relationship_engine_execution.schema_version}`
+                : null}
+            </>
+          ) : exec.display_mode === "finance_charts" || exec.finance_engine_execution ? (
+            <>
+              Finance charts: <code>D1 + D9</code>
+              {exec.finance_engine_execution?.schema_version
+                ? ` · ${exec.finance_engine_execution.schema_version}`
                 : null}
             </>
           ) : (

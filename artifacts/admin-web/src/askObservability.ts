@@ -233,6 +233,28 @@ export interface ObservabilityHealthChartFacts {
     }>;
     health_roles?: string[];
   }>;
+  /** Finance engine pack uses this key instead of health_houses */
+  finance_houses?: Array<{
+    house?: number;
+    sign?: string;
+    lord?: string;
+    lord_state?: {
+      lord?: string;
+      lord_house?: number;
+      lord_dignity?: string;
+      lord_strength_score?: number;
+      lord_shadbala?: { strength_pct?: number } | null;
+      lord_in_dusthana?: boolean;
+    };
+    occupants?: string[];
+    aspects_received?: Array<{
+      planet?: string;
+      from_house?: number;
+      to_house?: number;
+      polarity?: string;
+    }>;
+    health_roles?: string[];
+  }>;
   house_lords?: Record<string, Record<string, unknown>>;
   karakas?: Record<string, Record<string, unknown>>;
   shadbala?: Record<string, Record<string, unknown>>;
@@ -242,6 +264,7 @@ export interface ObservabilityHealthChartFacts {
     string,
     { verdict?: string; reason?: string; tier?: string; score?: number }
   >;
+  wealth_yogas?: string[];
   sub_flags?: Record<string, unknown>;
   error?: string;
 }
@@ -297,6 +320,14 @@ export interface ObservabilityHealthEngineExecution {
     [key: string]: unknown;
   };
   relationship_signals?: Record<string, unknown>;
+  /** Finance pack top-level fields (also mirrored on d1) */
+  dimensions?: Record<
+    string,
+    { verdict?: string; reason?: string; tier?: string; score?: number }
+  >;
+  wealth_yogas?: string[];
+  sub_flags?: Record<string, unknown>;
+  afflictions?: string[];
 }
 
 export interface ObservabilityHallucinationSummary {
@@ -324,10 +355,13 @@ export interface AskObservability {
   health_validator_audit?: ObservabilityHealthDnaJudgeAudit;
   relationship_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
   relationship_selected_blocks?: ObservabilityHealthSelectedBlocks;
+  finance_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
+  finance_selected_blocks?: ObservabilityHealthSelectedBlocks;
   engine_execution?: {
-    display_mode?: "health_charts" | "relationship_charts" | "engine_rules";
+    display_mode?: "health_charts" | "relationship_charts" | "finance_charts" | "engine_rules";
     health_engine_execution?: ObservabilityHealthEngineExecution | null;
     relationship_engine_execution?: ObservabilityHealthEngineExecution | null;
+    finance_engine_execution?: ObservabilityHealthEngineExecution | null;
     engine_name?: string;
     engine_version?: string;
     modules?: ObservabilityModule[];
@@ -1054,6 +1088,33 @@ function enrichObservability(
   ) {
     exec.display_mode = "relationship_charts";
   }
+  if (!exec.finance_engine_execution) {
+    const finPack =
+      checks.finance_engine_execution ||
+      smChecks.finance_engine_execution ||
+      null;
+    if (finPack && typeof finPack === "object") {
+      exec.finance_engine_execution = finPack as ObservabilityHealthEngineExecution;
+      if (
+        exec.display_mode !== "health_charts" &&
+        exec.display_mode !== "relationship_charts"
+      ) {
+        exec.display_mode = "finance_charts";
+      }
+    }
+  }
+  if (
+    exec.display_mode !== "health_charts" &&
+    exec.display_mode !== "relationship_charts" &&
+    exec.finance_engine_execution &&
+    (String(sm.slice || "") === "finance_engine_v1" ||
+      String(checks.engine_version || smChecks.engine_version || "") ===
+        "finance_engine_execution_v1" ||
+      checks.finance_engine_execution ||
+      smChecks.finance_engine_execution)
+  ) {
+    exec.display_mode = "finance_charts";
+  }
   if (!exec.d1_health_facts) {
     const d1HealthFacts =
       exec.health_engine_execution?.d1 ||
@@ -1152,6 +1213,19 @@ function enrichObservability(
       obs.relationship_dna_judge_audit ||
         (checks.relationship_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
         (smChecks.relationship_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined),
+    ),
+    finance_selected_blocks:
+      (obs.finance_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      ((obs.finance_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined)
+        ?.selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (checks.finance_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.finance_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (checks.finance_selected_blocks_preview as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.finance_selected_blocks_preview as ObservabilityHealthSelectedBlocks | undefined),
+    finance_dna_judge_audit: normalizeHealthDnaJudgeAudit(
+      obs.finance_dna_judge_audit ||
+        (checks.finance_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+        (smChecks.finance_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined),
     ),
     astrology_checks: astro,
     engine_execution: exec,
@@ -1449,6 +1523,12 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
       "Relationship Engine Execution (D1 + D9):",
       JSON.stringify(exec.relationship_engine_execution, null, 2),
     );
+  } else if (exec.finance_engine_execution) {
+    lines.push(
+      "",
+      "Finance Engine Execution (D1 + D9):",
+      JSON.stringify(exec.finance_engine_execution, null, 2),
+    );
   } else if (exec.d1_health_facts) {
     lines.push(
       "",
@@ -1459,12 +1539,16 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   lines.push("");
 
   lines.push("=== 3. QUESTION DNA JUDGE ===");
+  const judgeCandidates = [
+    obs.health_dna_judge_audit,
+    obs.health_validator_audit,
+    obs.relationship_dna_judge_audit,
+    obs.finance_dna_judge_audit,
+  ];
   const judgeObs =
-    obs.health_dna_judge_audit ||
-    obs.health_validator_audit ||
-    obs.relationship_dna_judge_audit;
+    judgeCandidates.find((a) => a?.applies) || judgeCandidates.find(Boolean);
   if (!judgeObs?.applies) {
-    lines.push("— (health / relationship unified questions only)", "");
+    lines.push("— (health / relationship / finance unified questions only)", "");
   } else {
     lines.push(
       `Enabled: ${judgeObs.enabled ? "yes" : "no"} | Passed: ${judgeObs.passed ? "yes" : "no"} | Source: ${judgeObs.source || "—"}`,
@@ -1492,13 +1576,18 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   }
 
   lines.push("=== 4. LLM SELECTED JSON BLOCKS ===");
+  const blocksCandidates = [
+    obs.health_selected_blocks,
+    obs.relationship_selected_blocks,
+    obs.finance_selected_blocks,
+    obs.health_dna_judge_audit?.selected_blocks,
+    obs.relationship_dna_judge_audit?.selected_blocks,
+    obs.finance_dna_judge_audit?.selected_blocks,
+  ];
   const blocksObs =
-    obs.health_selected_blocks ||
-    obs.relationship_selected_blocks ||
-    obs.health_dna_judge_audit?.selected_blocks ||
-    obs.relationship_dna_judge_audit?.selected_blocks;
+    blocksCandidates.find((b) => b?.applies) || blocksCandidates.find(Boolean);
   if (!blocksObs?.applies) {
-    lines.push("— (health / relationship unified questions only)", "");
+    lines.push("— (health / relationship / finance unified questions only)", "");
   } else {
     lines.push(`Focus: ${blocksObs.focus_label || blocksObs.focus || "—"}`);
     lines.push("Expected blocks:");

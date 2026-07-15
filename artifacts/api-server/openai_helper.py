@@ -7847,24 +7847,46 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     question or "",
                     wants_explain=wants_explain,
                     archetype=_resolved_finance_arch,
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
                 )
-                chart_text = _finance_engine_result.to_narrator_payload()
-                dcr_love_meta = {
-                    "slice": "finance_engine_v1",
-                    "topic": "finance",
-                    "archetype": _finance_engine_result.archetype,
-                    "verdict": _finance_engine_result.verdict,
-                    "summary": list(_finance_engine_result.summary or []),
-                    "evidence": list(_finance_engine_result.evidence or []),
-                    "ignore": list(_finance_engine_result.ignore or []),
-                    "checks": dict(_finance_engine_result.checks or {}),
-                    "skip_llm": bool(_finance_engine_result.skip_llm),
-                    "word_budget": int(_finance_engine_result.word_budget or 70),
-                    "narrator_mode": "engine_facts_only",
-                }
+                _finance_checks = dict(getattr(_finance_engine_result, "checks", None) or {})
+                _finance_unified = bool(
+                    _finance_checks.get("finance_engine_execution")
+                    or _finance_checks.get("unified_execution")
+                    or str(_finance_checks.get("engine_version") or "")
+                    == "finance_engine_execution_v1"
+                )
+                if _finance_unified:
+                    from ask_finance.presenter import to_finance_llm_payload
+
+                    chart_text = to_finance_llm_payload(
+                        _finance_engine_result,
+                        question=question or "",
+                    )
+                else:
+                    chart_text = _finance_engine_result.to_narrator_payload()
+                try:
+                    from ask_finance.engine import finance_engine_slice_meta
+
+                    dcr_love_meta = finance_engine_slice_meta(_finance_engine_result)
+                except Exception:
+                    dcr_love_meta = {
+                        "slice": "finance_engine_v1",
+                        "topic": "finance",
+                        "archetype": _finance_engine_result.archetype,
+                        "verdict": _finance_engine_result.verdict,
+                        "summary": list(_finance_engine_result.summary or []),
+                        "evidence": list(_finance_engine_result.evidence or []),
+                        "ignore": list(_finance_engine_result.ignore or []),
+                        "checks": dict(_finance_engine_result.checks or {}),
+                        "skip_llm": bool(_finance_engine_result.skip_llm),
+                        "word_budget": int(_finance_engine_result.word_budget or 70),
+                        "narrator_mode": "engine_facts_only",
+                    }
                 print(
                     f"[raw_passthrough] FINANCE_ENGINE "
                     f"archetype={_finance_engine_result.archetype} "
+                    f"unified={_finance_unified} "
                     f"evidence={len(_finance_engine_result.evidence or [])} "
                     f"chart_chars={len(chart_text)}",
                     flush=True,
@@ -10455,6 +10477,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _llm_raw_text = ""
     _health_dna_judge_audit: dict = {}
     _mr_dna_judge_audit: dict = {}
+    _finance_dna_judge_audit: dict = {}
     resp = None
     _use_health_dna_judge = (
         isinstance(dcr_love_meta, dict)
@@ -10473,6 +10496,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             or _mr_meta_checks.get("relationship_engine_execution")
             or str(_mr_meta_checks.get("engine_version") or "")
             == "relationship_engine_execution_v1"
+        )
+    )
+    _use_finance_dna_judge = (
+        isinstance(dcr_love_meta, dict)
+        and str(dcr_love_meta.get("slice") or "") == "finance_engine_v1"
+        and not bool(dcr_love_meta.get("skip_llm"))
+        and (
+            _mr_meta_checks.get("unified_execution")
+            or _mr_meta_checks.get("finance_engine_execution")
+            or str(_mr_meta_checks.get("engine_version") or "")
+            == "finance_engine_execution_v1"
         )
     )
     try:
@@ -10575,6 +10609,47 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 print(
                     "[raw_passthrough] MR_DNA_JUDGE observability_fail "
                     f"issues={_mr_dna_judge_audit.get('issues')}",
+                    flush=True,
+                )
+        elif _use_finance_dna_judge:
+            from ask_finance.dna_judge import run_finance_llm_with_dna_judge
+
+            _fin_judge_meta = (
+                dict(dcr_love_meta) if isinstance(dcr_love_meta, dict) else {}
+            )
+            if isinstance(_llm_intent_admin, dict):
+                _qd = _llm_intent_admin.get("question_dna")
+                if isinstance(_qd, dict):
+                    _fin_judge_meta["question_dna"] = _qd
+                    _qs = _qd.get("questions")
+                    if isinstance(_qs, list) and _qs and isinstance(_qs[0], dict):
+                        _q0 = _qs[0]
+                        _fin_judge_meta["question_dna_item"] = _q0
+                        for _dk in (
+                            "normalized_question",
+                            "intent",
+                            "user_wants",
+                            "question_type",
+                            "domain",
+                            "bucket",
+                            "answer_style",
+                            "answer_approach",
+                        ):
+                            if _q0.get(_dk) not in (None, ""):
+                                _fin_judge_meta[_dk] = _q0[_dk]
+
+            _llm_raw_text, _finance_dna_judge_audit = run_finance_llm_with_dna_judge(
+                client,
+                model=model,
+                messages=_llm_messages,
+                max_tokens=_max_tok,
+                question=question or "",
+                meta=_fin_judge_meta,
+            )
+            if _finance_dna_judge_audit.get("passed") is False:
+                print(
+                    "[raw_passthrough] FINANCE_DNA_JUDGE observability_fail "
+                    f"issues={_finance_dna_judge_audit.get('issues')}",
                     flush=True,
                 )
         else:
@@ -10805,11 +10880,22 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 == "relationship_engine_execution_v1"
             )
         )
+        _gk_skip_finance_unified_post = (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "finance_engine_v1"
+            and (
+                _mr_chk_final.get("unified_execution")
+                or _mr_chk_final.get("finance_engine_execution")
+                or str(_mr_chk_final.get("engine_version") or "")
+                == "finance_engine_execution_v1"
+            )
+        )
         if (
             isinstance(dcr_love_meta, dict)
             and dcr_love_meta.get("slice", "").endswith("_engine_v1")
             and not _gk_skip_health_post
             and not _gk_skip_mr_unified_post
+            and not _gk_skip_finance_unified_post
         ):
             try:
                 from ask_execution_gatekeeper import (
@@ -11213,6 +11299,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if (os.environ.get("ASK_FINANCE_NARRATOR") or "1").strip() != "0"
                 else "universal"
             )
+            _sm_checks = (
+                dcr_love_meta.get("checks")
+                if isinstance(dcr_love_meta.get("checks"), dict)
+                else {}
+            )
+            for _ck in (
+                "narrator_input",
+                "d1_finance_facts",
+                "d9_finance_facts",
+                "finance_engine_execution",
+                "engine_version",
+                "unified_execution",
+                "routing_label",
+                "finance_selected_blocks_preview",
+            ):
+                if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
+                    _pt_checks[_ck] = _sm_checks[_ck]
+            if _finance_dna_judge_audit:
+                _pt_checks["finance_dna_judge_audit"] = _finance_dna_judge_audit
+                if isinstance(_finance_dna_judge_audit.get("selected_blocks"), dict):
+                    _pt_checks["finance_selected_blocks"] = _finance_dna_judge_audit[
+                        "selected_blocks"
+                    ]
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
             _pt_checks["mr_engine"] = "legacy_slice"
         if _engine_route is not None:

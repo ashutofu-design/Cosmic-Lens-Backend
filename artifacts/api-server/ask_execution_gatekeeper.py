@@ -569,6 +569,15 @@ def check_final_answer_gate(
         )
     ):
         return GatekeeperResult(True, "final", "exempt", "relationship_unified_execution")
+    if (
+        str(meta.get("slice") or "").strip() == "finance_engine_v1"
+        and (
+            _mr_checks.get("unified_execution")
+            or _mr_checks.get("finance_engine_execution")
+            or str(_mr_checks.get("engine_version") or "") == "finance_engine_execution_v1"
+        )
+    ):
+        return GatekeeperResult(True, "final", "exempt", "finance_unified_execution")
     text = (answer or "").strip()
     if not text:
         return GatekeeperResult(
@@ -708,6 +717,15 @@ def run_post_engine_gate(
         )
     ):
         return GatekeeperResult(True, "engine", "exempt", "relationship_unified_execution")
+    if (
+        str(meta.get("slice") or "").strip() == "finance_engine_v1"
+        and (
+            _mr_checks.get("unified_execution")
+            or _mr_checks.get("finance_engine_execution")
+            or str(_mr_checks.get("engine_version") or "") == "finance_engine_execution_v1"
+        )
+    ):
+        return GatekeeperResult(True, "engine", "exempt", "finance_unified_execution")
     eng = check_engine_output_gate(admin, slice_meta=slice_meta, question=question)
     if not eng.ok:
         return eng

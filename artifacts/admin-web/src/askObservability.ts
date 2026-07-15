@@ -290,6 +290,13 @@ export interface ObservabilityHealthEngineExecution {
     llm_note?: string;
     error?: string;
   };
+  manglik?: {
+    mars_house?: number | null;
+    is_manglik?: boolean;
+    classic_houses?: number[];
+    [key: string]: unknown;
+  };
+  relationship_signals?: Record<string, unknown>;
 }
 
 export interface ObservabilityHallucinationSummary {

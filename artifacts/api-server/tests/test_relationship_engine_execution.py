@@ -111,7 +111,7 @@ class TestRelationshipEngineExecution(unittest.TestCase):
 
     def test_gatekeeper_exempt_unified(self):
         os.environ.pop("ASK_MR_LEGACY_ARCHETYPE_ENGINES", None)
-        from ask_execution_gatekeeper import run_post_engine_gate
+        from ask_execution_gatekeeper import check_final_answer_gate, run_post_engine_gate
         from ask_mr import run_mr_static_engine
         from ask_mr.engine import mr_engine_slice_meta
         from ask_mr.presenter import to_relationship_llm_payload
@@ -122,6 +122,14 @@ class TestRelationshipEngineExecution(unittest.TestCase):
         gate = run_post_engine_gate({}, slice_meta=meta, chart_text=chart, question="commitment")
         self.assertTrue(gate.ok)
         self.assertEqual(gate.rule, "relationship_unified_execution")
+
+        final = check_final_answer_gate(
+            "maybe something unclear",
+            slice_meta=meta,
+            question="commitment kaisi",
+        )
+        self.assertTrue(final.ok)
+        self.assertEqual(final.rule, "relationship_unified_execution")
 
 
 if __name__ == "__main__":

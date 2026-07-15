@@ -189,6 +189,54 @@ function formatDashaTimingCompactSteps(
   ];
 }
 
+function formatRelationshipPackExtras(
+  pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
+): { label: string; value: string }[] {
+  if (!pack) return [];
+  const steps: { label: string; value: string }[] = [];
+  const manglik = pack.manglik;
+  if (manglik && typeof manglik === "object") {
+    const yes = manglik.is_manglik === true ? "Yes" : manglik.is_manglik === false ? "No" : "?";
+    steps.push({
+      label: "Manglik",
+      value:
+        `${yes}`
+        + (manglik.mars_house != null ? ` · Mars H${manglik.mars_house}` : "")
+        + (Array.isArray(manglik.classic_houses)
+          ? ` · classic houses ${(manglik.classic_houses as number[]).join(",")}`
+          : ""),
+    });
+  }
+  const signals = pack.relationship_signals;
+  if (signals && typeof signals === "object" && !signals.error) {
+    const flagKeys = [
+      "venus_debil",
+      "moon_debil",
+      "seventh_lord_dusthana",
+      "saturn_on_7th",
+      "mars_on_7th",
+      "rahu_on_7th_axis",
+      "loyalty_risk_high",
+      "separation_yoga",
+      "reconnection_yoga",
+      "third_person_risk",
+    ];
+    const on = flagKeys.filter((k) => signals[k] === true);
+    const notes = Array.isArray(signals.notes)
+      ? (signals.notes as unknown[]).slice(0, 6).map(String)
+      : [];
+    steps.push({
+      label: "Relationship Signals",
+      value:
+        (on.length ? `ON: ${on.join(", ")}` : "no key risk flags ON")
+        + (notes.length ? `\n${notes.join("\n")}` : ""),
+    });
+  } else if (signals && typeof signals === "object" && signals.error) {
+    steps.push({ label: "Relationship Signals", value: String(signals.error) });
+  }
+  return steps;
+}
+
 function formatHealthEngineExecutionSteps(
   pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
   opts?: { domain?: "health" | "relationship" },
@@ -209,6 +257,9 @@ function formatHealthEngineExecutionSteps(
     label: "Vargottama",
     value: vargottama.join("\n") || (pack.vargottama_planets || []).join(", ") || "none",
   });
+  if (domain === "relationship") {
+    steps.push(...formatRelationshipPackExtras(pack));
+  }
   steps.push(...formatDashaTimingCompactSteps(pack.dasha_timing_compact));
 
   return steps;

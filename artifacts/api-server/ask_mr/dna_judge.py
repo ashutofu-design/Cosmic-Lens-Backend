@@ -262,6 +262,7 @@ def run_relationship_llm_with_dna_judge(
 ) -> tuple[str, dict[str, Any]]:
     """Narrator LLM + DNA judge. Soft one-shot rewrite if proof missing; never hard-blocks."""
     from ask_health.answer_validator import _enrich_dna_contract
+    from ask_mr.answer_guard import guard_relationship_answer
 
     audit: dict[str, Any] = {
         "mode": "dna_judge_only",
@@ -275,6 +276,8 @@ def run_relationship_llm_with_dna_judge(
         model=model, messages=messages, max_tokens=max_tokens,
     )
     text = (resp.choices[0].message.content or "").strip()
+    text, guard_meta = guard_relationship_answer(question, text, meta)
+    audit["guard"] = guard_meta
 
     contract = _enrich_dna_contract(meta, question)
     audit["contract"] = {
@@ -339,6 +342,8 @@ def run_relationship_llm_with_dna_judge(
                 )
                 text2 = (resp2.choices[0].message.content or "").strip()
                 if text2:
+                    text2, guard_meta2 = guard_relationship_answer(question, text2, meta)
+                    audit["guard"] = guard_meta2
                     text = text2
                     audit["attempts"] = 2
                     audit["proof_retry"] = True

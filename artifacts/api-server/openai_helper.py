@@ -10790,10 +10790,26 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             isinstance(dcr_love_meta, dict)
             and dcr_love_meta.get("slice") == "health_engine_v1"
         )
+        _mr_chk_final = (
+            dcr_love_meta.get("checks")
+            if isinstance(dcr_love_meta, dict) and isinstance(dcr_love_meta.get("checks"), dict)
+            else {}
+        )
+        _gk_skip_mr_unified_post = (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "mr_engine_v1"
+            and (
+                _mr_chk_final.get("unified_execution")
+                or _mr_chk_final.get("relationship_engine_execution")
+                or str(_mr_chk_final.get("engine_version") or "")
+                == "relationship_engine_execution_v1"
+            )
+        )
         if (
             isinstance(dcr_love_meta, dict)
             and dcr_love_meta.get("slice", "").endswith("_engine_v1")
             and not _gk_skip_health_post
+            and not _gk_skip_mr_unified_post
         ):
             try:
                 from ask_execution_gatekeeper import (

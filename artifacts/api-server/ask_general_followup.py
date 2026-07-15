@@ -2,6 +2,10 @@
 
 Supports Hinglish, English, and Hindi (Devanagari) short follow-ups like
 "aur detail do", "tell me more", "और बताओ".
+
+Also catches *contextual* follow-ups that omit the prior topic noun but
+clearly continue the thread — e.g. after a health Q: "kab improve hogi?",
+"iske baare me batao", "upay kya hai?".
 """
 
 from __future__ import annotations
@@ -43,6 +47,46 @@ _ROMAN_FOLLOWUP_RX = re.compile(
     r"^\s*(?:aur|phir|dobara|more|again|why|how)\s*\??\s*$"
 )
 
+# Pointing back at the previous answer/topic (pronouns / deixis).
+_DEIXIS_RX = re.compile(
+    r"(?ix)\b("
+    r"iske|uske|iska|uska|iski|uski|isme|usme|isi|usi|"
+    r"is\s+(?:baare|bare)|us\s+(?:baare|bare)|"
+    r"yeh|ye\b|woh|wo\b|"
+    r"this|that\b|about\s+(?:this|that|it)|"
+    r"upar\s+(?:wala|wali)|pichhl[ae]|previous|"
+    r"same\s+(?:topic|question|baat)|usi\s+baat"
+    r")\b|"
+    r"इसके|उसके|इसका|उसका|इसकी|उसकी|इसमें|उसमें|"
+    r"इस\s*बारे|उस\s*बारे|येह?\b|वह\b|वो\b|"
+    r"ऊपर\s*वाला|पिछला"
+)
+
+# Refine / deepen cues that usually continue the prior thread when the
+# current turn has no domain noun of its own.
+_THREAD_REFINE_RX = re.compile(
+    r"(?ix)\b("
+    r"kab\s+(?:improve|theek|thik|better|recover|sudhar|accha|achha)|"
+    r"(?:improve|theek|thik|better|recover|sudhar)\s+"
+    r"(?:kab|hogi|hoga|hoge|ho\s+jayegi|ho\s+jayega)|"
+    r"kyu[n]?\s+(?:aisa|aise|yeh|ye|bola|hai)|"
+    r"why\s+(?:so|this|that|is)|"
+    r"kaise\s+(?:hai|hoga|hogi|batao|possible)|"
+    r"reason|wajah|"
+    r"remedy|upay|upaay|ilaj|solution|totka|"
+    r"kya\s+(?:kare[n]?|karu[n]?|karna|karein)|"
+    r"aur\s+(?:kya|kaise|kab|kyun|kyu)|"
+    r"phir\s+(?:kya|kab)|"
+    r"dasha|antardasha|gochar|transit|"
+    r"more\s+(?:about|on)|"
+    r"thoda\s+aur|thoda\s+detail"
+    r")\b|"
+    r"^\s*(?:kyu[n]?|why|kaise|how)\s*\??\s*$|"
+    r"क्यों\s*(?:ऐसा|है)?|क्यूं\s*(?:ऐसा|है)?|"
+    r"कब\s*(?:ठीक|सुधर)|उपाय\s*क्या|इलाज|"
+    r"दशा|अंतर्दशा"
+)
+
 # Hindi (Devanagari) — run on raw text (prepare_ask_question does not romanize)
 _DEV_FOLLOWUP_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p) for p in (
@@ -59,6 +103,10 @@ _DEV_FOLLOWUP_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"और\s*विवरण",
         r"स्पष्ट\s*कर",
         r"फिर\s*से\s*समझाओ",
+        r"इसके\s*बारे",
+        r"उसके\s*बारे",
+        r"उपाय\s*क्या",
+        r"कब\s*ठीक",
     )
 )
 
@@ -88,7 +136,12 @@ def _normalize_raw(text: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", (text or "")).split())
 
 
-def is_generic_followup(question: str) -> bool:
+def _token_count(text: str) -> int:
+    return len([t for t in re.split(r"\s+", (text or "").strip()) if t])
+
+
+def is_explicit_followup(question: str) -> bool:
+    """Classic 'tell me more / aur detail / समझ नहीं आया' style asks."""
     raw = _normalize_raw(question)
     if not raw:
         return False
@@ -99,6 +152,38 @@ def is_generic_followup(question: str) -> bool:
         if rx.search(raw):
             return True
     return False
+
+
+def is_contextual_followup(question: str) -> bool:
+    """Pronoun / elided refine that continues the prior user ask.
+
+    Examples (after a health Q): \"kab improve hogi?\", \"iske baare me\",
+    \"upay kya hai?\". Does NOT fire when the turn names its own domain
+    without deixis — that is treated as a fresh topic.
+    """
+    raw = _normalize_raw(question)
+    if not raw:
+        return False
+    q = prepare_ask_question(raw)
+    if _DEIXIS_RX.search(q) or _DEIXIS_RX.search(raw):
+        return True
+    if _token_count(q) > 14:
+        return False
+    if not (_THREAD_REFINE_RX.search(q) or _THREAD_REFINE_RX.search(raw)):
+        return False
+    try:
+        from ask_intent_fidelity import infer_primary_domain
+
+        # Elided topic only: if current turn already names a domain, leave it.
+        if infer_primary_domain(q):
+            return False
+    except Exception:
+        pass
+    return True
+
+
+def is_generic_followup(question: str) -> bool:
+    return is_explicit_followup(question) or is_contextual_followup(question)
 
 
 def extract_prev_user_question(history: Any, current_question: str = "") -> str:
@@ -141,6 +226,9 @@ def should_skip_general_merge(prev_question: str, current_question: str) -> bool
         prv_dom = infer_primary_domain(prv)
         if cur_dom and prv_dom and cur_dom != prv_dom:
             return True
+        # Fresh domain ask with no prior domain → do not glue to vague prior.
+        if cur_dom and not prv_dom:
+            return True
     except Exception:
         pass
     return False
@@ -162,11 +250,24 @@ def merge_general_followup_question(prev_question: str, followup: str) -> str:
 def resolve_general_followup_question(question: str, history: Any) -> tuple[str, bool]:
     """Return (effective_question, is_followup)."""
     raw = (question or "").strip()
-    if not raw or not is_generic_followup(raw):
+    if not raw:
+        return question, False
+    explicit = is_explicit_followup(raw)
+    contextual = is_contextual_followup(raw)
+    if not explicit and not contextual:
         return question, False
     prev = extract_prev_user_question(history, raw)
     if not prev:
         return question, False
     if should_skip_general_merge(prev, raw):
         return question, False
+    # Elided / pronoun follow-ups need a concrete prior topic (not empty fog).
+    if contextual and not explicit:
+        try:
+            from ask_intent_fidelity import infer_primary_domain
+
+            if not infer_primary_domain(prev):
+                return question, False
+        except Exception:
+            pass
     return merge_general_followup_question(prev, raw), True

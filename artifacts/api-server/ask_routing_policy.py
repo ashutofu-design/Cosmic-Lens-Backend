@@ -170,17 +170,21 @@ def matches_dedicated_static_engine(
     question: str,
     llm_intent: dict[str, Any] | None = None,
 ) -> bool:
-    """True when a domain static engine should run — do NOT bypass to direct LLM."""
+    """True when a domain static engine should run — do NOT bypass to direct LLM.
+
+    Does NOT treat bare LLM domain label alone as an engine match (that trapped
+    theory/concept Qs into career/health engines). Requires a classifier hit.
+    """
     q = (question or "").strip()
     if not q:
         return False
     intent = llm_intent if isinstance(llm_intent, dict) else {}
-    dom = str(intent.get("routed_domain") or intent.get("domain") or "").strip().lower()
     try:
-        from engine_collision_registry import DOMAIN_PRIMARY_ENGINE
+        from ask_answer_mode import is_llm_answer_mode, resolve_answer_mode
 
-        if dom in DOMAIN_PRIMARY_ENGINE:
-            return True
+        mode = resolve_answer_mode(q, intent)
+        if is_llm_answer_mode(mode) or mode == "chart_fact":
+            return False
     except Exception:
         pass
     _probe: tuple[str, str, bool] = (
@@ -224,10 +228,20 @@ def should_bypass_static_engines_for_direct_llm(
     question: str,
     llm_intent: dict[str, Any] | None = None,
 ) -> tuple[bool, str]:
-    """Chart/divisional Q with no dedicated engine — skip all static engines → LLM."""
+    """Chart/concept/interpretive Q — skip static engines → LLM."""
     q = (question or "").strip()
     if not q:
         return False, ""
+    try:
+        from ask_answer_mode import resolve_answer_mode
+
+        mode = resolve_answer_mode(q, llm_intent if isinstance(llm_intent, dict) else {})
+        if mode in ("llm_chart", "llm_knowledge"):
+            return True, f"answer_mode_{mode}"
+        if mode == "chart_fact":
+            return False, ""
+    except Exception:
+        pass
     if matches_dedicated_static_engine(q, llm_intent):
         return False, ""
     try:
@@ -239,6 +253,8 @@ def should_bypass_static_engines_for_direct_llm(
 
         if is_pure_chart_fact_lookup(q):
             return False, ""
+        if is_cosmic_domain_concept_question(q, llm_intent):
+            return True, "cosmic_concept_no_static_engine"
         if _detect_divisional(q):
             return True, "divisional_chart_no_static_engine"
         if needs_llm_chart_answer(q):

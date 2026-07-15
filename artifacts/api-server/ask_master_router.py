@@ -286,6 +286,37 @@ def resolve_ask_route(
             lock_timing=True,
         )
 
+    # ── Answer-mode authority (understand + deterministic validate) ──────
+    try:
+        from ask_answer_mode import resolve_answer_mode
+
+        answer_mode = resolve_answer_mode(
+            question,
+            llm_intent_admin if isinstance(llm_intent_admin, dict) else llm_intent,
+        )
+        guards.append(f"answer_mode:{answer_mode}")
+        if answer_mode == "chart_fact":
+            return MasterRoute(
+                path="chart_fact",
+                is_timing=False,
+                domain=domain,
+                archetype=archetype,
+                reason="answer_mode_chart_fact",
+                guards=guards,
+            )
+        if answer_mode in ("llm_chart", "llm_knowledge"):
+            return MasterRoute(
+                path="chart_llm",
+                is_timing=False,
+                domain=domain,
+                archetype=archetype,
+                mr_static=False,
+                reason=f"answer_mode_{answer_mode}",
+                guards=guards,
+            )
+    except Exception:
+        pass
+
     # ── Static engines / chart LLM ────────────────────────────────────────
     try:
         from ask_routing_policy import matches_dedicated_static_engine

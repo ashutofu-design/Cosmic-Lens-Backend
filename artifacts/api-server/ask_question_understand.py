@@ -11,6 +11,7 @@ from typing import Any, Optional
 _UNDERSTAND_PROMPT = """You read Hindi/Hinglish/English astrology questions WORD BY WORD.
 Return STRICT JSON only:
 {{"question_scope": "<one word>",
+ "answer_mode": "<one word>",
  "question_summary": "<explanation text>",
  "understood": true}}
 
@@ -27,6 +28,19 @@ Scope rules:
 - health = sehat/bimari/doctor/hospital (NOT partner-fit questions)
 - finance = paisa/dhan/wealth/loss
 - general = vague or multi-domain overview only
+
+answer_mode — pick exactly ONE (THIS ROUTES THE SYSTEM — be careful):
+chart_fact | engine | llm_chart | llm_knowledge
+
+answer_mode rules:
+- chart_fact = ONLY atomic chart lookup: which planet/house/sign/lagna/nakshatra/dasha is WHERE. No meaning, no good/bad, no "kya hota".
+  Examples: "mera lagna?", "10th me kaun hai?", "Mars kis house me?"
+- engine = personal LIFE outcome for THIS user that needs a domain engine (shaadi kab, career kaisi, sehat, love loyalty, children, money timing/quality about THEIR life).
+  Needs words like mera/meri/mujhe OR clearly about their future/life result.
+- llm_chart = meaning/effect/strength of THEIR chart placements when no single life-engine fits (combo, dignity on their chart, D10 effect, house meaning for them).
+- llm_knowledge = general astrology EDUCATION / theory — NOT asking to read THEIR empty house as a fact dump.
+  Examples: "6th house me debilitated planet accha hai ya exalted?", "dasha kya hoti hai?", "exaltation matlab?", "neech bhanga kya hai?"
+  If question compares debilitated vs exalted / good vs bad as a RULE or concept → llm_knowledge (even if a house number is mentioned).
 
 Rules for question_summary — THIS IS THE MAIN TASK:
 - Write 2–10 SHORT lines separated by newline (\\n). Plain Hinglish (Roman).
@@ -215,14 +229,20 @@ def llm_understand_question(
         data = json.loads(raw)
         summary = str(data.get("question_summary") or "").strip().replace("\\n", "\n")[:1800]
         scope = str(data.get("question_scope") or "").strip()
+        from ask_answer_mode import normalize_answer_mode
+
+        answer_mode = normalize_answer_mode(data.get("answer_mode"))
         understood = bool(data.get("understood", True)) and bool(summary) and not _echoes_question(summary, q)
-        return {
+        out = {
             "question_summary": summary,
             "question_scope": scope,
             "understood": understood,
             "source": "understand_llm",
             "latency_ms": int((time.time() - t0) * 1000),
         }
+        if answer_mode:
+            out["answer_mode"] = answer_mode
+        return out
     except Exception as exc:
         return {
             "question_summary": "",
@@ -274,6 +294,8 @@ def ensure_question_understanding(
             out["understanding_source"] = extra.get("source") or "understand_llm"
             if extra.get("latency_ms") is not None:
                 out["understand_latency_ms"] = extra["latency_ms"]
+            if extra.get("answer_mode"):
+                out["answer_mode"] = extra["answer_mode"]
 
     if not str(out.get("question_summary") or "").strip():
         fallback = build_question_explanation_fallback(q, out)
@@ -295,6 +317,13 @@ def ensure_question_understanding(
         out["understanding_source"] = "regex_paraphrase"
 
     _finalize_question_understanding(out, q, client=client)
+
+    try:
+        from ask_answer_mode import resolve_answer_mode
+
+        out["answer_mode"] = resolve_answer_mode(q, out)
+    except Exception:
+        pass
 
     try:
         from ask_intent_fidelity import infer_compatibility_angle, infer_partner_commitment_angle

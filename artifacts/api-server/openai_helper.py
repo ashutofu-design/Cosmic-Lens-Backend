@@ -12883,24 +12883,14 @@ def _build_messages(
                       f"trig={love_verdict_obj.get('current_trigger_score')} "
                       f"window='{love_window_str}'")
             if partner_kundli and love_verdict_block:
-                try:
-                    from event_timing.love.milan_engine_v1 import (
-                        assess_milan,
-                        format_milan_for_prompt,
-                        is_milan_question,
-                    )
-                    if is_milan_question(question or ""):
-                        _milan_obj = assess_milan(
-                            kundli, partner_kundli, intel_obj or {}, {},
-                            question=question or "",
-                        )
-                        _milan_block = format_milan_for_prompt(_milan_obj)
-                        if _milan_block:
-                            love_verdict_block = f"{love_verdict_block}\n\n{_milan_block}"
-                            if isinstance(out_meta, dict):
-                                out_meta["milan_verdict_obj"] = _milan_obj
-                except Exception as exc:
-                    print(f"[openai_helper] milan_engine failed: {exc}")
+                # Ask: do NOT run milan_engine_v1. Match / kundli-milan type Ask
+                # questions use unified MR relationship_engine_execution (D1+D9).
+                # Product Kundli Milan remains on /api/kundli-milan only.
+                print(
+                    "[openai_helper] ask_milan_skipped — use mr_engine_v1 D1+D9 "
+                    "(product milan is /api/kundli-milan)",
+                    flush=True,
+                )
         except Exception as exc:
             print(f"[openai_helper] love_engine failed: {exc}")
 

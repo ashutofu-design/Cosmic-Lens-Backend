@@ -672,10 +672,12 @@ def classify_mr_archetype(question: str) -> str:
 
     if re.search(
         r"(?ix)\b("
-        r"compatible|compatibility|gun\s*milan|36\s*gun|match\s*making|rishta\s*achha|"
+        r"compatible|compatibility|gun\s*milan|guna\s*milan|36\s*gun|match\s*making|"
+        r"kundli\s*match|kundli\s*milan|rishta\s*achha|"
         r"emotional\s*compat|mentally\s*compat|intellectually\s*compat|"
         r"thinking\s*match|soch\s*match|values?\s*same|life\s*goals?\s*match|"
-        r"personalities?\s*match|lifestyle\s*compat|dil\s*ka\s*match"
+        r"personalities?\s*match|lifestyle\s*compat|dil\s*ka\s*match|"
+        r"hamari\s*jodi|dono\s*chart|donon\s*chart"
         r")\b",
         q,
     ) and not re.search(

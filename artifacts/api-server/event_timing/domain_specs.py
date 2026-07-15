@@ -59,7 +59,7 @@ DOMAIN_TIMING_SPECS: dict[str, dict[str, Any]] = {
             "STEP6 Jupiter+Venus transit on 5H/7H/11H (month lock)",
             "STEP8 no rejection certainty / no third-party naming",
             "STATIC: love_static_engine_v1 for non-kab love Qs",
-            "MILAN: milan_engine_v1 when two charts + match Q",
+            "MILAN product API only (/api/kundli-milan); Ask match/milan → mr_engine_v1 D1+D9",
         ],
         "dasha_targets": ["5L", "7L", "11L", "Venus"],
         "transits": ["Venus transit", "Jupiter on 5H/7H"],
@@ -70,7 +70,9 @@ DOMAIN_TIMING_SPECS: dict[str, dict[str, Any]] = {
         ],
         "companion_engines": {
             "static": "event_timing.love.love_static_engine_v1",
+            # Product Kundli Milan API — not used on Ask path
             "milan": "event_timing.love.milan_engine_v1",
+            "ask_match": "ask_mr.mr_engine_v1",
         },
         "timing_triggers": ["pyaar kab", "patchup kab", "milega kab", "relationship kab"],
         "static_vs_timing": {

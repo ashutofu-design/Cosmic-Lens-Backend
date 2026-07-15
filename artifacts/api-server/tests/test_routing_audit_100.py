@@ -93,8 +93,8 @@ ROUTING_CASES: list[tuple[str, str, str | frozenset, str]] = [
     # ── LOVE STATIC (no kab) ──────────────────────────────────────────────────
     ("Kya wo mujhse pyar karta hai?", "love", frozenset({"general_love", "one_sided", "existing_status"}), "love_static"),
     ("Kya mera partner loyal hai?", "love", frozenset({"affair_third_party", "general_love", "existing_status"}), "love_static"),
-    ("Hamari kundli match kaisi hai?", "love", "milan", "milan_engine"),
-    ("Hum compatible hain kya?", "love", frozenset({"compatibility", "general_love", "milan"}), "love"),
+    ("Hamari kundli match kaisi hai?", "love", "compatibility", "mr_engine_v1"),
+    ("Hum compatible hain kya?", "love", "compatibility", "mr_engine_v1"),
     # ── COLLISION GUARDS ────────────────────────────────────────────────────
     ("Nifty kab badhega?", "general", "general", "llm_only"),
     ("Share market me entry kab karni chahiye?", "general", "general", "llm_only"),

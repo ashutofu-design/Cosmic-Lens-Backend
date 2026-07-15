@@ -103,7 +103,9 @@ def _resolve_static_domain(question: str) -> tuple[str, str]:
     try:
         from event_timing.love.milan_engine_v1 import is_milan_question
         if is_milan_question(q):
-            return "love", "milan"
+            # Ask path: kundli match / milan Q → unified MR D1+D9 (compatibility focus).
+            # Product Kundli Milan (/api/kundli-milan) stays separate.
+            return "love", "compatibility"
     except Exception:
         pass
     if _is_love_static(q):
@@ -142,8 +144,9 @@ def audit_question_routing(
     static_dom, static_sub = _resolve_static_domain(question)
     if static_dom != "general":
         eng = DOMAIN_ENGINES.get(static_dom, "llm_only")
-        if static_sub == "milan":
-            eng = "event_timing.love.milan_engine_v1"
+        if static_dom == "love" and static_sub == "compatibility":
+            # Ask kundli-match / milan-type Q uses unified MR (not milan_engine_v1)
+            eng = "ask_mr.mr_engine_v1"
         elif static_dom == "love":
             eng = "event_timing.love.love_static_engine_v1"
         return RoutingAudit(

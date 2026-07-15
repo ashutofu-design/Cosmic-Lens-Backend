@@ -153,6 +153,42 @@ function formatHealthChartFactsSteps(
   ];
 }
 
+function formatDashaTimingCompactSteps(
+  pack: import("./askObservability").ObservabilityHealthEngineExecution["dasha_timing_compact"] | null | undefined,
+): { label: string; value: string }[] {
+  if (!pack || pack.error) {
+    return pack?.error
+      ? [{ label: "Timing Dasha Compact", value: pack.error }]
+      : [];
+  }
+  if (!pack.current && !(pack.top_windows || []).length) {
+    return [];
+  }
+  const cur = pack.current;
+  const currentLine = cur
+    ? `MD ${cur.md || "?"} / AD ${cur.ad || "?"} / PD ${cur.pd || "?"}`
+      + (cur.window ? `\n${cur.window}` : "")
+      + (cur.why ? `\n${cur.why}` : "")
+    : "—";
+  const windows = (pack.top_windows || []).map((w, i) => {
+    const score = w.score != null ? ` · score ${w.score}` : "";
+    return `#${i + 1} ${w.role || "window"}: MD ${w.md || "?"} / AD ${w.ad || "?"} / PD ${w.pd || "?"}`
+      + (w.window ? `\n${w.window}` : "")
+      + score
+      + (w.why ? `\n${w.why}` : "");
+  });
+  return [
+    {
+      label: "Timing Dasha Compact",
+      value:
+        `horizon ${pack.horizon_years ?? "?"}y · top ${pack.max_windows ?? (pack.top_windows || []).length}`
+        + (pack.schema_version ? ` · ${pack.schema_version}` : ""),
+    },
+    { label: "Current MD/AD/PD", value: currentLine },
+    { label: "Top Windows", value: windows.join("\n\n") || "—" },
+  ];
+}
+
 function formatHealthEngineExecutionSteps(
   pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
   opts?: { domain?: "health" | "relationship" },
@@ -173,6 +209,7 @@ function formatHealthEngineExecutionSteps(
     label: "Vargottama",
     value: vargottama.join("\n") || (pack.vargottama_planets || []).join(", ") || "none",
   });
+  steps.push(...formatDashaTimingCompactSteps(pack.dasha_timing_compact));
 
   return steps;
 }

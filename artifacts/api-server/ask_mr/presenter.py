@@ -29,6 +29,9 @@ def to_relationship_llm_payload(result: EngineResult, *, question: str = "") -> 
         "manglik": execution.get("manglik") or {},
         "relationship_signals": execution.get("relationship_signals") or {},
     }
+    dasha = execution.get("dasha_timing_compact") if isinstance(execution, dict) else None
+    if isinstance(dasha, dict) and (dasha.get("current") or dasha.get("top_windows")):
+        payload["dasha_timing_compact"] = dasha
     parts = [
         RELATIONSHIP_ENGINE_EXECUTION_JSON_LABEL + "\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":")),

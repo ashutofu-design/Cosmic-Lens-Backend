@@ -315,6 +315,32 @@ def _inject_relationship_engine_execution(
         and isinstance(existing.get("d9"), dict)
     )
     if not force and has_core:
+        # Timing ask: ensure compact dasha is present even if D1/D9 already injected
+        if question and isinstance(existing, dict) and "dasha_timing_compact" not in existing:
+            chart = kundli if isinstance(kundli, dict) else None
+            if chart is None:
+                for key in ("kundli", "chart", "chart_json"):
+                    candidate = ctx.get(key)
+                    if isinstance(candidate, dict) and (
+                        candidate.get("planets") or candidate.get("dashas")
+                    ):
+                        chart = candidate
+                        break
+            if chart is not None:
+                try:
+                    from ask_mr.dasha_compact import maybe_attach_dasha_compact
+
+                    maybe_attach_dasha_compact(existing, chart, question)
+                    checks = dict(checks)
+                    checks["relationship_engine_execution"] = existing
+                    ctx["checks"] = checks
+                    sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+                    sm_checks = dict(sm.get("checks") or {}) if isinstance(sm.get("checks"), dict) else {}
+                    sm_checks["relationship_engine_execution"] = existing
+                    sm["checks"] = sm_checks
+                    ctx["slice_meta"] = sm
+                except Exception:
+                    pass
         return ctx
     chart = kundli if isinstance(kundli, dict) else None
     if chart is None:
@@ -366,6 +392,14 @@ def _inject_relationship_engine_execution(
     except Exception:
         pass
     return ctx
+
+
+def _prepare_ctx_for_observability(
+    ctx: dict[str, Any],
+    question_text: str = "",
+    *,
+    kundli: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     out = dict(ctx)
     q = (question_text or out.get("question") or "").strip()
     if q:

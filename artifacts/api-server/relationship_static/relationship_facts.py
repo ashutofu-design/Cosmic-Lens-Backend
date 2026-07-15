@@ -410,7 +410,11 @@ def compute_relationship_engine_execution(
     routing_label: str = "",
     llm_intent: Optional[dict] = None,
 ) -> Dict[str, Any]:
-    """Fixed D1 + D9 relationship pack for admin Engine Execution and LLM context."""
+    """Fixed D1 + D9 relationship pack for admin Engine Execution and LLM context.
+
+    Timing questions only: also attaches ``dasha_timing_compact`` (current MD/AD/PD
+    + top windows from a 10y internal scan — not the full dasha tree).
+    """
     chart = kundli if isinstance(kundli, dict) else {}
     d1 = compute_relationship_facts(chart)
     d9 = compute_d9_relationship_facts(chart)
@@ -461,4 +465,13 @@ def compute_relationship_engine_execution(
         pack["intent_domain"] = str(
             llm_intent.get("routed_domain") or llm_intent.get("domain") or ""
         ).strip().lower()
+    if (question or "").strip():
+        try:
+            from ask_mr.dasha_compact import maybe_attach_dasha_compact
+
+            maybe_attach_dasha_compact(
+                pack, chart, question, llm_intent=llm_intent,
+            )
+        except Exception:
+            pass
     return pack

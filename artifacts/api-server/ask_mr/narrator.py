@@ -264,6 +264,8 @@ def build_mr_engine_narrator_system_prompt(
                 "poora padho, lekin jawab me sirf sawal-relevant facts. "
                 "QUESTION_PRIORITY_FACTS se #1 natural chart proof ZAROORI "
                 "(planet + ghar/dignity). Dump mat karo. "
+                "Agar dasha_timing_compact ho (timing ask) — WHEN window usi current/top_windows se; "
+                "bahar date mat banavo. "
                 f"routing_label ({arch or 'general_mr'}) = answer FOCUS only, not a separate engine. "
                 "Never invent placements/dates. "
                 "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष, Big Picture, Kyun aisa, Ab kya karein."

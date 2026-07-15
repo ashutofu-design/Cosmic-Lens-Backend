@@ -265,6 +265,31 @@ export interface ObservabilityHealthEngineExecution {
     d9_house?: number;
     vargottama?: boolean;
   }>;
+  /** Timing asks only — current MD/AD/PD + ranked windows */
+  dasha_timing_compact?: {
+    schema_version?: string;
+    horizon_years?: number;
+    max_windows?: number;
+    current?: {
+      md?: string;
+      ad?: string;
+      pd?: string;
+      window?: string | null;
+      role?: string;
+      why?: string;
+    } | null;
+    top_windows?: Array<{
+      md?: string;
+      ad?: string;
+      pd?: string;
+      window?: string | null;
+      role?: string;
+      score?: number;
+      why?: string;
+    }>;
+    llm_note?: string;
+    error?: string;
+  };
 }
 
 export interface ObservabilityHallucinationSummary {

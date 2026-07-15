@@ -1,4 +1,4 @@
-"""Relationship → LLM payload: full Engine Execution (D1 + D9) + routing label."""
+"""Relationship → LLM payload: full Engine Execution + QUESTION_PRIORITY_FACTS (health-style)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,11 @@ import json
 from ask_mr.types import EngineResult
 
 RELATIONSHIP_ENGINE_EXECUTION_JSON_LABEL = "RELATIONSHIP_ENGINE_EXECUTION_JSON:"
+QUESTION_PRIORITY_FACTS_LABEL = "QUESTION_PRIORITY_FACTS:"
 
 
 def to_relationship_llm_payload(result: EngineResult, *, question: str = "") -> str:
-    """Full D1/D9 Relationship Engine Execution for narrator + admin."""
+    """Full D1/D9 Relationship Engine Execution + ranked priority facts for narrator."""
     checks = dict(result.checks or {})
     execution = checks.get("relationship_engine_execution") or {}
     label = (
@@ -31,12 +32,36 @@ def to_relationship_llm_payload(result: EngineResult, *, question: str = "") -> 
     parts = [
         RELATIONSHIP_ENGINE_EXECUTION_JSON_LABEL + "\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-        (
-            "NARRATOR_LOCK: Use ONLY RELATIONSHIP_ENGINE_EXECUTION_JSON for chart facts. "
-            f"routing_label={label} = answer focus (loyalty vs commitment etc.) — not a separate engine. "
-            "Do not invent placements, signs, houses, or dates."
-        ),
     ]
+    try:
+        from ask_mr.selected_blocks import build_relationship_selected_blocks
+
+        selected = build_relationship_selected_blocks(
+            question or "",
+            "",
+            meta={"checks": checks, "routing_label": label, "archetype": label},
+            execution=execution if isinstance(execution, dict) else None,
+        )
+        priority = str(selected.get("priority_facts_for_llm") or "").strip()
+        if priority:
+            parts.append(priority)
+            checks["relationship_selected_blocks_preview"] = {
+                "focus": selected.get("focus"),
+                "focus_label": selected.get("focus_label"),
+                "expected_blocks": (selected.get("expected_blocks") or [])[:8],
+                "priority_facts_for_llm": priority,
+                "source": "relationship_engine_execution",
+            }
+            result.checks = checks
+    except Exception:
+        pass
+
+    parts.append(
+        "NARRATOR_LOCK: Use ONLY RELATIONSHIP_ENGINE_EXECUTION_JSON for chart facts. "
+        f"routing_label={label} = answer focus — not a separate engine. "
+        "Cite #1 from QUESTION_PRIORITY_FACTS as natural chart proof when answering. "
+        "Do not invent placements, signs, houses, or dates."
+    )
     if result.verdict:
         parts.append(f"VERDICT_HINT: {result.verdict}")
     if result.answer_plan:

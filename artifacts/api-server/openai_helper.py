@@ -9866,10 +9866,21 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             isinstance(dcr_love_meta, dict)
             and dcr_love_meta.get("slice") == "health_engine_v1"
         )
+        _mr_chk = (
+            (dcr_love_meta.get("checks") if isinstance(dcr_love_meta, dict) else None) or {}
+        )
+        _is_mr_unified_slice = (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "mr_engine_v1"
+            and (
+                _mr_chk.get("unified_execution")
+                or _mr_chk.get("relationship_engine_execution")
+            )
+        )
         _dna_narrator_rules = build_question_dna_narrator_rules(
             _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
             question=question or "",
-            health_validator=_is_health_slice,
+            health_validator=_is_health_slice or _is_mr_unified_slice,
         )
     except Exception as _dna_rules_exc:
         print(f"[raw_passthrough] question_dna narrator rules skipped: {_dna_rules_exc}", flush=True)
@@ -10443,11 +10454,26 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     _llm_raw_text = ""
     _health_dna_judge_audit: dict = {}
+    _mr_dna_judge_audit: dict = {}
     resp = None
     _use_health_dna_judge = (
         isinstance(dcr_love_meta, dict)
         and str(dcr_love_meta.get("slice") or "") == "health_engine_v1"
         and not bool(dcr_love_meta.get("skip_llm"))
+    )
+    _mr_meta_checks = (
+        (dcr_love_meta.get("checks") if isinstance(dcr_love_meta, dict) else None) or {}
+    )
+    _use_mr_dna_judge = (
+        isinstance(dcr_love_meta, dict)
+        and str(dcr_love_meta.get("slice") or "") == "mr_engine_v1"
+        and not bool(dcr_love_meta.get("skip_llm"))
+        and (
+            _mr_meta_checks.get("unified_execution")
+            or _mr_meta_checks.get("relationship_engine_execution")
+            or str(_mr_meta_checks.get("engine_version") or "")
+            == "relationship_engine_execution_v1"
+        )
     )
     try:
         if _use_health_dna_judge:
@@ -10508,6 +10534,47 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 print(
                     "[raw_passthrough] HEALTH_DNA_JUDGE observability_fail "
                     f"issues={_health_dna_judge_audit.get('issues')}",
+                    flush=True,
+                )
+        elif _use_mr_dna_judge:
+            from ask_mr.dna_judge import run_relationship_llm_with_dna_judge
+
+            _mr_judge_meta = (
+                dict(dcr_love_meta) if isinstance(dcr_love_meta, dict) else {}
+            )
+            if isinstance(_llm_intent_admin, dict):
+                _qd = _llm_intent_admin.get("question_dna")
+                if isinstance(_qd, dict):
+                    _mr_judge_meta["question_dna"] = _qd
+                    _qs = _qd.get("questions")
+                    if isinstance(_qs, list) and _qs and isinstance(_qs[0], dict):
+                        _q0 = _qs[0]
+                        _mr_judge_meta["question_dna_item"] = _q0
+                        for _dk in (
+                            "normalized_question",
+                            "intent",
+                            "user_wants",
+                            "question_type",
+                            "domain",
+                            "bucket",
+                            "answer_style",
+                            "answer_approach",
+                        ):
+                            if _q0.get(_dk) not in (None, ""):
+                                _mr_judge_meta[_dk] = _q0[_dk]
+
+            _llm_raw_text, _mr_dna_judge_audit = run_relationship_llm_with_dna_judge(
+                client,
+                model=model,
+                messages=_llm_messages,
+                max_tokens=_max_tok,
+                question=question or "",
+                meta=_mr_judge_meta,
+            )
+            if _mr_dna_judge_audit.get("passed") is False:
+                print(
+                    "[raw_passthrough] MR_DNA_JUDGE observability_fail "
+                    f"issues={_mr_dna_judge_audit.get('issues')}",
                     flush=True,
                 )
         else:
@@ -11073,9 +11140,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "explanation",
                 "engine_version",
                 "rules_version",
+                "relationship_engine_execution",
+                "unified_execution",
+                "routing_label",
+                "relationship_selected_blocks_preview",
             ):
                 if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
                     _pt_checks[_ck] = _sm_checks[_ck]
+            if _mr_dna_judge_audit:
+                _pt_checks["relationship_dna_judge_audit"] = _mr_dna_judge_audit
+                if isinstance(_mr_dna_judge_audit.get("selected_blocks"), dict):
+                    _pt_checks["relationship_selected_blocks"] = _mr_dna_judge_audit[
+                        "selected_blocks"
+                    ]
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "health_engine_v1":
             _pt_checks["health_engine"] = "v1"
             _pt_checks["narrator_mode"] = (

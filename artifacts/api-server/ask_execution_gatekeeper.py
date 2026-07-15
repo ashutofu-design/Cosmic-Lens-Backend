@@ -207,6 +207,56 @@ def dna_expectation(admin: dict[str, Any] | None, *, question: str = "") -> DnaE
     return exp
 
 
+def allow_llm_fallback_on_gate_fail(
+    result: GatekeeperResult | None,
+    question: str = "",
+) -> bool:
+    """Product policy: engine mismatch / incomplete engine → LLM answers (don't block).
+
+    Hard blocks stay for hallucination_detected and empty answers.
+    """
+    if result is None or result.ok:
+        return False
+    reason = (result.reason or "").strip().lower()
+    if reason in ("hallucination_detected", "empty_answer", "verdict_mismatch"):
+        return False
+    # routing_error / missing narrator / insufficient evidence → chart+LLM
+    if reason in (
+        "routing_error",
+        "routing_archetype_mismatch",
+        "missing_narrator_json",
+        "insufficient_evidence",
+        "invalid_narrator_json",
+    ):
+        return True
+    q = (question or "").strip()
+    if not q:
+        return reason.startswith("routing")
+    try:
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        ok, _why = should_bypass_static_engines_for_direct_llm(q)
+        if ok:
+            return True
+    except Exception:
+        pass
+    try:
+        from chart_fact_answer import needs_llm_chart_answer
+
+        if needs_llm_chart_answer(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_chart_open_qa import is_open_chart_interpretation_question
+
+        if is_open_chart_interpretation_question(q):
+            return True
+    except Exception:
+        pass
+    return reason.startswith("routing")
+
+
 def enforce_dna_routing_flags(
     flags: dict[str, bool],
     admin: dict[str, Any] | None,
@@ -217,6 +267,25 @@ def enforce_dna_routing_flags(
     """When trusted DNA domain disagrees with resolver winner, force primary engine."""
     if not gatekeeper_enabled():
         return flags, None
+    # Chart interpretation / no dedicated engine → do NOT force health/career DNA.
+    try:
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        _bypass, _why = should_bypass_static_engines_for_direct_llm(
+            question or "",
+            admin if isinstance(admin, dict) else None,
+        )
+        if _bypass:
+            return flags, None
+    except Exception:
+        pass
+    try:
+        from chart_fact_answer import needs_llm_chart_answer
+
+        if needs_llm_chart_answer(question or ""):
+            return flags, None
+    except Exception:
+        pass
     exp = dna_expectation(admin, question=question)
     if not exp.trusted or not exp.engine_key:
         return flags, None
@@ -299,6 +368,25 @@ def check_routing_gate(
 ) -> GatekeeperResult:
     if not gatekeeper_enabled():
         return GatekeeperResult(True, "routing", "disabled", "gate_off")
+    # Placement / interpretive chart Qs → LLM path; don't hard-fail routing.
+    try:
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        _bypass, _ = should_bypass_static_engines_for_direct_llm(
+            question or "",
+            admin if isinstance(admin, dict) else None,
+        )
+        if _bypass:
+            return GatekeeperResult(True, "routing", "exempt", "direct_llm_chart_q")
+    except Exception:
+        pass
+    try:
+        from chart_fact_answer import needs_llm_chart_answer
+
+        if needs_llm_chart_answer(question or ""):
+            return GatekeeperResult(True, "routing", "exempt", "chart_interpretive_llm")
+    except Exception:
+        pass
     exp = dna_expectation(admin, question=question)
     if not exp.trusted or not exp.engine_key:
         return GatekeeperResult(True, "routing", "dna_not_trusted", "skip")

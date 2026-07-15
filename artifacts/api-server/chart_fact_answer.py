@@ -217,8 +217,17 @@ _NEEDS_LLM_RX = re.compile(
     r")\b",
 )
 
-# "6th lord ko 10th me place kar sakta hun?", "placement change ho sakta?"
-# — conceptual / hypothetical — must NOT hit deterministic house_lookup.
+# "6th lord 3rd house me ... debilitated ... kya hota" — chart meaning, not health engine.
+_LORD_PLACEMENT_EFFECT_RX = re.compile(
+    r"(?ix)("
+    r"\d{1,2}(?:st|nd|rd|th)?\s*lord.{0,100}(?:\d{1,2}(?:st|nd|rd|th)?\s*)?(?:house|ghar|bhav)"
+    r"|lord.{0,50}(?:house|ghar|bhav).{0,80}(?:kya\s+hota|matlab|meaning|effect|result|phal|hota\s+h)"
+    r"|(?:debilitat|neech|deblit|deblited).{0,50}(?:kya|matlab|hota|effect|phal)"
+    r"|(?:kya\s+hota|matlab|meaning).{0,50}(?:debilitat|neech|lord|house|ghar)"
+    r")"
+)
+
+# "6th lord ko 10th me place" — conceptual / hypothetical — must NOT hit deterministic house_lookup.
 _HYPOTHETICAL_PLACEMENT_RX = re.compile(
     r"(?ix)\b("
     r"placememt\s+change|placement\s+change|change\s+(?:ho\s+)?sakta|change\s+(?:kar\s+)?sakta|"
@@ -300,6 +309,8 @@ def needs_llm_chart_answer(question: str) -> bool:
     if not q:
         return False
     if _HYPOTHETICAL_PLACEMENT_RX.search(q):
+        return True
+    if _LORD_PLACEMENT_EFFECT_RX.search(q):
         return True
     if _detect_divisional(q) and not _is_pure_divisional_placement_lookup(q):
         return True

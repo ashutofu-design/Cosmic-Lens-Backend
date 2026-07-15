@@ -90,6 +90,14 @@ class TestNeedsLlmChartAnswer(unittest.TestCase):
         self.assertIsNotNone(det)
         self.assertIn("10", det.get("text", ""))
 
+    def test_lord_debilitated_effect_needs_llm(self):
+        q = (
+            "pehele samjhao 6th lord 3rd house me he woh sun he and "
+            "deblited he to kya hota he"
+        )
+        self.assertTrue(needs_llm_chart_answer(q))
+        self.assertFalse(is_pure_chart_fact_lookup(q))
+
 
 if __name__ == "__main__":
     unittest.main()

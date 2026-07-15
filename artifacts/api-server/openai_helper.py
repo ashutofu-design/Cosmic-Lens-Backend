@@ -9251,6 +9251,50 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         f"archetype={dcr_love_meta.get('archetype')}",
                         flush=True,
                     )
+                from ask_execution_gatekeeper import (
+                    allow_llm_fallback_on_gate_fail,
+                    GatekeeperResult as _GkResult,
+                )
+
+                if not _gk_pre.ok and allow_llm_fallback_on_gate_fail(
+                    _gk_pre, question or ""
+                ):
+                    # Policy: engine mismatch → Cosmo LLM + full chart (don't block user).
+                    print(
+                        f"[raw_passthrough] EXECUTION_GATEKEEPER → LLM fallback "
+                        f"rule={_gk_pre.rule} reason={_gk_pre.reason}",
+                        flush=True,
+                    )
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["gatekeeper_llm_fallback"] = _gk_pre.to_dict()
+                    try:
+                        chart_text = _rich_chart_text_for_llm_fallback(
+                            kundli,
+                            birth=birth,
+                            question=question or "",
+                        )
+                    except Exception:
+                        try:
+                            chart_text = _raw_compact_chart(
+                                kundli, include_dasha=False, static_dasha_hint=True,
+                            )
+                        except Exception:
+                            pass
+                    dcr_love_meta = {
+                        "slice": "universal_chart_llm",
+                        "checks": {
+                            "gatekeeper_llm_fallback": True,
+                            "prior_gate": _gk_pre.to_dict(),
+                        },
+                    }
+                    _chart_slice_type = "universal_chart_llm"
+                    _is_health_static = False
+                    _is_career_static = False
+                    _is_finance_static = False
+                    _is_mr_static = False
+                    _gk_pre = _GkResult(
+                        True, "engine", "llm_fallback", "gate_fail_to_llm"
+                    )
                 if not _gk_pre.ok:
                     if isinstance(_llm_intent_admin, dict):
                         _llm_intent_admin["gatekeeper_blocked"] = _gk_pre.to_dict()
@@ -9272,13 +9316,21 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         question_type=qtype,
                         is_timing=bool(is_timing),
                         checks={
-                            "slice_type": dcr_love_meta.get("slice"),
+                            "slice_type": (
+                                dcr_love_meta.get("slice")
+                                if isinstance(dcr_love_meta, dict)
+                                else None
+                            ),
                             "gatekeeper_blocked": True,
                             "gatekeeper": _gk_pre.to_dict(),
-                            "archetype": dcr_love_meta.get("archetype"),
+                            "archetype": (
+                                dcr_love_meta.get("archetype")
+                                if isinstance(dcr_love_meta, dict)
+                                else None
+                            ),
                         },
                         chart_text=chart_text,
-                        slice_meta=dcr_love_meta,
+                        slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
                         llm_called=False,
                         skip_reason=f"gatekeeper_{_gk_pre.rule}",
                         intent_source=_intent_source,

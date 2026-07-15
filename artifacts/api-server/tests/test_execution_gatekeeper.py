@@ -8,6 +8,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_execution_gatekeeper import (
+    GatekeeperResult,
+    allow_llm_fallback_on_gate_fail,
     check_engine_output_gate,
     check_final_answer_gate,
     check_routing_gate,
@@ -101,7 +103,11 @@ class ExecutionGatekeeperTests(unittest.TestCase):
         }
         res = check_engine_output_gate(admin, slice_meta=meta)
         self.assertFalse(res.ok)
-        self.assertEqual(res.rule, "rule_6_health_question_career_engine")
+        # Domain clash may fire rule_1 first; both mean health DNA ≠ career engine.
+        self.assertIn(
+            res.rule,
+            ("rule_6_health_question_career_engine", "rule_1_dna_executed_mismatch"),
+        )
 
     def test_rule2_zero_evidence_blocked_on_career(self):
         meta = {
@@ -230,6 +236,61 @@ class ExecutionGatekeeperTests(unittest.TestCase):
         exp = dna_expectation(admin)
         self.assertEqual(exp.archetype, "heart_blood_pressure")
         self.assertEqual(exp.engine_key, "health")
+
+    def test_lord_placement_effect_skips_routing_block(self):
+        q = (
+            "pehele samjhao 6th lord 3rd house me he woh sun he and "
+            "deblited he to kya hota he"
+        )
+        admin = {
+            "question_dna": {
+                "source": "llm",
+                "questions": [{
+                    "domain": "health",
+                    "bucket": "general_health",
+                    "confidence": 0.9,
+                    "bucket_match_confidence": "high",
+                }],
+            },
+            "dna_routing_applied": True,
+        }
+
+        class _Route:
+            engine_key = "career"
+            archetype = "general_career"
+            domain = "career"
+            reason = ""
+
+        res = check_routing_gate(admin, engine_route=_Route(), question=q)
+        self.assertTrue(res.ok)
+        self.assertIn(res.rule, ("chart_interpretive_llm", "direct_llm_chart_q"))
+
+        flags = {k: False for k in _ALL_FLAGS}
+        flags["career"] = True
+        out, note = enforce_dna_routing_flags(flags, admin, _Route(), question=q)
+        self.assertIsNone(note)
+        self.assertTrue(out["career"])  # not forced to health
+
+    def test_routing_error_allows_llm_fallback(self):
+        bad = GatekeeperResult(
+            ok=False,
+            stage="routing",
+            reason="routing_error",
+            rule="rule_1_routing_mismatch",
+        )
+        self.assertTrue(
+            allow_llm_fallback_on_gate_fail(
+                bad,
+                "6th lord 3rd house me sun debilitated kya hota hai",
+            )
+        )
+        hallu = GatekeeperResult(
+            ok=False,
+            stage="final",
+            reason="hallucination_detected",
+            rule="rule_5",
+        )
+        self.assertFalse(allow_llm_fallback_on_gate_fail(hallu, "health kaisi"))
 
 
 if __name__ == "__main__":

@@ -62,9 +62,26 @@ class TestNeedsLlmChartAnswer(unittest.TestCase):
             "kya placement change ho sakta he like 6th lord ko 10th me "
             "place kar sakta hun kya"
         )
+        from chart_fact_answer import answer_hypothetical_placement_change
+
         self.assertTrue(needs_llm_chart_answer(q))
         self.assertFalse(is_pure_chart_fact_lookup(q))
-        self.assertIsNone(try_deterministic_chart_fact(q, _KUNDLI))
+        hyp = answer_hypothetical_placement_change(q)
+        self.assertIsNotNone(hyp)
+        self.assertIn("change nahi", hyp.get("text", "").lower())
+        self.assertNotIn("koi graha nahi", hyp.get("text", "").lower())
+        # Locked answer works even without planet list
+        det = try_deterministic_chart_fact(q, {"ascendant": "Virgo", "planets": []})
+        self.assertIsNotNone(det)
+        self.assertIn("change nahi", det.get("text", "").lower())
+
+    def test_placememt_typo_hypothetical_lock(self):
+        from chart_fact_answer import answer_hypothetical_placement_change
+
+        q = "kya placememt change ho sakta he like 6th lord ko 10th me place kar sakta hun kya"
+        hyp = answer_hypothetical_placement_change(q)
+        self.assertIsNotNone(hyp)
+        self.assertNotIn("koi graha nahi", (hyp.get("text") or "").lower())
 
     def test_pure_tenth_house_occupants_still_chart_fact(self):
         q = "Mere 10th house mein kaun se graha hain"

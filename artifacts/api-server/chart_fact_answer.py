@@ -234,6 +234,47 @@ _HYPOTHETICAL_PLACEMENT_RX = re.compile(
 )
 
 
+def is_hypothetical_placement_question(question: str) -> bool:
+    q = normalize_ask_typos((question or "").strip())
+    return bool(q and _HYPOTHETICAL_PLACEMENT_RX.search(q))
+
+
+def answer_hypothetical_placement_change(
+    question: str = "",
+    lang: str = "hn",
+) -> dict | None:
+    """Natal placements cannot be rewritten — fixed reply, no house dump / LLM."""
+    if not is_hypothetical_placement_question(question):
+        return None
+    lang_use = lang if lang in ("hi", "hn", "en") else "hn"
+    if lang_use == "en":
+        text = (
+            "Birth-chart placements don’t change — you can’t move the 6th lord "
+            "into the 10th house in your natal kundli. Planets stay where they "
+            "are at birth. Transits and dashas bring phases; they don’t rewrite "
+            "the natal chart. Ask what your 6th lord’s current house means if "
+            "you want that reading."
+        )
+    elif lang_use == "hi":
+        text = (
+            "जन्म कुंडली की ग्रह स्थिति बदलती नहीं — छठे भाव के स्वामी को "
+            "दसवें भाव में ‘place’ नहीं कर सकते। जन्म के समय जो जहाँ है, वही "
+            "natal chart पर रहता है। गोचर/दशा अलग चरण लाती हैं, कुंडली "
+            "फिर से नहीं लिखतीं। अगर छठे स्वामी की मौजूदा स्थिति का मतलब "
+            "पूछना हो तो वो पूछें।"
+        )
+    else:
+        text = (
+            "Janma kundli ki graha placement change nahi hoti — 6th lord ko "
+            "aap 10th house me 'place' nahi kar sakte. Jo grah jis ghar me "
+            "janam pe hai, wahi natal chart pe fixed hai. Transit/dasha alag "
+            "phases laate hain, kundli rewrite nahi karte. Agar 6th lord abhi "
+            "kis house me hai / uska matlab chahiye to woh poochho."
+        )
+    return _payload(text, "hypothetical_placement_lock")
+
+
+
 _PURE_PLACEMENT_LOOKUP_RX = re.compile(
     r"(?ix)\b("
     r"kahan|kahaan|kis\s+(?:ghar|house|bhav|rashi|sign)|"
@@ -800,6 +841,11 @@ def try_deterministic_chart_fact(
     birth: Any = None,
 ) -> dict | None:
     """Return a full ask-response dict for chart lookups, or None if not a lookup."""
+    # Natal rewrite / "lord ko X me place" — no kundli required for the lock answer.
+    _hyp = answer_hypothetical_placement_change(question or "", lang=lang)
+    if _hyp:
+        return _hyp
+
     if not isinstance(kundli, dict) or not kundli.get("planets"):
         return None
 

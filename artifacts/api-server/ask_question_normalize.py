@@ -53,6 +53,18 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bheath+\b", re.I), "health"),
     (re.compile(r"\bplacememt\b", re.I), "placement"),
     (re.compile(r"\bplace?ment\b", re.I), "placement"),
+    # Dignity typos (chart meaning Qs must not fall into house_lookup)
+    (re.compile(r"\bdeblit(?:ed)?\b", re.I), "debilitated"),
+    (re.compile(r"\bdeblited\b", re.I), "debilitated"),
+    (re.compile(r"\bdebliated\b", re.I), "debilitated"),
+    (re.compile(r"\bexalteted\b", re.I), "exalted"),
+    (re.compile(r"\bexalted?d\b", re.I), "exalted"),
+    (re.compile(r"\bneecha?\b", re.I), "neecha"),
+    (re.compile(r"\buchcha?\b", re.I), "uchcha"),
+    # "acha" / "achha" → accha (do not touch "sacha")
+    (re.compile(r"\bacha\b", re.I), "accha"),
+    (re.compile(r"\bachha\b", re.I), "accha"),
+    (re.compile(r"\bacch+a+\b", re.I), "accha"),
     (re.compile(r"\bhealt+h+\b", re.I), "health"),
     (re.compile(r"\btab+iat+\b", re.I), "tabiyat"),
     (re.compile(r"\btab+iyat+\b", re.I), "tabiyat"),
@@ -224,9 +236,11 @@ def _build_fuzzy_vocab() -> tuple[str, ...]:
         "child", "bachcha", "pregnancy", "property", "ghar", "flat", "vastu",
         "visa", "abroad", "videsh", "travel", "litigation", "court",
         "sacha", "sachcha", "sachchi", "mohabbat", "true",
+        "accha", "achha", "acha", "bura", "good", "bad",
         "shani", "saturn", "rahu", "ketu", "jupiter", "guru", "venus", "shukra",
         "mars", "mangal", "mercury", "budh", "moon", "chandra", "sun", "surya",
         "house", "bhav", "bhaav", "lord", "exalted", "debilitated", "retrograde",
+        "neecha", "neech", "uchcha", "combust", "vakri",
         "future", "timing", "luck", "bhagya", "sade", "sati", "transit",
     }
     try:

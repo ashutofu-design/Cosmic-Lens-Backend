@@ -115,8 +115,8 @@ _INTERPRET_RX = re.compile(
     r"se\s+kya|isse\s+kya|is\s+se\s+kya|"
     r"kaise\s+(?:affect|prabhav|kar)|"
     r"style|influence|farak|"
-    r"dikkat|problem|issue|accha|bura|lucky|unlucky|"
-    r"good|bad|favourable|favorable"
+    r"dikkat|problem|issue|acha|accha|achha|bura|lucky|unlucky|"
+    r"good|bad|favourable|favorable|better|worse"
     r")\b",
 )
 _DOMAIN_LIFE_INTERPRET_RX = re.compile(
@@ -212,9 +212,20 @@ _NEEDS_LLM_RX = re.compile(
     r"kya\s+hoga|kya\s+hogi|kya\s+hota|kya\s+hoti|kya\s+hote|kya\s+hai|"
     r"se\s+kya|isse\s+kya|is\s+se\s+kya|"
     r"kaise\s+(?:affect|prabhav|kar|help|hurt)|"
-    r"explain|samjha|samjh|bataye|batao\s+ki|good|bad|accha|bura|favourable|"
+    r"explain|samjha|samjh|bataye|batao\s+ki|good|bad|acha|accha|achha|bura|favourable|"
     r"strong|weak|powerful|kamzor|kami|lack|loneliness|lonely|akela\s*pan|akele\s*pan|dikh\s+r"
     r")\b",
+)
+
+# Any dignity / strength vocabulary → interpretive LLM (never empty-house stub).
+_DIGNITY_TOPIC_RX = re.compile(
+    r"(?ix)\b("
+    r"debilitat(?:ed|ion)?|deblit(?:ed)?|deblited|debliated|"
+    r"exalt(?:ed|ation)?|"
+    r"neech[a]?|uchch[a]?|ucch[a]?|"
+    r"own[\s-]?sign|swa[\s-]?rashi|moolatrikon[a]?|moola[\s-]?trikona|"
+    r"combust|vakri|retrograde"
+    r")\b"
 )
 
 # "6th lord 3rd house me ... debilitated ... kya hota" — chart meaning, not health engine.
@@ -222,8 +233,10 @@ _LORD_PLACEMENT_EFFECT_RX = re.compile(
     r"(?ix)("
     r"\d{1,2}(?:st|nd|rd|th)?\s*lord.{0,100}(?:\d{1,2}(?:st|nd|rd|th)?\s*)?(?:house|ghar|bhav)"
     r"|lord.{0,50}(?:house|ghar|bhav).{0,80}(?:kya\s+hota|matlab|meaning|effect|result|phal|hota\s+h)"
-    r"|(?:debilitat|neech|deblit|deblited).{0,50}(?:kya|matlab|hota|effect|phal)"
-    r"|(?:kya\s+hota|matlab|meaning).{0,50}(?:debilitat|neech|lord|house|ghar)"
+    r"|(?:debilitat|neech|deblit|deblited).{0,60}(?:kya|matlab|hota|effect|phal|acha|accha|good|ya|better|or|vs)"
+    r"|(?:kya\s+hota|matlab|meaning|acha|accha|good).{0,50}(?:debilitat|neech|exalt|uchch|lord|house|ghar)"
+    r"|(?:house|ghar|bhav).{0,80}(?:debilitat|neech|deblit|exalt|uchch)"
+    r".{0,40}(?:acha|accha|good|ya|better|or|vs|kya|hota)"
     r")"
 )
 
@@ -309,6 +322,8 @@ def needs_llm_chart_answer(question: str) -> bool:
     if not q:
         return False
     if _HYPOTHETICAL_PLACEMENT_RX.search(q):
+        return True
+    if _DIGNITY_TOPIC_RX.search(q):
         return True
     if _LORD_PLACEMENT_EFFECT_RX.search(q):
         return True

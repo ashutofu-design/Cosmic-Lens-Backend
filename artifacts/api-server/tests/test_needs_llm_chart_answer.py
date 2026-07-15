@@ -98,6 +98,14 @@ class TestNeedsLlmChartAnswer(unittest.TestCase):
         self.assertTrue(needs_llm_chart_answer(q))
         self.assertFalse(is_pure_chart_fact_lookup(q))
 
+    def test_house_debilitated_vs_exalted_needs_llm(self):
+        """Conceptual dignity Q — must NOT dump empty-house occupants."""
+        q = "6th house me deblited planet acha he ya exalted"
+        self.assertTrue(needs_llm_chart_answer(q))
+        self.assertFalse(is_pure_chart_fact_lookup(q))
+        det = try_deterministic_chart_fact(q, _KUNDLI)
+        self.assertIsNone(det)
+
 
 if __name__ == "__main__":
     unittest.main()

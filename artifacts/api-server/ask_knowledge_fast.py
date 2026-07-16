@@ -147,8 +147,17 @@ def _classical_lagna_gem_answer(question: str, lang: str = "hn") -> dict | None:
     }
 
 
+_KNOWLEDGE_LLM_SYSTEM = (
+    "You answer general Vedic astrology questions only.\n"
+    "Read the user's language (English, Hindi, or Hinglish) and reply in the same language.\n"
+    "Give one short simple paragraph that directly answers the question.\n"
+    "Do not invent this user's personal chart. No greetings, no lists, no headers."
+)
+
+
 def _llm_knowledge_answer(question: str, lang: str = "hn") -> str | None:
-    """Optional — off by default (ASK_KNOWLEDGE_FAST_LLM=1 to enable)."""
+    """Short paragraph knowledge answer; language follows the question."""
+    del lang  # language comes from the question text, not app locale
     try:
         from openai_helper import _get_client
     except Exception:
@@ -160,36 +169,23 @@ def _llm_knowledge_answer(question: str, lang: str = "hn") -> str | None:
         "ASK_KNOWLEDGE_FAST_MODEL",
         os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
     )
-    lang_line = (
-        "Reply in clear simple English."
-        if lang == "en"
-        else "Reply in warm natural Hinglish (Roman Hindi + English), 4-7 short sentences."
-    )
-    system = (
-        "You are Cosmo, a Vedic astrology teacher. Answer GENERAL astrology knowledge only. "
-        "Do NOT invent this user's personal chart placements. "
-        "If the question is about a named lagna (e.g. Leo lagna gemstone), give the "
-        "classical lagna-lord gemstone rule and a short caveat. "
-        "No greetings, no fear-selling.\n"
-        f"{lang_line}"
-    )
     try:
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": [
-                {"role": "system", "content": system},
+                {"role": "system", "content": _KNOWLEDGE_LLM_SYSTEM},
                 {"role": "user", "content": (question or "")[:500]},
             ],
-            "temperature": 0.4,
+            "temperature": 0.3,
         }
         try:
             resp = client.chat.completions.create(
                 **kwargs,
-                max_completion_tokens=450,
+                max_completion_tokens=220,
                 timeout=12,
             )
         except TypeError:
-            resp = client.chat.completions.create(**kwargs, max_tokens=450)
+            resp = client.chat.completions.create(**kwargs, max_tokens=220)
         text = ((resp.choices[0].message.content or "") if resp.choices else "").strip()
         return text or None
     except Exception as exc:
@@ -217,12 +213,12 @@ def try_astrology_knowledge_fast_answer(
     if classical:
         return classical
 
-    # 2) Optional LLM only when explicitly enabled.
-    use_llm = (os.environ.get("ASK_KNOWLEDGE_FAST_LLM") or "0").strip().lower() in (
-        "1",
-        "on",
-        "true",
-        "yes",
+    # 2) LLM short paragraph (default ON; set ASK_KNOWLEDGE_FAST_LLM=0 to disable).
+    use_llm = (os.environ.get("ASK_KNOWLEDGE_FAST_LLM") or "1").strip().lower() not in (
+        "0",
+        "off",
+        "false",
+        "no",
     )
     if use_llm:
         llm_text = _llm_knowledge_answer(q, lang=lang)
@@ -234,22 +230,17 @@ def try_astrology_knowledge_fast_answer(
                 "confidence": 0.85,
                 "source": "knowledge_fast_llm",
                 "engine_tag": "ans-cosmo",
-                "follow_ups": [
-                    "Mere chart pe kaunsa ratn suit karega?",
-                    "Dharan karne ka sahi tarika batao",
-                ],
+                "follow_ups": [],
             }
 
     # 3) Still answer — never soft-fail.
     return {
         "text": (
-            "Yeh general jyotish sawaal hai — lagna lord ke anusar ratn choose hota hai "
-            "(jaise Leo/Singh lagna → Manik/Ruby, Surya). Poori kundli + dasha dekh ke "
-            "final confirm karna behtar rehta hai."
+            "Yeh general jyotish sawaal hai. Seedha classical rule: sawal ke hisaab se "
+            "house/planet ka role short mein bataya jaata hai; personal chart alag check hota hai."
             if lang != "en"
-            else "In general Jyotish, gemstones follow the lagna lord "
-            "(e.g. Leo lagna → Ruby for the Sun). A full chart and dasha check can change "
-            "the final recommendation."
+            else "This is a general Jyotish question. Classical rules answer the topic briefly; "
+            "a personal chart reading is separate."
         ),
         "topic": "remedy",
         "question_type": "STATIC",

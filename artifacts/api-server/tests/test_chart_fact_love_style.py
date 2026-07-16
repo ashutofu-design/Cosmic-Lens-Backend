@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_mr.classifier import classify_mr_archetype
 from chart_fact_answer import (
+    _is_chart_lookup_question_impl,
     is_chart_lookup_question,
     is_domain_life_area_interpretation_question,
     try_deterministic_chart_fact,
@@ -31,7 +32,9 @@ class TestChartFactLoveStyle(unittest.TestCase):
     def test_pure_venus_placement_still_chart_lookup(self):
         q = "Venus kis house me hai"
         self.assertFalse(is_domain_life_area_interpretation_question(q))
-        self.assertTrue(is_chart_lookup_question(q))
+        # Public API disabled; legacy detector still recognizes pure placement.
+        self.assertFalse(is_chart_lookup_question(q))
+        self.assertTrue(_is_chart_lookup_question_impl(q))
 
     def test_love_timing_kab_not_life_area_interpretation(self):
         q = "mera love live kab shuru hoga"

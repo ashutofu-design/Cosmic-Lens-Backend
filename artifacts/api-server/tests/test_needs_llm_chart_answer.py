@@ -51,11 +51,10 @@ class TestNeedsLlmChartAnswer(unittest.TestCase):
         self.assertIsNone(try_deterministic_chart_fact(q, _KUNDLI))
 
     def test_pure_d10_placement_still_chart_fact(self):
+        # Chart-fact lookup disabled — pure placement goes to LLM (not deterministic).
         q = "D10 mein Sun kis house me hai"
-        self.assertFalse(needs_llm_chart_answer(q))
-        det = try_deterministic_chart_fact(q, _KUNDLI)
-        self.assertIsNotNone(det)
-        self.assertIn("D10", det.get("text", ""))
+        self.assertFalse(is_pure_chart_fact_lookup(q))
+        self.assertIsNone(try_deterministic_chart_fact(q, _KUNDLI))
 
     def test_hypothetical_lord_place_needs_llm_not_house_lookup(self):
         q = (
@@ -84,11 +83,11 @@ class TestNeedsLlmChartAnswer(unittest.TestCase):
         self.assertNotIn("koi graha nahi", (hyp.get("text") or "").lower())
 
     def test_pure_tenth_house_occupants_still_chart_fact(self):
+        # Chart-fact lookup disabled — pure house occupants go to LLM.
         q = "Mere 10th house mein kaun se graha hain"
-        self.assertFalse(needs_llm_chart_answer(q))
+        self.assertFalse(is_pure_chart_fact_lookup(q))
         det = try_deterministic_chart_fact(q, _KUNDLI)
-        self.assertIsNotNone(det)
-        self.assertIn("10", det.get("text", ""))
+        self.assertIsNone(det)
 
     def test_lord_debilitated_effect_needs_llm(self):
         q = (
@@ -105,6 +104,34 @@ class TestNeedsLlmChartAnswer(unittest.TestCase):
         self.assertFalse(is_pure_chart_fact_lookup(q))
         det = try_deterministic_chart_fact(q, _KUNDLI)
         self.assertIsNone(det)
+
+    def test_leo_lagna_gemstone_not_native_lagna_lookup(self):
+        """Leo/kisi-ka gem advice must NEVER become 'Your ascendant is …'."""
+        from ask_question_normalize import normalize_ask_typos
+        from ask_remedy.remedy_registry import is_remedy_static_question
+        from chart_fact_answer import is_gemstone_or_remedy_advice_question
+        from openai_helper import _classify_ask_intent
+
+        q_raw = "agar kisi ka leo lagna he to konsa gemstoene dharan karna chahiye"
+        q = normalize_ask_typos(q_raw)
+        self.assertIn("gemstone", q.lower())
+        self.assertTrue(is_gemstone_or_remedy_advice_question(q))
+        self.assertTrue(needs_llm_chart_answer(q))
+        self.assertFalse(is_pure_chart_fact_lookup(q))
+        # Personal chart remedy engine must not steal named-lagna theory Q.
+        self.assertFalse(is_remedy_static_question(q))
+        # Intent must not be lagna_lookup for native chart.
+        it = (_classify_ask_intent(q, "hn").get("intent") or "")
+        self.assertNotEqual(it, "lagna_lookup")
+        # Native is Sagittarius — must not return that one-liner.
+        sag_kundli = {
+            "ascendant": "Sagittarius",
+            "planets": [{"name": "Sun", "house": 9, "sign": "Leo"}],
+        }
+        det = try_deterministic_chart_fact(q, sag_kundli, lang="en")
+        self.assertIsNone(det)
+        if det:
+            self.assertNotIn("Sagittarius", det.get("text", ""))
 
 
 if __name__ == "__main__":

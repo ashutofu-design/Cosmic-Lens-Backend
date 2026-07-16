@@ -39,7 +39,10 @@ class TestAnswerMode(unittest.TestCase):
 
     def test_pure_house_lookup_chart_fact(self):
         q = "Mere 10th house mein kaun se graha hain"
-        self.assertEqual(resolve_answer_mode(q), "chart_fact")
+        # chart_fact path disabled — must not resolve to chart_fact
+        mode = resolve_answer_mode(q)
+        self.assertNotEqual(mode, "chart_fact")
+        self.assertIn(mode, ("llm_chart", "llm_knowledge", "engine"))
 
     def test_understand_engine_overridden_for_theory(self):
         q = "6th house me debilitated planet accha hai ya exalted"

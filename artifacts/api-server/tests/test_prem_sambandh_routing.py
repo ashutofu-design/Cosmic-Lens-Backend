@@ -45,7 +45,8 @@ class TestPremSambandhRouting(unittest.TestCase):
         q = "Kya meri kundli me Raj yoga hai?"
         intent = _classify_ask_intent(q, "hn")
         self.assertEqual(intent["intent"], "yoga_check")
-        self.assertTrue(is_chart_lookup_question(q))
+        # Public chart-lookup API disabled — always False.
+        self.assertFalse(is_chart_lookup_question(q))
 
     def test_true_love_yog_not_chart_lookup(self):
         from chart_fact_answer import is_domain_outcome_yoga_question

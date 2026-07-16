@@ -201,10 +201,15 @@ def try_astrology_knowledge_fast_answer(
     question: str,
     *,
     lang: str = "hn",
+    force: bool = False,
 ) -> dict | None:
-    """Instant classical answer for named-lagna gem Qs — no LLM wait by default."""
+    """Knowledge answers for theory / named-lagna gem Qs.
+
+    Phase 2: call only when Understand says branch=knowledge.
+    Pass force=True to skip the legacy regex gate (Understand is authority).
+    """
     q = normalize_ask_typos((question or "").strip())
-    if not is_astrology_knowledge_fast_question(q):
+    if not force and not is_astrology_knowledge_fast_question(q):
         return None
 
     # 1) Instant classical (Leo → Manik) — this is the product path.

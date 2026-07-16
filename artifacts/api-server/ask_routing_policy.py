@@ -244,10 +244,21 @@ def should_bypass_static_engines_for_direct_llm(
     # Engine classifiers first — never let answer_mode skip a real engine.
     if matches_dedicated_static_engine(q, intent):
         return False, ""
+    # Personal life-outcome (incl. D9/D10 career/shaadi) must never bypass,
+    # even when understand labels the Q llm_* or D10 is mentioned.
+    try:
+        from ask_answer_mode import infer_answer_mode
+
+        if infer_answer_mode(q, intent or {}) == "engine":
+            return False, ""
+    except Exception:
+        pass
     try:
         from ask_answer_mode import resolve_answer_mode
 
         mode = resolve_answer_mode(q, intent or {})
+        if mode == "engine":
+            return False, ""
         if mode == "chart_fact":
             return False, ""
         if mode in ("llm_chart", "llm_knowledge"):

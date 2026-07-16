@@ -5337,6 +5337,31 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         pass
 
+    # ── Non-personal astrology knowledge (Leo lagna gemstone / kisi-ka…) ──
+    # One short LLM (or classical fallback) — skip DNA/engines so mobile
+    # does not sit until timeout → "Kshama karein…".
+    try:
+        from ask_knowledge_fast import try_astrology_knowledge_fast_answer
+
+        _kf = try_astrology_knowledge_fast_answer(question or "", lang=lang or "hn")
+        if _kf:
+            print(
+                f"[raw_passthrough] knowledge_fast "
+                f"source={_kf.get('source')!r} q={(question or '')[:72]!r}",
+                flush=True,
+            )
+            return _attach_admin(
+                _kf,
+                question=question or "",
+                question_type="STATIC",
+                is_timing=False,
+                llm_called=_kf.get("source") == "knowledge_fast_llm",
+                skip_reason="knowledge_fast",
+                intent_source="knowledge_fast",
+            )
+    except Exception as _kf_exc:
+        print(f"[raw_passthrough] knowledge_fast skipped: {_kf_exc}", flush=True)
+
     # ── Death / lifespan — always refuse (timing or static); no LLM ───────
     try:
         from ask_hard_guards import death_refusal_result, is_death_lifespan_question

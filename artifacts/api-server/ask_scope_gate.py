@@ -1,9 +1,11 @@
-"""LLM-first Ask scope gate for personal cosmic questions.
+"""Ask scope gate — allow all cosmic questions; block only clear off-topic.
 
-The question's meaning is classified by the scope LLM. Regex is used only for
-the deterministic greeting shortcut, never to decide question scope.
+Philosophy:
+  • Do NOT grow an allowlist one question at a time — that never ends.
+  • ALLOW astrology / vastu / numerology / remedies / life domains / "kisi ka" advice.
+  • BLOCK only clear off-topic (recipes, coding, sports scores, politics news).
+  • Ambiguous asks fail open — DNA + engines + LLM answer them.
 """
-
 from __future__ import annotations
 
 import os
@@ -19,127 +21,43 @@ ScopeReason = Literal[
 ]
 
 SCOPE_REFUSAL_TEXT = (
-    "Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, "
-    "shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, "
-    "presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. "
-    "Kripya apni life se juda sawaal puchiye."
+    "Cosmic Ask sirf jyotish / cosmic life sawaal leta hai — kundli, shaadi, "
+    "career, health, paisa, gemstone, remedy, timing, etc. "
+    "Coding, recipes, news, sports scores yahan nahi. "
+    "Kripya astrology ya apni life se juda sawaal puchiye."
 )
 
-# Explicit general-knowledge / encyclopedia (even if astrology word appears)
-_GK_BLOCK_RX = re.compile(
-    r"(?ix)"
-    r"\b("
-    r"who\s+(is|was|are|were)\s+.{0,40}\b(president|pm|prime\s+minister|"
-    r"rashtrapati|chief\s+minister|modi|trump|xi\s+jinping|putin)\b|"
-    r"\b(president|pm|prime\s+minister|rashtrapati)\s+of\b|"
-    r"\b(who|kisne)\s+(invented|created|developed|discovered|founded|"
-    r"started|banayi|banaya|likhi|wrote)\b.{0,30}\b(astrology|jyotish|"
-    r"horoscope|kundli|vedic|parashara|bhrigu)\b|"
-    r"\b(astrology|jyotish|horoscope|kundli)\s+(was|is|were)\s+"
-    r"(developed|invented|created|discovered|founded|written)\s+by\b|"
-    r"\bhistory\s+of\s+(astrology|jyotish|vedic|horoscope)\b|"
-    r"\b(wikipedia|encyclopedia|general\s+knowledge)\b"
-    r")\b"
-)
-
-# First-person / own-life anchors (Hindi + English)
-_PERSONAL_RX = re.compile(
-    r"(?ix)"
-    r"\b("
-    r"mera|meri|mere|mujhe|mujhko|mujh|main|mein|my|mine|i\s+am|i'll|"
-    r"i\s+will|i\s+was|mere\s+liye|meri\s+life|mera\s+future|my\s+career|"
-    r"my\s+marriage|my\s+health|my\s+chart|my\s+kundli|my\s+life|"
-    r"shaadi\s+hogi|shadi\s+hogi|naukri\s+lagegi|bachcha\s+hoga|lucky\s+hu|manglik\s+hu|"
-    r"will\s+i\s+|should\s+i\s+|am\s+i\s+"
-    r")\b"
-)
-
-# Marriage / career / money timing — personal + kab/hoga (even if "shadi" not "shaadi")
-_TIMING_LIFE_RX = re.compile(
-    r"(?ix)"
-    r"\b(kab|when|kab\s+tak|kis\s+saal|kitne\s+saal)\b.{0,30}\b("
-    r"hoga|hogi|hogaa|milega|milegi|lagega|lagegi|aayega|aayegi|ho\s+jaayega"
-    r")\b|"
-    r"\b(hoga|hogi|milega|milegi)\b.{0,20}\b(kab|when)\b"
-)
-
-# Chart placement without mera/meri: "D9 me moon kahan", "8th house me Rahu"
-_CHART_PLACEMENT_RX = re.compile(
-    r"(?ix)"
-    r"\b("
-    r"(?:d\d+|navamsa|navamsha|d9|d7|d10|d12)\b.{0,30}\b("
-    r"lagna|moon|sun|venus|mars|saturn|rahu|ketu|jupiter|mercury|"
-    r"shani|shukra|mangal|surya|chandra|budh|guru"
-    r")\b|"
-    r"\b(?:1st|2nd|3rd|[4-9]th|1[0-2]th|\d{1,2})\s*(?:house|bhav|bhaav)\b|"
-    r"\b(?:\d{1,2}(?:st|nd|rd|th)?\s+)?(?:csl|cusp|sub[\s-]?lord|sublord)\b|"
-    r"\b(?:mesh|mithun|kark|singh|kanya|tula|vrishchik|dhanu|makar|kumbh|meen|"
-    r"aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|sagittarius|"
-    r"capricorn|aquarius|pisces)\s*(?:rashi)?\b.{0,20}\b(?:ghar|house|bhav)\b"
-    r")\b"
-)
-
-_PERSONAL_HOUSE_PLACEMENT_RX = re.compile(
-    r"(?ix)"
-    r"\b(mera|meri|mere|my|apna|apni|apne)\b"
-    r".{0,30}\b("
-    r"(?:1st|2nd|3rd|[4-9]th|1[0-2]th|\d{1,2})\s*"
-    r"(?:house|bhav|bhaav|ghar|h)\b|"
-    r"(?:house|bhav|bhaav|ghar)\s*(?:me|mein|mai|in)?\s*"
-    r"(?:1st|2nd|3rd|[4-9]th|1[0-2]th|\d{1,2})"
-    r")"
-)
-
-# Transparency / "how did you decide this" follow-ups to a prior reading.
-# These reference the assistant's previous answer, so they have no astro
-# topic word of their own — but they ARE in scope (explain my reading).
-# GK ("astrology kaise kaam karta hai") is blocked earlier by _GK_BLOCK_RX.
-_TRANSPARENCY_FOLLOWUP_RX = re.compile(
+# Hard off-topic — only these are refused (no per-question allowlist).
+_HARD_OFF_TOPIC_RX = re.compile(
     r"(?ix)\b("
-    r"kaise\s+(bataya|bata|pata|kaha|bola|nikala|nikali|samjha|jana|"
-    r"jaana|decide|check|maloom|malum)|"
-    r"kya\s+(check|dekha|dekhe|aadhar|aadhaar|basis)|check\s+kiya|"
-    r"kis\s+(basis|aadhar|aadhaar|cheez|hisaab)\s*(pe|par|se)?|"
-    r"pata\s+(chala|chale|kaise)|kaise\s+pata|"
-    r"kyun?\s+(bola|kaha|bataya|lagta)|"
-    r"proof|saboot|sabut|evidence|"
-    r"how\s+(did|do)\s+you\s+(know|say|check|tell|find|figure|"
-    r"determine|decide|conclude)|"
-    r"what\s+did\s+you\s+(check|see|look)|"
-    r"on\s+what\s+basis|why\s+do\s+you\s+say|prove\s+it|"
-    r"samjha(?:o|do|iye)"
+    r"biryani|recipe|cooking|code\s*likho|python\s+function|javascript|"
+    r"write\s+a\s+(?:function|program|script)|"
+    r"match\s+kaun\s+jeetega|ipl\s+score|weather\s+aaj|"
+    r"president\s+of\s+india|prime\s+minister\s+kaun|"
+    r"cricket\s+score|football\s+score"
     r")\b"
 )
 
-
-# Follow-ups after an astrology answer often omit "mera/meri".
-# Marriage timing alt-window ("agar June 2029 mein nahi, aage kab?") — no shaadi word.
-_MARRIAGE_ALT_TIMING_RX = re.compile(
-    r"(?ix)"
-    r"\b(agar|if)\b.{0,80}\b(nahi|na|not|miss)\b.{0,50}\b(kab|when|aage|agla)\b|"
-    r"\b(aage|agla|next|dusra|backup)\b.{0,30}\b(kab|when|hoga|hogi|milega|time|window|period|samay)\b|"
-    r"\b(kab|when)\b.{0,25}\b(aage|agla|next|baad|later)\b|"
-    r"\b(uske|iske|is)\s+baad\s+(kab|kya|when)\b|"
-    r"\b(january|february|march|april|may|june|july|august|september|october|november|december|"
-    r"jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)"
-    r".{0,60}\b(nahi|na|not|miss)\b.{0,60}\b(kab|when|aage|agla)\b"
+# Broad cosmic/life signal — allow immediately (skip scope LLM latency).
+_COSMIC_OR_LIFE_RX = re.compile(
+    r"(?ix)\b("
+    r"jyotish|astrology|horoscope|kundli|kundali|chart|rashi|lagna|"
+    r"nakshatra|dasha|graha|planet|transit|gochar|yog|dosh|manglik|"
+    r"gemstone|gem\s*stone|ratna|stone|mani|remedy|upay|upaay|mantra|puja|yantra|"
+    r"vastu|vaastu|numerology|tarot|palmistry|hastrekha|"
+    r"shaadi|shadi|marriage|vivah|love|pyaar|partner|bf|gf|"
+    r"career|naukri|job|business|paisa|money|wealth|finance|"
+    r"health|sehat|tabiyat|swasth|child|bachcha|pregnancy|"
+    r"property|ghar|flat|visa|abroad|videsh|travel|"
+    r"luck|bhagya|future|timing|spiritual|adhyatm|dharma|dharmik|moksha|"
+    r"leo|mesh|vrishabh|mithun|kark|singh|kanya|tula|vrishchik|"
+    r"dhanu|makar|kumbh|meen|aries|taurus|gemini|cancer|virgo|"
+    r"libra|scorpio|sagittarius|capricorn|aquarius|pisces|"
+    r"house|bhav|bhaav|sun|moon|mars|venus|saturn|rahu|ketu|jupiter|"
+    r"mera|meri|mere|mujhe|main|mein|my|hamari|hamara|"
+    r"hoga|hogi|milega|kaisa|kaisi|kab|kaunsa|kaunsi|dharan"
+    r")\b|(?:(?<![a-z])me(?![a-z]))"
 )
-
-_ASTRO_FOLLOWUP_RX = re.compile(
-    r"(?ix)"
-    r"(?=.*\b("
-    r"shaadi|shadi|marriage|vivah|love\s*marriage|arrange(?:d)?|"
-    r"relationship|partner|spouse|career|naukri|job|business|paisa|money|"
-    r"health|sehat|rahu|ketu|saturn|shani|jupiter|guru|venus|shukra|"
-    r"moon|chandra|mars|mangal|sun|surya|mercury|budh|lagna|rashi|"
-    r"nakshatra|dasha|kundli|chart|house|bhav|bhaav"
-    r")\b)"
-    r"(?=.*\b("
-    r"kaise|kyun|kyu|why|how|samjha|samjhao|explain|detail|reason|"
-    r"kya|kon|kaun|which|where|kahan|kab|when|hoga|hogi|hai|he"
-    r")\b)"
-)
-
 
 # Short greetings — must pass scope gate AND get canned reply (not LLM).
 _GREETING_RX = re.compile(
@@ -213,7 +131,24 @@ class AskScopeVerdict:
     normalized_question: Optional[str] = None
 
 
+def _looks_cosmic_or_life(question: str) -> bool:
+    q = (question or "").strip()
+    if not q:
+        return False
+    if _COSMIC_OR_LIFE_RX.search(q):
+        return True
+    try:
+        from ask_routing_policy import is_cosmic_domain_question
+
+        if is_cosmic_domain_question(q):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
+    """Allow all cosmic asks; hard-block only clear off-topic."""
     from ask_question_normalize import prepare_ask_question
 
     q = prepare_ask_question((question or "").strip())
@@ -226,9 +161,15 @@ def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
     if not _gate_enabled():
         return AskScopeVerdict(allowed=True, reason="ok")
 
-    # Scope is an intent/meaning decision. Do not pre-empt the LLM with keyword
-    # allowlists or blocklists; those caused valid Hinglish questions such as
-    # "kya me dharmik hun" to be rejected before their meaning was understood.
+    # Fast hard block — recipes/coding/scores (no allowlist needed).
+    if _HARD_OFF_TOPIC_RX.search(q):
+        return AskScopeVerdict(allowed=False, reason="off_topic")
+
+    # Fast allow — any jyotish/life signal (leo lagna, gemstone, dharmik, shaadi…).
+    if _looks_cosmic_or_life(q):
+        return AskScopeVerdict(allowed=True, reason="ok")
+
+    # Remaining ambiguous text — ask scope LLM, but ONLY block off_topic.
     try:
         from ask_scope_llm import classify_ask_scope_llm, scope_llm_enabled
 
@@ -246,18 +187,17 @@ def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
                     allowed=True, reason="ok", normalized_question=_norm or None
                 )
 
-            # Only hard-block clear off-topic / GK. Ambiguous personal asks such as
-            # "kya me dharmik hun" must reach question DNA + engines, not die here.
-            if _conf >= 0.62:
-                _reason = _llm.get("reason") or "not_personal"
-                if _reason in ("off_topic", "general_knowledge"):
-                    return AskScopeVerdict(
-                        allowed=False, reason=_reason  # type: ignore[arg-type]
-                    )
+            # Product rule: never reject GK / not_personal / theory —
+            # only clear off_topic is refused. Everything else gets an answer.
+            if _conf >= 0.72 and (_llm.get("reason") or "") == "off_topic":
+                return AskScopeVerdict(allowed=False, reason="off_topic")
+            if _norm and _looks_cosmic_or_life(_norm):
+                return AskScopeVerdict(
+                    allowed=True, reason="ok", normalized_question=_norm
+                )
     except Exception:
         pass
 
-    # LLM outage/configuration must not falsely reject a valid personal ask.
     return AskScopeVerdict(allowed=True, reason="ok")
 
 
@@ -266,7 +206,6 @@ def scope_refusal_payload(
     question: str = "",
     lang: str = "en",
 ) -> dict:
-    # Last-line safety: hi/hello must never get the GK refusal wall.
     if question:
         greet = greeting_shortcut_response(question, lang=lang)
         if greet:

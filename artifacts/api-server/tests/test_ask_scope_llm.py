@@ -1,4 +1,4 @@
-"""Tests for the LLM-first Ask scope classifier."""
+"""Tests for Ask scope — allow all cosmic; block only clear off-topic."""
 import json
 import sys
 import unittest
@@ -58,7 +58,6 @@ class AskScopeLlmTests(unittest.TestCase):
         res = classify_ask_scope_llm("hlt kysi rhgi", client=_client(payload))
         self.assertTrue(res["allowed"])
         self.assertEqual(res["reason"], "ok")
-        self.assertEqual(res["cleaned_question"], "health kaisi rahegi")
 
     def test_classify_blocks_recipe(self):
         payload = {
@@ -70,82 +69,57 @@ class AskScopeLlmTests(unittest.TestCase):
         self.assertFalse(res["allowed"])
         self.assertEqual(res["reason"], "off_topic")
 
-    def test_classify_blocks_gk(self):
-        payload = {
-            "category": "general_knowledge",
-            "cleaned_question": "astrology kya hai",
-            "confidence": 0.88,
-        }
-        res = classify_ask_scope_llm("astrology kya hai matlab", client=_client(payload))
-        self.assertFalse(res["allowed"])
-        self.assertEqual(res["reason"], "general_knowledge")
-
-    @patch("ask_scope_llm.classify_ask_scope_llm")
-    def test_scope_gate_llm_allows_heavy_typo(self, mock_llm):
-        mock_llm.return_value = {
-            "allowed": True,
-            "reason": "ok",
-            "cleaned_question": "health kaisi rahegi",
-            "confidence": 0.9,
-            "source": "llm",
-        }
-        v = assess_ask_scope("hlt kysi rhgi")
-        self.assertTrue(v.allowed, v.reason)
-        mock_llm.assert_called_once()
-        self.assertIsNotNone(v.normalized_question)
-
-    @patch("ask_scope_llm.classify_ask_scope_llm")
-    def test_scope_gate_llm_understands_dharmik_question(self, mock_llm):
-        mock_llm.return_value = {
-            "allowed": True,
-            "reason": "ok",
-            "cleaned_question": "Kya main dharmik hun?",
-            "confidence": 0.97,
-            "source": "llm",
-        }
-        v = assess_ask_scope("kya me dharmik hun")
-        self.assertTrue(v.allowed, v.reason)
-        self.assertEqual(v.normalized_question, "Kya main dharmik hun")
-        mock_llm.assert_called_once()
-
-    @patch("ask_scope_llm.classify_ask_scope_llm")
-    def test_known_domain_does_not_bypass_llm_scope_decision(self, mock_llm):
-        mock_llm.return_value = {
-            "allowed": False,
-            "reason": "general_knowledge",
-            "cleaned_question": "astrology kya hai",
-            "confidence": 0.96,
-            "source": "llm",
-        }
-        v = assess_ask_scope("astrology kya hai")
+    def test_gate_blocks_biryani_hard(self):
+        v = assess_ask_scope("biryani recipe batao")
         self.assertFalse(v.allowed)
-        self.assertEqual(v.reason, "general_knowledge")
-        mock_llm.assert_called_once()
+        self.assertEqual(v.reason, "off_topic")
 
-    @patch("ask_scope_llm.classify_ask_scope_llm")
-    def test_not_personal_fails_open(self, mock_llm):
-        mock_llm.return_value = {
-            "allowed": False,
-            "reason": "not_personal",
-            "cleaned_question": "kya me dharmik hun",
-            "confidence": 0.95,
-            "source": "llm",
-        }
-        v = assess_ask_scope("kya me dharmik hun")
-        self.assertTrue(v.allowed, v.reason)
-        mock_llm.assert_called_once()
+    def test_gate_allows_dharmik_without_llm(self):
+        with patch("ask_scope_llm.classify_ask_scope_llm") as mock_llm:
+            v = assess_ask_scope("kya me dharmik hun")
+            self.assertTrue(v.allowed, v.reason)
+            mock_llm.assert_not_called()
 
-    @patch("ask_scope_llm.classify_ask_scope_llm")
-    def test_llm_outage_fails_open_without_regex_verdict(self, mock_llm):
-        mock_llm.return_value = {
-            "allowed": False,
-            "reason": "not_personal",
-            "cleaned_question": "",
-            "confidence": 0.0,
-            "source": "llm_unavailable",
-        }
-        v = assess_ask_scope("kya me dharmik hun")
-        self.assertTrue(v.allowed, v.reason)
+    def test_gate_allows_leo_gemstone_without_llm(self):
+        with patch("ask_scope_llm.classify_ask_scope_llm") as mock_llm:
+            v = assess_ask_scope(
+                "agar kisi ka leo lagna he to konsa gemstoene dharan karna chahiye"
+            )
+            self.assertTrue(v.allowed, v.reason)
+            mock_llm.assert_not_called()
+
+    def test_gate_allows_astrology_theory(self):
+        """Theory/concept Qs must get answers — not refused as GK."""
+        with patch("ask_scope_llm.classify_ask_scope_llm") as mock_llm:
+            v = assess_ask_scope("astrology kya hai")
+            self.assertTrue(v.allowed, v.reason)
+            mock_llm.assert_not_called()
+
+    def test_gate_allows_when_llm_says_gk(self):
+        with patch("ask_scope_llm.classify_ask_scope_llm") as mock_llm:
+            mock_llm.return_value = {
+                "allowed": False,
+                "reason": "general_knowledge",
+                "cleaned_question": "random",
+                "confidence": 0.99,
+                "source": "llm",
+            }
+            # No cosmic anchor → still fail-open (answer layer handles).
+            v = assess_ask_scope("batao kuch interesting")
+            self.assertTrue(v.allowed, v.reason)
+
+    def test_gate_blocks_only_confident_off_topic_from_llm(self):
+        with patch("ask_scope_llm.classify_ask_scope_llm") as mock_llm:
+            mock_llm.return_value = {
+                "allowed": False,
+                "reason": "off_topic",
+                "cleaned_question": "tell a joke",
+                "confidence": 0.95,
+                "source": "llm",
+            }
+            v = assess_ask_scope("tell a joke please")
+            self.assertFalse(v.allowed)
+            self.assertEqual(v.reason, "off_topic")
 
 
 if __name__ == "__main__":

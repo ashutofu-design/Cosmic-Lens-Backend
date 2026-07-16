@@ -23,43 +23,32 @@ _TIMEOUT_S = 6
 _PROMPT = """You are the scope gate for Cosmic Lens — a Vedic astrology app.
 Users type in Hindi, English, or Hinglish, often with spelling mistakes.
 
-Classify the question into exactly ONE category:
+DEFAULT: ALLOW (personal_astro) for almost everything related to astrology or life advice.
 
-1. personal_astro — About THIS user's birth chart or personal life timing/outlook:
-   marriage/shaadi, love, career, job, money, health, children, property, travel,
-   visa, dasha, planets, houses, lagna, rashi, nakshatra, yog, dosh, remedies,
-   muhurat, sade sati, gochar, chart placements, spirituality/dharma, religious
-   nature, intuition, life purpose, personality, strengths, and weaknesses.
-   Treat colloquial "me" as "main/I" when the sentence means "am I", such as
-   "kya me dharmik hun". "meri/mera/mere/mujhe/main/me/my/I" personal questions
-   are about the current user unless the text clearly says otherwise.
-   INCLUDE heavily misspelled versions if intent is clearly personal astro.
-   Examples: "helth kaisi rahegi", "nokri kb lagegi", "shadi kb hogi",
-   "8th house me rahu", "Abhi kaun sa dasha chal raha hai",
-   "kya me dharmik hun", "mera spiritual path kaisa hai".
+Classify into exactly ONE category:
 
-2. general_knowledge — Encyclopedia / definition / history, NOT about user's chart:
-   "astrology kya hai", "who invented jyotish", "nakshatra ka matlab",
-   "what is manglik", "president kaun hai", Wikipedia-style facts.
+1. personal_astro — ALLOW. Any jyotish / cosmic / life question, including:
+   kundli, lagna, rashi, gemstone, remedy, dasha, shaadi, career, health, money,
+   spirituality, "kisi ka leo lagna pe gemstone", theory like "manglik kya hota hai",
+   "astrology kaise kaam karta hai" when user wants practical understanding.
+   Examples: "kya me dharmik hun", "leo lagna gemstone", "shadi kab hogi".
 
-3. off_topic — Not astrology at all: coding, recipes, sports scores, weather,
-   homework, jokes, random chat, shopping, politics news, medical diagnosis
-   requests to replace a doctor.
+2. general_knowledge — Prefer personal_astro instead for astrology topics.
+   Only use this for pure encyclopedia unrelated to answering the user in-app
+   (e.g. "who is president of india", "wikipedia").
 
-4. greeting — hi, hello, namaste only (no real question).
+3. off_topic — NOT astrology: coding, recipes, sports scores, weather jokes,
+   shopping, politics news, homework with no chart link.
 
-5. not_personal — Astrology about someone else's chart with no user anchor,
-   or too vague to answer ("kuch batao", "life kaisi hai" with zero domain).
+4. greeting — hi, hello, namaste only.
 
-Also return "cleaned_question": fix typos and normalize to clear Hinglish/English
-(≤20 words). Keep the user's meaning; do not add facts.
+5. not_personal — Almost never. Prefer personal_astro. Use only for empty noise.
 
 Return STRICT JSON only:
 {{"category": "personal_astro|general_knowledge|off_topic|greeting|not_personal",
   "cleaned_question": "...",
   "confidence": 0.0-1.0}}
 
-Use conversation history only to resolve short follow-ups and pronouns.
 {history}
 
 Question: {question}"""

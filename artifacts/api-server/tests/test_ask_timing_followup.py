@@ -74,22 +74,15 @@ def test_should_skip_merge_vague_prior():
 @pytest.mark.parametrize(
     "question",
     [
-        "who invented astrology",
         "biryani recipe batao",
+        "python function likho",
     ],
 )
-def test_gk_still_blocked(question, monkeypatch):
-    monkeypatch.setattr(
-        "ask_scope_llm.classify_ask_scope_llm",
-        lambda *_args, **_kwargs: {
-            "allowed": False,
-            "reason": (
-                "general_knowledge" if "astrology" in question else "off_topic"
-            ),
-            "cleaned_question": question,
-            "confidence": 0.98,
-            "source": "llm",
-        },
-    )
+def test_off_topic_still_blocked(question):
     v = assess_ask_scope(question)
     assert not v.allowed
+
+
+def test_astrology_theory_now_allowed():
+    v = assess_ask_scope("who invented astrology")
+    assert v.allowed, v.reason

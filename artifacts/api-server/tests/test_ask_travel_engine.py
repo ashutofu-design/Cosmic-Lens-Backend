@@ -72,17 +72,37 @@ class TravelEngineTests(unittest.TestCase):
                 self.assertTrue(is_travel_static_question(q), msg=q)
                 self.assertEqual(classify_travel_archetype(q), expected, msg=q)
 
-    def test_all_archetypes_emit_evidence(self):
+    def test_unified_engine_execution_pack(self):
+        """Default path: one main engine + EE pack (not per-archetype string evidence)."""
         seen = set()
         for q, expected in ROUTING_MATRIX:
             res = run_travel_static_engine(SAMPLE_KUNDLI, q)
             seen.add(res.archetype)
             self.assertEqual(res.archetype, expected, msg=q)
-            self.assertGreaterEqual(len(res.evidence), 6, msg=q)
-            ev_blob = " ".join(res.evidence)
-            self.assertRegex(ev_blob, r"9th|9H|12th|12H|Rahu|D9|Navamsa", msg=q)
+            checks = dict(res.checks or {})
+            self.assertTrue(checks.get("unified_execution"), msg=q)
+            pack = checks.get("travel_engine_execution")
+            self.assertIsInstance(pack, dict, msg=q)
+            self.assertEqual(pack.get("schema_version"), "travel_engine_execution_v1", msg=q)
+            self.assertIn("d1", pack)
+            self.assertIn("dimensions", pack)
+            d1 = pack.get("d1") or {}
+            lords = d1.get("house_lords") or {}
+            self.assertTrue(lords.get("h9") or lords.get("h12") or lords.get("h3"), msg=q)
             self.assertTrue(res.verdict, msg=q)
         self.assertEqual(seen, set(a for _, a in ROUTING_MATRIX))
+
+    def test_legacy_archetype_engines_still_emit_evidence(self):
+        import os
+
+        os.environ["ASK_TRAVEL_LEGACY_ARCHETYPE_ENGINES"] = "1"
+        try:
+            res = run_travel_static_engine(SAMPLE_KUNDLI, "Visa approve hoga kya?")
+            self.assertEqual(res.archetype, "visa_theme")
+            self.assertGreaterEqual(len(res.evidence), 6)
+            self.assertTrue((res.checks or {}).get("travel_engine_execution"))
+        finally:
+            os.environ.pop("ASK_TRAVEL_LEGACY_ARCHETYPE_ENGINES", None)
 
     def test_study_abroad_stays_education(self):
         q = "Study abroad possible hai IELTS ke baad?"

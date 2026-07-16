@@ -357,11 +357,14 @@ export interface AskObservability {
   relationship_selected_blocks?: ObservabilityHealthSelectedBlocks;
   finance_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
   finance_selected_blocks?: ObservabilityHealthSelectedBlocks;
+  travel_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
+  travel_selected_blocks?: ObservabilityHealthSelectedBlocks;
   engine_execution?: {
-    display_mode?: "health_charts" | "relationship_charts" | "finance_charts" | "engine_rules";
+    display_mode?: "health_charts" | "relationship_charts" | "finance_charts" | "travel_charts" | "engine_rules";
     health_engine_execution?: ObservabilityHealthEngineExecution | null;
     relationship_engine_execution?: ObservabilityHealthEngineExecution | null;
     finance_engine_execution?: ObservabilityHealthEngineExecution | null;
+    travel_engine_execution?: ObservabilityHealthEngineExecution | null;
     engine_name?: string;
     engine_version?: string;
     modules?: ObservabilityModule[];
@@ -1115,6 +1118,35 @@ function enrichObservability(
   ) {
     exec.display_mode = "finance_charts";
   }
+  if (!exec.travel_engine_execution) {
+    const trvPack =
+      checks.travel_engine_execution ||
+      smChecks.travel_engine_execution ||
+      null;
+    if (trvPack && typeof trvPack === "object") {
+      exec.travel_engine_execution = trvPack as ObservabilityHealthEngineExecution;
+      if (
+        exec.display_mode !== "health_charts" &&
+        exec.display_mode !== "relationship_charts" &&
+        exec.display_mode !== "finance_charts"
+      ) {
+        exec.display_mode = "travel_charts";
+      }
+    }
+  }
+  if (
+    exec.display_mode !== "health_charts" &&
+    exec.display_mode !== "relationship_charts" &&
+    exec.display_mode !== "finance_charts" &&
+    exec.travel_engine_execution &&
+    (String(sm.slice || "") === "travel_engine_v1" ||
+      String(checks.engine_version || smChecks.engine_version || "") ===
+        "travel_engine_execution_v1" ||
+      checks.travel_engine_execution ||
+      smChecks.travel_engine_execution)
+  ) {
+    exec.display_mode = "travel_charts";
+  }
   if (!exec.d1_health_facts) {
     const d1HealthFacts =
       exec.health_engine_execution?.d1 ||
@@ -1226,6 +1258,19 @@ function enrichObservability(
       obs.finance_dna_judge_audit ||
         (checks.finance_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
         (smChecks.finance_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined),
+    ),
+    travel_selected_blocks:
+      (obs.travel_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      ((obs.travel_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined)
+        ?.selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (checks.travel_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.travel_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (checks.travel_selected_blocks_preview as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.travel_selected_blocks_preview as ObservabilityHealthSelectedBlocks | undefined),
+    travel_dna_judge_audit: normalizeHealthDnaJudgeAudit(
+      obs.travel_dna_judge_audit ||
+        (checks.travel_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+        (smChecks.travel_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined),
     ),
     astrology_checks: astro,
     engine_execution: exec,
@@ -1529,6 +1574,12 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
       "Finance Engine Execution (D1 + D9):",
       JSON.stringify(exec.finance_engine_execution, null, 2),
     );
+  } else if (exec.travel_engine_execution) {
+    lines.push(
+      "",
+      "Travel Engine Execution (D1 + D9):",
+      JSON.stringify(exec.travel_engine_execution, null, 2),
+    );
   } else if (exec.d1_health_facts) {
     lines.push(
       "",
@@ -1544,11 +1595,12 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
     obs.health_validator_audit,
     obs.relationship_dna_judge_audit,
     obs.finance_dna_judge_audit,
+    obs.travel_dna_judge_audit,
   ];
   const judgeObs =
     judgeCandidates.find((a) => a?.applies) || judgeCandidates.find(Boolean);
   if (!judgeObs?.applies) {
-    lines.push("— (health / relationship / finance unified questions only)", "");
+    lines.push("— (health / relationship / finance / travel unified questions only)", "");
   } else {
     lines.push(
       `Enabled: ${judgeObs.enabled ? "yes" : "no"} | Passed: ${judgeObs.passed ? "yes" : "no"} | Source: ${judgeObs.source || "—"}`,
@@ -1580,14 +1632,16 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
     obs.health_selected_blocks,
     obs.relationship_selected_blocks,
     obs.finance_selected_blocks,
+    obs.travel_selected_blocks,
     obs.health_dna_judge_audit?.selected_blocks,
     obs.relationship_dna_judge_audit?.selected_blocks,
     obs.finance_dna_judge_audit?.selected_blocks,
+    obs.travel_dna_judge_audit?.selected_blocks,
   ];
   const blocksObs =
     blocksCandidates.find((b) => b?.applies) || blocksCandidates.find(Boolean);
   if (!blocksObs?.applies) {
-    lines.push("— (health / relationship / finance unified questions only)", "");
+    lines.push("— (health / relationship / finance / travel unified questions only)", "");
   } else {
     lines.push(`Focus: ${blocksObs.focus_label || blocksObs.focus || "—"}`);
     lines.push("Expected blocks:");

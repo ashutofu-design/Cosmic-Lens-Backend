@@ -7440,24 +7440,46 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     question or "",
                     wants_explain=wants_explain,
                     archetype=_resolved_trv_arch,
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
                 )
-                chart_text = _travel_engine_result.to_narrator_payload()
-                dcr_love_meta = {
-                    "slice": "travel_engine_v1",
-                    "topic": "travel",
-                    "archetype": _travel_engine_result.archetype,
-                    "verdict": _travel_engine_result.verdict,
-                    "summary": list(_travel_engine_result.summary or []),
-                    "evidence": list(_travel_engine_result.evidence or []),
-                    "ignore": list(_travel_engine_result.ignore or []),
-                    "checks": dict(_travel_engine_result.checks or {}),
-                    "skip_llm": bool(_travel_engine_result.skip_llm),
-                    "word_budget": int(_travel_engine_result.word_budget or 75),
-                    "narrator_mode": "engine_facts_only",
-                }
+                _travel_checks = dict(getattr(_travel_engine_result, "checks", None) or {})
+                _travel_unified = bool(
+                    _travel_checks.get("travel_engine_execution")
+                    or _travel_checks.get("unified_execution")
+                    or str(_travel_checks.get("engine_version") or "")
+                    == "travel_engine_execution_v1"
+                )
+                if _travel_unified:
+                    from ask_travel.presenter import to_travel_llm_payload
+
+                    chart_text = to_travel_llm_payload(
+                        _travel_engine_result,
+                        question=question or "",
+                    )
+                else:
+                    chart_text = _travel_engine_result.to_narrator_payload()
+                try:
+                    from ask_travel.engine import travel_engine_slice_meta
+
+                    dcr_love_meta = travel_engine_slice_meta(_travel_engine_result)
+                except Exception:
+                    dcr_love_meta = {
+                        "slice": "travel_engine_v1",
+                        "topic": "travel",
+                        "archetype": _travel_engine_result.archetype,
+                        "verdict": _travel_engine_result.verdict,
+                        "summary": list(_travel_engine_result.summary or []),
+                        "evidence": list(_travel_engine_result.evidence or []),
+                        "ignore": list(_travel_engine_result.ignore or []),
+                        "checks": dict(_travel_engine_result.checks or {}),
+                        "skip_llm": bool(_travel_engine_result.skip_llm),
+                        "word_budget": int(_travel_engine_result.word_budget or 75),
+                        "narrator_mode": "engine_facts_only",
+                    }
                 print(
                     f"[raw_passthrough] TRAVEL_ENGINE "
                     f"archetype={_travel_engine_result.archetype} "
+                    f"unified={_travel_unified} "
                     f"evidence={len(_travel_engine_result.evidence or [])} "
                     f"chart_chars={len(chart_text)}",
                     flush=True,
@@ -10478,6 +10500,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _health_dna_judge_audit: dict = {}
     _mr_dna_judge_audit: dict = {}
     _finance_dna_judge_audit: dict = {}
+    _travel_dna_judge_audit: dict = {}
     resp = None
     _use_health_dna_judge = (
         isinstance(dcr_love_meta, dict)
@@ -10507,6 +10530,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             or _mr_meta_checks.get("finance_engine_execution")
             or str(_mr_meta_checks.get("engine_version") or "")
             == "finance_engine_execution_v1"
+        )
+    )
+    _use_travel_dna_judge = (
+        isinstance(dcr_love_meta, dict)
+        and str(dcr_love_meta.get("slice") or "") == "travel_engine_v1"
+        and not bool(dcr_love_meta.get("skip_llm"))
+        and (
+            _mr_meta_checks.get("unified_execution")
+            or _mr_meta_checks.get("travel_engine_execution")
+            or str(_mr_meta_checks.get("engine_version") or "")
+            == "travel_engine_execution_v1"
         )
     )
     try:
@@ -10650,6 +10684,47 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 print(
                     "[raw_passthrough] FINANCE_DNA_JUDGE observability_fail "
                     f"issues={_finance_dna_judge_audit.get('issues')}",
+                    flush=True,
+                )
+        elif _use_travel_dna_judge:
+            from ask_travel.dna_judge import run_travel_llm_with_dna_judge
+
+            _trv_judge_meta = (
+                dict(dcr_love_meta) if isinstance(dcr_love_meta, dict) else {}
+            )
+            if isinstance(_llm_intent_admin, dict):
+                _qd = _llm_intent_admin.get("question_dna")
+                if isinstance(_qd, dict):
+                    _trv_judge_meta["question_dna"] = _qd
+                    _qs = _qd.get("questions")
+                    if isinstance(_qs, list) and _qs and isinstance(_qs[0], dict):
+                        _q0 = _qs[0]
+                        _trv_judge_meta["question_dna_item"] = _q0
+                        for _dk in (
+                            "normalized_question",
+                            "intent",
+                            "user_wants",
+                            "question_type",
+                            "domain",
+                            "bucket",
+                            "answer_style",
+                            "answer_approach",
+                        ):
+                            if _q0.get(_dk) not in (None, ""):
+                                _trv_judge_meta[_dk] = _q0[_dk]
+
+            _llm_raw_text, _travel_dna_judge_audit = run_travel_llm_with_dna_judge(
+                client,
+                model=model,
+                messages=_llm_messages,
+                max_tokens=_max_tok,
+                question=question or "",
+                meta=_trv_judge_meta,
+            )
+            if _travel_dna_judge_audit.get("passed") is False:
+                print(
+                    "[raw_passthrough] TRAVEL_DNA_JUDGE observability_fail "
+                    f"issues={_travel_dna_judge_audit.get('issues')}",
                     flush=True,
                 )
         else:
@@ -11320,6 +11395,37 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _pt_checks["finance_dna_judge_audit"] = _finance_dna_judge_audit
                 if isinstance(_finance_dna_judge_audit.get("selected_blocks"), dict):
                     _pt_checks["finance_selected_blocks"] = _finance_dna_judge_audit[
+                        "selected_blocks"
+                    ]
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "travel_engine_v1":
+            _pt_checks["travel_engine"] = "v1"
+            _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (
+                "engine_facts_only"
+                if (os.environ.get("ASK_TRAVEL_NARRATOR") or "1").strip() != "0"
+                else "universal"
+            )
+            _sm_checks = (
+                dcr_love_meta.get("checks")
+                if isinstance(dcr_love_meta.get("checks"), dict)
+                else {}
+            )
+            for _ck in (
+                "narrator_input",
+                "d1_travel_facts",
+                "d9_travel_facts",
+                "travel_engine_execution",
+                "engine_version",
+                "unified_execution",
+                "routing_label",
+                "travel_selected_blocks_preview",
+                "travel_score",
+            ):
+                if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
+                    _pt_checks[_ck] = _sm_checks[_ck]
+            if _travel_dna_judge_audit:
+                _pt_checks["travel_dna_judge_audit"] = _travel_dna_judge_audit
+                if isinstance(_travel_dna_judge_audit.get("selected_blocks"), dict):
+                    _pt_checks["travel_selected_blocks"] = _travel_dna_judge_audit[
                         "selected_blocks"
                     ]
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):

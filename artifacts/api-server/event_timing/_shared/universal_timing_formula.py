@@ -598,6 +598,12 @@ def compute_universal_timing(
     """Run Universal Timing Formula for any non-marriage domain."""
     intel = intel or {}
     cfg = build_universal_formula_config(domain, bucket)
+    try:
+        from event_timing._shared.timing_eligibility import min_eligible_age
+
+        cfg.min_practical_age = int(min_eligible_age(domain, question or ""))
+    except Exception:
+        pass
     factors: list[str] = [f"DOMAIN={domain} BUCKET={bucket}"]
 
     if not isinstance(kundli, dict) or not kundli.get("planets"):

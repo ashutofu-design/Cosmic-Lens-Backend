@@ -314,11 +314,15 @@ def assess_love_timing(
     bucket: Optional[str] = None,
     user_age: Optional[int] = None,
 ) -> dict:
-    """Delegate to dasha-first love_timing_v2 pipeline."""
-    _ = user_age
+    """Delegate to dasha-first love timing; preserve user_age for eligibility attach."""
     from event_timing.love.love_timing_v1 import compute_love_window
 
-    return compute_love_window(kundli, intel, kp, birth, question, bucket=bucket)
+    raw = compute_love_window(kundli, intel, kp, birth, question, bucket=bucket)
+    if not isinstance(raw, dict):
+        return {"user_age": user_age, "verdict": "UNKNOWN"}
+    if user_age is not None:
+        raw["user_age"] = user_age
+    return raw
 
 
 def format_love_timing_for_prompt(v: dict, question: str = "") -> str:

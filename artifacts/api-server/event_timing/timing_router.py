@@ -698,9 +698,45 @@ def run_timing_engine(
         except Exception:
             pass
 
+    # Shared age/eligibility floor for ALL timing domains (narrator lock).
+    if demand.is_timing and domain != "marriage" and isinstance(ctx.raw, dict) and ctx.raw:
+        try:
+            from event_timing._shared.timing_eligibility import attach_timing_eligibility
+
+            ctx.raw = attach_timing_eligibility(
+                ctx.raw,
+                domain=domain,
+                question=question or "",
+                birth=birth,
+                kundli=ctx.kundli,
+                user_age=demand.user_age,
+            )
+            note = str((ctx.raw.get("timing_eligibility") or {}).get("practical_note") or "")
+            if note and note not in (ctx.factors or []):
+                ctx.factors = (list(ctx.factors or []) + [f"ELIGIBILITY {note[:160]}"])[:14]
+        except Exception as exc:
+            ctx.factors.append(f"timing_eligibility error: {exc}")
+
     return ctx
 
 
 def format_timing_block(ctx: PipelineContext) -> str:
     block = (ctx.raw or {}).get("_prompt_block") or ""
-    return block if isinstance(block, str) else ""
+    if not isinstance(block, str):
+        return ""
+    # Safety net if eligibility attach was skipped.
+    if block and "PRACTICAL MANIFESTATION FILTER" not in block and "TIMING ELIGIBILITY (LOCKED" not in block and ctx.demand.is_timing:
+        try:
+            from event_timing._shared.timing_eligibility import enrich_timing_prompt_block
+
+            block = enrich_timing_prompt_block(
+                block,
+                domain=ctx.demand.domain,
+                question=ctx.question,
+                birth=ctx.birth,
+                kundli=ctx.kundli,
+                user_age=ctx.demand.user_age,
+            )
+        except Exception:
+            pass
+    return block

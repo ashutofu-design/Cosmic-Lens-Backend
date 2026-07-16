@@ -7,13 +7,14 @@ from typing import Any
 from event_timing.domain_specs import get_domain_spec
 
 # Minimum age before timing answer is considered practical (Step 0).
+# Keep in sync with event_timing._shared.timing_eligibility.DOMAIN_MIN_ELIGIBLE_AGE
 MIN_PRACTICAL_AGE: dict[str, int] = {
     "children": 20,
     "career": 18,
     "education": 14,
     "foreign_education": 16,
     "travel": 18,
-    "property": 21,
+    "property": 24,  # home buy floor (was 21)
     "vehicle": 18,
     "finance": 18,
     "health": 12,

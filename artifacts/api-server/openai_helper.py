@@ -1192,7 +1192,28 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
             )
         except Exception:
             pass
-        return _M17_format_marriage_block(engine_result), engine_result
+        _m17_block = _M17_format_marriage_block(engine_result)
+        try:
+            from event_timing._shared.timing_eligibility import enrich_timing_prompt_block
+
+            _m17_age = None
+            try:
+                _m17_age = (engine_result.get("step0") or {}).get("user_age")
+                if _m17_age is None:
+                    _m17_age = engine_result.get("user_age")
+            except Exception:
+                _m17_age = None
+            _m17_block = enrich_timing_prompt_block(
+                _m17_block or "",
+                domain="marriage",
+                question=question or "",
+                birth=birth,
+                kundli=kundli,
+                user_age=int(_m17_age) if _m17_age is not None else None,
+            )
+        except Exception:
+            pass
+        return _m17_block, engine_result
     except Exception as _exc:  # noqa: BLE001
         print(f"[passthrough_marriage_block] err: {str(_exc)[:200]}", flush=True)
         try:
@@ -1272,6 +1293,24 @@ def _passthrough_career_block(question, kundli, intel, birth, llm_intent=None):
                 f"score={verdict.get('score')} conf={verdict.get('confidence')} "
                 f"age={((verdict.get('age_context') or {}).get('user_age'))}",
                 flush=True,
+            )
+        except Exception:
+            pass
+        try:
+            from event_timing._shared.timing_eligibility import enrich_timing_prompt_block
+
+            _age = None
+            try:
+                _age = (verdict.get("age_context") or {}).get("user_age")
+            except Exception:
+                _age = None
+            block = enrich_timing_prompt_block(
+                block or "",
+                domain="career",
+                question=question or "",
+                birth=birth,
+                kundli=kundli,
+                user_age=int(_age) if _age is not None else None,
             )
         except Exception:
             pass

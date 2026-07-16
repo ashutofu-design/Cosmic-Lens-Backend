@@ -5331,7 +5331,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         from ask_scope_gate import assess_ask_scope, scope_refusal_payload
 
         # Policy: scope → engine → LLM fallback; random off-topic refused here.
-        _sv = assess_ask_scope(question)
+        _sv = assess_ask_scope(question, history)
         if not _sv.allowed:
             return scope_refusal_payload(_sv.reason, question=question, lang=lang)
     except Exception:
@@ -15738,11 +15738,11 @@ def _maybe_inject_multi_intent_ack(text, question, lang="hinglish",
         return text
 
 
-def astro_scope_refusal(question: str, lang: str = "en", user=None):
+def astro_scope_refusal(question: str, lang: str = "en", user=None, history=None):
     """Flask /api/ask shim — personal jyotish only; blocks GK and off-topic."""
     from ask_scope_gate import astro_scope_refusal as _refusal
 
-    return _refusal(question, lang, user)
+    return _refusal(question, lang, user, history)
 
 
 _BRAND_SAFE_REDIRECT = {

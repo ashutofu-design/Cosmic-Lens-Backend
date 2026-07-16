@@ -123,6 +123,19 @@ class AskScopeLlmTests(unittest.TestCase):
         mock_llm.assert_called_once()
 
     @patch("ask_scope_llm.classify_ask_scope_llm")
+    def test_not_personal_fails_open(self, mock_llm):
+        mock_llm.return_value = {
+            "allowed": False,
+            "reason": "not_personal",
+            "cleaned_question": "kya me dharmik hun",
+            "confidence": 0.95,
+            "source": "llm",
+        }
+        v = assess_ask_scope("kya me dharmik hun")
+        self.assertTrue(v.allowed, v.reason)
+        mock_llm.assert_called_once()
+
+    @patch("ask_scope_llm.classify_ask_scope_llm")
     def test_llm_outage_fails_open_without_regex_verdict(self, mock_llm):
         mock_llm.return_value = {
             "allowed": False,

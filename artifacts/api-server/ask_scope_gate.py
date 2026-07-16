@@ -246,11 +246,11 @@ def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
                     allowed=True, reason="ok", normalized_question=_norm or None
                 )
 
-            # Only a confident LLM rejection blocks access. An uncertain model
-            # verdict fails open so downstream question-understanding can retry.
+            # Only hard-block clear off-topic / GK. Ambiguous personal asks such as
+            # "kya me dharmik hun" must reach question DNA + engines, not die here.
             if _conf >= 0.62:
                 _reason = _llm.get("reason") or "not_personal"
-                if _reason in ("off_topic", "general_knowledge", "not_personal"):
+                if _reason in ("off_topic", "general_knowledge"):
                     return AskScopeVerdict(
                         allowed=False, reason=_reason  # type: ignore[arg-type]
                     )

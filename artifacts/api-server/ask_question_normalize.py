@@ -111,10 +111,12 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
 
 # Hinglish verb / question-word typos
 _VERB_FIXES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bkya\s+me\b", re.I), "kya main"),
+    (re.compile(r"\bme\s+(dharmik|dharmi|spiritual|adhyatmik)\b", re.I), r"main \1"),
     (re.compile(r"\b(kya|kaun|kab|kaise|kaisa|kaisi|kahan|kyun)\s+he\b", re.I), r"\1 hai"),
     (re.compile(r"\b(kya|kaun|kab|kaisa|kaisi)\s+ho\b", re.I), r"\1 hai"),
     (re.compile(r"\b(kaisa|kaisi|kaise)\s+he\b", re.I), r"\1 hai"),
-    (re.compile(r"\b(he|ho|h|haii|haai)\s*$", re.I), "hai"),
+    (re.compile(r"\b(he|ho|h|hun|haii|haai)\s*$", re.I), "hai"),
     (re.compile(r"\bhogaa+\b", re.I), "hoga"),
     (re.compile(r"\bhogiii+\b", re.I), "hogi"),
     (re.compile(r"\brahegaa+\b", re.I), "rahega"),

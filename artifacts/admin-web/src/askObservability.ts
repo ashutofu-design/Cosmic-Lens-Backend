@@ -360,11 +360,12 @@ export interface AskObservability {
   travel_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
   travel_selected_blocks?: ObservabilityHealthSelectedBlocks;
   engine_execution?: {
-    display_mode?: "health_charts" | "relationship_charts" | "finance_charts" | "travel_charts" | "engine_rules";
+    display_mode?: "health_charts" | "relationship_charts" | "finance_charts" | "travel_charts" | "domain_charts" | "engine_rules";
     health_engine_execution?: ObservabilityHealthEngineExecution | null;
     relationship_engine_execution?: ObservabilityHealthEngineExecution | null;
     finance_engine_execution?: ObservabilityHealthEngineExecution | null;
     travel_engine_execution?: ObservabilityHealthEngineExecution | null;
+    domain_engine_execution?: ObservabilityHealthEngineExecution | null;
     engine_name?: string;
     engine_version?: string;
     modules?: ObservabilityModule[];
@@ -1147,6 +1148,26 @@ function enrichObservability(
   ) {
     exec.display_mode = "travel_charts";
   }
+  // Generic unified domain EE (career/education/children/…/gap topics)
+  if (!exec.travel_engine_execution && !exec.finance_engine_execution && !exec.health_engine_execution) {
+    const unifiedDom = String(checks.unified_domain || smChecks.unified_domain || "").trim();
+    const eeKey = unifiedDom ? `${unifiedDom}_engine_execution` : "";
+    const uniPack =
+      (eeKey && (checks[eeKey] || smChecks[eeKey])) ||
+      Object.entries({ ...smChecks, ...checks }).find(
+        ([k, v]) => k.endsWith("_engine_execution") && v && typeof v === "object",
+      )?.[1] ||
+      null;
+    if (uniPack && typeof uniPack === "object") {
+      (exec as { domain_engine_execution?: unknown }).domain_engine_execution = uniPack;
+      if (
+        !exec.display_mode ||
+        exec.display_mode === "engine_rules"
+      ) {
+        exec.display_mode = "domain_charts" as typeof exec.display_mode;
+      }
+    }
+  }
   if (!exec.d1_health_facts) {
     const d1HealthFacts =
       exec.health_engine_execution?.d1 ||
@@ -1272,6 +1293,24 @@ function enrichObservability(
         (checks.travel_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
         (smChecks.travel_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined),
     ),
+    // Unified remaining domains (career/education/…)
+    ...((): Partial<AskObservability> => {
+      const uniAudit =
+        (obs as AskObservability & { unified_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit })
+          .unified_dna_judge_audit ||
+        (checks.unified_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+        (smChecks.unified_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined);
+      const uniBlocks =
+        (checks.unified_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+        (smChecks.unified_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+        (uniAudit?.selected_blocks as ObservabilityHealthSelectedBlocks | undefined);
+      if (!uniAudit && !uniBlocks) return {};
+      return {
+        // Reuse finance slots as fallback display when domain-specific empty
+        finance_dna_judge_audit: obs.finance_dna_judge_audit || normalizeHealthDnaJudgeAudit(uniAudit),
+        finance_selected_blocks: obs.finance_selected_blocks || uniBlocks,
+      };
+    })(),
     astrology_checks: astro,
     engine_execution: exec,
     planet_evidence: planetEvidence,

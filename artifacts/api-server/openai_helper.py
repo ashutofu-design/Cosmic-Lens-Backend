@@ -7219,6 +7219,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     archetype=_resolved_edu_arch,
                 )
                 chart_text = _education_engine_result.to_narrator_payload()
+                try:
+                    from ask_unified import maybe_upgrade_chart_text
+                    chart_text = maybe_upgrade_chart_text(
+                        _education_engine_result, chart_text, question=question or "",
+                    )
+                except Exception:
+                    pass
                 dcr_love_meta = {
                     "slice": "education_engine_v1",
                     "topic": "education",
@@ -7275,6 +7282,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     archetype=_resolved_child_arch,
                 )
                 chart_text = _children_engine_result.to_narrator_payload()
+                try:
+                    from ask_unified import maybe_upgrade_chart_text
+                    chart_text = maybe_upgrade_chart_text(
+                        _children_engine_result, chart_text, question=question or "",
+                    )
+                except Exception:
+                    pass
                 dcr_love_meta = {
                     "slice": "children_engine_v1",
                     "topic": "children",
@@ -7331,6 +7345,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     archetype=_resolved_prop_arch,
                 )
                 chart_text = _property_engine_result.to_narrator_payload()
+                try:
+                    from ask_unified import maybe_upgrade_chart_text
+                    chart_text = maybe_upgrade_chart_text(
+                        _property_engine_result, chart_text, question=question or "",
+                    )
+                except Exception:
+                    pass
                 dcr_love_meta = {
                     "slice": "property_engine_v1",
                     "topic": "property",
@@ -7386,6 +7407,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     archetype=_resolved_veh_arch,
                 )
                 chart_text = _vehicle_engine_result.to_narrator_payload()
+                try:
+                    from ask_unified import maybe_upgrade_chart_text
+                    chart_text = maybe_upgrade_chart_text(
+                        _vehicle_engine_result, chart_text, question=question or "",
+                    )
+                except Exception:
+                    pass
                 dcr_love_meta = {
                     "slice": "vehicle_engine_v1",
                     "topic": "vehicle",
@@ -7520,6 +7548,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     archetype=_resolved_lit_arch,
                 )
                 chart_text = _litigation_engine_result.to_narrator_payload()
+                try:
+                    from ask_unified import maybe_upgrade_chart_text
+                    chart_text = maybe_upgrade_chart_text(
+                        _litigation_engine_result, chart_text, question=question or "",
+                    )
+                except Exception:
+                    pass
                 _lit_remedy = (_litigation_engine_result.checks or {}).get("remedy_text") or ""
                 if _lit_remedy:
                     chart_text = (
@@ -7603,6 +7638,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if _gap_out:
                     _gap_result, _gap_slice, _gap_topic, _gap_key = _gap_out
                     chart_text = _gap_result.to_narrator_payload()
+                    try:
+                        from ask_unified import maybe_upgrade_chart_text
+                        chart_text = maybe_upgrade_chart_text(
+                            _gap_result, chart_text, question=question or "",
+                        )
+                    except Exception:
+                        pass
                     dcr_love_meta = gap_static_to_meta(
                         _gap_result,
                         slice_id=_gap_slice,
@@ -7704,6 +7746,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     archetype=_resolved_net_arch,
                 )
                 chart_text = _network_engine_result.to_narrator_payload()
+                try:
+                    from ask_unified import maybe_upgrade_chart_text
+                    chart_text = maybe_upgrade_chart_text(
+                        _network_engine_result, chart_text, question=question or "",
+                    )
+                except Exception:
+                    pass
                 dcr_love_meta = {
                     "slice": "network_engine_v1",
                     "topic": "network",
@@ -7759,6 +7808,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     archetype=_resolved_luck_arch,
                 )
                 chart_text = _luck_engine_result.to_narrator_payload()
+                try:
+                    from ask_unified import maybe_upgrade_chart_text
+                    chart_text = maybe_upgrade_chart_text(
+                        _luck_engine_result, chart_text, question=question or "",
+                    )
+                except Exception:
+                    pass
                 dcr_love_meta = {
                     "slice": "luck_engine_v1",
                     "topic": "luck",
@@ -7815,6 +7871,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     archetype=_resolved_career_arch,
                 )
                 chart_text = _career_engine_result.to_narrator_payload()
+                try:
+                    from ask_unified import maybe_upgrade_chart_text
+                    chart_text = maybe_upgrade_chart_text(
+                        _career_engine_result, chart_text, question=question or "",
+                    )
+                except Exception:
+                    pass
                 dcr_love_meta = {
                     "slice": "career_engine_v1",
                     "topic": "career",
@@ -10501,6 +10564,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _mr_dna_judge_audit: dict = {}
     _finance_dna_judge_audit: dict = {}
     _travel_dna_judge_audit: dict = {}
+    _unified_dna_judge_audit: dict = {}
     resp = None
     _use_health_dna_judge = (
         isinstance(dcr_love_meta, dict)
@@ -10543,6 +10607,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             == "travel_engine_execution_v1"
         )
     )
+    _use_unified_dna_judge = False
+    _unified_dna_domain = ""
+    if (
+        isinstance(dcr_love_meta, dict)
+        and not bool(dcr_love_meta.get("skip_llm"))
+        and not (_use_health_dna_judge or _use_mr_dna_judge or _use_finance_dna_judge or _use_travel_dna_judge)
+    ):
+        try:
+            from ask_unified.specs import is_unified_slice, slice_to_domain
+
+            _sl = str(dcr_love_meta.get("slice") or "")
+            if is_unified_slice(_sl) and (
+                _mr_meta_checks.get("unified_execution")
+                or _mr_meta_checks.get("unified_domain")
+            ):
+                _use_unified_dna_judge = True
+                _unified_dna_domain = (
+                    str(_mr_meta_checks.get("unified_domain") or "")
+                    or slice_to_domain(_sl)
+                    or ""
+                )
+        except Exception:
+            _use_unified_dna_judge = False
     try:
         if _use_health_dna_judge:
             from ask_health.dna_judge import run_health_llm_with_dna_judge
@@ -10725,6 +10812,49 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 print(
                     "[raw_passthrough] TRAVEL_DNA_JUDGE observability_fail "
                     f"issues={_travel_dna_judge_audit.get('issues')}",
+                    flush=True,
+                )
+        elif _use_unified_dna_judge:
+            from ask_unified import run_domain_llm_with_dna_judge
+
+            _uni_judge_meta = (
+                dict(dcr_love_meta) if isinstance(dcr_love_meta, dict) else {}
+            )
+            if isinstance(_llm_intent_admin, dict):
+                _qd = _llm_intent_admin.get("question_dna")
+                if isinstance(_qd, dict):
+                    _uni_judge_meta["question_dna"] = _qd
+                    _qs = _qd.get("questions")
+                    if isinstance(_qs, list) and _qs and isinstance(_qs[0], dict):
+                        _q0 = _qs[0]
+                        _uni_judge_meta["question_dna_item"] = _q0
+                        for _dk in (
+                            "normalized_question",
+                            "intent",
+                            "user_wants",
+                            "question_type",
+                            "domain",
+                            "bucket",
+                            "answer_style",
+                            "answer_approach",
+                        ):
+                            if _q0.get(_dk) not in (None, ""):
+                                _uni_judge_meta[_dk] = _q0[_dk]
+
+            _llm_raw_text, _unified_dna_judge_audit = run_domain_llm_with_dna_judge(
+                client,
+                model=model,
+                messages=_llm_messages,
+                max_tokens=_max_tok,
+                question=question or "",
+                meta=_uni_judge_meta,
+                domain=_unified_dna_domain or None,
+            )
+            if _unified_dna_judge_audit.get("passed") is False:
+                print(
+                    "[raw_passthrough] UNIFIED_DNA_JUDGE observability_fail "
+                    f"domain={_unified_dna_domain} "
+                    f"issues={_unified_dna_judge_audit.get('issues')}",
                     flush=True,
                 )
         else:
@@ -11429,7 +11559,40 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         "selected_blocks"
                     ]
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
-            _pt_checks["mr_engine"] = "legacy_slice"
+            _sm_checks = (
+                dcr_love_meta.get("checks")
+                if isinstance(dcr_love_meta.get("checks"), dict)
+                else {}
+            )
+            if _sm_checks.get("unified_execution") or _sm_checks.get("unified_domain"):
+                _udom = str(_sm_checks.get("unified_domain") or dcr_love_meta.get("topic") or "")
+                _pt_checks["unified_engine"] = _udom or "v1"
+                _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or "engine_facts_only"
+                for _ck, _cv in _sm_checks.items():
+                    if _cv not in (None, "", [], {}) and (
+                        _ck.endswith("_engine_execution")
+                        or _ck.endswith("_facts")
+                        or _ck in (
+                            "engine_version", "unified_execution", "routing_label",
+                            "unified_domain",
+                        )
+                        or _ck.endswith("_selected_blocks_preview")
+                        or _ck.endswith("_score")
+                    ):
+                        _pt_checks[_ck] = _cv
+                if _unified_dna_judge_audit:
+                    _pt_checks["unified_dna_judge_audit"] = _unified_dna_judge_audit
+                    if isinstance(_unified_dna_judge_audit.get("selected_blocks"), dict):
+                        _pt_checks["unified_selected_blocks"] = _unified_dna_judge_audit[
+                            "selected_blocks"
+                        ]
+                        if _udom:
+                            _pt_checks[f"{_udom}_selected_blocks"] = _unified_dna_judge_audit[
+                                "selected_blocks"
+                            ]
+                            _pt_checks[f"{_udom}_dna_judge_audit"] = _unified_dna_judge_audit
+            else:
+                _pt_checks["mr_engine"] = "legacy_slice"
         if _engine_route is not None:
             _pt_checks["engine_route"] = _engine_route.to_dict()
         if _answer_fidelity:

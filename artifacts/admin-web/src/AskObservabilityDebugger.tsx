@@ -436,6 +436,19 @@ function buildEngineExecutionSteps(
     }];
   }
 
+  const domainPack = (exec as { domain_engine_execution?: import("./askObservability").ObservabilityHealthEngineExecution | null })
+    ?.domain_engine_execution;
+  const domainSteps = formatHealthEngineExecutionSteps(domainPack, { domain: "travel" });
+  if (domainSteps.length || exec?.display_mode === "domain_charts" || domainPack) {
+    if (domainSteps.length) {
+      return domainSteps;
+    }
+    return [{
+      label: "Domain Chart Pack",
+      value: `D1 + D9 unified pack load nahi hua. Naya question pucho after API deploy (v${OBS_DEBUGGER_VERSION}+).`,
+    }];
+  }
+
   const modules = exec?.modules || [];
   const modLines =
     modules.length > 0

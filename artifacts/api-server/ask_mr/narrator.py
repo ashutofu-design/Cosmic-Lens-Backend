@@ -294,6 +294,16 @@ def build_mr_engine_narrator_system_prompt(
                 "No guaranteed visa/PR, no fixed country name as certainty, never invent placements/dates. "
                 "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष, Big Picture, Kyun aisa, Ab kya karein."
             )
+        elif "_ENGINE_EXECUTION_JSON" in (chart_text or "") or "ENGINE_EXECUTION_JSON" in (chart_text or ""):
+            engine_lock = (
+                "DOMAIN JSON: Engine Execution JSON is the full D1+D9 pack — "
+                "poora padho, lekin jawab me sirf sawal-relevant facts. "
+                "QUESTION_PRIORITY_FACTS se #1 natural chart proof ZAROORI "
+                "(planet + ghar/dignity). Dump mat karo. "
+                f"routing_label ({arch or 'general'}) = answer FOCUS only, not a separate engine. "
+                "Never invent placements/dates. "
+                "BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष, Big Picture, Kyun aisa, Ab kya karein."
+            )
         else:
             engine_lock = (
                 "ENGINE LOCK: Facts below are final — narrate and EXPAND them; never recalculate or contradict VERDICT.\n"

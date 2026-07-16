@@ -101,11 +101,25 @@ def run_gap_static_engine(
             except Exception:
                 continue
         try:
-            result = run_fn(
+            legacy = run_fn(
                 kundli if isinstance(kundli, dict) else {},
                 question or "",
                 wants_explain=wants_explain,
             )
+            arch = getattr(legacy, "archetype", None) or f"general_{key}"
+            try:
+                from ask_unified import build_unified_engine_result
+
+                result = build_unified_engine_result(
+                    domain=key,
+                    kundli=kundli if isinstance(kundli, dict) else {},
+                    question=question or "",
+                    archetype=str(arch),
+                    wants_explain=wants_explain,
+                    llm_intent=llm_intent,
+                )
+            except Exception:
+                result = legacy
             return result, slice_id, topic, key
         except Exception:
             continue
@@ -118,6 +132,17 @@ def gap_static_to_meta(
     slice_id: str,
     topic: str,
 ) -> dict[str, Any]:
+    checks = dict(getattr(result, "checks", None) or {})
+    if checks.get("unified_execution"):
+        try:
+            from ask_unified import domain_engine_slice_meta
+
+            meta = domain_engine_slice_meta(result, domain=topic)
+            meta["slice"] = slice_id
+            meta["topic"] = topic
+            return meta
+        except Exception:
+            pass
     from ask_mr.engine import mr_engine_slice_meta
 
     meta = mr_engine_slice_meta(result)

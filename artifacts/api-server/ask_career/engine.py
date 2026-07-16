@@ -1,11 +1,17 @@
+"""Career static — unified career_engine_execution_v1 by default."""
+
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from .classifier import classify_career_archetype
-from .job_registry import JOB_ENGINE_ARCHETYPES
 from .types import EngineResult
+
+
+def _legacy_enabled() -> bool:
+    return (os.environ.get("ASK_CAREER_LEGACY_ARCHETYPE_ENGINES") or "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
 
 
 def run_career_static_engine(
@@ -14,11 +20,36 @@ def run_career_static_engine(
     *,
     wants_explain: bool = False,
     archetype: str | None = None,
+    llm_intent: dict | None = None,
 ) -> EngineResult:
     if (os.environ.get("ASK_CAREER_ENGINE") or "1").strip() == "0":
         raise RuntimeError("ASK_CAREER_ENGINE=0 — caller should use legacy career path")
 
-    archetype = (archetype or "").strip().lower() or classify_career_archetype(question)
+    label = (archetype or "").strip().lower() or classify_career_archetype(question)
+
+    if _legacy_enabled():
+        # Preserve old per-archetype runners; still attach EE pack.
+        from ask_unified import attach_domain_engine_execution
+
+        result = _run_legacy(kundli, question, wants_explain=wants_explain, archetype=label)
+        return attach_domain_engine_execution(
+            result, kundli, domain="career", question=question or "", llm_intent=llm_intent,
+        )
+
+    from ask_unified import build_unified_engine_result
+
+    return build_unified_engine_result(
+        domain="career",
+        kundli=kundli,
+        question=question or "",
+        archetype=label,
+        wants_explain=wants_explain,
+        llm_intent=llm_intent,
+    )
+
+
+def _run_legacy(kundli, question, *, wants_explain, archetype):
+    from .job_registry import JOB_ENGINE_ARCHETYPES
 
     if archetype == "job_vs_business":
         from .engines.job_vs_business import run_job_vs_business
@@ -74,6 +105,5 @@ def run_career_static_engine(
     if archetype in JOB_ENGINE_ARCHETYPES:
         from .engines.job_sector import run_job_sector
         return run_job_sector(kundli, question, archetype=archetype, wants_explain=wants_explain)
-
     from .engines.general_career import run_general_career
     return run_general_career(kundli, question, wants_explain=wants_explain)

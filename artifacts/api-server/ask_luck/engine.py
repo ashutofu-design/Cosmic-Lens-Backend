@@ -1,3 +1,5 @@
+"""Luck static — unified luck_engine_execution_v1 by default."""
+
 from __future__ import annotations
 
 import os
@@ -12,30 +14,19 @@ def run_luck_static_engine(
     *,
     wants_explain: bool = False,
     archetype: str | None = None,
+    llm_intent: dict | None = None,
 ) -> EngineResult:
     if (os.environ.get("ASK_LUCK_ENGINE") or "1").strip() == "0":
-        raise RuntimeError("ASK_LUCK_ENGINE=0 — caller should use legacy path")
+        raise RuntimeError("ASK_LUCK_ENGINE=0 — caller should use legacy luck path")
 
-    archetype = (archetype or "").strip().lower() or classify_luck_archetype(question)
+    label = (archetype or "").strip().lower() or classify_luck_archetype(question)
+    from ask_unified import build_unified_engine_result
 
-    from .engines.luck_engines import (
-        run_career_luck,
-        run_general_luck,
-        run_love_luck,
-        run_luck_strength,
-        run_lucky_traits,
-        run_money_luck,
-        run_overall_luck,
+    return build_unified_engine_result(
+        domain="luck",
+        kundli=kundli,
+        question=question or "",
+        archetype=label,
+        wants_explain=wants_explain,
+        llm_intent=llm_intent,
     )
-
-    dispatch = {
-        "overall_luck": run_overall_luck,
-        "luck_strength": run_luck_strength,
-        "career_luck": run_career_luck,
-        "love_luck": run_love_luck,
-        "money_luck": run_money_luck,
-        "lucky_traits": run_lucky_traits,
-        "general_luck": run_general_luck,
-    }
-    runner = dispatch.get(archetype, run_general_luck)
-    return runner(kundli, question, wants_explain=wants_explain)

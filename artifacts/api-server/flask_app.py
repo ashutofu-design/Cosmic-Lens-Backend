@@ -8896,8 +8896,14 @@ def ask_stream_route():
     if not question:
         return jsonify({"error": "question is required"}), 400
 
+    try:
+        from ask_question_normalize import prepare_ask_question
 
-    # Greetings / help only — language/scope/privacy/normalize run once inside RP.
+        question = prepare_ask_question(question)
+    except Exception:
+        pass
+
+    # Greetings / help — before language & scope gates (hi/hello are not "personal" astro Qs).
     _shortcut_early_s = None
     try:
         from shortcuts import resolve_ask_shortcut as _resolve_ask_shortcut_s
@@ -8920,8 +8926,58 @@ def ask_stream_route():
         )
         return jsonify(_shortcut_early_s)
 
+    try:
+        from ask_language_gate import assess_ask_language, language_refusal_payload
+
+        _lang_v_s = assess_ask_language(question)
+        if not _lang_v_s.allowed:
+            print(
+                f"[ask/stream] language_gate blocked "
+                f"script={_lang_v_s.script_blocked!r}",
+                flush=True,
+            )
+            return jsonify(language_refusal_payload())
+    except Exception as _lg_exc_s:
+        print(
+            f"[ask/stream] language_gate error (non-fatal): {_lg_exc_s}",
+            flush=True,
+        )
+
+    try:
+        from ask_scope_gate import assess_ask_scope, scope_refusal_payload
+
+        _scope_v_s = assess_ask_scope(question, history)
+        if not _scope_v_s.allowed:
+            print(
+                f"[ask/stream] scope_gate blocked reason={_scope_v_s.reason}",
+                flush=True,
+            )
+            _log_brand_guard_question(question, data)
+            return jsonify(scope_refusal_payload(_scope_v_s.reason, question=question, lang=lang))
+        if getattr(_scope_v_s, "normalized_question", None):
+            question = _scope_v_s.normalized_question
+            print(f"[ask/stream] scope_llm normalized q={question[:60]!r}", flush=True)
+    except Exception as _sg_exc_s:
+        print(f"[ask/stream] scope_gate error (non-fatal): {_sg_exc_s}", flush=True)
+
+    try:
+        from ask_privacy_guard import apply_privacy_guard
+
+        _priv_s = apply_privacy_guard(question or "", lang=lang or "hn")
+        if _priv_s:
+            print(
+                f"[ask/stream] privacy_hard_guard blocked q={question[:60]!r}",
+                flush=True,
+            )
+            return jsonify(_priv_s)
+    except Exception as _priv_exc_s:
+        print(f"[ask/stream] privacy_guard error (non-fatal): {_priv_exc_s}", flush=True)
+
     # ════════════════════════════════════════════════════════════════════════
-    # RAW PASSTHROUGH MODE (2026-05-06, stream parity) — gates owned by RP.
+    # RAW PASSTHROUGH MODE (2026-05-06, stream parity) — see /api/ask above
+    # for full rationale. Stream route returns ONE single jsonify chunk
+    # (no SSE deltas) when RAW_PASSTHROUGH_MODE=1, since the helper does a
+    # single non-streaming completion. Mobile client handles both shapes.
     # ════════════════════════════════════════════════════════════════════════
     try:
         from openai_helper import raw_passthrough_ask as _rp_ask_s
@@ -10283,6 +10339,98 @@ def prashna_number_ask_route():
         )
 
     return jsonify(result)
+
+
+@app.route("/api/prashna/simple-ask", methods=["GET", "POST", "OPTIONS"])
+@app.route("/api/prashna/simple-ask/", methods=["GET", "POST", "OPTIONS"])
+def prashna_simple_ask_route():
+    """Prashna Kundli simple Q&A — NOT Ask Anything.
+
+    Personal → user D1 + dasha(timing only) + short LLM.
+    Knowledge → knowledge_fast.
+    Body: { question, user_id?, kundli?, lang? }
+    """
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if request.method == "GET":
+        return jsonify(
+            {
+                "ok": True,
+                "service": "prashna_simple_ask",
+                "hint": "POST JSON {question, user_id?, lang?}",
+            }
+        )
+
+    from prashna_simple_ask import ask_prashna_simple
+    from subscription_helper import consume_question, effective_plan
+
+    data = request.get_json(force=True, silent=True) or {}
+    question = (data.get("question") or "").strip()
+    user_id = data.get("user_id")
+    lang = (data.get("lang") or "hn").strip().lower() or "hn"
+    kundli = data.get("kundli") or data.get("chart_data")
+    if kundli is not None and not isinstance(kundli, dict):
+        kundli = None
+
+    if not question:
+        return jsonify({"error": "question is required", "ok": False}), 400
+
+    user = None
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found", "ok": False}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized", "ok": False}), 401
+
+        quota = consume_question(user)
+        if not quota["allowed"]:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": "daily_limit_reached",
+                        "message": (
+                            f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
+                            "Pro upgrade karein for unlimited."
+                        ),
+                        "text": (
+                            f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
+                            "Pro upgrade karein for unlimited."
+                        ),
+                        "quota": {"used": quota["used"], "limit": quota["limit"]},
+                        "plan": effective_plan(user),
+                        "upgrade_required": True,
+                    }
+                ),
+                402,
+            )
+
+    try:
+        result = ask_prashna_simple(
+            question,
+            kundli=kundli if isinstance(kundli, dict) else None,
+            user=user,
+            lang=lang,
+        )
+    except Exception:
+        app.logger.exception("[Prashna Simple] failed")
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "internal_error",
+                    "text": "Abhi jawab nahi ban paya. Punah try karein.",
+                }
+            ),
+            500,
+        )
+
+    status = 200 if result.get("ok") else 400
+    if result.get("error") == "kundli_required":
+        status = 400
+    return jsonify(result), status
 
 
 # ── Vastu Drishti Scan (vision) ───────────────────────────────────────────────

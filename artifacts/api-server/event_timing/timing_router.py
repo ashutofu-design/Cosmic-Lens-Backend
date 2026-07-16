@@ -121,6 +121,46 @@ def resolve_timing_domain(
     if _STOCK_TIMING_DEFER_RX.search(q):
         return "general", "general", False
 
+    # Narrow topic guards before broad registries (foreign/finance/career words
+    # overlap heavily). These remain timing-only and fall back to the universal
+    # atlas when there is no dedicated domain engine.
+    if detect_timing_intent(q, llm_intent):
+        if re.search(
+            r"(?ix)\b(foreign|abroad|videsh|overseas)\b.{0,30}\b("
+            r"settle|settlement|shift|move|pr|green\s*card)\b",
+            q,
+        ):
+            return "travel", _travel_bucket(q), True
+        if re.search(r"(?ix)\b(teerth\s*yatra|teerthyatra|tirth\s*yatra|pilgrimage)\b", q):
+            try:
+                from ask_spiritual.timing_registry import classify_spiritual_timing_bucket
+
+                return "spiritual", classify_spiritual_timing_bucket(q), True
+            except Exception:
+                return "spiritual", "pilgrimage", True
+        if re.search(
+            r"(?ix)\b(bade\s+log|influential|powerful\s+(?:people|person)|"
+            r"senior\s+contact)\b.{0,35}\b(help|support|madad|connect)\b",
+            f"{q} {question or ''}",
+        ):
+            try:
+                from ask_network.timing_registry import classify_network_timing_bucket
+
+                return "network", classify_network_timing_bucket(q), True
+            except Exception:
+                return "network", "influential_support", True
+        if re.search(
+            r"(?ix)\b(lottery|jackpot|pet\s+(?:dog|cat)?\s*.*adopt|"
+            r"dog\s+kab\s+adopt|cat\s+kab\s+adopt)\b",
+            q,
+        ):
+            from event_timing.universal.topic_atlas import classify_universal_bucket
+
+            return "universal", classify_universal_bucket(q), True
+
+    if _MARRIAGE_EVENT_RX.search(q) and detect_timing_intent(q, llm_intent):
+        return "marriage", "timing", True
+
     # Love timing first — any phrasing/length; LLM love+timing or regex match.
     try:
         from ask_love.timing_registry import is_love_timing_question  # type: ignore

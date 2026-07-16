@@ -9,16 +9,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 _KUNDLI = {
     "ascendant": "Leo",
+    "ascendantDeg": 125.0,
     "planets": [
-        {"name": "Sun", "sign": "Leo", "house": 1},
-        {"name": "Moon", "sign": "Taurus", "house": 10},
-        {"name": "Mars", "sign": "Capricorn", "house": 6},
-        {"name": "Mercury", "sign": "Virgo", "house": 2},
-        {"name": "Jupiter", "sign": "Sagittarius", "house": 5},
-        {"name": "Venus", "sign": "Libra", "house": 3},
-        {"name": "Saturn", "sign": "Aquarius", "house": 7},
-        {"name": "Rahu", "sign": "Aries", "house": 9},
-        {"name": "Ketu", "sign": "Libra", "house": 3},
+        {"name": "Sun", "sign": "Leo", "house": 1, "longitude": 125.0},
+        {"name": "Moon", "sign": "Taurus", "house": 10, "longitude": 45.0},
+        {"name": "Mars", "sign": "Capricorn", "house": 6, "longitude": 280.0},
+        {"name": "Mercury", "sign": "Virgo", "house": 2, "longitude": 155.0},
+        {"name": "Jupiter", "sign": "Sagittarius", "house": 5, "longitude": 250.0},
+        {"name": "Venus", "sign": "Libra", "house": 3, "longitude": 185.0},
+        {"name": "Saturn", "sign": "Aquarius", "house": 7, "longitude": 310.0},
+        {"name": "Rahu", "sign": "Aries", "house": 9, "longitude": 15.0},
+        {"name": "Ketu", "sign": "Libra", "house": 3, "longitude": 195.0},
     ],
     "divisionalCharts": {
         "D9": {
@@ -60,6 +61,9 @@ class FinanceEngineExecutionTests(unittest.TestCase):
             (res.checks or {}).get("engine_version"),
             "finance_engine_execution_v1",
         )
+        pack = (res.checks or {}).get("finance_engine_execution") or {}
+        self.assertEqual(pack.get("divisional_chart_tag"), "D2")
+        self.assertIn("D2", pack.get("charts_used") or [])
 
     def test_gatekeeper_exempt_unified(self):
         os.environ.pop("ASK_FINANCE_LEGACY_ARCHETYPE_ENGINES", None)

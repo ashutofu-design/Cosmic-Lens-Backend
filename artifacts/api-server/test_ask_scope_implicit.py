@@ -39,6 +39,20 @@ def test_implicit_asks_allowed_without_mera(question):
         "match kaun jeetega aaj",
     ],
 )
-def test_off_topic_still_blocked(question):
+def test_off_topic_still_blocked(question, monkeypatch):
+    monkeypatch.setattr(
+        "ask_scope_llm.classify_ask_scope_llm",
+        lambda *_args, **_kwargs: {
+            "allowed": False,
+            "reason": (
+                "general_knowledge"
+                if "astrology" in question or "president" in question
+                else "off_topic"
+            ),
+            "cleaned_question": question,
+            "confidence": 0.98,
+            "source": "llm",
+        },
+    )
     v = assess_ask_scope(question)
     assert not v.allowed, f"{question!r} should be blocked"

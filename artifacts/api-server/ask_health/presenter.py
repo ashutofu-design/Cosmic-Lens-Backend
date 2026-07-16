@@ -18,6 +18,13 @@ def to_health_llm_payload(result: EngineResult, *, question: str = "") -> str:
         "question": (question or "").strip(),
         "d1": execution.get("d1") or checks.get("d1_health_facts") or {},
         "d9": execution.get("d9") or checks.get("d9_health_facts") or {},
+        "divisional_chart_tag": execution.get("divisional_chart_tag") or "D30",
+        "divisional_chart": (
+            execution.get("divisional_chart")
+            or checks.get("health_divisional_facts")
+            or {}
+        ),
+        "charts_used": execution.get("charts_used") or checks.get("charts_used") or ["D1", "D9"],
     }
     dasha = execution.get("dasha_timing_compact") if isinstance(execution, dict) else None
     if isinstance(dasha, dict) and (dasha.get("current") or dasha.get("top_windows")):

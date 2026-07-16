@@ -56,3 +56,25 @@ def test_registry_timing_without_llm():
     route = resolve_ask_route(_OFFICE_Q)
     assert route.is_timing is True
     assert route.timing_engine_slice == "love_timing_v1"
+
+
+def test_trusted_static_dna_does_not_force_relationship_engine():
+    admin = {
+        "dna_routing_applied": True,
+        "question_dna": {
+            "source": "llm",
+            "questions": [{
+                "domain": "health",
+                "bucket": "general_health",
+                "timing": False,
+            }],
+        },
+    }
+    route = resolve_ask_route(
+        "Meri health overall kaisi hai?",
+        llm_intent={"domain": "health", "is_timing": False},
+        llm_intent_admin=admin,
+    )
+    assert route.path == "engine_static"
+    assert route.domain == "health"
+    assert route.mr_static is False

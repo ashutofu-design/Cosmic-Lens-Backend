@@ -8,7 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from event_timing._shared.generic_timing_engine import _lagna_si
-from event_timing._shared.kaal_pipeline import expand_to_kaal_pipeline
 from event_timing.property.bcp_property_ages import compute_bcp_property_ages
 from event_timing.property.property_timing_v1 import compute_property_window
 
@@ -28,6 +27,20 @@ SAMPLE_KUNDLI = {
 
 
 class TestPropertyBcpAges(unittest.TestCase):
+    def test_property_uses_d9_and_d4_when_longitudes_are_available(self):
+        chart = {
+            **SAMPLE_KUNDLI,
+            "ascendantDeg": 250.0,
+            "planets": [
+                {**planet, "longitude": float(index * 43 % 360)}
+                for index, planet in enumerate(SAMPLE_KUNDLI["planets"])
+            ],
+        }
+        raw = compute_property_window(
+            chart, {}, {}, "1996-01-15", "me ghar kab buy karunga",
+        )
+        self.assertEqual(raw.get("divisional_charts_used"), ["D1", "D9", "D4"])
+
     def test_4l_jupiter_in_4h_placement_ages(self):
         lagna = _lagna_si(SAMPLE_KUNDLI)
         self.assertIsNotNone(lagna)
@@ -41,18 +54,14 @@ class TestPropertyBcpAges(unittest.TestCase):
         self.assertIn(32, d1_ages)
         self.assertTrue(bcp.get("focus_ages"))
 
-    def test_step1_includes_bcp_for_property(self):
+    def test_property_engine_execution_does_not_use_bcp(self):
         raw = compute_property_window(
             SAMPLE_KUNDLI, {}, {}, "1996-01-15", "me ghar kab buy karunga",
         )
-        self.assertTrue(raw.get("bcp_property_ages"))
-        s1 = (raw.get("step_audit") or {}).get("step1") or {}
-        self.assertIn("BCP", s1.get("name") or "")
-        self.assertEqual(s1.get("fourth_lord"), "Jupiter")
-        out = expand_to_kaal_pipeline(raw, "property")
-        s1k = (out.get("step_audit") or {}).get("step1") or {}
-        self.assertIn("BCP", s1k.get("name") or "")
-        self.assertTrue(s1k.get("d1_bcp_ages") or s1k.get("focus_ages"))
+        self.assertNotIn("bcp_property_ages", raw)
+        self.assertFalse(any("BCP" in str(x) for x in raw.get("factors") or []))
+        self.assertEqual(raw.get("divisional_charts_used"), ["D1"])
+        self.assertEqual(raw.get("divisional_charts_required"), ["D1", "D9", "D4"])
 
     def test_build_property_step1_bcp_fields(self):
         from event_timing.property.bcp_property_ages import build_property_step1_bcp
@@ -64,7 +73,7 @@ class TestPropertyBcpAges(unittest.TestCase):
         self.assertIn("aspects", s1.get("detail") or "")
         self.assertIn("rule", s1)
 
-    def test_admin_recompute_property_bcp_step1(self):
+    def test_admin_does_not_recompute_property_bcp(self):
         from ask_llm_context_debug import recompute_property_bcp_from_kundli
 
         ctx = {
@@ -89,15 +98,8 @@ class TestPropertyBcpAges(unittest.TestCase):
         out = recompute_property_bcp_from_kundli(
             ctx, SAMPLE_KUNDLI, "1996-01-15", question_text="me ghar kab buy karunga",
         )
-        sa = (out.get("slice_meta") or {}).get("step_audit") or {}
-        s1 = sa.get("step1") or {}
-        s2 = sa.get("step2") or {}
-        self.assertIn("BCP", s1.get("name") or "")
-        self.assertEqual(s1.get("fourth_lord"), "Jupiter")
-        self.assertEqual(s1.get("fourth_lord_house"), 4)
-        self.assertTrue(s1.get("recomputed_from_chart"))
-        self.assertIn("Saturn", str(s2.get("detail") or ""))
-        self.assertTrue((out.get("slice_meta") or {}).get("bcp_property_ages"))
+        self.assertEqual(out, ctx)
+        self.assertNotIn("bcp_property_ages", out.get("slice_meta") or {})
 
 
 if __name__ == "__main__":

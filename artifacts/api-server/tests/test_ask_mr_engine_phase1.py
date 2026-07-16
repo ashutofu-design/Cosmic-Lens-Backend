@@ -1,3 +1,4 @@
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -38,6 +39,24 @@ SAMPLE_KUNDLI = {
 
 
 class MrEngineTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._legacy_env = os.environ.get("ASK_MR_LEGACY_ARCHETYPE_ENGINES")
+        cls._v2_env = os.environ.get("ASK_MR_ENGINE_V2")
+        os.environ["ASK_MR_LEGACY_ARCHETYPE_ENGINES"] = "1"
+        os.environ["ASK_MR_ENGINE_V2"] = "0"
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls._legacy_env is None:
+            os.environ.pop("ASK_MR_LEGACY_ARCHETYPE_ENGINES", None)
+        else:
+            os.environ["ASK_MR_LEGACY_ARCHETYPE_ENGINES"] = cls._legacy_env
+        if cls._v2_env is None:
+            os.environ.pop("ASK_MR_ENGINE_V2", None)
+        else:
+            os.environ["ASK_MR_ENGINE_V2"] = cls._v2_env
+
     def test_breakup_risk_engine_runs_and_emits_evidence(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "kya mera breakup hoga?", wants_explain=False)
         self.assertEqual(res.archetype, "breakup_risk")

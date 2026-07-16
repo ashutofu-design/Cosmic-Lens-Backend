@@ -14,6 +14,7 @@ from ask_health.routing import resolve_health_archetype
 
 _SAMPLE_KUNDLI = {
     "ascendant": "Leo",
+    "ascendantDeg": 120.0,
     "planets": [
         {"name": "Sun", "house": 1, "sign": "Leo", "longitude": 120.0},
         {"name": "Moon", "house": 4, "sign": "Scorpio", "longitude": 220.0},
@@ -100,6 +101,8 @@ class TestAskHealthEngine(unittest.TestCase):
         pack = (res.checks or {}).get("health_engine_execution") or {}
         self.assertEqual(pack.get("schema_version"), "health_engine_execution_v1")
         self.assertEqual(pack.get("d1", {}).get("ascendant"), "Leo")
+        self.assertEqual(pack.get("divisional_chart_tag"), "D30")
+        self.assertIn("D30", pack.get("charts_used") or [])
         self.assertEqual(facts.get("schema_version"), "health_d1_facts_v1")
         self.assertEqual(facts.get("chart"), "D1")
         self.assertEqual(facts.get("ascendant"), "Leo")

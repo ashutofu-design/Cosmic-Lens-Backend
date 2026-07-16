@@ -300,6 +300,31 @@ def compute_domain_engine_execution(
         d9_kundli = {"ascendant": asc_sign or chart.get("ascendant"), "planets": planets}
         d9 = _tag(compute_domain_facts(d9_kundli, spec), chart="D9", spec=spec)
 
+    domain_division = (spec.divisional or "D9").upper()
+    if domain_division == "D9":
+        divisional = d9
+    else:
+        try:
+            from event_timing._shared.universal_timing_formula import _divisional_chart
+
+            div_chart = _divisional_chart(chart, domain_division)
+            if div_chart.get("planets") and div_chart.get("ascendant"):
+                divisional = _tag(
+                    compute_domain_facts(div_chart, spec),
+                    chart=domain_division,
+                    spec=spec,
+                )
+            else:
+                divisional = {
+                    "error": f"{domain_division.lower()} missing",
+                    "chart": domain_division,
+                }
+        except Exception as exc:
+            divisional = {
+                "error": f"{domain_division.lower()} unavailable: {str(exc)[:120]}",
+                "chart": domain_division,
+            }
+
     d1_map = {str(p.get("name") or ""): p for p in (d1.get("planets") or []) if p.get("name")}
     d9_map = {
         str(p.get("name") or ""): p
@@ -324,9 +349,15 @@ def compute_domain_engine_execution(
         "domain": spec.key,
         "d1": d1,
         "d9": d9,
+        "divisional_chart_tag": domain_division,
+        "divisional_chart": divisional,
+        "charts_used": ["D1", "D9"] + (
+            [domain_division] if domain_division != "D9" else []
+        ),
         "lagnesh": {
             "d1": d1.get("lagnesh") or {},
             "d9": d9.get("lagnesh") or {},
+            domain_division.lower(): divisional.get("lagnesh") or {},
         },
         "vargottama_planets": [r["planet"] for r in vargottama_details if r.get("vargottama")],
         "vargottama_details": vargottama_details,

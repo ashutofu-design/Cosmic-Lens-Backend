@@ -71,6 +71,19 @@ def test_career_timing():
     assert dom == "career"
 
 
+def test_overlapping_timing_topics_use_correct_engine():
+    cases = {
+        "Teerthyatra kab hoga?": "spiritual",
+        "Bade log help kab karenge?": "network",
+        "Lottery kab lagegi?": "universal",
+        "Pet dog kab adopt karun?": "universal",
+    }
+    for question, expected in cases.items():
+        domain, _, is_timing = resolve_timing_domain(question)
+        assert is_timing, question
+        assert domain == expected, question
+
+
 def test_static_not_timing():
     assert not detect_timing_intent("Kaunsi industry best rahegi?")
     assert not detect_timing_intent("Biwi kaisi hogi?")

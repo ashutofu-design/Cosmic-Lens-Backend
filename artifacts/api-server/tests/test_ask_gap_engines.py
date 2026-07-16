@@ -55,14 +55,18 @@ class TestAskGapEngines(unittest.TestCase):
     def test_timing_excluded(self):
         self.assertIsNone(detect_gap_static_key("bhai kab supportive hoga"))
 
-    def test_engine_returns_evidence(self):
+    def test_engine_returns_unified_execution_pack(self):
         out = run_gap_static_engine(_SAMPLE_KUNDLI, "Mera bhai supportive hai kya")
         self.assertIsNotNone(out)
         result, slice_id, topic, key = out
         self.assertEqual(key, "siblings")
         self.assertEqual(slice_id, "siblings_engine_v1")
-        self.assertGreaterEqual(len(result.evidence), 4)
-        self.assertIn("VERDICT:", result.to_narrator_payload())
+        checks = result.checks or {}
+        self.assertTrue(checks.get("unified_execution"))
+        pack = checks.get("siblings_engine_execution") or {}
+        self.assertIn("d1", pack)
+        self.assertIn("d9", pack)
+        self.assertTrue(pack.get("dimensions"))
 
     def test_spiritual_awakening_routes_and_narrator_lock(self):
         q = "Kya mera kundli me spiritual awakening hai"

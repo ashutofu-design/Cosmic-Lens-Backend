@@ -165,7 +165,11 @@ def _dasha_start_end(node: dict) -> Tuple[Optional[datetime], Optional[datetime]
 
 
 def _dasha_children(node: dict) -> List[dict]:
-    for k in ("subDashas", "antardashas", "ad", "sub_dashas", "pratyantar", "pd", "children"):
+    for k in (
+        "subDashas", "antardashas", "ad", "sub_dashas",
+        "pratyantar", "pratyantar_dashas", "pratyantardashas",
+        "pd", "children",
+    ):
         v = node.get(k)
         if isinstance(v, list):
             return v
@@ -254,13 +258,25 @@ def _step2_d9(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
     if not candidates or compute_d9 is None:
         return out
     try:
-        d9 = compute_d9(kundli)
-        d9p = (d9 or {}).get("planets") if isinstance(d9, dict) else None
-        if not d9p:
+        planets = kundli.get("planets") or []
+        asc_lon = next(
+            (
+                kundli.get(key)
+                for key in (
+                    "ascendantDeg", "ascendantLongitude",
+                    "ascendant_longitude", "lagnaLongitude",
+                )
+                if isinstance(kundli.get(key), (int, float))
+            ),
+            None,
+        )
+        d9 = compute_d9(planets, lagna_lon=asc_lon)
+        if not isinstance(d9, dict) or not d9:
             return out
         for pname in candidates:
-            si = _planet_sign_idx(d9p, pname)
-            if si is None:
+            info = d9.get(pname)
+            si = info.get("sign_idx") if isinstance(info, dict) else None
+            if not isinstance(si, int):
                 continue
             if pname in _EXALT and si == _EXALT[pname]:
                 out[pname] = 22.0
@@ -631,9 +647,10 @@ def pick_primary_timing_window(
     *,
     min_ad_pd: float = MIN_AD_PD_ACTIVATION,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], str, bool]:
-    """Dasha-first: current AD/PD active (score >= min) → else chronology forward scan.
+    """Dasha-first: current AD/PD active → else strongest suitable AD/PD window.
 
-    Mandatory: periods with activation < min_ad_pd are never cited — scan next PD/AD.
+    Mandatory: periods with activation < min_ad_pd are never cited. Selection
+    priority is AD+PD > AD > PD; MD remains background context.
     """
     if not windows:
         return None, None, "none", False
@@ -647,17 +664,34 @@ def pick_primary_timing_window(
     def _qualified(w: Dict[str, Any]) -> bool:
         return _activation_score(w, promote, score_map) >= min_ad_pd
 
+    def _ad_pd_rank(w: Dict[str, Any]) -> int:
+        ad = _norm_lord(w.get("ad"))
+        pd = _norm_lord(w.get("pd"))
+        ad_hit = ad in promote
+        pd_hit = pd in promote
+        if ad_hit and pd_hit:
+            return 0
+        if ad_hit:
+            return 1
+        if pd_hit:
+            return 2
+        return 3
+
+    def _suitable_key(w: Dict[str, Any]) -> tuple:
+        return (
+            _ad_pd_rank(w),
+            -_activation_score(w, promote, score_map),
+            w.get("start") or datetime.max,
+        )
+
     running = _finest_windows_containing_now(windows, now)
     if running:
-        best_run = max(
-            running,
-            key=lambda w: (_activation_score(w, promote, score_map), w.get("score", 0)),
-        )
+        best_run = min(running, key=_suitable_key)
         act = _activation_score(best_run, promote, score_map)
         if act >= min_ad_pd:
             future = sorted(
                 [w for w in windows if w.get("start") and w["start"] > now],
-                key=lambda x: x["start"],
+                key=_suitable_key,
             )
             nxt = next((w for w in future if _qualified(w)), None)
             row = _enrich_window_row(best_run)
@@ -667,7 +701,7 @@ def pick_primary_timing_window(
 
     future = sorted(
         [w for w in windows if w.get("end") and w["end"] > now],
-        key=lambda x: x["start"],
+        key=_suitable_key,
     )
     for w in future:
         if not _qualified(w):
@@ -677,7 +711,7 @@ def pick_primary_timing_window(
         row["is_active_now"] = w["start"] <= now <= w["end"]
         row["activation_score"] = round(act, 2)
         nxt = next(
-            (x for x in future if x["start"] > w["start"] and _qualified(x)),
+            (x for x in future if x is not w and _qualified(x)),
             None,
         )
         return row, (_enrich_window_row(nxt) if nxt else None), "next_dasha_scan", False

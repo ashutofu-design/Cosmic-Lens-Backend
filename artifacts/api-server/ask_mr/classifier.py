@@ -788,6 +788,17 @@ def classify_mr_archetype(question: str) -> str:
             r"(?ix)\b(true\s*love|sach+a\s*pyaar|sach+a\s*pyar|milne\s+ka\s+yog|yog\s+likha)\b",
             q,
         ):
+            try:
+                from ask_intent_fidelity import is_dyadic_couple_question
+
+                if is_dyadic_couple_question(q) and re.search(
+                    r"(?ix)\b(hum\s+dono|ham\s+dono|we\s+both|between\s+us|"
+                    r"humare\s+beech|hamare\s+beech|hamaare\s+beech)\b",
+                    q,
+                ):
+                    return "general_mr"
+            except Exception:
+                pass
             return "chemistry"
 
 

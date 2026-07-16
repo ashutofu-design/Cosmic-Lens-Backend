@@ -883,7 +883,8 @@ def _dasha_start_end(node: dict) -> Tuple[Optional[datetime], Optional[datetime]
 def _dasha_children(node: dict) -> List[dict]:
     """Get the next-level dasha list under any common key name."""
     for k in ("subDashas", "antardashas", "ad", "sub_dashas",
-              "pratyantar", "pd", "children"):
+              "pratyantar", "pratyantar_dashas", "pratyantardashas",
+              "pd", "children"):
         v = node.get(k)
         if isinstance(v, list):
             return v

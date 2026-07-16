@@ -1,4 +1,4 @@
-"""Tests for LLM scope fallback (astro vs off-topic)."""
+"""Tests for the LLM-first Ask scope classifier."""
 import json
 import sys
 import unittest
@@ -81,7 +81,7 @@ class AskScopeLlmTests(unittest.TestCase):
         self.assertEqual(res["reason"], "general_knowledge")
 
     @patch("ask_scope_llm.classify_ask_scope_llm")
-    def test_scope_gate_llm_fallback_allows_heavy_typo(self, mock_llm):
+    def test_scope_gate_llm_allows_heavy_typo(self, mock_llm):
         mock_llm.return_value = {
             "allowed": True,
             "reason": "ok",
@@ -93,6 +93,46 @@ class AskScopeLlmTests(unittest.TestCase):
         self.assertTrue(v.allowed, v.reason)
         mock_llm.assert_called_once()
         self.assertIsNotNone(v.normalized_question)
+
+    @patch("ask_scope_llm.classify_ask_scope_llm")
+    def test_scope_gate_llm_understands_dharmik_question(self, mock_llm):
+        mock_llm.return_value = {
+            "allowed": True,
+            "reason": "ok",
+            "cleaned_question": "Kya main dharmik hun?",
+            "confidence": 0.97,
+            "source": "llm",
+        }
+        v = assess_ask_scope("kya me dharmik hun")
+        self.assertTrue(v.allowed, v.reason)
+        self.assertEqual(v.normalized_question, "Kya main dharmik hun")
+        mock_llm.assert_called_once()
+
+    @patch("ask_scope_llm.classify_ask_scope_llm")
+    def test_known_domain_does_not_bypass_llm_scope_decision(self, mock_llm):
+        mock_llm.return_value = {
+            "allowed": False,
+            "reason": "general_knowledge",
+            "cleaned_question": "astrology kya hai",
+            "confidence": 0.96,
+            "source": "llm",
+        }
+        v = assess_ask_scope("astrology kya hai")
+        self.assertFalse(v.allowed)
+        self.assertEqual(v.reason, "general_knowledge")
+        mock_llm.assert_called_once()
+
+    @patch("ask_scope_llm.classify_ask_scope_llm")
+    def test_llm_outage_fails_open_without_regex_verdict(self, mock_llm):
+        mock_llm.return_value = {
+            "allowed": False,
+            "reason": "not_personal",
+            "cleaned_question": "",
+            "confidence": 0.0,
+            "source": "llm_unavailable",
+        }
+        v = assess_ask_scope("kya me dharmik hun")
+        self.assertTrue(v.allowed, v.reason)
 
 
 if __name__ == "__main__":

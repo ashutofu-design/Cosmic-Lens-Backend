@@ -189,9 +189,9 @@ def resolve_ask_route(
             return MasterRoute(
                 path="engine_static",
                 is_timing=False,
-                domain=dna_dom if dna_dom != "general" else "love",
+                domain=dna_dom or "general",
                 archetype=dna_arch,
-                mr_static=True,
+                mr_static=dna_dom in ("love", "marriage"),
                 reason="dna_static_authority",
                 guards=guards,
             )

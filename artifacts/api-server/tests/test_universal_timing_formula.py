@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import sys
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -50,6 +51,81 @@ def _minimal_kundli() -> dict:
 
 
 class TestUniversalTimingFormula(unittest.TestCase):
+    def test_shared_dasha_parser_reads_pratyantar_aliases(self):
+        from event_timing._shared.generic_timing_engine import _dasha_children
+
+        rows = [{"lord": "Venus"}]
+        self.assertEqual(_dasha_children({"pratyantar_dashas": rows}), rows)
+        self.assertEqual(_dasha_children({"pratyantardashas": rows}), rows)
+
+    @patch("event_timing._shared.universal_timing_formula._step5_windows")
+    def test_unqualified_ad_pd_windows_do_not_reach_final_selection(self, mock_windows):
+        from event_timing._shared.universal_timing_domains import build_universal_formula_config
+        from event_timing._shared.universal_timing_formula import _step3_dasha_activation
+
+        now = datetime.utcnow()
+        mock_windows.return_value = [{
+            "md": "Saturn", "ad": "Moon", "pd": "Mars",
+            "start": now + timedelta(days=10), "end": now + timedelta(days=30),
+            "score": 99.0,
+        }]
+        qualified, step3, primary = _step3_dasha_activation(
+            _minimal_kundli(),
+            [{"name": "Jupiter", "score": 10.0, "links": ["5L"]}],
+            build_universal_formula_config("children", "conception"),
+            now,
+        )
+        self.assertEqual(qualified, [])
+        self.assertIsNone(primary)
+        self.assertEqual(step3.get("status"), "NONE_FOUND")
+
+    def test_window_picker_prioritizes_ad_pd_confluence_over_earliest(self):
+        from event_timing._shared.generic_timing_engine import pick_primary_timing_window
+
+        now = datetime.utcnow()
+        windows = [
+            {
+                "md": "Saturn", "ad": "Moon", "pd": "Jupiter",
+                "start": now + timedelta(days=10), "end": now + timedelta(days=40),
+            },
+            {
+                "md": "Saturn", "ad": "Jupiter", "pd": "Venus",
+                "start": now + timedelta(days=80), "end": now + timedelta(days=120),
+            },
+        ]
+        ranked = [
+            {"name": "Jupiter", "score": 80.0},
+            {"name": "Venus", "score": 75.0},
+            {"name": "Moon", "score": 20.0},
+        ]
+        primary, _, _, _ = pick_primary_timing_window(
+            windows,
+            ranked,
+            {"Jupiter", "Venus"},
+            now,
+            min_ad_pd=0,
+        )
+        self.assertEqual(primary.get("ad"), "Jupiter")
+        self.assertEqual(primary.get("pd"), "Venus")
+
+    def test_step1_uses_d1_d9_and_domain_divisional_chart(self):
+        from event_timing._shared.universal_timing_formula import compute_universal_timing
+
+        chart = _minimal_kundli()
+        for index, planet in enumerate(chart["planets"]):
+            planet["longitude"] = float(index * 37 % 360)
+        out = compute_universal_timing(
+            chart,
+            "career",
+            "promotion",
+            {"year": datetime.utcnow().year - 28, "month": 5, "day": 10},
+            "Promotion kab hogi?",
+        )
+        step1 = (out.get("step_audit") or {}).get("step1") or {}
+        self.assertEqual(step1.get("charts_used"), ["D1", "D9", "D10"])
+        self.assertTrue(step1.get("d9_house_lord"))
+        self.assertTrue(step1.get("div_house_lord"))
+
     def test_step0_delays_baby_answer_for_16_year_old(self):
         from event_timing._shared.universal_timing_formula import compute_universal_timing
 

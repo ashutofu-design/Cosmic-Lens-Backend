@@ -41,6 +41,8 @@ def attach_domain_engine_execution(
         checks[key] = pack
         checks[f"d1_{domain}_facts"] = pack.get("d1") or {}
         checks[f"d9_{domain}_facts"] = pack.get("d9") or {}
+        checks[f"{domain}_divisional_facts"] = pack.get("divisional_chart") or {}
+        checks["charts_used"] = pack.get("charts_used") or ["D1", "D9"]
         checks["engine_version"] = spec.schema_version
         checks["unified_execution"] = True
         checks["routing_label"] = result.archetype
@@ -121,6 +123,7 @@ def domain_engine_slice_meta(result: EngineResult, *, domain: str) -> dict[str, 
         "topic": domain,
         "archetype": result.archetype,
         "verdict": result.verdict,
+        "confidence": result.confidence,
         "summary": list(result.summary or []),
         "evidence": list(result.evidence or []),
         "evidence_positive": pos,
@@ -164,6 +167,13 @@ def to_domain_llm_payload(
         "schema_version": execution.get("schema_version") or spec.schema_version,
         "d1": execution.get("d1") or checks.get(f"d1_{domain}_facts") or {},
         "d9": execution.get("d9") or checks.get(f"d9_{domain}_facts") or {},
+        "divisional_chart_tag": execution.get("divisional_chart_tag"),
+        "divisional_chart": (
+            execution.get("divisional_chart")
+            or checks.get(f"{domain}_divisional_facts")
+            or {}
+        ),
+        "charts_used": execution.get("charts_used") or checks.get("charts_used") or ["D1", "D9"],
         "lagnesh": execution.get("lagnesh") or {},
         "vargottama_planets": execution.get("vargottama_planets") or [],
         "dimensions": execution.get("dimensions") or {},
@@ -228,6 +238,12 @@ def build_domain_selected_blocks(
         or (spec.default_archetype if spec else domain)
     ).strip().lower()
     d1 = pack.get("d1") if isinstance(pack.get("d1"), dict) else {}
+    div = (
+        pack.get("divisional_chart")
+        if isinstance(pack.get("divisional_chart"), dict)
+        else {}
+    )
+    div_tag = str(pack.get("divisional_chart_tag") or "").strip().upper()
     lords = d1.get("house_lords") or {}
     karakas = d1.get("karakas") or {}
     dims = pack.get("dimensions") or d1.get("dimensions") or {}
@@ -249,6 +265,28 @@ def build_domain_selected_blocks(
         pr = 90 if verdict == "RED" else (70 if verdict == "YELLOW" else 55)
         add(f"dim.{dim_key}", f"Dimension · {dim_key}",
             f"{verdict} — {row.get('reason') or ''}".strip(" —"), priority=pr, role=role)
+
+    if div_tag and div_tag != "D9" and not div.get("error"):
+        div_lords = div.get("house_lords") or {}
+        primary_house = (spec.focus_houses[0] if spec else 1)
+        div_lord = div_lords.get(f"h{primary_house}") if isinstance(div_lords, dict) else None
+        if isinstance(div_lord, dict) and div_lord.get("lord"):
+            add(
+                f"{div_tag.lower()}.lord.h{primary_house}",
+                f"{div_tag} confirmation · H{primary_house} lord",
+                (
+                    f"{div_lord.get('lord')} → H{div_lord.get('lord_house')} · "
+                    f"{div_lord.get('lord_sign')} · {div_lord.get('lord_dignity')}"
+                ),
+                priority=85,
+                role=(
+                    "weak"
+                    if div_lord.get("lord_in_dusthana")
+                    else "support"
+                    if div_lord.get("lord_dignity") in ("exalted", "own")
+                    else "neutral"
+                ),
+            )
 
     houses = (spec.focus_houses if spec else (1, 10))[:4]
     for h in houses:
@@ -389,27 +427,43 @@ def run_domain_llm_with_dna_judge(
         audit["dna_judge"] = {"enabled": False, "skipped": "disabled"}
         return text, audit
 
-    prompt = f"""You are a strict QA judge for Vedic {topic.upper()} answers.
+    answer_mode = str(
+        meta.get("answer_mode")
+        or (meta.get("question_dna_item") or {}).get("answer_mode")
+        or ""
+    ).strip().lower()
+    requires_chart_proof = answer_mode not in ("llm_knowledge", "knowledge")
+    proof_rule = (
+        "FAIL if a specific/personal answer has NO chart proof "
+        "(planet/house/dignity; issue: missing_question_proof)."
+        if requires_chart_proof
+        else "This is a general knowledge answer; chart proof is NOT required."
+    )
+
+    def _judge_answer(candidate: str) -> dict[str, Any]:
+        prompt = f"""You are a strict QA judge for Vedic {topic.upper()} answers.
 Check whether CANDIDATE ANSWER matches Question DNA. Return ONLY JSON:
 {{"passed": true/false, "issues": ["..."], "fix_hint": "..."}}
 
-FAIL if answer misses user_wants/intent, or has NO chart proof (planet/house/dignity)
-for a specific ask (issue: missing_question_proof).
+FAIL if answer misses user_wants/intent or answers a different question.
+{proof_rule}
 
 NORMALIZED: {contract.get('normalized_question') or question}
 INTENT: {contract.get('intent') or '—'}
 USER WANTS: {contract.get('user_wants') or '—'}
 TYPE: {contract.get('question_type') or '—'}
 ANSWER:
-{(text or '')[:1800]}
+{(candidate or '')[:1800]}
 """
-    try:
         jresp = client.chat.completions.create(
             model=(os.environ.get("ASK_UNIFIED_DNA_JUDGE_MODEL") or "gpt-4.1-mini").strip(),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=220,
         )
-        parsed = _parse_judge_json((jresp.choices[0].message.content or "").strip())
+        return _parse_judge_json((jresp.choices[0].message.content or "").strip())
+
+    try:
+        parsed = _judge_answer(text)
         ok = bool(parsed.get("passed", True))
         issues = [str(x) for x in (parsed.get("issues") or []) if str(x).strip()]
         hint = str(parsed.get("fix_hint") or "").strip() or None
@@ -422,16 +476,18 @@ ANSWER:
         if hint:
             audit["fix_hint"] = hint
 
-        needs_proof = (not ok) and any(
-            "missing_question_proof" in x.lower() or "no chart proof" in x.lower()
-            for x in issues
-        )
-        if needs_proof:
+        if not ok:
             retry = list(messages) + [
                 {"role": "assistant", "content": text},
                 {"role": "user", "content": (
-                    "Rewrite: add 1 natural chart proof (planet + ghar/dignity) for the asked "
-                    f"question. Fix: {hint or 'cite #1 QUESTION_PRIORITY_FACTS'}"
+                    "Rewrite the answer so it matches the exact Question DNA and fixes every "
+                    f"judge issue: {', '.join(issues) or 'question mismatch'}. "
+                    f"Fix hint: {hint or 'answer only what the user asked'}. "
+                    + (
+                        "Include 1 natural chart proof (planet + house/dignity)."
+                        if requires_chart_proof
+                        else "Do not invent personal chart facts."
+                    )
                 )},
             ]
             try:
@@ -442,13 +498,27 @@ ANSWER:
                 if t2:
                     text = t2
                     audit["attempts"] = 2
-                    audit["proof_retry"] = True
+                    audit["dna_retry"] = True
                     if domain:
                         audit["selected_blocks"] = build_domain_selected_blocks(
                             question, text, meta=meta, domain=domain,
                         )
+                    parsed2 = _judge_answer(text)
+                    ok2 = bool(parsed2.get("passed", False))
+                    issues2 = [
+                        str(x) for x in (parsed2.get("issues") or []) if str(x).strip()
+                    ]
+                    audit["passed"] = ok2
+                    audit["issues"] = issues2
+                    audit["dna_judge_retry"] = {
+                        "judge": f"{domain}_dna_v1",
+                        "enabled": True,
+                        "passed": ok2,
+                        "issues": issues2,
+                        "parsed": parsed2,
+                    }
             except Exception as exc:
-                audit["proof_retry_error"] = str(exc)[:120]
+                audit["dna_retry_error"] = str(exc)[:120]
     except Exception as exc:
         audit["dna_judge"] = {
             "enabled": True, "passed": True, "error": str(exc)[:160], "soft_pass_on_error": True,

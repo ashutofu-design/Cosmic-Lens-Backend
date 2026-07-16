@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -28,7 +29,15 @@ class TestRoutingPolicy(unittest.TestCase):
 
     def test_biryani_off_topic(self):
         q = "biryani recipe batao"
-        self.assertFalse(assess_ask_scope(q).allowed)
+        llm_verdict = {
+            "allowed": False,
+            "reason": "off_topic",
+            "cleaned_question": q,
+            "confidence": 0.98,
+            "source": "llm",
+        }
+        with patch("ask_scope_llm.classify_ask_scope_llm", return_value=llm_verdict):
+            self.assertFalse(assess_ask_scope(q).allowed)
 
     def test_concept_no_engine_llm_ok(self):
         q = "manglik kya hota hai matlab"

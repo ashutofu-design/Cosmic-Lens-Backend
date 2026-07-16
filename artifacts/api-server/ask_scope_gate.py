@@ -1,7 +1,7 @@
-"""Ask scope gate — astrology + personal-life questions only.
+"""LLM-first Ask scope gate for personal cosmic questions.
 
-Blocks: news, GK, presidents, coding, recipes, and generic questions like
-'who invented astrology' that are not about the user's own chart/life.
+The question's meaning is classified by the scope LLM. Regex is used only for
+the deterministic greeting shortcut, never to decide question scope.
 """
 
 from __future__ import annotations
@@ -214,12 +214,7 @@ class AskScopeVerdict:
 
 
 def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
-    from ask_question_normalize import (
-        has_question_intent,
-        looks_like_implicit_ask,
-        looks_like_personal_life_question,
-        prepare_ask_question,
-    )
+    from ask_question_normalize import prepare_ask_question
 
     q = prepare_ask_question((question or "").strip())
     if not q:
@@ -231,181 +226,39 @@ def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
     if not _gate_enabled():
         return AskScopeVerdict(allowed=True, reason="ok")
 
-    # Jyotish / vastu / numerology / tarot — in-app (not random off-topic).
-    try:
-        from ask_routing_policy import is_cosmic_domain_question
-        from ask_question_normalize import has_question_intent
-
-        if is_cosmic_domain_question(q) and has_question_intent(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-    except Exception:
-        pass
-
-    try:
-        from ask_career.classifier import is_career_static_question
-
-        if is_career_static_question(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-    except Exception:
-        pass
-
-    try:
-        from ask_vehicle.vehicle_registry import is_vehicle_static_question
-
-        if is_vehicle_static_question(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-    except Exception:
-        pass
-
-    try:
-        from ask_vehicle.timing_registry import is_vehicle_timing_question
-
-        if is_vehicle_timing_question(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-    except Exception:
-        pass
-
-    if _GK_BLOCK_RX.search(q):
-        return AskScopeVerdict(allowed=False, reason="general_knowledge")
-
-    # Relationship-compatibility quality questions that may omit "mera/meri"
-    # anchors (e.g. "lifestyle compatibility achhi hai?").
-    if (
-        re.search(r"(?ix)\b(lifestyle|sexual|financial)\s+compatibility\b", q)
-        and re.search(
-            r"(?ix)\b(achhi|achha|strong|weak|average|healthy|balanced|successful|lifetime)\b",
-            q,
-        )
-    ):
-        return AskScopeVerdict(allowed=True, reason="ok")
-
-    # General relationship-compatibility quality (even if no strict "mera/meri"
-    # anchor is present). This prevents "not_personal" blocks for questions
-    # like "hamare values same hain?" or "life goals match karte hain?".
-    if (
-        re.search(
-            r"(?ix)\b("
-            r"compatible|compatibility|match|values?|life\s*goals?|goals?|"
-            r"expectations?|bonding|mutual\s+understanding|understanding|"
-            r"trust|respect|communication|teamwork|conflict|compromise|"
-            r"possessiveness|jealousy|ego\s*clashes|space|healthy|balanced|"
-            r"successful|lifetime\s+partners?"
-            r")\b",
-            q,
-        )
-        and re.search(
-            r"(?ix)\b("
-            r"hum|hamare|hamari|hamara|dono|ek\s+dusre|ek\s+dusri|"
-            r"partner|spouse|relationship|rishta|marriage|shaadi|shadi|vivah"
-            r")\b",
-            q,
-        )
-    ):
-        return AskScopeVerdict(allowed=True, reason="ok")
-
-    # "How did you decide this? / kya check kiya?" — transparency follow-up to
-    # the previous reading. In scope; the answer layer re-explains the prior
-    # question's evidence using conversation history.
-    if _TRANSPARENCY_FOLLOWUP_RX.search(q):
-        return AskScopeVerdict(allowed=True, reason="ok")
-
-    try:
-        from ask_question_normalize import _QUESTION_SHAPE_RX
-        from ask_timing_followup import (
-            history_has_timing_thread,
-            is_timing_refine_followup,
-        )
-
-        if is_timing_refine_followup(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-        if history and history_has_timing_thread(history):
-            if _QUESTION_SHAPE_RX.search(q) and len(q.split()) <= 16:
-                return AskScopeVerdict(allowed=True, reason="ok")
-    except Exception:
-        pass
-
-    if _MARRIAGE_ALT_TIMING_RX.search(q):
-        return AskScopeVerdict(allowed=True, reason="ok")
-
-    # Primary path: read topic + intent — mera/meri NOT required in Ask context.
-    if looks_like_implicit_ask(q):
-        return AskScopeVerdict(allowed=True, reason="ok")
-
-    if _PERSONAL_HOUSE_PLACEMENT_RX.search(q) or _CHART_PLACEMENT_RX.search(q):
-        return AskScopeVerdict(allowed=True, reason="ok")
-
-    if _ASTRO_FOLLOWUP_RX.search(q):
-        return AskScopeVerdict(allowed=True, reason="ok")
-
-    try:
-        from domain_splitter import extract_domains, has_astro_anchor, is_jyotish_anchored_strict
-
-        if extract_domains(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-        if has_astro_anchor(q) and has_question_intent(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-        if is_jyotish_anchored_strict(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-    except Exception:
-        pass
-
-    try:
-        from openai_helper import _is_brand_unsafe
-
-        if _is_brand_unsafe(q):
-            return AskScopeVerdict(allowed=False, reason="off_topic")
-    except Exception:
-        pass
-
-    try:
-        from ask_cosmo import is_personal_chart_question
-
-        if is_personal_chart_question(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-    except Exception:
-        pass
-
-    if _PERSONAL_RX.search(q):
-        if looks_like_personal_life_question(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-        if _TIMING_LIFE_RX.search(q):
-            return AskScopeVerdict(allowed=True, reason="ok")
-
-    if looks_like_personal_life_question(q):
-        return AskScopeVerdict(allowed=True, reason="ok")
-
-    # LLM fallback — heavy typos / Hinglish the regex layer missed.
+    # Scope is an intent/meaning decision. Do not pre-empt the LLM with keyword
+    # allowlists or blocklists; those caused valid Hinglish questions such as
+    # "kya me dharmik hun" to be rejected before their meaning was understood.
     try:
         from ask_scope_llm import classify_ask_scope_llm, scope_llm_enabled
 
-        if scope_llm_enabled():
-            _llm = classify_ask_scope_llm(q)
-            if _llm.get("source") in ("llm", "llm_low_conf"):
-                _conf = float(_llm.get("confidence") or 0.0)
-                if _conf >= 0.62:
-                    _cleaned = (_llm.get("cleaned_question") or "").strip()
-                    _norm = None
-                    if _cleaned:
-                        try:
-                            from ask_question_normalize import prepare_ask_question as _prep
+        if not scope_llm_enabled():
+            return AskScopeVerdict(allowed=True, reason="ok")
 
-                            _norm = _prep(_cleaned)
-                        except Exception:
-                            _norm = _cleaned
-                    if _llm.get("allowed"):
-                        return AskScopeVerdict(
-                            allowed=True, reason="ok", normalized_question=_norm or None
-                        )
-                    _reason = _llm.get("reason") or "not_personal"
-                    if _reason in ("off_topic", "general_knowledge", "not_personal"):
-                        return AskScopeVerdict(
-                            allowed=False, reason=_reason  # type: ignore[arg-type]
-                        )
-                    return AskScopeVerdict(allowed=False, reason="not_personal")
+        _llm = classify_ask_scope_llm(q, history=history)
+        if _llm.get("source") in ("llm", "llm_low_conf"):
+            _conf = float(_llm.get("confidence") or 0.0)
+            _cleaned = (_llm.get("cleaned_question") or "").strip()
+            _norm = prepare_ask_question(_cleaned) if _cleaned else None
+
+            if _llm.get("allowed"):
+                return AskScopeVerdict(
+                    allowed=True, reason="ok", normalized_question=_norm or None
+                )
+
+            # Only a confident LLM rejection blocks access. An uncertain model
+            # verdict fails open so downstream question-understanding can retry.
+            if _conf >= 0.62:
+                _reason = _llm.get("reason") or "not_personal"
+                if _reason in ("off_topic", "general_knowledge", "not_personal"):
+                    return AskScopeVerdict(
+                        allowed=False, reason=_reason  # type: ignore[arg-type]
+                    )
     except Exception:
         pass
 
-    return AskScopeVerdict(allowed=False, reason="not_personal")
+    # LLM outage/configuration must not falsely reject a valid personal ask.
+    return AskScopeVerdict(allowed=True, reason="ok")
 
 
 def scope_refusal_payload(

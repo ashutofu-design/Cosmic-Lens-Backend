@@ -213,10 +213,11 @@ class ValidationTests(unittest.TestCase):
 
 
 class ModuleRouterTests(unittest.TestCase):
-    def test_marriage_timing_gets_dasha_transit_kp(self):
+    def test_marriage_timing_gets_dasha_transit_bcp_without_kp(self):
         mods = derive_required_modules("marriage", "general_mr", timing=True)
-        for m in ("D1", "D9", "DASHA", "TRANSIT", "KP"):
+        for m in ("D1", "D9", "DASHA", "TRANSIT", "BCP"):
             self.assertIn(m, mods)
+        self.assertNotIn("KP", mods)
 
     def test_static_loyalty_is_d1_d9_only(self):
         mods = derive_required_modules("love", "trust_loyalty", timing=False, tense="future")
@@ -233,12 +234,33 @@ class ModuleRouterTests(unittest.TestCase):
 
     def test_career_timing_gets_ashtakavarga_and_d10(self):
         mods = derive_required_modules("career", "govt_job", timing=True)
+        self.assertIn("D9", mods)
         self.assertIn("D10", mods)
         self.assertIn("ASHTAKAVARGA", mods)
+        self.assertNotIn("BCP", mods)
 
     def test_children_gets_d7(self):
         mods = derive_required_modules("children", "child_promise")
+        self.assertIn("D9", mods)
         self.assertIn("D7", mods)
+
+    def test_children_timing_is_only_non_marriage_bcp_route(self):
+        mods = derive_required_modules("children", "child_timing", timing=True)
+        self.assertIn("BCP", mods)
+        self.assertNotIn("KP", mods)
+
+    def test_gap_domains_have_dna_and_question_specific_modules(self):
+        from ask_question_dna import DNA_DOMAINS
+
+        for domain in ("luck", "network", "siblings", "parents", "fame", "wellness"):
+            self.assertIn(domain, DNA_DOMAINS)
+        self.assertIn("D11", derive_required_modules("network", "general_network"))
+        self.assertIn("D10", derive_required_modules("fame", "general_fame"))
+        self.assertIn("D30", derive_required_modules("wellness", "general_wellness"))
+        self.assertNotIn(
+            "BCP",
+            derive_required_modules("fame", "general_fame", timing=True),
+        )
 
 
 class DnaRoutingTests(unittest.TestCase):

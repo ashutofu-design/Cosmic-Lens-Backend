@@ -65,7 +65,9 @@ from relationship_dna_taxonomy import (  # noqa: E402
 DNA_DOMAINS: tuple[str, ...] = (
     "marriage", "love", "career", "finance", "health", "education",
     "children", "property", "travel", "litigation", "vehicle",
-    "spiritual", "general",
+    "spiritual", "luck", "network", "siblings", "parents", "enemies",
+    "fame", "personality", "dreams", "anger", "remedy", "charity",
+    "settlement", "vastu", "pets", "wellness", "general",
 )
 
 DNA_BUCKETS_BY_DOMAIN: dict[str, frozenset[str]] = {
@@ -81,6 +83,21 @@ DNA_BUCKETS_BY_DOMAIN: dict[str, frozenset[str]] = {
     "litigation": frozenset(LITIGATION_ARCHETYPES),
     "vehicle":    frozenset({"vehicle_purchase", "vehicle_timing", "general_vehicle"}),
     "spiritual":  frozenset({"spiritual_growth", "moksha_path", "guru_yog", "general_spiritual"}),
+    "luck":       frozenset({"general_luck"}),
+    "network":    frozenset({"general_network"}),
+    "siblings":   frozenset({"general_siblings"}),
+    "parents":    frozenset({"general_parents"}),
+    "enemies":    frozenset({"general_enemies"}),
+    "fame":       frozenset({"general_fame"}),
+    "personality": frozenset({"general_personality"}),
+    "dreams":     frozenset({"general_dreams"}),
+    "anger":      frozenset({"general_anger"}),
+    "remedy":     frozenset({"general_remedy"}),
+    "charity":    frozenset({"general_charity"}),
+    "settlement": frozenset({"general_settlement"}),
+    "vastu":      frozenset({"general_vastu"}),
+    "pets":       frozenset({"general_pets"}),
+    "wellness":   frozenset({"general_wellness"}),
     "general":    frozenset({"native_overview", "chart_fact", "general"}),
 }
 
@@ -97,6 +114,21 @@ DNA_DEFAULT_BUCKET: dict[str, str] = {
     "litigation": "general_litigation",
     "vehicle": "general_vehicle",
     "spiritual": "general_spiritual",
+    "luck": "general_luck",
+    "network": "general_network",
+    "siblings": "general_siblings",
+    "parents": "general_parents",
+    "enemies": "general_enemies",
+    "fame": "general_fame",
+    "personality": "general_personality",
+    "dreams": "general_dreams",
+    "anger": "general_anger",
+    "remedy": "general_remedy",
+    "charity": "general_charity",
+    "settlement": "general_settlement",
+    "vastu": "general_vastu",
+    "pets": "general_pets",
+    "wellness": "general_wellness",
     "general": "general",
 }
 
@@ -166,7 +198,8 @@ _OVERVIEW_PLAN_RX = re.compile(
 )
 
 DNA_MODULES: tuple[str, ...] = (
-    "D1", "D9", "D10", "D7", "DASHA", "TRANSIT", "KP", "ASHTAKAVARGA",
+    "D1", "D2", "D4", "D6", "D7", "D9", "D10", "D11", "D20", "D24", "D30",
+    "DASHA", "TRANSIT", "ASHTAKAVARGA", "BCP",
 )
 
 
@@ -364,17 +397,32 @@ def apply_question_dna_to_routing(
 _DOMAIN_BASE_MODULES: dict[str, tuple[str, ...]] = {
     "marriage":   ("D1", "D9"),
     "love":       ("D1", "D9"),
-    "career":     ("D1", "D10"),
-    "finance":    ("D1",),
-    "health":     ("D1",),
-    "education":  ("D1",),
-    "children":   ("D1", "D7"),
-    "property":   ("D1",),
-    "travel":     ("D1",),
-    "litigation": ("D1",),
-    "vehicle":    ("D1",),
-    "spiritual":  ("D1", "D9"),
-    "general":    ("D1",),
+    "career":     ("D1", "D9", "D10"),
+    "finance":    ("D1", "D9", "D2"),
+    "health":     ("D1", "D9", "D30"),
+    "education":  ("D1", "D9", "D24"),
+    "children":   ("D1", "D9", "D7"),
+    "property":   ("D1", "D9", "D4"),
+    "travel":     ("D1", "D9"),
+    "litigation": ("D1", "D9", "D6"),
+    "vehicle":    ("D1", "D9", "D4"),
+    "spiritual":  ("D1", "D9", "D20"),
+    "luck":       ("D1", "D9"),
+    "network":    ("D1", "D9", "D11"),
+    "siblings":   ("D1", "D9"),
+    "parents":    ("D1", "D9"),
+    "enemies":    ("D1", "D9"),
+    "fame":       ("D1", "D9", "D10"),
+    "personality": ("D1", "D9"),
+    "dreams":     ("D1", "D9"),
+    "anger":      ("D1", "D9"),
+    "remedy":     ("D1", "D9"),
+    "charity":    ("D1", "D9"),
+    "settlement": ("D1", "D9", "D4"),
+    "vastu":      ("D1", "D9", "D4"),
+    "pets":       ("D1", "D9"),
+    "wellness":   ("D1", "D9", "D30"),
+    "general":    ("D1", "D9"),
 }
 
 
@@ -388,8 +436,11 @@ def derive_required_modules(
     """(domain, bucket, timing, tense) → chart modules. Policy lives HERE, not in the LLM.
 
     Rules:
-      • D1 always; D9 for relationship/spiritual; D10 career; D7 children.
-      • timing questions → DASHA + TRANSIT + KP (event confirmation).
+      • D1 always; D9 verifies chart strength; the domain varga is also required
+        (D10 career, D7 children, D2 finance, D4 property, etc.).
+      • timing questions → DASHA + TRANSIT. AD/PD are the primary dasha triggers;
+        MD is background context only.
+      • BCP is allowed only for marriage and children/baby questions.
       • present-tense state questions ("abhi chal raha hai?") → DASHA + TRANSIT
         even without a kab/when anchor — current activation needs the current
         MD/AD, a natal-only read is incomplete (e.g. "affair abhi chal raha?").
@@ -397,9 +448,11 @@ def derive_required_modules(
     """
     mods: list[str] = list(_DOMAIN_BASE_MODULES.get(domain, ("D1",)))
     if timing:
-        for m in ("DASHA", "TRANSIT", "KP"):
+        for m in ("DASHA", "TRANSIT"):
             if m not in mods:
                 mods.append(m)
+        if domain in ("marriage", "children"):
+            mods.append("BCP")
         if domain in ("career", "property", "finance", "travel"):
             mods.append("ASHTAKAVARGA")
     elif tense == "present":
@@ -654,6 +707,11 @@ risk: low | medium | high  (emotional/brand sensitivity of answering this)
 KEY RULES:
 - timing=true ONLY for a real WHEN anchor (kab/when/kis saal/month/muhurat/date).
   "Kya hoga" prediction without WHEN → timing=false.
+- For every timing question, the execution plan must check suitable windows with
+  Antardasha (AD) and Pratyantardasha (PD) as primary triggers; Mahadasha (MD)
+  is broad background. BCP is permitted only for marriage and baby/children.
+- Every personal engine answer uses D1 + D9 + the question-domain divisional
+  chart (for example children D7, career D10, finance D2, property D4).
 - "abhi / currently / chal raha hai" state questions → tense=present,
   question_type=current_state, timing=false.
 - Partner/spouse as subject (their nature, loyalty, support) → domain love or
@@ -775,7 +833,8 @@ def build_question_dna_narrator_rules(
 
     if health_validator:
         header = (
-            "=== QUESTION DNA (MUST follow every time — DNA Judge checks alignment) ==="
+            "=== QUESTION DNA (MUST follow every time — DNA Judge checks alignment; "
+            "validator will reject mismatch) ==="
         )
     else:
         header = (
@@ -867,7 +926,10 @@ def _derive_answer_approach(
     else:
         parts.append("Answer from chart evidence for the routed engine/archetype.")
     if timing:
-        parts.append("Lead with timing window (dasha/transit), then brief supporting reason.")
+        parts.append(
+            "Lead with the most suitable AD/PD timing window; use MD only as broad "
+            "background, then briefly confirm through transit and the relevant divisional chart."
+        )
     elif question_type == "decision":
         parts.append("Balanced guidance — avoid absolute yes/no unless chart is very clear.")
     elif question_type == "current_state":

@@ -30,10 +30,26 @@ def _attach_health_engine_execution(
             kundli if isinstance(kundli, dict) else {},
             question=question or "",
         )
+        try:
+            from event_timing._shared.universal_timing_formula import _divisional_chart
+
+            d30 = _divisional_chart(kundli if isinstance(kundli, dict) else {}, "D30")
+            pack["divisional_chart_tag"] = "D30"
+            pack["divisional_chart"] = d30 or {"error": "d30 missing", "chart": "D30"}
+            pack["charts_used"] = ["D1", "D9"] + (["D30"] if d30.get("planets") else [])
+        except Exception as exc:
+            pack["divisional_chart_tag"] = "D30"
+            pack["divisional_chart"] = {
+                "error": f"d30 unavailable: {str(exc)[:120]}",
+                "chart": "D30",
+            }
+            pack["charts_used"] = ["D1", "D9"]
         checks = dict(result.checks or {})
         checks["health_engine_execution"] = pack
         checks["d1_health_facts"] = pack.get("d1") or {}
         checks["d9_health_facts"] = pack.get("d9") or {}
+        checks["health_divisional_facts"] = pack.get("divisional_chart") or {}
+        checks["charts_used"] = pack.get("charts_used") or ["D1", "D9"]
         checks["engine_version"] = "health_engine_execution_v1"
         result.checks = checks
     except Exception as exc:

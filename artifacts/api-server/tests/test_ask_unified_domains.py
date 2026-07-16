@@ -55,6 +55,32 @@ class UnifiedDomainStackTests(unittest.TestCase):
         self.assertTrue((res.checks or {}).get("unified_execution"))
         self.assertIn("career_engine_execution", res.checks or {})
 
+    def test_domain_execution_includes_respective_divisional_chart(self):
+        expected = {
+            "career": "D10",
+            "education": "D24",
+            "children": "D7",
+            "property": "D4",
+            "vehicle": "D4",
+            "litigation": "D6",
+            "network": "D11",
+            "spiritual": "D20",
+        }
+        for domain, division in expected.items():
+            with self.subTest(domain=domain):
+                result = build_unified_engine_result(
+                    domain=domain,
+                    kundli=_KUNDLI,
+                    question=f"mere {domain} ke bare me batao",
+                )
+                pack = (result.checks or {}).get(f"{domain}_engine_execution") or {}
+                self.assertEqual(pack.get("divisional_chart_tag"), division)
+                self.assertEqual(pack.get("charts_used"), ["D1", "D9", division])
+                self.assertEqual(
+                    (pack.get("divisional_chart") or {}).get("chart"),
+                    division,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

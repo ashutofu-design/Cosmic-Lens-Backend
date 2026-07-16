@@ -25,6 +25,7 @@ _LLM = {
 def _sample_kundli() -> dict:
     return {
         "ascendant": "Sagittarius",
+        "ascendantDeg": 250.0,
         "planets": [
             {"name": "Moon", "sign": "Gemini", "house": 7, "longitude": 95.0},
             {"name": "Saturn", "sign": "Virgo", "house": 10, "longitude": 165.0},
@@ -86,6 +87,8 @@ class TestChildrenBabyTimingRouting(unittest.TestCase):
         self.assertTrue(
             raw.get("d7_picture") or raw.get("next_child_window") or raw.get("next_3_windows"),
         )
+        bcp = raw.get("bcp_baby_ages") or {}
+        self.assertEqual(bcp.get("policy"), "BCP secondary; AD/PD primary")
         self.assertIn("D7", block.upper())
 
 

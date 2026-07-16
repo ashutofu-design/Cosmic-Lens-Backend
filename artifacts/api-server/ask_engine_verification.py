@@ -418,12 +418,27 @@ def verify_engine_output(
     neg = list(meta.get("evidence_negative") or [])
     neu = list(meta.get("evidence_neutral") or [])
     ev_count = len(evidence) or len(pos) + len(neg) + len(neu)
+    checks = meta.get("checks") if isinstance(meta.get("checks"), dict) else {}
+    unified_pack_ok = bool(
+        checks.get("unified_execution")
+        and any(
+            isinstance(value, dict) and (value.get("d1") or value.get("d9"))
+            for key, value in checks.items()
+            if str(key).endswith("_engine_execution")
+        )
+    )
+    if unified_pack_ok:
+        return EngineVerificationResult(
+            ok=True,
+            action="keep",
+            reason="unified_execution_pack_ok",
+            failed_checks=[],
+        )
 
     if engine_key in ("gap", "mr", "health", "career", "finance") and ev_count == 0:
         if not meta.get("skip_llm") and not meta.get("template_text"):
             # health_engine_v1 uses D1/D9 execution JSON — not legacy evidence[] lines.
             if engine_key == "health":
-                checks = meta.get("checks") if isinstance(meta.get("checks"), dict) else {}
                 pack = checks.get("health_engine_execution")
                 if isinstance(pack, dict) and (pack.get("d1") or pack.get("d9")):
                     return EngineVerificationResult(

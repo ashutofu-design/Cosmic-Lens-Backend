@@ -85,13 +85,35 @@ class EngineVerificationTests(unittest.TestCase):
         self.assertTrue(ver.ok, ver.to_dict())
         self.assertEqual(ver.reason, "health_execution_pack_ok")
 
+    def test_relationship_empty_legacy_evidence_ok_with_unified_execution(self):
+        meta = {
+            "slice": "mr_engine_v1",
+            "evidence": [],
+            "checks": {
+                "unified_execution": True,
+                "relationship_engine_execution": {
+                    "schema_version": "relationship_engine_execution_v1",
+                    "d1": {"ascendant": "Leo", "axes": {"seventh_lord": {}}},
+                    "d9": {"ascendant": "Aries", "axes": {"seventh_lord": {}}},
+                },
+            },
+        }
+        ver = verify_engine_output(
+            "Mera partner loyal hai kya?",
+            engine_key="mr",
+            archetype="loyalty_trust",
+            slice_meta=meta,
+        )
+        self.assertTrue(ver.ok, ver.to_dict())
+        self.assertEqual(ver.reason, "unified_execution_pack_ok")
+
 
 class EngineVerificationAdminSummaryTests(unittest.TestCase):
     def test_summary_correct_when_verification_ok(self):
         from ask_engine_verification import build_engine_verification_admin_summary
 
         s = build_engine_verification_admin_summary(
-            "test",
+            "Mere partner ka nature kaisa hai?",
             llm_intent={
                 "engine_verification": {"ok": True, "action": "keep", "reason": "selection_ok"},
                 "engine_ran": "mr",

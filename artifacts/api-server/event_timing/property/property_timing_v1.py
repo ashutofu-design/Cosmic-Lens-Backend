@@ -257,6 +257,50 @@ def compute_property_window(
     out = compute_generic_timing_window(
         kundli, _PROPERTY_CFG, intel, kp, birth, question, b,
     )
+    try:
+        from divisional_charts import compute_d4, compute_d9, summarize_d4_for_property
+
+        planets = kundli.get("planets") or []
+        asc_lon = next(
+            (
+                kundli.get(key)
+                for key in (
+                    "ascendantDeg", "ascendantLongitude",
+                    "ascendant_longitude", "lagnaLongitude",
+                )
+                if isinstance(kundli.get(key), (int, float))
+            ),
+            None,
+        )
+        d9 = compute_d9(planets, lagna_lon=asc_lon)
+        d4 = compute_d4(
+            planets,
+            lagna_lon=asc_lon,
+        )
+        d4_summary = summarize_d4_for_property(d4, intel or {}) if d4 else {}
+        charts_used = ["D1"]
+        if isinstance(d9, dict) and any(not str(k).startswith("_") for k in d9):
+            charts_used.append("D9")
+        if isinstance(d4, dict) and any(not str(k).startswith("_") for k in d4):
+            charts_used.append("D4")
+        out["divisional_charts_used"] = charts_used
+        out["divisional_charts_required"] = ["D1", "D9", "D4"]
+        out["d4_property"] = d4_summary
+        if d4_summary:
+            factors = list(out.get("factors") or [])
+            factors.insert(
+                0,
+                "D4 property verify: "
+                + ", ".join(
+                    f"{key}={value}"
+                    for key, value in d4_summary.items()
+                    if key in ("4L", "4L_d4_strength", "d4_lagna_sign")
+                ),
+            )
+            out["factors"] = factors[:16]
+    except Exception:
+        out["divisional_charts_used"] = ["D1"]
+        out["divisional_charts_required"] = ["D1", "D9", "D4"]
     karakas = _mars_saturn_snapshot(kundli)
     if karakas:
         out["property_karakas"] = karakas
@@ -266,40 +310,6 @@ def compute_property_window(
         out["factors"] = filtered
     elif karakas:
         out["factors"] = karakas
-    try:
-        from event_timing.property.bcp_property_ages import (
-            compute_bcp_property_ages,
-            resolve_property_lagna_si,
-        )
-
-        lagna_si = resolve_property_lagna_si(kundli)
-        user_age: Optional[int] = None
-        try:
-            from ask_career.timing_registry import resolve_user_age  # type: ignore
-
-            user_age = resolve_user_age(question, birth, kundli)
-        except Exception:
-            pass
-        if user_age is not None:
-            out["user_age"] = user_age
-        if lagna_si is not None:
-            bcp = compute_bcp_property_ages(kundli, lagna_si, user_age=user_age)
-            out["bcp_property_ages"] = bcp
-            bcp_lines = []
-            try:
-                from event_timing.property.bcp_property_ages import bcp_property_admin_lines
-
-                bcp_lines = bcp_property_admin_lines(bcp)
-            except Exception:
-                pass
-            if bcp_lines:
-                factors = list(out.get("factors") or [])
-                factors[:0] = bcp_lines[:3]
-                out["factors"] = factors[:16]
-    except Exception as exc:
-        factors = list(out.get("factors") or [])
-        factors.append(f"bcp_property_ages skipped: {exc}")
-        out["factors"] = factors[:16]
     extra: list[str] = []
     if b == "dispute":
         extra.append("Property vivaad — court outcome guarantee nahi; legal + mediation parallel rakho.")
@@ -336,19 +346,6 @@ def format_property_timing_for_prompt(v: dict, question: str = "") -> str:
     ]
     for k in (v.get("property_karakas") or [])[:2]:
         lines.append(f"  KARAK: {k}")
-    bcp = v.get("bcp_property_ages") if isinstance(v.get("bcp_property_ages"), dict) else {}
-    if bcp:
-        lord = bcp.get("fourth_lord") or "?"
-        sit = bcp.get("fourth_lord_house")
-        asp = bcp.get("d1_aspect_houses") or []
-        focus = bcp.get("focus_ages") or bcp.get("future_priority_ages") or []
-        lines.append(
-            f"▸ BCP 4L: {lord} in {sit}H · aspects {','.join(str(h) for h in asp) or '—'}"
-        )
-        if focus:
-            lines.append(
-                f"▸ BCP focus ages (4L sit+aspect): {', '.join(str(a) for a in focus[:6])}"
-            )
     periods = v.get("timing_periods") or []
     if periods:
         lines.append("▸ THREE RANKED PROPERTY PERIODS (engine locked):")

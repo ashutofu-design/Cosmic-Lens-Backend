@@ -42,10 +42,26 @@ def _attach_finance_engine_execution(
             routing_label=result.archetype or "",
             llm_intent=llm_intent,
         )
+        try:
+            from event_timing._shared.universal_timing_formula import _divisional_chart
+
+            d2 = _divisional_chart(kundli if isinstance(kundli, dict) else {}, "D2")
+            pack["divisional_chart_tag"] = "D2"
+            pack["divisional_chart"] = d2 or {"error": "d2 missing", "chart": "D2"}
+            pack["charts_used"] = ["D1", "D9"] + (["D2"] if d2.get("planets") else [])
+        except Exception as exc:
+            pack["divisional_chart_tag"] = "D2"
+            pack["divisional_chart"] = {
+                "error": f"d2 unavailable: {str(exc)[:120]}",
+                "chart": "D2",
+            }
+            pack["charts_used"] = ["D1", "D9"]
         checks = dict(result.checks or {})
         checks["finance_engine_execution"] = pack
         checks["d1_finance_facts"] = pack.get("d1") or {}
         checks["d9_finance_facts"] = pack.get("d9") or {}
+        checks["finance_divisional_facts"] = pack.get("divisional_chart") or {}
+        checks["charts_used"] = pack.get("charts_used") or ["D1", "D9"]
         checks["engine_version"] = "finance_engine_execution_v1"
         checks["unified_execution"] = True
         checks["routing_label"] = result.archetype

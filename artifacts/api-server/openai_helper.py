@@ -10630,6 +10630,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
         except Exception:
             _use_unified_dna_judge = False
+    if (
+        not (_use_health_dna_judge or _use_mr_dna_judge or _use_finance_dna_judge or _use_travel_dna_judge)
+        and bool(_eng_checks.get("llm_no_engine"))
+    ):
+        _use_unified_dna_judge = True
+        _no_engine_intent = (
+            _fallback_intent if isinstance(_fallback_intent, dict) else {}
+        )
+        _unified_dna_domain = str(
+            _no_engine_intent.get("routed_domain")
+            or _no_engine_intent.get("domain")
+            or "general"
+        ).strip().lower()
     try:
         if _use_health_dna_judge:
             from ask_health.dna_judge import run_health_llm_with_dna_judge
@@ -10820,6 +10833,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _uni_judge_meta = (
                 dict(dcr_love_meta) if isinstance(dcr_love_meta, dict) else {}
             )
+            if bool(_eng_checks.get("llm_no_engine")):
+                _uni_judge_meta["checks"] = dict(_eng_checks)
+                _uni_judge_meta["slice"] = "llm_no_engine_v1"
+                if isinstance(_fallback_intent, dict):
+                    _uni_judge_meta["answer_mode"] = _fallback_intent.get("answer_mode")
             if isinstance(_llm_intent_admin, dict):
                 _qd = _llm_intent_admin.get("question_dna")
                 if isinstance(_qd, dict):

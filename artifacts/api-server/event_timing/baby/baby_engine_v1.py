@@ -461,7 +461,17 @@ def _build_d9_chart(kundli: dict) -> Optional[Dict[str, Any]]:
     d1_planets = kundli.get("planets") or []
     if not d1_planets:
         return None
-    asc_lon = kundli.get("ascendant_longitude")
+    asc_lon = next(
+        (
+            kundli.get(key)
+            for key in (
+                "ascendantDeg", "ascendantLongitude",
+                "ascendant_longitude", "lagnaLongitude",
+            )
+            if isinstance(kundli.get(key), (int, float))
+        ),
+        None,
+    )
     try:
         ext = compute_d9(d1_planets,
                           float(asc_lon)
@@ -577,7 +587,17 @@ def _build_d7_chart(kundli: dict, lagna_si: int
     Tier-2: internal longitude-based computation (Parashara odd/even rule).
     """
     d1_planets = kundli.get("planets") or []
-    asc_lon = kundli.get("ascendant_longitude")
+    asc_lon = next(
+        (
+            kundli.get(key)
+            for key in (
+                "ascendantDeg", "ascendantLongitude",
+                "ascendant_longitude", "lagnaLongitude",
+            )
+            if isinstance(kundli.get(key), (int, float))
+        ),
+        None,
+    )
 
     # Tier-1: external compute_d7 helper. divisional_charts returns a
     # dict keyed by planet name with {sign, sign_idx, vargottama} +
@@ -2266,6 +2286,24 @@ def _compute_baby_window_impl(kundli: dict,
     d7_chart = _build_d7_chart(kundli, lagna_si)
     d7_scores = _step3_d7_progeny(kundli, survivors, lagna_si,
                                      d7_chart=d7_chart)
+    try:
+        from event_timing.baby.bcp_baby_ages import compute_bcp_baby_ages
+
+        bcp_baby_ages = compute_bcp_baby_ages(
+            kundli,
+            d7_chart,
+            user_age=age,
+        )
+    except Exception as exc:
+        bcp_baby_ages = {
+            "policy": "BCP secondary; AD/PD primary",
+            "future_priority_ages": [],
+            "shared_priority_ages": [],
+            "error": f"{type(exc).__name__}: {str(exc)[:120]}",
+        }
+    factors.append(
+        f"STEP3 BCP secondary ages={bcp_baby_ages.get('future_priority_ages') or []}"
+    )
     factors.append(f"STEP3 D7_progeny=" +
                     ",".join(f"{p}:{s:.1f}" for p, s in d7_scores.items()))
 
@@ -2468,7 +2506,32 @@ def _compute_baby_window_impl(kundli: dict,
     factors.append(f"CHILD_PROMISED={child_promised}")
 
     # ── Window selection + severity ──
-    top3 = _select_top_3(dasha_windows)
+    # User-facing primary windows must follow AD/PD activation first.
+    # BCP is only a secondary tie-breaker after PEAK/STRONG/TRIGGER.
+    _PRIORITY_RANK = {"PEAK": 0, "STRONG": 1, "TRIGGER": 2}
+    bcp_focus_ages = set(bcp_baby_ages.get("future_priority_ages") or [])
+    active_candidates = []
+    for window in dasha_windows:
+        priority = window.get("active_priority")
+        if priority not in _PRIORITY_RANK:
+            continue
+        row = dict(window)
+        if isinstance(age, int) and isinstance(row.get("start"), datetime):
+            row["age_at_window"] = age + max(0, row["start"].year - now.year)
+            row["bcp_supported"] = row["age_at_window"] in bcp_focus_ages
+        else:
+            row["bcp_supported"] = False
+        active_candidates.append(row)
+    active_chrono = sorted(
+        active_candidates,
+        key=lambda x: (
+            _PRIORITY_RANK.get(x.get("active_priority"), 3),
+            0 if x.get("bcp_supported") else 1,
+            -float(x.get("score") or 0),
+            x["start"],
+        ),
+    )
+    top3 = active_chrono[:3]
     formatted_top3: List[Dict[str, Any]] = []
     confirmations_severe = 0
     for w in top3:
@@ -2624,19 +2687,7 @@ def _compute_baby_window_impl(kundli: dict,
     affected = _affected_areas(ranked)
     remedies = _compute_baby_remedies(ranked, affected, rec_tier)
 
-    # Phase 2.5.5 — CHILD-ACTIVE WINDOWS (user-requested simple view):
-    # Chronological list of upcoming dasha windows where a final-gate-
-    # passed promoter planet is ruling at AD/PD/MD level. Distinct from
-    # `next_3_windows` (which is score-sorted and may include non-active
-    # high-score windows) — this list answers "kab filter-passed planet
-    # dasha me aa raha hai" directly. Priority order: PEAK > STRONG >
-    # TRIGGER > BACKGROUND. Capped at next 8 to keep result lean.
-    _PRIORITY_RANK = {"PEAK": 0, "STRONG": 1, "TRIGGER": 2,
-                       "BACKGROUND": 3}
-    active_chrono = sorted(
-        (w for w in dasha_windows if w.get("active_window")),
-        key=lambda x: x["start"]
-    )
+    # Same AD/PD-priority list is exposed for prompt/admin consumers.
     child_active_windows = [{
         "md": w["md"], "ad": w["ad"], "pd": w["pd"],
         "priority":              w["active_priority"],
@@ -2647,6 +2698,8 @@ def _compute_baby_window_impl(kundli: dict,
         "score":                 w["score"],
         "kind":                  w.get("kind", "general"),
         "risk_raw":              w.get("risk_raw", 0.0),
+        "age_at_window":         w.get("age_at_window"),
+        "bcp_supported":         bool(w.get("bcp_supported")),
     } for w in active_chrono[:8]]
     next_child_window = child_active_windows[0] if child_active_windows else None
     factors.append(
@@ -2670,6 +2723,7 @@ def _compute_baby_window_impl(kundli: dict,
         "weighted_breakdown": breakdown,
         "kp_layer": kp_layer,
         "d7_picture": d7_picture,
+        "bcp_baby_ages": bcp_baby_ages,
         "cross_chart_filter": {
             "confirmed_planets": cross_confirmed,
             "per_planet": cross_map,

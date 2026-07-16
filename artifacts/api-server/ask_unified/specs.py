@@ -21,6 +21,7 @@ class DomainSpec:
     dimensions: tuple[str, ...]
     default_archetype: str
     topic_label: str
+    divisional: str = "D9"
     banned: str = "exact date, guarantee, invented placements"
     dim_house_map: dict[str, tuple[int, ...]] = field(default_factory=dict)
 
@@ -43,6 +44,7 @@ _reg(DomainSpec(
     focus_planets=("Sun", "Saturn", "Mercury", "Jupiter"),
     dimensions=("career_strength", "job_stability", "growth", "obstacles"),
     default_archetype="general_career", topic_label="career/job",
+    divisional="D10",
     dim_house_map={
         "career_strength": (10, 1), "job_stability": (10, 6),
         "growth": (11, 2), "obstacles": (6, 8, 12),
@@ -56,6 +58,7 @@ _reg(DomainSpec(
     focus_planets=("Mercury", "Jupiter", "Moon"),
     dimensions=("learning_ability", "exam_support", "higher_studies", "focus"),
     default_archetype="general_education", topic_label="education/studies",
+    divisional="D24",
     dim_house_map={
         "learning_ability": (4, 5), "exam_support": (5, 9),
         "higher_studies": (9, 4), "focus": (5, 1),
@@ -69,6 +72,7 @@ _reg(DomainSpec(
     focus_planets=("Jupiter", "Venus", "Moon"),
     dimensions=("progeny_promise", "bond", "child_success", "obstacles"),
     default_archetype="general_children", topic_label="children/santaan",
+    divisional="D7",
     banned="exact gender guarantee, medical diagnosis, exact conception date",
     dim_house_map={
         "progeny_promise": (5, 9), "bond": (5, 4),
@@ -83,6 +87,7 @@ _reg(DomainSpec(
     focus_planets=("Mars", "Saturn", "Moon", "Venus"),
     dimensions=("property_yog", "capacity", "risk", "gains"),
     default_archetype="general_property", topic_label="property/ghar-zameen",
+    divisional="D4",
     dim_house_map={
         "property_yog": (4, 11), "capacity": (2, 11),
         "risk": (6, 8, 12), "gains": (11, 2),
@@ -96,6 +101,7 @@ _reg(DomainSpec(
     focus_planets=("Venus", "Mars", "Moon"),
     dimensions=("vehicle_yog", "affordability", "safety", "growth"),
     default_archetype="general_vehicle", topic_label="vehicle/gaadi",
+    divisional="D4",
     dim_house_map={
         "vehicle_yog": (4, 11), "affordability": (2, 11),
         "safety": (3, 8), "growth": (11, 4),
@@ -109,6 +115,7 @@ _reg(DomainSpec(
     focus_planets=("Saturn", "Mars", "Rahu", "Jupiter"),
     dimensions=("case_strength", "delay_risk", "relief", "enemy_pressure"),
     default_archetype="general_litigation", topic_label="litigation/court",
+    divisional="D6",
     banned="legal advice as lawyer, guaranteed acquittal, exact court date",
     dim_house_map={
         "case_strength": (6, 7), "delay_risk": (8, 12),
@@ -136,6 +143,7 @@ _reg(DomainSpec(
     focus_planets=("Mercury", "Jupiter", "Venus"),
     dimensions=("circle_quality", "support", "influence", "friction"),
     default_archetype="general_network", topic_label="network/friends",
+    divisional="D11",
     dim_house_map={
         "circle_quality": (11, 3), "support": (11, 7),
         "influence": (11, 10), "friction": (6, 8),
@@ -175,6 +183,7 @@ _reg(DomainSpec(
     focus_houses=(1, 10, 11), focus_planets=("Sun", "Jupiter", "Venus"),
     dimensions=("fame_potential", "reputation", "visibility"),
     default_archetype="general_fame", topic_label="fame/reputation",
+    divisional="D10",
     dim_house_map={"fame_potential": (1, 10), "reputation": (10, 11), "visibility": (11, 1)},
 ))
 _reg(DomainSpec(
@@ -257,6 +266,7 @@ _reg(DomainSpec(
     focus_houses=(1, 6), focus_planets=("Moon", "Sun", "Saturn"),
     dimensions=("vitality", "habits", "sleep_rest"),
     default_archetype="general_wellness", topic_label="wellness/lifestyle",
+    divisional="D30",
     banned="medical diagnosis, cure guarantee",
     dim_house_map={"vitality": (1, 6), "habits": (6, 2), "sleep_rest": (12, 4)},
 ))
@@ -267,6 +277,7 @@ _reg(DomainSpec(
     focus_houses=(9, 12, 8), focus_planets=("Jupiter", "Ketu", "Saturn"),
     dimensions=("spiritual_path", "detachment", "guru_support"),
     default_archetype="general_spiritual", topic_label="spiritual",
+    divisional="D20",
     dim_house_map={"spiritual_path": (9, 12), "detachment": (12, 8), "guru_support": (9, 5)},
 ))
 

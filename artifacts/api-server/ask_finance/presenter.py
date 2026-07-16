@@ -23,6 +23,13 @@ def to_finance_llm_payload(result: EngineResult, *, question: str = "") -> str:
         "schema_version": execution.get("schema_version") or "finance_engine_execution_v1",
         "d1": execution.get("d1") or checks.get("d1_finance_facts") or {},
         "d9": execution.get("d9") or checks.get("d9_finance_facts") or {},
+        "divisional_chart_tag": execution.get("divisional_chart_tag") or "D2",
+        "divisional_chart": (
+            execution.get("divisional_chart")
+            or checks.get("finance_divisional_facts")
+            or {}
+        ),
+        "charts_used": execution.get("charts_used") or checks.get("charts_used") or ["D1", "D9"],
         "lagnesh": execution.get("lagnesh") or {},
         "vargottama_planets": execution.get("vargottama_planets") or [],
         "dimensions": execution.get("dimensions") or {},

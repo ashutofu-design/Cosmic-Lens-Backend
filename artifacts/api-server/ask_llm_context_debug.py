@@ -1690,57 +1690,9 @@ def recompute_property_bcp_from_kundli(
     question_text: str = "",
     topic: str = "",
 ) -> dict[str, Any]:
-    """Admin load: rebuild property Step 1 BCP from saved chart (old rows + missing lagna)."""
+    """BCP policy gate: property questions must never recompute BCP."""
     ctx = dict(ctx) if isinstance(ctx, dict) else {}
-    if not _should_recompute_property_admin(ctx, question_text=question_text, topic=topic):
-        return ctx
-    chart = normalize_kundli_chart_payload(kundli)
-    if chart is None:
-        print(
-            "[property_admin_recompute] skip: chart normalize failed "
-            f"q={(question_text or ctx.get('question') or '')[:50]!r}",
-            flush=True,
-        )
-        return ctx
-    lagna_si = _resolve_lagna_si_for_admin(chart)
-    if lagna_si is None:
-        print(
-            "[property_admin_recompute] skip: lagna_si missing "
-            f"asc={chart.get('ascendant')!r} q={(question_text or '')[:50]!r}",
-            flush=True,
-        )
-        return ctx
-    user_age = _user_age_from_admin_ctx(ctx, birth, chart)
-    try:
-        from event_timing.property.bcp_property_ages import (
-            bcp_property_admin_lines,
-            build_property_step1_bcp,
-            compute_bcp_property_ages,
-        )
-
-        bcp = compute_bcp_property_ages(chart, lagna_si, user_age=user_age)
-        step1_bcp = build_property_step1_bcp(bcp, user_age)
-        evidence_lines = bcp_property_admin_lines(bcp) or []
-    except Exception as exc:
-        print(
-            f"[property_admin_recompute] BCP fail: {type(exc).__name__}: {str(exc)[:160]}",
-            flush=True,
-        )
-        return ctx
-    out = _apply_property_bcp_recompute_to_ctx(ctx, bcp, step1_bcp, evidence_lines)
-    sa = (
-        (out.get("slice_meta") or {}).get("step_audit")
-        if isinstance(out.get("slice_meta"), dict)
-        else {}
-    )
-    s1 = sa.get("step1") if isinstance(sa, dict) else {}
-    print(
-        "[property_admin_recompute] ok "
-        f"4L={s1.get('fourth_lord')!r} house={s1.get('fourth_lord_house')!r} "
-        f"q={(question_text or '')[:40]!r}",
-        flush=True,
-    )
-    return out
+    return ctx
 
 
 def _format_bcp_step2_lines_for_admin(

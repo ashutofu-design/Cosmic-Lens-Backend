@@ -237,6 +237,13 @@ def should_bypass_static_engines_for_direct_llm(
 
         mode = resolve_answer_mode(q, llm_intent if isinstance(llm_intent, dict) else {})
         if mode in ("llm_chart", "llm_knowledge"):
+            try:
+                from chart_fact_answer import _detect_divisional
+
+                if _detect_divisional(q):
+                    return True, "divisional_chart_no_static_engine"
+            except Exception:
+                pass
             return True, f"answer_mode_{mode}"
         if mode == "chart_fact":
             return False, ""

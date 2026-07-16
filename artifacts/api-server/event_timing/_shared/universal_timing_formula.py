@@ -14,18 +14,20 @@ from event_timing._shared.universal_timing_domains import (
 )
 
 try:
-    from divisional_charts import (  # type: ignore
-        compute_d2,
-        compute_d4,
-        compute_d7,
-        compute_d9,
-        compute_d10,
-        compute_d24,
-        compute_d30,
-    )
+    import divisional_charts as _dc  # type: ignore
 except Exception:
-    compute_d2 = compute_d4 = compute_d7 = compute_d9 = None  # type: ignore
-    compute_d10 = compute_d24 = compute_d30 = None  # type: ignore
+    _dc = None  # type: ignore
+
+compute_d2 = getattr(_dc, "compute_d2", None)
+compute_d4 = getattr(_dc, "compute_d4", None)
+compute_d6 = getattr(_dc, "compute_d6", None)
+compute_d7 = getattr(_dc, "compute_d7", None)
+compute_d9 = getattr(_dc, "compute_d9", None)
+compute_d10 = getattr(_dc, "compute_d10", None)
+compute_d11 = getattr(_dc, "compute_d11", None)
+compute_d20 = getattr(_dc, "compute_d20", None)
+compute_d24 = getattr(_dc, "compute_d24", None)
+compute_d30 = getattr(_dc, "compute_d30", None)
 
 try:
     from event_timing._shared.double_transit import check_double_transit  # type: ignore
@@ -61,9 +63,12 @@ _ENGINE_VERSION = "utf_v1.0.0"
 _DIV_FN = {
     "D2": compute_d2,
     "D4": compute_d4,
+    "D6": compute_d6,
     "D7": compute_d7,
     "D9": compute_d9,
     "D10": compute_d10,
+    "D11": compute_d11,
+    "D20": compute_d20,
     "D24": compute_d24,
     "D30": compute_d30,
 }
@@ -175,7 +180,38 @@ def _divisional_chart(kundli: dict, tag: str) -> dict:
         return {}
     planets = (kundli or {}).get("planets") or []
     try:
-        return fn(planets, lagna_lon=_lagna_lon(kundli)) or {}
+        raw = fn(planets, lagna_lon=_lagna_lon(kundli)) or {}
+        if not isinstance(raw, dict):
+            return {}
+        lagna = raw.get("_lagna") if isinstance(raw.get("_lagna"), dict) else {}
+        lagna_sign = lagna.get("sign")
+        if not lagna_sign:
+            lagna_sign = next(
+                (v for k, v in raw.items() if str(k).startswith("lagna_") and isinstance(v, str)),
+                None,
+            )
+        if not lagna_sign:
+            return {}
+        from event_timing._shared.generic_timing_engine import _sign_idx
+        lagna_si = _sign_idx(lagna_sign)
+        if lagna_si is None:
+            return {}
+        normalized_planets: list[dict[str, Any]] = []
+        for name, info in raw.items():
+            if str(name).startswith("_") or str(name).startswith("lagna_") or not isinstance(info, dict):
+                continue
+            sign_si = info.get("sign_idx")
+            if not isinstance(sign_si, int):
+                sign_si = _sign_idx(info.get("sign"))
+            if sign_si is None:
+                continue
+            normalized_planets.append({
+                "name": str(name),
+                "sign": info.get("sign"),
+                "sign_idx": sign_si,
+                "house": ((sign_si - lagna_si) % 12) + 1,
+            })
+        return {"ascendant": lagna_sign, "planets": normalized_planets, "raw": raw}
     except Exception:
         return {}
 
@@ -190,9 +226,21 @@ def _step1_target_houses(
     primary_h = cfg.target_houses[0] if cfg.target_houses else 1
     d1_lord = _house_lord(lagna_si, primary_h)
     d1_occ = _planets_in_house(planets, primary_h)
+    d9 = _divisional_chart(kundli, "D9")
     div = _divisional_chart(kundli, cfg.divisional)
+    d9_lord = None
+    d9_occ: list[str] = []
     div_lord = None
     div_occ: list[str] = []
+    if d9.get("planets"):
+        d9_lagna = d9.get("ascendant") or d9.get("lagnaSign")
+        d9_si = None
+        if isinstance(d9_lagna, str):
+            from event_timing._shared.generic_timing_engine import _sign_idx
+            d9_si = _sign_idx(d9_lagna)
+        if d9_si is not None:
+            d9_lord = _house_lord(d9_si, primary_h)
+            d9_occ = _planets_in_house(d9.get("planets") or [], primary_h)
     if div.get("planets"):
         div_lagna = div.get("ascendant") or div.get("lagnaSign")
         div_si = None
@@ -209,11 +257,15 @@ def _step1_target_houses(
         "divisional": cfg.divisional,
         "d1_house_lord": d1_lord,
         "d1_occupants": d1_occ,
+        "d9_house_lord": d9_lord,
+        "d9_occupants": d9_occ,
         "div_house_lord": div_lord,
         "div_occupants": div_occ,
+        "charts_used": ["D1", "D9"] + ([cfg.divisional] if cfg.divisional != "D9" else []),
         "detail": (
             f"D1 {primary_h}H lord {d1_lord}"
             + (f" · in {primary_h}H {', '.join(d1_occ)}" if d1_occ else "")
+            + (f" · D9 lord {d9_lord}" if d9_lord else "")
             + (f" · {cfg.divisional} lord {div_lord}" if div_lord else "")
         ),
     }
@@ -320,14 +372,25 @@ def _step3_dasha_activation(
         if ad in top_names or pd in top_names:
             w = dict(w)
             w["ad_trigger"] = ad in top_names
+            w["pd_trigger"] = pd in top_names
             w["pd_micro"] = pd
+            w["ad_pd_priority"] = (
+                "PEAK" if w["ad_trigger"] and w["pd_trigger"]
+                else "STRONG" if w["ad_trigger"]
+                else "TRIGGER"
+            )
             w["activation_score"] = round(_activation_score(w, promote, score_map), 2)
             qualified.append(w)
-    if not qualified:
-        qualified = windows[:5]
-
+    priority_rank = {"PEAK": 0, "STRONG": 1, "TRIGGER": 2}
+    qualified.sort(
+        key=lambda w: (
+            priority_rank.get(str(w.get("ad_pd_priority")), 3),
+            -float(w.get("activation_score") or 0),
+            w.get("start") or datetime.max,
+        )
+    )
     primary, next_win, timing_source, _ = pick_primary_timing_window(
-        qualified or windows, ranked, promote, now, min_ad_pd=MIN_AD_PD_ACTIVATION,
+        qualified, ranked, promote, now, min_ad_pd=MIN_AD_PD_ACTIVATION,
     )
     step3 = {
         "name": "Dasha activation (MD/AD/PD)",
@@ -336,6 +399,7 @@ def _step3_dasha_activation(
         "candidate_windows": qualified[:5],
         "primary_window": primary,
         "next_window": next_win,
+        "selection_policy": "AD+PD > AD > PD; MD is background only",
         "top_significators": [r["name"] for r in ranked[:4]],
         "detail": (
             f"AD trigger lords {', '.join(sorted(top_names)[:4])} · "
@@ -359,7 +423,7 @@ def _step4_double_transit(
             "status": "UNAVAILABLE",
             "detail": "swisseph unavailable",
         }
-        return candidates[:3], step4
+        return [dict(w, transit_confirmed=False) for w in candidates[:3]], step4
 
     planets = kundli.get("planets") or []
     for w in candidates:
@@ -373,7 +437,7 @@ def _step4_double_transit(
         if row["transit_confirmed"]:
             matched.append(row)
     if not matched:
-        matched = candidates[:3]
+        matched = [dict(w, transit_confirmed=False) for w in candidates[:3]]
     step4 = {
         "name": "Double transit lock (Guru + Shani)",
         "status": "DONE" if any(w.get("transit_confirmed") for w in matched) else "PARTIAL",
@@ -464,6 +528,7 @@ def _step5_final_verdict(
     lords = "/".join(
         x for x in (best.get("md"), best.get("ad"), best.get("pd")) if x
     )
+    transit_confirmed = bool(best.get("transit_confirmed"))
     backup = matched[1] if len(matched) > 1 else None
     backup_pw = None
     if backup and isinstance(backup.get("start"), datetime):
@@ -502,13 +567,21 @@ def _step5_final_verdict(
             "window": best.get("window"),
         },
         "sun_mars_trigger_month": month_year,
+        "transit_confirmed": transit_confirmed,
         "strategy": (
             delay_prefix
-            + f"Window {month_year} — dasha {lords} + Guru/Shani double transit."
+            + f"Window {month_year} — dasha {lords}"
+            + (
+                " + Guru/Shani double transit."
+                if transit_confirmed
+                else "; Guru/Shani double-transit confirmation pending."
+            )
             + (f" Agla period: {backup_pw}." if backup_pw else "")
         ).strip(),
         "detail": (
-            f"dasha {lords} · DT confirmed · month lock {month_year}"
+            f"dasha {lords} · "
+            + ("DT confirmed" if transit_confirmed else "DT not confirmed")
+            + f" · month lock {month_year}"
             + (f" · delayed to ~age {age_at_answer}" if delayed and age_at_answer else "")
         ),
     }

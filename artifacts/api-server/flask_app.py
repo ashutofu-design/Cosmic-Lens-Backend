@@ -8993,7 +8993,7 @@ def ask_stream_route():
     try:
         from ask_scope_gate import assess_ask_scope, scope_refusal_payload
 
-        _scope_v_s = assess_ask_scope(question)
+        _scope_v_s = assess_ask_scope(question, history)
         if not _scope_v_s.allowed:
             print(
                 f"[ask/stream] scope_gate blocked reason={_scope_v_s.reason}",

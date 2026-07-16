@@ -1,11 +1,10 @@
-"""LLM scope classifier — personal astrology vs off-topic / GK.
+"""LLM scope classifier — personal cosmic questions vs off-topic / GK.
 
-When regex scope gate cannot confidently allow a question (heavy typos,
-mixed Hindi/English/Hinglish), one cheap JSON call decides whether the
-user is asking about THEIR chart/life (allow) or something else (block).
+One cheap JSON call decides whether the user is asking about their chart,
+personal life, or spiritual nature. No regex layer interprets question scope.
 
-Never raises — on failure returns source=llm_unavailable so callers fall
-back to the regex verdict unchanged.
+Never raises — on failure returns source=llm_unavailable so callers can fail
+open rather than falsely reject a valid question.
 
 Gated by ASK_SCOPE_LLM (default on). Set ASK_SCOPE_LLM=off to disable.
 """
@@ -29,10 +28,15 @@ Classify the question into exactly ONE category:
 1. personal_astro — About THIS user's birth chart or personal life timing/outlook:
    marriage/shaadi, love, career, job, money, health, children, property, travel,
    visa, dasha, planets, houses, lagna, rashi, nakshatra, yog, dosh, remedies,
-   muhurat, sade sati, gochar, chart placements, "meri/mera/my" life questions.
+   muhurat, sade sati, gochar, chart placements, spirituality/dharma, religious
+   nature, intuition, life purpose, personality, strengths, and weaknesses.
+   Treat colloquial "me" as "main/I" when the sentence means "am I", such as
+   "kya me dharmik hun". "meri/mera/mere/mujhe/main/me/my/I" personal questions
+   are about the current user unless the text clearly says otherwise.
    INCLUDE heavily misspelled versions if intent is clearly personal astro.
    Examples: "helth kaisi rahegi", "nokri kb lagegi", "shadi kb hogi",
-   "8th house me rahu", "Abhi kaun sa dasha chal raha hai".
+   "8th house me rahu", "Abhi kaun sa dasha chal raha hai",
+   "kya me dharmik hun", "mera spiritual path kaisa hai".
 
 2. general_knowledge — Encyclopedia / definition / history, NOT about user's chart:
    "astrology kya hai", "who invented jyotish", "nakshatra ka matlab",
@@ -54,6 +58,9 @@ Return STRICT JSON only:
 {{"category": "personal_astro|general_knowledge|off_topic|greeting|not_personal",
   "cleaned_question": "...",
   "confidence": 0.0-1.0}}
+
+Use conversation history only to resolve short follow-ups and pronouns.
+{history}
 
 Question: {question}"""
 
@@ -89,9 +96,26 @@ def _category_to_verdict(category: str) -> tuple[bool, ScopeReason]:
     return False, "not_personal"
 
 
+def _history_block(history: Any, max_turns: int = 6) -> str:
+    if not isinstance(history, (list, tuple)) or not history:
+        return ""
+    lines: list[str] = []
+    for item in list(history)[-max_turns:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        text = str(item.get("content") or item.get("text") or "").strip()
+        if role in ("user", "assistant") and text:
+            lines.append(f"{role}: {text[:280]}")
+    if not lines:
+        return ""
+    return "CONVERSATION HISTORY:\n" + "\n".join(lines)
+
+
 def classify_ask_scope_llm(
     question: str,
     *,
+    history: Any = None,
     client: Any = None,
     model: Optional[str] = None,
 ) -> dict:
@@ -125,7 +149,15 @@ def classify_ask_scope_llm(
         temperature=0.0,
         timeout=_TIMEOUT_S,
         response_format={"type": "json_object"},
-        messages=[{"role": "user", "content": _PROMPT.format(question=q)}],
+        messages=[
+            {
+                "role": "user",
+                "content": _PROMPT.format(
+                    question=q,
+                    history=_history_block(history),
+                ),
+            }
+        ],
     )
     try:
         try:

@@ -231,73 +231,12 @@ def should_bypass_static_engines_for_direct_llm(
     question: str,
     llm_intent: dict[str, Any] | None = None,
 ) -> tuple[bool, str]:
-    """Chart/concept/interpretive Q — skip static engines → LLM.
+    """Final arch: no engine bypass for astrology prediction questions.
 
-    Dedicated engines always win over answer_mode labels. Otherwise personal
-    spiritual/gap asks (e.g. "kya me dharmik hun") were wrongly bypassed to the
-    slow chart-only LLM path when understand/DNA set answer_mode=llm_chart.
+    Understand branch=engine must always hit a domain engine. Knowledge is a
+    separate branch handled before engines.
     """
-    q = (question or "").strip()
-    if not q:
-        return False, ""
-    intent = llm_intent if isinstance(llm_intent, dict) else None
-    # Engine classifiers first — never let answer_mode skip a real engine.
-    if matches_dedicated_static_engine(q, intent):
-        return False, ""
-    # Personal life-outcome (incl. D9/D10 career/shaadi) must never bypass,
-    # even when understand labels the Q llm_* or D10 is mentioned.
-    try:
-        from ask_answer_mode import infer_answer_mode
-
-        if infer_answer_mode(q, intent or {}) == "engine":
-            return False, ""
-    except Exception:
-        pass
-    try:
-        from ask_answer_mode import resolve_answer_mode
-
-        mode = resolve_answer_mode(q, intent or {})
-        if mode == "engine":
-            return False, ""
-        if mode == "chart_fact":
-            return False, ""
-        if mode in ("llm_chart", "llm_knowledge"):
-            try:
-                from chart_fact_answer import _detect_divisional
-
-                if _detect_divisional(q):
-                    return True, "divisional_chart_no_static_engine"
-            except Exception:
-                pass
-            return True, f"answer_mode_{mode}"
-    except Exception:
-        pass
-    try:
-        from chart_fact_answer import (
-            _detect_divisional,
-            is_pure_chart_fact_lookup,
-            needs_llm_chart_answer,
-        )
-
-        if is_pure_chart_fact_lookup(q):
-            return False, ""
-        if is_cosmic_domain_concept_question(q, intent):
-            return True, "cosmic_concept_no_static_engine"
-        if _detect_divisional(q):
-            return True, "divisional_chart_no_static_engine"
-        if needs_llm_chart_answer(q):
-            return True, "chart_interpretive_no_static_engine"
-    except Exception:
-        pass
-    dom = str((intent or {}).get("domain") or "").strip().lower()
-    if dom == "general":
-        try:
-            from chart_fact_answer import needs_llm_chart_answer
-
-            if needs_llm_chart_answer(q):
-                return True, "general_domain_chart_llm"
-        except Exception:
-            pass
+    _ = question, llm_intent
     return False, ""
 
 

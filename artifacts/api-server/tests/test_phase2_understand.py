@@ -45,7 +45,8 @@ class TestPhase2Understand(unittest.TestCase):
 
         self.assertEqual(normalize_branch("llm_knowledge"), "knowledge")
         self.assertEqual(normalize_branch("engine"), "engine")
-        self.assertEqual(normalize_branch("refuse"), "refuse")
+        # refuse collapses to engine — hard gates own real refusals
+        self.assertEqual(normalize_branch("refuse"), "engine")
 
     def test_knowledge_fast_force_skips_regex_gate(self):
         from ask_knowledge_fast import try_astrology_knowledge_fast_answer

@@ -12,7 +12,8 @@ import re
 import time
 from typing import Any, Optional
 
-BRANCHES = frozenset({"knowledge", "engine", "refuse"})
+# Final architecture: exactly TWO execution branches after hard gates.
+BRANCHES = frozenset({"knowledge", "engine"})
 
 _DOMAINS = frozenset({
     "love", "marriage", "relationship", "career", "health", "finance",
@@ -20,13 +21,32 @@ _DOMAINS = frozenset({
     "spiritual", "remedy", "general",
 })
 
+# domain → static engine key used by raw_passthrough_ask flags
+_DOMAIN_ENGINE_KEY: dict[str, str] = {
+    "love": "mr",
+    "marriage": "mr",
+    "relationship": "mr",
+    "career": "career",
+    "health": "health",
+    "finance": "finance",
+    "education": "education",
+    "children": "children",
+    "property": "property",
+    "travel": "travel",
+    "litigation": "litigation",
+    "vehicle": "vehicle",
+    "spiritual": "gap",
+    "remedy": "mr",
+    "general": "mr",
+}
+
 _TIMEOUT_S = 16
 
 _PROMPT = """You are Cosmo Understand — ONE classification step for an astrology Ask product.
 Read the question carefully (Hindi/Hinglish/English). Return STRICT JSON only:
 
 {{
-  "branch": "knowledge|engine|refuse",
+  "branch": "knowledge|engine",
   "domain": "<one domain>",
   "archetype": "<snake_case theme bucket>",
   "question_type": "prediction|timing|decision|verification|explanation|overview|remedy",
@@ -38,14 +58,13 @@ Read the question carefully (Hindi/Hinglish/English). Return STRICT JSON only:
   "confidence": 0.0
 }}
 
-branch (MOST IMPORTANT — pick FIRST):
+branch (MOST IMPORTANT — pick FIRST; ONLY these two values):
 - knowledge = general astrology THEORY / education / named-lagna advice NOT reading THIS user's personal chart.
   Examples: "Leo lagna gemstone?", "dasha kya hoti hai?", "6th house me neech planet?", "kisi ka Singh lagna ratn?"
   knowledge=true when branch=knowledge.
 - engine = personal life/chart outcome for THIS user (mera/meri/mujhe/my chart) OR clearly their future result.
   Examples: "meri shaadi kab?", "mera career kaisa?", "partner loyal hai?", "mujhe kaunsa ratn pehenna chahiye?"
   knowledge=false when branch=engine.
-- refuse = death/lifespan ask, password/OTP/phone leak ask, clear non-astrology abuse. Prefer refuse only when unsafe/blocked.
 
 domain: love|marriage|relationship|career|health|finance|education|children|property|travel|litigation|vehicle|spiritual|remedy|general
 archetype: short snake_case theme (e.g. gemstone_remedy, marriage_timing, partner_loyalty, general_health). For love use theme ids like trust_loyalty, commitment, reconciliation_ex.
@@ -64,14 +83,76 @@ def normalize_branch(raw: Any) -> str:
     b = str(raw or "").strip().lower()
     if b in BRANCHES:
         return b
-    # Compat bridges from older answer_mode / scope labels
+    # Compat bridges — refuse/off-topic collapse to engine (hard gates already ran).
     if b in ("llm_knowledge", "theory", "general_knowledge", "education"):
         return "knowledge"
-    if b in ("llm_chart", "chart_llm", "chart_fact", "engine_static", "engine_timing"):
+    if b in (
+        "llm_chart", "chart_llm", "chart_fact", "engine_static", "engine_timing",
+        "refuse", "block", "deny", "off_topic",
+    ):
         return "engine"
-    if b in ("block", "deny", "off_topic"):
-        return "refuse"
     return "engine"
+
+
+def domain_to_engine_key(domain: str) -> str:
+    d = _normalize_domain(domain)
+    return _DOMAIN_ENGINE_KEY.get(d, "mr")
+
+
+def phase2_engine_static_flags(u: dict[str, Any] | None) -> dict[str, bool]:
+    """Sole engine routing from Understand JSON — no secondary detectors."""
+    keys = (
+        "education", "children", "property", "vehicle", "travel", "litigation",
+        "gap", "network", "luck", "career", "finance", "health", "mr",
+    )
+    flags = {k: False for k in keys}
+    src = u if isinstance(u, dict) else {}
+    if str(src.get("branch") or "engine") != "engine":
+        return flags
+    eng = domain_to_engine_key(str(src.get("domain") or "general"))
+    if eng in flags:
+        flags[eng] = True
+    else:
+        flags["mr"] = True
+    return flags
+
+
+def phase2_llm_intent(u: dict[str, Any], *, question: str = "") -> dict[str, Any]:
+    """Intent dict derived only from Understand JSON."""
+    domain = str(u.get("domain") or "general")
+    archetype = str(u.get("archetype") or "general")
+    timing = bool(u.get("timing"))
+    out: dict[str, Any] = {
+        "domain": domain,
+        "is_timing": timing,
+        "is_decision": str(u.get("question_type") or "") == "decision",
+        "wants_explain": False,
+        "question_summary": str(u.get("question_summary") or ""),
+        "source": "understand_phase2",
+        "confidence": float(u.get("confidence") or 0.7),
+        "branch": u.get("branch"),
+        "knowledge": bool(u.get("knowledge")),
+    }
+    if domain in ("love", "marriage", "relationship"):
+        out["mr_archetype"] = archetype
+    elif domain == "career":
+        out["career_archetype"] = archetype
+    elif domain == "finance":
+        out["finance_archetype"] = archetype
+    elif domain == "health":
+        out["health_archetype"] = archetype
+    elif domain == "education":
+        out["education_archetype"] = archetype
+    elif domain == "children":
+        out["children_archetype"] = archetype
+    elif domain == "property":
+        out["property_archetype"] = archetype
+    elif domain == "travel":
+        out["travel_archetype"] = archetype
+    elif domain == "litigation":
+        out["litigation_archetype"] = archetype
+    _ = question
+    return out
 
 
 def _normalize_domain(raw: Any) -> str:
@@ -147,11 +228,7 @@ def normalize_understand(data: dict[str, Any] | None, *, question: str = "") -> 
         confidence = 0.7
     confidence = max(0.0, min(1.0, confidence))
 
-    answer_mode = {
-        "knowledge": "llm_knowledge",
-        "engine": "engine",
-        "refuse": "refuse",
-    }.get(branch, "engine")
+    answer_mode = "llm_knowledge" if branch == "knowledge" else "engine"
 
     return {
         "branch": branch,
@@ -291,7 +368,7 @@ def run_understand_phase2(
     q = (question or "").strip()
     if not q:
         out = normalize_understand(
-            {"branch": "refuse", "domain": "general", "question_summary": "Empty question", "confidence": 1.0},
+            {"branch": "engine", "domain": "general", "question_summary": "Empty question", "confidence": 1.0},
             question=q,
         )
         out["ok"] = False

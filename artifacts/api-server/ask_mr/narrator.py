@@ -320,6 +320,13 @@ def build_mr_engine_narrator_system_prompt(
         )
 
     return f"""{_NARRATOR_LANG[rl]}
+{_MR_CONFIDENT_TONE}
+
+OUTPUT FORMAT (final — not post-edited):
+• Plain short paragraphs. NO section headers, NO "---", NO template labels
+  (Seedha jawab / Conclusion / Big Picture / Kyun / Ab kya karein).
+• Direct answer first, then expand engine evidence in daily-life language.
+• Stay inside the word budget. No filler openers.
 {intent_block}
 {engine_lock}
 

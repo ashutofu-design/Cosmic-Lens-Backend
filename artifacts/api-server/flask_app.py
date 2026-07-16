@@ -7893,14 +7893,7 @@ def ask_route():
     if not question:
         return jsonify({"error": "question is required"}), 400
 
-    try:
-        from ask_question_normalize import prepare_ask_question
-
-        question = prepare_ask_question(question)
-    except Exception:
-        pass
-
-    # Greetings / help — before language & scope gates (hi/hello are not "personal" astro Qs).
+    # Greetings / help only — language/scope/privacy/normalize run once inside RP.
     _shortcut_early = None
     try:
         from shortcuts import resolve_ask_shortcut as _resolve_ask_shortcut
@@ -7923,49 +7916,9 @@ def ask_route():
         )
         return jsonify(_shortcut_early)
 
-    try:
-        from ask_language_gate import assess_ask_language, language_refusal_payload
-
-        _lang_v = assess_ask_language(question)
-        if not _lang_v.allowed:
-            print(
-                f"[ask] language_gate blocked script={_lang_v.script_blocked!r}",
-                flush=True,
-            )
-            return jsonify(language_refusal_payload())
-    except Exception as _lg_exc:
-        print(f"[ask] language_gate error (non-fatal): {_lg_exc}", flush=True)
-
-    try:
-        from ask_scope_gate import assess_ask_scope, scope_refusal_payload
-
-        _scope_v = assess_ask_scope(question, history)
-        if not _scope_v.allowed:
-            print(f"[ask] scope_gate blocked reason={_scope_v.reason}", flush=True)
-            _log_brand_guard_question(question, data)
-            return jsonify(scope_refusal_payload(_scope_v.reason, question=question, lang=lang))
-        if getattr(_scope_v, "normalized_question", None):
-            question = _scope_v.normalized_question
-            print(f"[ask] scope_llm normalized q={question[:60]!r}", flush=True)
-    except Exception as _sg_exc:
-        print(f"[ask] scope_gate error (non-fatal): {_sg_exc}", flush=True)
-
-    try:
-        from ask_privacy_guard import apply_privacy_guard
-
-        _priv = apply_privacy_guard(question or "", lang=lang or "hn")
-        if _priv:
-            print(f"[ask] privacy_hard_guard blocked q={question[:60]!r}", flush=True)
-            return jsonify(_priv)
-    except Exception as _priv_exc:
-        print(f"[ask] privacy_guard error (non-fatal): {_priv_exc}", flush=True)
-
     # ════════════════════════════════════════════════════════════════════════
     # RAW PASSTHROUGH MODE (2026-05-06) — user-requested nuclear path.
-    # Skips length-cap, layer3-clarifier,
-    # crisis-pregate, shortcut, all static engines (health/property/finance),
-    # classifier, signal-packs, post-injectors, multi-intent ack.
-    # Just: auth + quota + DB-load → D1+D9 chart + question → LLM → answer.
+    # Language/scope/privacy/normalize owned solely by raw_passthrough_ask.
     # Killswitch: env RAW_PASSTHROUGH_MODE=0 → legacy multi-stage pipeline.
     # ════════════════════════════════════════════════════════════════════════
     try:
@@ -8943,14 +8896,8 @@ def ask_stream_route():
     if not question:
         return jsonify({"error": "question is required"}), 400
 
-    try:
-        from ask_question_normalize import prepare_ask_question
 
-        question = prepare_ask_question(question)
-    except Exception:
-        pass
-
-    # Greetings / help — before language & scope gates (hi/hello are not "personal" astro Qs).
+    # Greetings / help only — language/scope/privacy/normalize run once inside RP.
     _shortcut_early_s = None
     try:
         from shortcuts import resolve_ask_shortcut as _resolve_ask_shortcut_s
@@ -8973,58 +8920,8 @@ def ask_stream_route():
         )
         return jsonify(_shortcut_early_s)
 
-    try:
-        from ask_language_gate import assess_ask_language, language_refusal_payload
-
-        _lang_v_s = assess_ask_language(question)
-        if not _lang_v_s.allowed:
-            print(
-                f"[ask/stream] language_gate blocked "
-                f"script={_lang_v_s.script_blocked!r}",
-                flush=True,
-            )
-            return jsonify(language_refusal_payload())
-    except Exception as _lg_exc_s:
-        print(
-            f"[ask/stream] language_gate error (non-fatal): {_lg_exc_s}",
-            flush=True,
-        )
-
-    try:
-        from ask_scope_gate import assess_ask_scope, scope_refusal_payload
-
-        _scope_v_s = assess_ask_scope(question, history)
-        if not _scope_v_s.allowed:
-            print(
-                f"[ask/stream] scope_gate blocked reason={_scope_v_s.reason}",
-                flush=True,
-            )
-            _log_brand_guard_question(question, data)
-            return jsonify(scope_refusal_payload(_scope_v_s.reason, question=question, lang=lang))
-        if getattr(_scope_v_s, "normalized_question", None):
-            question = _scope_v_s.normalized_question
-            print(f"[ask/stream] scope_llm normalized q={question[:60]!r}", flush=True)
-    except Exception as _sg_exc_s:
-        print(f"[ask/stream] scope_gate error (non-fatal): {_sg_exc_s}", flush=True)
-
-    try:
-        from ask_privacy_guard import apply_privacy_guard
-
-        _priv_s = apply_privacy_guard(question or "", lang=lang or "hn")
-        if _priv_s:
-            print(
-                f"[ask/stream] privacy_hard_guard blocked q={question[:60]!r}",
-                flush=True,
-            )
-            return jsonify(_priv_s)
-    except Exception as _priv_exc_s:
-        print(f"[ask/stream] privacy_guard error (non-fatal): {_priv_exc_s}", flush=True)
-
     # ════════════════════════════════════════════════════════════════════════
-    # RAW PASSTHROUGH MODE (2026-05-06, stream parity) — see /api/ask above
-    # for full rationale. Stream route returns ONE single jsonify chunk
-    # (no SSE deltas) when RAW_PASSTHROUGH_MODE=1, since the helper does a
-    # single non-streaming completion. Mobile client handles both shapes.
+    # RAW PASSTHROUGH MODE (2026-05-06, stream parity) — gates owned by RP.
     # ════════════════════════════════════════════════════════════════════════
     try:
         from openai_helper import raw_passthrough_ask as _rp_ask_s

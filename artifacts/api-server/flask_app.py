@@ -8184,7 +8184,7 @@ def ask_route():
     # ai_ask() too, but called here as well so the rule-engine fallback path
     # (when OpenAI is unavailable) also enforces the same policy.
     try:
-        from openai_helper import astro_scope_refusal as _ask_scope_refusal
+        from ask_scope_gate import astro_scope_refusal as _ask_scope_refusal
     except Exception as _scope_imp_exc:
         print(f"[ask] openai_helper import failed: {_scope_imp_exc}", flush=True)
         return (
@@ -9248,7 +9248,7 @@ def ask_stream_route():
     # internally; the route-level call additionally protects the rule-engine
     # fallback path used when OpenAI is unavailable.
     try:
-        from openai_helper import astro_scope_refusal as _ask_scope_refusal
+        from ask_scope_gate import astro_scope_refusal as _ask_scope_refusal
     except Exception as _scope_imp_exc:
         print(f"[ask/stream] openai_helper import failed: {_scope_imp_exc}", flush=True)
         return (

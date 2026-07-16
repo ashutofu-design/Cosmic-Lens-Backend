@@ -205,16 +205,100 @@ def classify_and_route_ask(
     understanding: dict[str, Any] | None = None,
     question_raw: str = "",
 ) -> dict[str, Any]:
-    """Understand → classify intent → apply routing patches. Never raises."""
+    """Understand → classify intent → apply routing patches. Never raises.
+
+    When Question DNA is already trusted, skip the extra intent + understand
+    LLM calls (those were stacking to 1–3 minutes on mobile).
+    """
     q = (question or "").strip()
     understanding = understanding if isinstance(understanding, dict) else {}
     summary = str(understanding.get("question_summary") or "").strip()
+
+    # ── Fast path: trusted Question DNA already extracted upstream ─────
+    _dna_fast = understanding.get("question_dna") if isinstance(understanding.get("question_dna"), dict) else None
+    if _dna_fast:
+        try:
+            from ask_question_dna import (
+                apply_question_dna_to_routing,
+                dna_item_trusted_for_routing,
+                dna_primary_item,
+            )
+
+            _item = dna_primary_item(_dna_fast)
+            if dna_item_trusted_for_routing(
+                _item,
+                dna_source=str(_dna_fast.get("source") or ""),
+            ):
+                admin: dict[str, Any] = dict(understanding)
+                res: dict[str, Any] = {
+                    "domain": str((_item or {}).get("domain") or "general"),
+                    "is_timing": bool((_item or {}).get("timing")),
+                    "source": "question_dna",
+                }
+                apply_question_dna_to_routing(
+                    q,
+                    admin,
+                    _dna_fast,
+                    llm_intent=res,
+                )
+                # Prefer DNA intent/user_wants as the question summary — no
+                # second understand LLM call.
+                _uw = str((_item or {}).get("user_wants") or (_item or {}).get("intent") or "").strip()
+                if _uw:
+                    admin["question_summary"] = _uw
+                    admin["question_meaning"] = _uw
+                    res["question_summary"] = _uw
+                admin["routed_domain"] = res.get("domain") or admin.get("routed_domain")
+                admin["routed_archetype"] = (
+                    admin.get("routed_archetype")
+                    or admin.get("mr_archetype")
+                    or admin.get("dna_engine_archetype")
+                )
+                admin["routed_timing"] = bool(res.get("is_timing"))
+                try:
+                    from ask_master_router import finalize_ask_route
+
+                    _mr = finalize_ask_route(
+                        q,
+                        understanding=admin,
+                        llm_intent=res,
+                        llm_intent_admin=admin,
+                    )
+                    res["is_timing"] = bool(_mr.is_timing)
+                    admin["routed_timing"] = bool(_mr.is_timing)
+                    admin["master_route"] = _mr.to_dict()
+                except Exception:
+                    pass
+                print(
+                    f"[route] DNA_FAST_PATH skip_intent_llm "
+                    f"domain={admin.get('routed_domain')} "
+                    f"archetype={admin.get('routed_archetype')}",
+                    flush=True,
+                )
+                return {
+                    "llm_intent": res,
+                    "llm_intent_record": res,
+                    "llm_intent_admin": admin,
+                    "intent_source": "question_dna",
+                    "is_timing": bool(res.get("is_timing")),
+                    "mr_archetype": admin.get("mr_archetype"),
+                    "career_archetype": admin.get("career_archetype"),
+                    "finance_archetype": admin.get("finance_archetype"),
+                    "health_archetype": admin.get("health_archetype"),
+                    "education_archetype": admin.get("education_archetype"),
+                    "children_archetype": admin.get("children_archetype"),
+                    "property_archetype": admin.get("property_archetype"),
+                    "travel_archetype": admin.get("travel_archetype"),
+                    "litigation_archetype": admin.get("litigation_archetype"),
+                }
+        except Exception as _dna_fast_exc:
+            print(f"[route] DNA_FAST_PATH skipped: {_dna_fast_exc}", flush=True)
 
     intent_q = q
     if summary and summary.lower() not in q.lower():
         intent_q = f"{q}\n\n[Understood meaning: {summary}]"
 
-    res: dict[str, Any] = {}
+    res = {}
     try:
         from ask_intent_llm import classify_ask_intent
 
@@ -239,15 +323,17 @@ def classify_and_route_ask(
     llm_intent_record = res if src not in ("llm_error", "llm_unavailable", "") else None
     intent_source = src if src in ("llm", "llm_repaired", "llm_low_conf") else "regex"
 
-    admin: dict[str, Any] = {**understanding, **{k: v for k, v in res.items() if v is not None}}
+    admin = {**understanding, **{k: v for k, v in res.items() if v is not None}}
     try:
         from ask_question_understand import ensure_question_understanding
 
+        # DNA already provides meaning — don't force a second understand call.
+        _force = not bool(admin.get("question_dna"))
         admin = ensure_question_understanding(
             q,
             admin,
             client=client,
-            force_llm=True,
+            force_llm=_force,
             question_raw=question_raw or q,
         )
     except Exception:

@@ -353,9 +353,37 @@ def build_domain_selected_blocks(
     }
 
 
+_GAP_DNA_JUDGE_OFF_BY_DEFAULT = frozenset({
+    "spiritual", "siblings", "parents", "enemies", "fame", "personality",
+    "dreams", "anger", "remedy", "charity", "settlement", "vastu", "pets",
+    "wellness", "luck", "network",
+})
+
+
 def domain_dna_judge_enabled(domain: str) -> bool:
-    env = f"ASK_{domain.upper()}_DNA_JUDGE"
-    return (os.environ.get(env) or os.environ.get("ASK_UNIFIED_DNA_JUDGE") or "1").strip() != "0"
+    d = (domain or "").strip().lower()
+    env = f"ASK_{d.upper()}_DNA_JUDGE" if d else "ASK_UNIFIED_DNA_JUDGE"
+    explicit = os.environ.get(env)
+    if explicit is not None and str(explicit).strip() != "":
+        return str(explicit).strip() != "0"
+    unified = os.environ.get("ASK_UNIFIED_DNA_JUDGE")
+    if unified is not None and str(unified).strip() != "":
+        return str(unified).strip() != "0"
+    # Gap / light domains: skip judge-by-default (latency). Health/MR/finance/
+    # travel keep their dedicated judge modules.
+    if d in _GAP_DNA_JUDGE_OFF_BY_DEFAULT:
+        return False
+    return True
+
+
+def dna_judge_retry_enabled() -> bool:
+    """Second LLM rewrite after judge fail — default OFF (was a major latency source)."""
+    return (os.environ.get("ASK_DNA_JUDGE_RETRY") or "0").strip().lower() in (
+        "1",
+        "on",
+        "true",
+        "yes",
+    )
 
 
 def _parse_judge_json(raw: str) -> dict[str, Any]:
@@ -477,48 +505,52 @@ ANSWER:
             audit["fix_hint"] = hint
 
         if not ok:
-            retry = list(messages) + [
-                {"role": "assistant", "content": text},
-                {"role": "user", "content": (
-                    "Rewrite the answer so it matches the exact Question DNA and fixes every "
-                    f"judge issue: {', '.join(issues) or 'question mismatch'}. "
-                    f"Fix hint: {hint or 'answer only what the user asked'}. "
-                    + (
-                        "Include 1 natural chart proof (planet + house/dignity)."
-                        if requires_chart_proof
-                        else "Do not invent personal chart facts."
-                    )
-                )},
-            ]
-            try:
-                r2 = client.chat.completions.create(
-                    model=model, messages=retry, max_tokens=max_tokens,
-                )
-                t2 = (r2.choices[0].message.content or "").strip()
-                if t2:
-                    text = t2
-                    audit["attempts"] = 2
-                    audit["dna_retry"] = True
-                    if domain:
-                        audit["selected_blocks"] = build_domain_selected_blocks(
-                            question, text, meta=meta, domain=domain,
+            if not dna_judge_retry_enabled():
+                audit["dna_retry"] = False
+                audit["dna_retry_skipped"] = "ASK_DNA_JUDGE_RETRY=off"
+            else:
+                retry = list(messages) + [
+                    {"role": "assistant", "content": text},
+                    {"role": "user", "content": (
+                        "Rewrite the answer so it matches the exact Question DNA and fixes every "
+                        f"judge issue: {', '.join(issues) or 'question mismatch'}. "
+                        f"Fix hint: {hint or 'answer only what the user asked'}. "
+                        + (
+                            "Include 1 natural chart proof (planet + house/dignity)."
+                            if requires_chart_proof
+                            else "Do not invent personal chart facts."
                         )
-                    parsed2 = _judge_answer(text)
-                    ok2 = bool(parsed2.get("passed", False))
-                    issues2 = [
-                        str(x) for x in (parsed2.get("issues") or []) if str(x).strip()
-                    ]
-                    audit["passed"] = ok2
-                    audit["issues"] = issues2
-                    audit["dna_judge_retry"] = {
-                        "judge": f"{domain}_dna_v1",
-                        "enabled": True,
-                        "passed": ok2,
-                        "issues": issues2,
-                        "parsed": parsed2,
-                    }
-            except Exception as exc:
-                audit["dna_retry_error"] = str(exc)[:120]
+                    )},
+                ]
+                try:
+                    r2 = client.chat.completions.create(
+                        model=model, messages=retry, max_tokens=max_tokens,
+                    )
+                    t2 = (r2.choices[0].message.content or "").strip()
+                    if t2:
+                        text = t2
+                        audit["attempts"] = 2
+                        audit["dna_retry"] = True
+                        if domain:
+                            audit["selected_blocks"] = build_domain_selected_blocks(
+                                question, text, meta=meta, domain=domain,
+                            )
+                        parsed2 = _judge_answer(text)
+                        ok2 = bool(parsed2.get("passed", False))
+                        issues2 = [
+                            str(x) for x in (parsed2.get("issues") or []) if str(x).strip()
+                        ]
+                        audit["passed"] = ok2
+                        audit["issues"] = issues2
+                        audit["dna_judge_retry"] = {
+                            "judge": f"{domain}_dna_v1",
+                            "enabled": True,
+                            "passed": ok2,
+                            "issues": issues2,
+                            "parsed": parsed2,
+                        }
+                except Exception as exc:
+                    audit["dna_retry_error"] = str(exc)[:120]
     except Exception as exc:
         audit["dna_judge"] = {
             "enabled": True, "passed": True, "error": str(exc)[:160], "soft_pass_on_error": True,

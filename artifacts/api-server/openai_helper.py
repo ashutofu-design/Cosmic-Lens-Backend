@@ -10634,15 +10634,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         not (_use_health_dna_judge or _use_mr_dna_judge or _use_finance_dna_judge or _use_travel_dna_judge)
         and bool(_eng_checks.get("llm_no_engine"))
     ):
-        _use_unified_dna_judge = True
-        _no_engine_intent = (
-            _fallback_intent if isinstance(_fallback_intent, dict) else {}
-        )
-        _unified_dna_domain = str(
-            _no_engine_intent.get("routed_domain")
-            or _no_engine_intent.get("domain")
-            or "general"
-        ).strip().lower()
+        # No-engine fallback: one answer LLM call only — DNA judge + retry were
+        # adding 10–40s and causing mobile timeouts on personal gap asks.
+        _use_unified_dna_judge = False
+        _unified_dna_domain = ""
+        _eng_checks["dna_judge_skipped"] = "llm_no_engine_fast_path"
     try:
         if _use_health_dna_judge:
             from ask_health.dna_judge import run_health_llm_with_dna_judge

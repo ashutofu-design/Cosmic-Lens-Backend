@@ -21,6 +21,21 @@ DOMAIN_PRIMARY_ENGINE: dict[str, str] = {
     "network": "network",
     "friends": "network",
     "social_circle": "network",
+    # Gap static engines (ask_gap_dispatch)
+    "spiritual": "gap",
+    "siblings": "gap",
+    "parents": "gap",
+    "enemies": "gap",
+    "fame": "gap",
+    "personality": "gap",
+    "dreams": "gap",
+    "anger": "gap",
+    "remedy": "gap",
+    "charity": "gap",
+    "settlement": "gap",
+    "vastu": "gap",
+    "pets": "gap",
+    "wellness": "gap",
 }
 
 # When LLM domain is X, these regex-only engines must not run

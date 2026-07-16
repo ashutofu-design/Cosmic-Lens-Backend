@@ -273,13 +273,18 @@ def dna_item_trusted_for_routing(
         return False
     if int(item.get("coercions") or 0) > 2:
         return False
+    domain = str(item.get("domain") or "").strip().lower()
     bucket = str(item.get("bucket") or "").strip().lower()
-    if bucket in ("", "general", LOVE_BUCKET_UNKNOWN):
+    if bucket in ("", "general", LOVE_BUCKET_UNKNOWN) and domain in ("", "general"):
         return False
     conf = float(item.get("confidence") or 0)
     bmc = str(item.get("bucket_match_confidence") or "").lower()
     if conf >= min_confidence:
-        return True
+        # Domain with a real engine is enough even if bucket is generic.
+        if domain and domain not in ("", "general"):
+            return True
+        if bucket not in ("", "general", LOVE_BUCKET_UNKNOWN):
+            return True
     if bmc == "high":
         return True
     if bmc == "medium" and conf >= 0.45:

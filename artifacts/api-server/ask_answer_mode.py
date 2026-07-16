@@ -17,7 +17,7 @@ _VALID_MODES = frozenset({"chart_fact", "engine", "llm_chart", "llm_knowledge"})
 
 _PERSONAL_RX = re.compile(
     r"(?ix)\b("
-    r"mera|meri|mere|mujhe|mujhko|main|mai|hum|ham|hamari|hamara|"
+    r"mera|meri|mere|mujhe|mujhko|main|mai|me|hum|ham|hamari|hamara|"
     r"my|i\s+am|our|myself|kundli\s+me|chart\s+me"
     r")\b",
 )

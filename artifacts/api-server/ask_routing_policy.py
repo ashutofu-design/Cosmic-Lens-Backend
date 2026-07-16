@@ -78,8 +78,11 @@ def is_cosmic_domain_concept_question(
         pass
     if _CONCEPT_SHAPE_RX.search(q):
         return True
+    # Bare domain labels are NOT enough — spiritual/luck have dedicated gap
+    # engines. Only treat as concept when no engine matched (caller already
+    # checked matches_dedicated_static_engine before this path).
     dom = str((llm_intent or {}).get("domain") or "").strip().lower()
-    if dom in ("spiritual", "vastu", "general", "luck"):
+    if dom in ("vastu", "general"):
         return True
     try:
         from ask_question_normalize import has_question_intent
@@ -228,14 +231,25 @@ def should_bypass_static_engines_for_direct_llm(
     question: str,
     llm_intent: dict[str, Any] | None = None,
 ) -> tuple[bool, str]:
-    """Chart/concept/interpretive Q — skip static engines → LLM."""
+    """Chart/concept/interpretive Q — skip static engines → LLM.
+
+    Dedicated engines always win over answer_mode labels. Otherwise personal
+    spiritual/gap asks (e.g. "kya me dharmik hun") were wrongly bypassed to the
+    slow chart-only LLM path when understand/DNA set answer_mode=llm_chart.
+    """
     q = (question or "").strip()
     if not q:
+        return False, ""
+    intent = llm_intent if isinstance(llm_intent, dict) else None
+    # Engine classifiers first — never let answer_mode skip a real engine.
+    if matches_dedicated_static_engine(q, intent):
         return False, ""
     try:
         from ask_answer_mode import resolve_answer_mode
 
-        mode = resolve_answer_mode(q, llm_intent if isinstance(llm_intent, dict) else {})
+        mode = resolve_answer_mode(q, intent or {})
+        if mode == "chart_fact":
+            return False, ""
         if mode in ("llm_chart", "llm_knowledge"):
             try:
                 from chart_fact_answer import _detect_divisional
@@ -245,12 +259,8 @@ def should_bypass_static_engines_for_direct_llm(
             except Exception:
                 pass
             return True, f"answer_mode_{mode}"
-        if mode == "chart_fact":
-            return False, ""
     except Exception:
         pass
-    if matches_dedicated_static_engine(q, llm_intent):
-        return False, ""
     try:
         from chart_fact_answer import (
             _detect_divisional,
@@ -260,7 +270,7 @@ def should_bypass_static_engines_for_direct_llm(
 
         if is_pure_chart_fact_lookup(q):
             return False, ""
-        if is_cosmic_domain_concept_question(q, llm_intent):
+        if is_cosmic_domain_concept_question(q, intent):
             return True, "cosmic_concept_no_static_engine"
         if _detect_divisional(q):
             return True, "divisional_chart_no_static_engine"
@@ -268,7 +278,7 @@ def should_bypass_static_engines_for_direct_llm(
             return True, "chart_interpretive_no_static_engine"
     except Exception:
         pass
-    dom = str((llm_intent or {}).get("domain") or "").strip().lower()
+    dom = str((intent or {}).get("domain") or "").strip().lower()
     if dom == "general":
         try:
             from chart_fact_answer import needs_llm_chart_answer

@@ -5509,14 +5509,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         print(f"[raw_passthrough] early question_understand skipped: {_uq_early_exc}", flush=True)
 
     try:
-        from chart_fact_answer import (
-            try_deterministic_chart_fact,
-            answer_hypothetical_placement_change,
-            is_chart_lookup_question,
-            is_domain_life_area_interpretation_question,
-            is_domain_outcome_yoga_question,
-            needs_llm_chart_answer,
-        )
+        from chart_fact_answer import answer_hypothetical_placement_change
 
         # Natal "lord ko X house me place" — fixed answer (no empty-house stub, no LLM).
         _hyp = answer_hypothetical_placement_change(question or "", lang=lang or "hn")
@@ -5536,43 +5529,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 intent_source="chart_fact",
                 llm_intent=_llm_intent_admin,
             )
-
-        if needs_llm_chart_answer(question):
-            print(
-                f"[raw_passthrough] chart_fact skipped — LLM interpretation/combo "
-                f"q={(question or '')[:72]!r}",
-                flush=True,
-            )
-        elif is_domain_outcome_yoga_question(question):
-            print(
-                f"[raw_passthrough] chart_fact skipped — domain outcome yoga "
-                f"q={(question or '')[:72]!r}",
-                flush=True,
-            )
-        elif is_domain_life_area_interpretation_question(question):
-            print(
-                f"[raw_passthrough] chart_fact skipped — domain life interpretation "
-                f"q={(question or '')[:72]!r}",
-                flush=True,
-            )
-        else:
-            _det = try_deterministic_chart_fact(question, kundli, lang, birth=birth)
-            if _det:
-                return _attach_admin(
-                    _det,
-                    question=question or "",
-                    question_type="STATIC",
-                    is_timing=False,
-                    llm_called=False,
-                    skip_reason="chart_fact_deterministic",
-                    intent_source="chart_fact",
-                    llm_intent=_llm_intent_admin,
-                )
-            if is_chart_lookup_question(question):
-                print(
-                    "[raw_passthrough] chart_fact unresolved → LLM (no engine refusal)",
-                    flush=True,
-                )
+        # Chart-fact deterministic path DISABLED — placement Qs go to LLM + kundli.
     except Exception as _cfe:
         print(f"[raw_passthrough] chart_fact deterministic skipped: {_cfe}", flush=True)
 
@@ -12884,18 +12841,10 @@ def _build_messages(
         question = prepare_ask_question(question)
     except Exception:
         pass
-    if mode == "astro" and (_route_is_minimal or _is_chart_fact_question(question)):
-        try:
-            from chart_fact_answer import needs_llm_chart_answer, try_deterministic_chart_fact
-
-            if not needs_llm_chart_answer(question):
-                _det = try_deterministic_chart_fact(question, kundli, lang)
-                if _det and isinstance(out_meta, dict):
-                    out_meta["deterministic_chart_fact"] = True
-                if _det:
-                    return _det
-        except Exception as _cfe:
-            print(f"[ai_ask] chart_fact deterministic skipped: {_cfe}", flush=True)
+    # Chart-fact minimal prompt DISABLED for placement lookups ("shani kahan",
+    # "rahu kis house"). Those go to the full D1+D9 Cosmo prompt below.
+    # Keep minimal path only for dosha_check / transparency / simple_fact routes.
+    if mode == "astro" and _route_is_minimal:
         chart_only = _kundli_summary(kundli, birth)
 
         # ── Dosha pre-compute (deterministic) ─────────────────────────────
@@ -16127,21 +16076,12 @@ _CHART_FACT_PATTERNS = [
         r"\bhow\s+did\s+you\s+(?:know|find|figure)\b",
         r"\bproof\s+kya\s+hai\b",
         r"\bsource\s+(?:kya|kaha)\b",
-        # ── House / planet placement lookups (engine-only, no LLM) ─────────
-        r"\b\d{1,2}(?:st|nd|rd|th)?\s*(?:house|ghar|bhav[a]?)\s+me\b",
-        r"\b\d{1,2}(?:st|nd|rd|th)?\s+me\b.{0,20}\b(kon|kaun|kya|planet|grah)\b",
-        r"\b\d{1,2}(?:st|nd|rd|th)?\s+(?:house|ghar|bhav[a]?)\s+(?:k[ae]\s+)?(?:lord|swami|malik)\b",
-        r"\b(?:sun|surya|moon|chandra|mars|mangal|mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu)\b"
-        r".{0,25}\b(?:kis\s+(?:house|ghar|bhav|rashi)|kahan|kahaan|placement)\b",
-        r"\b(?:kis\s+(?:house|ghar|bhav)|kahan|kahaan)\b.{0,25}\b(?:sun|surya|moon|chandra|mars|mangal|"
-        r"mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu)\b",
+        # ── House / planet placement lookups — DISABLED (full LLM + D1/D9) ──
+        # (patterns removed so "shani kahan" / "rahu kis house" never hit
+        #  the 2–3 sentence minimal chart_fact prompt)
         r"\b(?:sub[\s-]?lord|sublord|cusp)\b",
-        r"\b(?:d\d{1,2}|navamsa|navamsha|dwadasamsa)\b.{0,30}\b(?:house|ghar|bhav|me|kon|kaun|kahan)\b",
         r"\b\d{1,2}(?:st|nd|rd|th)?\s+csl\b",
         r"\b(?:mera|meri|mere)\s+\d{1,2}(?:st|nd|rd|th)?\s+csl\b",
-        r"\b(?:mesh|mithun|kark|singh|kanya|tula|vrishchik|dhanu|makar|kumbh|meen|"
-        r"aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|sagittarius|"
-        r"capricorn|aquarius|pisces)\s*(?:rashi)?\b.{0,15}\b(?:kis\s+ghar|kis\s+house)\b",
     )
 ]
 _CHART_FACT_DEV_PATTERNS = [
@@ -16341,7 +16281,23 @@ def _classify_ask_intent(question: str, lang: str = "hn") -> dict:
 
     # Most specific → least specific routing.
     # 1. Lagna lookup (no other strong signal, just "lagna kya hai")
-    if has_lagna and not has_strength and not has_position and not has_house_tok:
+    # Skip when question is gemstone/remedy advice or named-sign lagna theory
+    # ("kisi ka leo lagna → gemstone") — that is NOT "what is MY lagna".
+    _GEM_OR_NAMED_LAGNA_ADVICE = re.compile(
+        r"(?ix)\b("
+        r"gemstone|gem\s*stone|ratna|ratn|stone|mani|dharan|pehne|pehen|remedy|upay|"
+        r"kisi\s+ka|kisi\s+ke|kisi\s+ki|"
+        r"(?:leo|aries|taurus|gemini|cancer|virgo|libra|scorpio|"
+        r"sagittarius|capricorn|aquarius|pisces|mesh|singh|simha)\s+lagna"
+        r")\b"
+    )
+    if (
+        has_lagna
+        and not has_strength
+        and not has_position
+        and not has_house_tok
+        and not _GEM_OR_NAMED_LAGNA_ADVICE.search(q)
+    ):
         reasons.append("lagna keyword without strength/position")
         return {"intent": "lagna_lookup", "subjects": ["Lagna"], "scope": "lagna",
                 "confidence": 0.95, "reasons": reasons, "word_count": wc}

@@ -48,9 +48,11 @@ _THEORY_RX = re.compile(
 def normalize_answer_mode(raw: Any) -> str | None:
     m = str(raw or "").strip().lower().replace("-", "_").replace(" ", "_")
     aliases = {
-        "chartfact": "chart_fact",
-        "fact": "chart_fact",
-        "lookup": "chart_fact",
+        # chart_fact path disabled — remap legacy labels to llm_chart
+        "chartfact": "llm_chart",
+        "chart_fact": "llm_chart",
+        "fact": "llm_chart",
+        "lookup": "llm_chart",
         "static": "engine",
         "timing": "engine",
         "engine_static": "engine",
@@ -65,6 +67,8 @@ def normalize_answer_mode(raw: Any) -> str | None:
         "general_llm": "llm_knowledge",
     }
     m = aliases.get(m, m)
+    if m == "chart_fact":
+        m = "llm_chart"
     return m if m in _VALID_MODES else None
 
 
@@ -78,24 +82,18 @@ def infer_answer_mode(
         return "llm_knowledge"
 
     intent = llm_intent if isinstance(llm_intent, dict) else {}
+    raw_am = str(intent.get("answer_mode") or "").strip().lower().replace("-", "_").replace(" ", "_")
     from_llm = normalize_answer_mode(intent.get("answer_mode"))
 
-    try:
-        from chart_fact_answer import is_pure_chart_fact_lookup, needs_llm_chart_answer
-
-        if is_pure_chart_fact_lookup(q):
-            return "chart_fact"
-    except Exception:
-        pass
+    # chart_fact disabled: never return it; map LLM/legacy chart_fact → llm path.
+    if raw_am in ("chart_fact", "chartfact", "fact", "lookup") or from_llm == "chart_fact":
+        return "llm_chart" if _PERSONAL_RX.search(q) else "llm_knowledge"
 
     # Personal life-outcome (career/shaadi/health…) → engine before chart-interpret heuristics.
     if _PERSONAL_RX.search(q) and _LIFE_OUTCOME_RX.search(q):
         return "engine"
 
-    # Classifier-confirmed engines (also covers some non-"mera" phrasings).
-    if _personal_engine_match(q, intent):
-        return "engine"
-
+    # Interpretive / theory / combo → LLM before engine classifiers (e.g. "house me").
     try:
         from chart_fact_answer import needs_llm_chart_answer
 
@@ -106,7 +104,11 @@ def infer_answer_mode(
     except Exception:
         pass
 
-    if from_llm in ("engine", "llm_chart", "llm_knowledge", "chart_fact"):
+    # Classifier-confirmed engines (also covers some non-"mera" phrasings).
+    if _personal_engine_match(q, intent):
+        return "engine"
+
+    if from_llm in ("engine", "llm_chart", "llm_knowledge"):
         return from_llm
 
     if _PERSONAL_RX.search(q):
@@ -160,15 +162,16 @@ def resolve_answer_mode(
     raw = normalize_answer_mode(intent.get("answer_mode"))
     inferred = infer_answer_mode(question, intent)
     # Hard overrides that understand must never break.
-    if inferred == "chart_fact":
-        mode = "chart_fact"
-    elif raw == "engine" and inferred in ("llm_chart", "llm_knowledge"):
+    if raw == "engine" and inferred in ("llm_chart", "llm_knowledge"):
         # Understand said engine but Q is interpretive/theory — trust infer.
         mode = inferred
     elif raw in _VALID_MODES:
         mode = raw
     else:
         mode = inferred
+    # chart_fact path disabled — always remap to llm_chart.
+    if mode == "chart_fact":
+        mode = "llm_chart"
     if isinstance(intent, dict):
         intent["answer_mode"] = mode
         intent["answer_mode_source"] = (

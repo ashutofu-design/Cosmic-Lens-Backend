@@ -177,6 +177,31 @@ _DOMAIN_OUTCOME_YOGA_RX = re.compile(
     r")\b",
 )
 
+# Gemstone / remedy / hypothetical lagna advice — NEVER "your lagna is X".
+_GEM_REMEDY_ADVICE_RX = re.compile(
+    r"(?ix)\b("
+    r"gemstone|gem\s*stone|ratna|ratn|stone|mani|pukhraj|neelam|manik|moti|"
+    r"emerald|ruby|pearl|sapphire|coral|"
+    r"remedy|upay|upaay|mantra|dharan|pehne|pehen|wear\s+stone|"
+    r"kaun\s*sa\s+ratn|which\s+gem|konsa\s+gem|konsa\s+ratn"
+    r")\b"
+)
+_HYPOTHETICAL_OTHER_CHART_RX = re.compile(
+    r"(?ix)\b("
+    r"kisi\s+ka|kisi\s+ke|kisi\s+ki|agar\s+kisi|if\s+someone|"
+    r"for\s+(?:leo|aries|taurus|gemini|cancer|virgo|libra|scorpio|"
+    r"sagittarius|capricorn|aquarius|pisces|mesh|singh|simha)\s+lagna|"
+    r"(?:leo|aries|taurus|gemini|cancer|virgo|libra|scorpio|"
+    r"sagittarius|capricorn|aquarius|pisces|mesh|singh|simha)\s+lagna"
+    r".{0,40}\b(?:gem|ratn|stone|remedy|upay|dharan|pehne|wear)"
+    r")\b"
+)
+
+
+def is_gemstone_or_remedy_advice_question(question: str) -> bool:
+    q = normalize_ask_typos((question or "").strip())
+    return bool(q and (_GEM_REMEDY_ADVICE_RX.search(q) or _HYPOTHETICAL_OTHER_CHART_RX.search(q)))
+
 
 def is_domain_outcome_yoga_question(question: str) -> bool:
     """Life-domain yog (love/career/marriage) — engines/LLM, not chart_fact lookup."""
@@ -321,6 +346,9 @@ def needs_llm_chart_answer(question: str) -> bool:
     q = normalize_ask_typos((question or "").strip())
     if not q:
         return False
+    # "Leo lagna pe kaunsa gemstone" must NEVER become "Your lagna is Sagittarius".
+    if is_gemstone_or_remedy_advice_question(q):
+        return True
     if _HYPOTHETICAL_PLACEMENT_RX.search(q):
         return True
     if _DIGNITY_TOPIC_RX.search(q):
@@ -356,11 +384,81 @@ def needs_llm_chart_answer(question: str) -> bool:
 
 
 def is_pure_chart_fact_lookup(question: str) -> bool:
-    """Atomic placement only — short factual answer, no LLM narration."""
+    """Atomic placement lookup — DISABLED: all placement Qs go to LLM + D1/D9."""
+    return False
+
+
+def is_chart_lookup_question(question: str) -> bool:
+    """Chart-fact short-circuit — DISABLED (product: LLM narrates from kundli)."""
+    return False
+
+
+def _is_pure_chart_fact_lookup_impl(question: str) -> bool:
+    """Legacy detector kept for tests / offline checks; not used in Ask routing."""
     q = normalize_ask_typos((question or "").strip())
     if not q or needs_llm_chart_answer(q):
         return False
-    return is_chart_lookup_question(q)
+    return _is_chart_lookup_question_impl(q)
+
+
+def _is_chart_lookup_question_impl(question: str) -> bool:
+    """True when the question is a chart placement/fact lookup (engine-only)."""
+    q = normalize_ask_typos((question or "").strip())
+    if not q or len(q.split()) > 18:
+        return False
+    if is_gemstone_or_remedy_advice_question(q):
+        return False
+    if needs_llm_chart_answer(q):
+        return False
+    if is_domain_outcome_yoga_question(q):
+        return False
+    if is_domain_life_area_interpretation_question(q):
+        return False
+    # Love / vehicle / career timing must not be mis-routed as chart yoga lookup.
+    for _mod, _fn in (
+        ("ask_love.timing_registry", "is_love_timing_question"),
+        ("ask_vehicle.timing_registry", "is_vehicle_timing_question"),
+        ("ask_career.timing_registry", "is_career_timing_question"),
+    ):
+        try:
+            import importlib
+
+            if getattr(importlib.import_module(_mod), _fn)(q):
+                return False
+        except Exception:
+            pass
+    local = _detect_local_lookup_tag(q)
+    if local:
+        return True
+    try:
+        from openai_helper import _classify_ask_intent, _is_chart_fact_question
+
+        if _is_chart_fact_question(q):
+            # Guard: gemstone/lagna-advice still may match lagna patterns.
+            if is_gemstone_or_remedy_advice_question(q):
+                return False
+            return True
+        intent = _classify_ask_intent(q, "hn")
+        it = intent.get("intent") or ""
+        if it in _CHART_LOOKUP_INTENTS:
+            if it == "lagna_lookup" and is_gemstone_or_remedy_advice_question(q):
+                return False
+            return True
+        if it in ("planet_strength", "yoga_check", "comparison", "planet_combo"):
+            return False
+    except Exception:
+        pass
+    if _CHART_LOOKUP_RX.search(q) and _parse_house_num(q) is not None:
+        return True
+    if _CHART_LOOKUP_RX.search(q):
+        try:
+            from openai_helper import _detect_planets
+
+            if _detect_planets(q):
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def is_domain_life_area_interpretation_question(question: str) -> bool:
@@ -470,59 +568,6 @@ def _detect_local_lookup_tag(q: str) -> str | None:
     if _detect_divisional(q):
         return "divisional_lookup"
     return None
-
-
-def is_chart_lookup_question(question: str) -> bool:
-    """True when the question is a chart placement/fact lookup (engine-only)."""
-    q = normalize_ask_typos((question or "").strip())
-    if not q or len(q.split()) > 18:
-        return False
-    if needs_llm_chart_answer(q):
-        return False
-    if is_domain_outcome_yoga_question(q):
-        return False
-    if is_domain_life_area_interpretation_question(q):
-        return False
-    # Love / vehicle / career timing must not be mis-routed as chart yoga lookup.
-    for _mod, _fn in (
-        ("ask_love.timing_registry", "is_love_timing_question"),
-        ("ask_vehicle.timing_registry", "is_vehicle_timing_question"),
-        ("ask_career.timing_registry", "is_career_timing_question"),
-    ):
-        try:
-            import importlib
-
-            if getattr(importlib.import_module(_mod), _fn)(q):
-                return False
-        except Exception:
-            pass
-    local = _detect_local_lookup_tag(q)
-    if local:
-        return True
-    try:
-        from openai_helper import _classify_ask_intent, _is_chart_fact_question
-
-        if _is_chart_fact_question(q):
-            return True
-        intent = _classify_ask_intent(q, "hn")
-        it = intent.get("intent") or ""
-        if it in _CHART_LOOKUP_INTENTS:
-            return True
-        if it in ("planet_strength", "yoga_check", "comparison", "planet_combo"):
-            return False
-    except Exception:
-        pass
-    if _CHART_LOOKUP_RX.search(q) and _parse_house_num(q) is not None:
-        return True
-    if _CHART_LOOKUP_RX.search(q):
-        try:
-            from openai_helper import _detect_planets
-
-            if _detect_planets(q):
-                return True
-        except Exception:
-            pass
-    return False
 
 
 def is_chart_interpretation_question(question: str) -> bool:
@@ -866,136 +911,11 @@ def try_deterministic_chart_fact(
     lang: str = "hn",
     birth: Any = None,
 ) -> dict | None:
-    """Return a full ask-response dict for chart lookups, or None if not a lookup."""
-    # Natal rewrite / "lord ko X me place" — no kundli required for the lock answer.
+    """Chart placement one-liners DISABLED — all go to LLM + D1/D9 kundli.
+
+    Only keeps natal rewrite lock ("lord ko X me place") — not a chart lookup.
+    """
     _hyp = answer_hypothetical_placement_change(question or "", lang=lang)
     if _hyp:
         return _hyp
-
-    if not isinstance(kundli, dict) or not kundli.get("planets"):
-        return None
-
-    # Merge birth fields for lazy KP compute when client sends birthData separately.
-    if isinstance(birth, dict):
-        for k in ("day", "month", "year", "hour", "minute", "ampm", "lat", "lon", "tz"):
-            if kundli.get(k) is None and birth.get(k) is not None:
-                kundli[k] = birth.get(k)
-
-    q = normalize_ask_typos(question or "")
-    lang_use = lang if lang in ("hi", "hn", "en") else "hn"
-
-    if needs_llm_chart_answer(q):
-        return None
-
-    if is_domain_life_area_interpretation_question(q):
-        return None
-
-    local_tag = _detect_local_lookup_tag(q)
-    it = local_tag or ""
-    planets: list[str] = []
-
-    if not is_pure_chart_fact_lookup(q):
-        return None
-
-    try:
-        from openai_helper import _classify_ask_intent, _detect_planets
-
-        if not it:
-            it = (_classify_ask_intent(q, lang_use).get("intent") or "")
-        planets = _detect_planets(q)
-    except Exception:
-        if not it:
-            it = "house_lookup"
-
-    house = _parse_house_num(q)
-    varga = _detect_divisional(q)
-    use_csl = bool(re.search(r"\bcsl\b", q, re.I))
-
-    # ── Handlers (priority order) ─────────────────────────────────────────
-    # Sign-in-house BEFORE moon_sign ("Mesh rashi kis ghar me" ≠ janma rashi).
-    if _detect_sign_house_lookup(q):
-        sign = _parse_named_sign(q)
-        if sign:
-            text = _answer_sign_in_house(kundli, sign, lang_use)
-            if text:
-                return _payload(text, "sign_house_lookup")
-
-    # KP CSL / cusp sub-lord — engine only, no LLM interpretation.
-    if it == "kp_cusp_lookup" or _KP_CUSP_RX.search(q):
-        h = house or 1
-        text = _answer_kp_cusp(kundli, h, lang_use, use_csl=use_csl)
-        if text:
-            return _payload(text, "kp_cusp_lookup")
-
-    if it == "lagna_lookup":
-        sign = _sign_label(_lagna_sign(kundli), lang_use)
-        if sign:
-            text = f"Your ascendant (Lagna) is {sign}." if lang_use == "en" else f"Aapka lagna {sign} hai."
-            return _payload(text, it)
-
-    if it == "moon_sign_lookup" and not _detect_sign_house_lookup(q):
-        sign = _sign_label(_moon_sign(kundli), lang_use)
-        if sign:
-            text = (
-                f"Your Moon sign (janma rashi) is {sign}."
-                if lang_use == "en"
-                else f"Aapki janma rashi {sign} hai."
-            )
-            return _payload(text, it)
-
-    if it == "sun_sign_lookup":
-        sign = _sign_label(_sun_sign(kundli), lang_use)
-        if sign:
-            text = f"Your Sun sign is {sign}." if lang_use == "en" else f"Aapki Surya rashi {sign} hai."
-            return _payload(text, it)
-
-    if it == "nakshatra_lookup":
-        nak = _nakshatra(kundli)
-        if nak:
-            text = f"Your birth nakshatra is {nak}." if lang_use == "en" else f"Aapka janma nakshatra {nak} hai."
-            return _payload(text, it)
-
-    if it == "dasha_current":
-        dasha = _current_dasha(kundli)
-        if dasha:
-            text = f"Your current dasha is {dasha}." if lang_use == "en" else f"Abhi aapki {dasha} chal rahi hai."
-            return _payload(text, it)
-
-    if it in ("house_lord_lookup",) and house:
-        text = _answer_house_lord(kundli, house, lang_use)
-        if text:
-            return _payload(text, it)
-
-    if it in ("planet_nakshatra_lookup",) and planets:
-        text = _answer_planet_nakshatra(kundli, planets[0], lang_use)
-        if text:
-            return _payload(text, it)
-
-    if it in ("divisional_lookup",) and varga:
-        text = _answer_divisional(
-            kundli,
-            varga,
-            planet=planets[0] if planets else None,
-            house=house,
-            lang=lang_use,
-        )
-        if text:
-            return _payload(text, it)
-
-    if it in ("house_lookup",) and house:
-        text = _answer_house_lookup(kundli, house, lang_use)
-        if text:
-            return _payload(text, it)
-
-    if it in ("planet_in_house", "planet_position") and planets:
-        text = _answer_planet_position(kundli, planets[0], lang_use)
-        if text:
-            return _payload(text, it)
-
-    # Fallback: house number in question → occupants
-    if house and re.search(r"\b(kon|kaun|kya|who|what|which)\b", q, re.I):
-        text = _answer_house_lookup(kundli, house, lang_use)
-        if text:
-            return _payload(text, "house_lookup")
-
     return None

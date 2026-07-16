@@ -18,12 +18,26 @@ _SCOPE_RX = re.compile(
 )
 _CHARITY_ONLY_RX = re.compile(r"(?ix)\b(daan|charity|donation)\b")
 
+# Hypothetical / named-lagna gem advice ("kisi ka leo lagna → ratn") is
+# classical knowledge — NOT the native's chart remedy engine.
+_HYPOTHETICAL_NAMED_LAGNA_RX = re.compile(
+    r"(?ix)\b("
+    r"kisi\s+ka|kisi\s+ke|kisi\s+ki|agar\s+kisi|if\s+someone|"
+    r"for\s+(?:a\s+)?(?:leo|aries|taurus|gemini|cancer|virgo|libra|scorpio|"
+    r"sagittarius|capricorn|aquarius|pisces|mesh|singh|simha)\s+(?:lagna|ascendant)|"
+    r"(?:leo|aries|taurus|gemini|cancer|virgo|libra|scorpio|"
+    r"sagittarius|capricorn|aquarius|pisces|mesh|singh|simha)\s+(?:lagna|ascendant)"
+    r")\b"
+)
+
 
 def is_remedy_static_question(question: str, llm_intent: dict | None = None) -> bool:
     q = (question or "").strip()
     if not q or not _SCOPE_RX.search(q) or TIMING_RX.search(q):
         return False
     if is_spiritual_topic(q):
+        return False
+    if _HYPOTHETICAL_NAMED_LAGNA_RX.search(q):
         return False
     if _CHARITY_ONLY_RX.search(q) and not re.search(
         r"(?ix)\b(remedy|ratn|gem|mantra|puja|upay)\b", q

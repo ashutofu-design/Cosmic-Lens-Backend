@@ -295,15 +295,7 @@ def resolve_ask_route(
             llm_intent_admin if isinstance(llm_intent_admin, dict) else llm_intent,
         )
         guards.append(f"answer_mode:{answer_mode}")
-        if answer_mode == "chart_fact":
-            return MasterRoute(
-                path="chart_fact",
-                is_timing=False,
-                domain=domain,
-                archetype=archetype,
-                reason="answer_mode_chart_fact",
-                guards=guards,
-            )
+        # chart_fact mode remapped upstream; never short-circuit to chart_fact path.
         if answer_mode in ("llm_chart", "llm_knowledge"):
             return MasterRoute(
                 path="chart_llm",
@@ -345,20 +337,7 @@ def resolve_ask_route(
     except Exception:
         pass
 
-    try:
-        from chart_fact_answer import is_pure_chart_fact_lookup
-
-        if is_pure_chart_fact_lookup(combined):
-            return MasterRoute(
-                path="chart_fact",
-                is_timing=False,
-                domain=domain,
-                archetype=archetype,
-                reason="chart_fact_lookup",
-                guards=guards,
-            )
-    except Exception:
-        pass
+    # chart_fact lookup path removed — placement Qs fall through to chart_llm.
 
     return MasterRoute(
         path="chart_llm",

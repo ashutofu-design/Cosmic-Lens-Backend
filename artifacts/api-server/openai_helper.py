@@ -5427,80 +5427,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception as _tc_exc:
         print(f"[raw_passthrough] timing clarifier skipped: {_tc_exc}", flush=True)
 
-    # ── Transparency follow-up ("kaise bataya? kya check kiya?") ──────────
-    # Re-run the PREVIOUS question with explain=ON so the user gets the full
-    # evidence behind the earlier reading, instead of answering the meta-Q.
+    # ── Follow-up: Understand LLM owns new vs continuing thread (no regex) ─
     _force_explain = False
     _timing_refine_followup = False
     _general_followup = False
-    if _is_transparency_followup(question):
-        _prev_q = _extract_prev_ask_question(history, question)
-        if _prev_q:
-            print(
-                f"[raw_passthrough] transparency follow-up → re-explain prev Q",
-                flush=True,
-            )
-            question = _prev_q
-            _force_explain = True
-        else:
-            return {
-                "text": (
-                    "Pichhle reading ke kis hisse ke baare me janna hai? "
-                    "Thoda batao — main wahi pattern detail me samjha deta hoon."
-                ),
-                "topic": "general",
-                "question_type": "STATIC",
-                "confidence": 1.0,
-                "source": "raw_passthrough:transparency_no_context",
-                "engine_tag": "ans-cosmo",
-                "follow_ups": [],
-            }
-
-    # ── Timing refine follow-up ("exact month?", "kis mahine change hoga?") ─
     _user_turn_question = question or ""
-    try:
-        from ask_timing_followup import resolve_timing_followup_question
-
-        _eff_q, _timing_refine_followup = resolve_timing_followup_question(
-            question, history,
-        )
-        if _timing_refine_followup:
-            print(
-                f"[raw_passthrough] timing refine follow-up → engine Q="
-                f"{_eff_q[:80]!r}",
-                flush=True,
-            )
-            question = _eff_q
-    except Exception as _tf_exc:
-        print(f"[raw_passthrough] timing follow-up skipped: {_tf_exc}", flush=True)
-        _user_turn_question = question or ""
-        _timing_refine_followup = False
-
-    # ── Generic follow-up ("aur detail do", "dobara batao") ────────────────
-    # Merge with the previous user question so the model continues the same
-    # thread instead of treating it as a fresh vague ask.
-    try:
-        from ask_general_followup import resolve_general_followup_question
-
-        _eff_q2, _general_followup = resolve_general_followup_question(
-            question, history,
-        )
-        if _general_followup:
-            print(
-                f"[raw_passthrough] generic follow-up → merged Q={_eff_q2[:80]!r}",
-                flush=True,
-            )
-            question = _eff_q2
-    except Exception as _gf_exc:
-        print(f"[raw_passthrough] generic follow-up skipped: {_gf_exc}", flush=True)
-        _general_followup = False
 
     client = _get_client()
     _llm_intent_admin: dict | None = None
     _phase2_understand: dict | None = None
     _phase2_ok = False
 
-    # ── Phase 2: ONE Understand LLM owns branch + routing JSON ───────────
+    # ── Phase 2: ONE Understand LLM owns branch + routing + follow-up ─────
     try:
         from ask_understand_phase2 import (
             phase2_understand_enabled,
@@ -5514,23 +5452,49 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 question or "",
                 client=client,
                 question_raw=_question_raw,
+                history=history,
             )
             _phase2_ok = bool((_phase2_understand or {}).get("ok"))
             if _phase2_ok and isinstance(_phase2_understand, dict):
+                _eff_q = str(_phase2_understand.get("effective_question") or "").strip()
+                if _eff_q:
+                    question = _eff_q
+                _turn = str(_phase2_understand.get("turn_type") or "new").strip().lower()
+                _general_followup = _turn == "followup" or bool(
+                    _phase2_understand.get("is_followup")
+                )
+                _force_explain = bool(_phase2_understand.get("wants_explain"))
+                _timing_refine_followup = _general_followup and bool(
+                    _phase2_understand.get("timing")
+                )
                 _llm_intent_admin = understand_to_admin(
                     _phase2_understand,
                     question=question or "",
-                    question_raw=_question_raw,
+                    question_raw=_question_raw or _user_turn_question,
                 )
                 _p2_branch = str(_phase2_understand.get("branch") or "engine")
                 print(
                     f"[raw_passthrough] PHASE2_UNDERSTAND branch={_p2_branch} "
+                    f"turn={_turn} followup={_general_followup} "
+                    f"explain={_force_explain} "
                     f"domain={_phase2_understand.get('domain')} "
                     f"archetype={_phase2_understand.get('archetype')} "
                     f"knowledge={_phase2_understand.get('knowledge')} "
+                    f"eff_q={(question or '')[:72]!r} "
                     f"latency_ms={_phase2_understand.get('latency_ms')}",
                     flush=True,
                 )
+                if _p2_branch == "refuse":
+                    return _attach_admin(
+                        refuse_payload(question=question or "", lang=lang or "hn"),
+                        question=question or "",
+                        question_type="STATIC",
+                        is_timing=False,
+                        llm_called=True,
+                        skip_reason="understand_refuse",
+                        intent_source="understand_phase2",
+                        llm_intent=_llm_intent_admin,
+                    )
                 if _p2_branch == "knowledge":
                     try:
                         from ask_knowledge_fast import try_astrology_knowledge_fast_answer
@@ -5572,6 +5536,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         print(f"[raw_passthrough] PHASE2_UNDERSTAND skipped: {_p2_exc}", flush=True)
         _phase2_ok = False
 
+    # If Understand LLM failed, keep regex knowledge_fast as emergency only
+    # (avoids Leo-gemstone soft-fail). Not the authority when Phase2 ok.
+    if not _phase2_ok:
+        try:
+            from ask_knowledge_fast import try_astrology_knowledge_fast_answer
+
+            _kf_fb = try_astrology_knowledge_fast_answer(
+                question or "", lang=lang or "hn", force=False,
+            )
+            if _kf_fb:
+                print(
+                    f"[raw_passthrough] knowledge_fast emergency_fallback "
+                    f"source={_kf_fb.get('source')!r}",
+                    flush=True,
+                )
+                return _attach_admin(
+                    _kf_fb,
+                    question=question or "",
+                    question_type="STATIC",
+                    is_timing=False,
+                    llm_called=_kf_fb.get("source") == "knowledge_fast_llm",
+                    skip_reason="knowledge_fast_emergency",
+                    intent_source="knowledge_fast_fallback",
+                )
+        except Exception as _kf_fb_exc:
+            print(f"[raw_passthrough] knowledge_fast emergency skipped: {_kf_fb_exc}", flush=True)
+
     # Legacy paraphrase Understand — skipped when Phase 2 already owns routing.
     if not _phase2_ok:
         try:
@@ -5591,10 +5582,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from chart_fact_answer import answer_hypothetical_placement_change
 
-        # Final arch: no third path — hypothetic lock only if Phase2 unavailable.
-        _hyp = None
-        if not _phase2_ok:
-            _hyp = answer_hypothetical_placement_change(question or "", lang=lang or "hn")
+        # Natal "lord ko X house me place" — fixed answer (no empty-house stub, no LLM).
+        _hyp = answer_hypothetical_placement_change(question or "", lang=lang or "hn")
         if _hyp:
             print(
                 f"[raw_passthrough] hypothetical_placement_lock "
@@ -5718,45 +5707,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _property_archetype_override = None
     _travel_archetype_override = None
     _litigation_archetype_override = None
-    if _phase2_ok and isinstance(_phase2_understand, dict):
-        try:
-            from ask_understand_phase2 import phase2_llm_intent
-
-            _llm_intent = phase2_llm_intent(
-                _phase2_understand, question=question or "",
-            )
-            _llm_intent_record = dict(_llm_intent)
-            _intent_source = "understand_phase2"
-            _mr_archetype_override = _llm_intent.get("mr_archetype")
-            _career_archetype_override = _llm_intent.get("career_archetype")
-            _finance_archetype_override = _llm_intent.get("finance_archetype")
-            _health_archetype_override = _llm_intent.get("health_archetype")
-            _education_archetype_override = _llm_intent.get("education_archetype")
-            _children_archetype_override = _llm_intent.get("children_archetype")
-            _property_archetype_override = _llm_intent.get("property_archetype")
-            _travel_archetype_override = _llm_intent.get("travel_archetype")
-            _litigation_archetype_override = _llm_intent.get("litigation_archetype")
-            print(
-                "[raw_passthrough] PHASE2_SOLE_ROUTE "
-                f"domain={_llm_intent.get('domain')} "
-                f"timing={_llm_intent.get('is_timing')} "
-                f"arch={_mr_archetype_override or _career_archetype_override or _health_archetype_override}",
-                flush=True,
-            )
-        except Exception as _p2r_exc:
-            print(f"[raw_passthrough] PHASE2_SOLE_ROUTE skipped: {_p2r_exc}", flush=True)
-
-    if not _phase2_ok:
-        _mr_archetype_override = None
-        _career_archetype_override = None
-        _finance_archetype_override = None
-        _health_archetype_override = None
-        _education_archetype_override = None
-        _children_archetype_override = None
-        _property_archetype_override = None
-        _travel_archetype_override = None
-        _litigation_archetype_override = None
-    if (not _phase2_ok) and (os.environ.get("ASK_LLM_INTENT") or "1").strip() == "1":
+    if (os.environ.get("ASK_LLM_INTENT") or "1").strip() == "1":
         try:
             from ask_route_from_understanding import classify_and_route_ask
 
@@ -6168,9 +6119,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
     except Exception:
         pass
-    # Final arch: never bypass engines for prediction path.
-    _direct_llm_bypass = False
-    _direct_llm_reason = ""
     _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
     _luck_engine_on = (os.environ.get("ASK_LUCK_ENGINE") or "1").strip() != "0"
     _network_engine_on = (os.environ.get("ASK_NETWORK_ENGINE") or "1").strip() != "0"
@@ -7038,38 +6986,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
         except Exception as _mr_pre_exc:
             print(f"[raw_passthrough] MR_STATIC pre-resolver skipped: {_mr_pre_exc}", flush=True)
-    # Phase2 Understand is sole routing authority for engine selection.
-    if _phase2_ok and isinstance(_phase2_understand, dict) and str(_phase2_understand.get("branch") or "engine") == "engine":
-        try:
-            from ask_understand_phase2 import phase2_engine_static_flags
-
-            _pf = phase2_engine_static_flags(_phase2_understand)
-            _is_education_static = bool(_pf.get("education"))
-            _is_children_static = bool(_pf.get("children"))
-            _is_property_static = bool(_pf.get("property"))
-            _is_vehicle_static = bool(_pf.get("vehicle"))
-            _is_travel_static = bool(_pf.get("travel"))
-            _is_litigation_static = bool(_pf.get("litigation"))
-            _is_gap_static = bool(_pf.get("gap"))
-            _is_network_static = bool(_pf.get("network"))
-            _is_luck_static = bool(_pf.get("luck"))
-            _is_career_static = bool(_pf.get("career"))
-            _is_finance_static = bool(_pf.get("finance"))
-            _is_health_static = bool(_pf.get("health"))
-            _is_mr_static = bool(_pf.get("mr"))
-            _direct_llm_bypass = False
-            _direct_llm_reason = ""
-            is_timing = bool(_phase2_understand.get("timing"))
-            qtype = "TIMING" if is_timing else "STATIC"
-            print(
-                f"[raw_passthrough] PHASE2_ENGINE_FLAGS "
-                f"mr={_is_mr_static} career={_is_career_static} health={_is_health_static} "
-                f"finance={_is_finance_static} timing={is_timing}",
-                flush=True,
-            )
-        except Exception as _p2f_exc:
-            print(f"[raw_passthrough] PHASE2_ENGINE_FLAGS skipped: {_p2f_exc}", flush=True)
-
     _engine_route = None
     if not is_timing and not _is_native_overview:
         try:
@@ -8385,7 +8301,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             archetype=_mr_engine_result.archetype,
                             slice_meta=mr_engine_slice_meta(_mr_engine_result),
                         )
-                        if (not _phase2_ok) and (not _mr_ver.ok) and _mr_ver.action == "d1_open_chart":
+                        if not _mr_ver.ok and _mr_ver.action == "d1_open_chart":
                             from ask_chart_open_qa import (
                                 open_chart_qa_slice_meta,
                                 run_open_chart_qa,
@@ -11071,26 +10987,353 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         }
 
     try:
-        # FINAL ARCH: Narrator LLM output is FINAL — no post-modifiers.
-        # Tone/structure live in narrator prompts (relationship_narrator / mr narrator).
-        text = (_llm_raw_text or "").strip()
-        _answer_fidelity: dict = {
-            "skipped": "narrator_final",
-            "ok": True,
-            "attempts": 0,
-            "issues": [],
-            "repairs": [],
-        }
-        if not text:
-            text = (
-                "Maaf kijiye, abhi response generate nahi ho paaya. "
-                "Phir try karein."
+        text = _llm_raw_text
+        _answer_fidelity: dict = {}
+        if _mr_engine_narrator:
+            _adaptive_health = (
+                isinstance(dcr_love_meta, dict)
+                and dcr_love_meta.get("narrator_mode") == "adaptive_d1_health_context"
             )
-        print(
-            f"[raw_passthrough] PHASE1_RAW_NARRATOR no post-modifiers chars={len(text)}",
-            flush=True,
-        )
+            if not _adaptive_health:
+                from ask_cosmo_narrator import enforce_cosmo_engine_answer
 
+                _concise_enforce = _is_batch_concise_mode_safe()
+                try:
+                    text = enforce_cosmo_engine_answer(
+                        text,
+                        wants_explain=wants_explain,
+                        concise=_concise_enforce,
+                    )
+                except TypeError:
+                    text = enforce_cosmo_engine_answer(
+                        text,
+                        wants_explain=wants_explain,
+                    )
+        elif _direct_llm_bypass or _eng_checks.get("llm_no_engine"):
+            pass
+        else:
+            text = _enforce_one_line_answer(
+                text, wants_explain,
+                is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
+                is_partner_nature=_is_pn_minimal,
+                question_focus=_mr_question_focus,
+            )
+        if _mr_engine_narrator:
+            from ask_mr.narrator import polish_mr_confident_tone
+
+            text = polish_mr_confident_tone(text)
+            text = _strip_decision_template_labels(text)
+        if is_decision:
+            if _decision_needs_plain_rewrite(text):
+                try:
+                    _rewritten = _raw_rewrite_decision_plain(
+                        client, model, question, eff_lang, text,
+                    )
+                    if _rewritten:
+                        text = _enforce_one_line_answer(
+                            _rewritten, wants_explain,
+                            is_timing=False, is_decision=True,
+                        )
+                        print("[raw_passthrough] decision plain rewrite applied", flush=True)
+                except Exception as _dre:
+                    print(f"[raw_passthrough] decision rewrite skipped: {_dre}", flush=True)
+            text = _polish_decision_reply(text, eff_lang)
+        text = _strip_decision_template_labels(text)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
+            "career_engine_v1",
+            "career_timing_v1",
+        ):
+            try:
+                from ask_career.answer_guard import guard_career_answer
+
+                text, _guard = guard_career_answer(
+                    client,
+                    model,
+                    question=question or "",
+                    answer=text,
+                    meta=dcr_love_meta,
+                    user_intent=_user_intent_hint,
+                    reply_lang=eff_lang,
+                )
+                text = _strip_decision_template_labels(text)
+                if _guard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] CAREER_ANSWER_GUARD repaired "
+                        f"issues={_guard.get('issues')} ok={_guard.get('ok_after_repair')}",
+                        flush=True,
+                    )
+                elif not _guard.get("ok"):
+                    print(
+                        f"[raw_passthrough] CAREER_ANSWER_GUARD warn "
+                        f"issues={_guard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _cag:
+                print(f"[raw_passthrough] CAREER_ANSWER_GUARD skipped: {_cag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "finance_engine_v1":
+            try:
+                from ask_finance.answer_guard import guard_finance_answer
+
+                text, _fguard = guard_finance_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _fguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] FINANCE_ANSWER_GUARD repaired "
+                        f"issues={_fguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _fguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] FINANCE_ANSWER_GUARD warn "
+                        f"issues={_fguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _fag:
+                print(f"[raw_passthrough] FINANCE_ANSWER_GUARD skipped: {_fag}", flush=True)
+        # health answer_guard disabled — only health_engine_execution_v1 D1/D9 → LLM
+        # ── Execution Gatekeeper — final answer must match engine verdict ──
+        _gk_skip_health_post = bool(_is_health_static) or (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "health_engine_v1"
+        )
+        _mr_chk_final = (
+            dcr_love_meta.get("checks")
+            if isinstance(dcr_love_meta, dict) and isinstance(dcr_love_meta.get("checks"), dict)
+            else {}
+        )
+        _gk_skip_mr_unified_post = (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "mr_engine_v1"
+            and (
+                _mr_chk_final.get("unified_execution")
+                or _mr_chk_final.get("relationship_engine_execution")
+                or str(_mr_chk_final.get("engine_version") or "")
+                == "relationship_engine_execution_v1"
+            )
+        )
+        _gk_skip_finance_unified_post = (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "finance_engine_v1"
+            and (
+                _mr_chk_final.get("unified_execution")
+                or _mr_chk_final.get("finance_engine_execution")
+                or str(_mr_chk_final.get("engine_version") or "")
+                == "finance_engine_execution_v1"
+            )
+        )
+        if (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice", "").endswith("_engine_v1")
+            and not _gk_skip_health_post
+            and not _gk_skip_mr_unified_post
+            and not _gk_skip_finance_unified_post
+        ):
+            try:
+                from ask_execution_gatekeeper import (
+                    build_blocked_response,
+                    check_final_answer_gate,
+                    extract_narrator_json_from_chart_text,
+                )
+
+                _nj_final = None
+                _chk_final = dcr_love_meta.get("checks")
+                if isinstance(_chk_final, dict) and isinstance(_chk_final.get("narrator_input"), dict):
+                    _nj_final = _chk_final["narrator_input"]
+                if not _nj_final:
+                    _nj_final = extract_narrator_json_from_chart_text(chart_text or "")
+                _gk_final = check_final_answer_gate(
+                    text,
+                    slice_meta=dcr_love_meta,
+                    narrator_json=_nj_final,
+                    admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    question=question or "",
+                )
+                if not _gk_final.ok:
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["gatekeeper_blocked"] = _gk_final.to_dict()
+                    print(
+                        f"[raw_passthrough] EXECUTION_GATEKEEPER BLOCK post-llm "
+                        f"rule={_gk_final.rule} reason={_gk_final.reason}",
+                        flush=True,
+                    )
+                    _gk_out = build_blocked_response(
+                        _gk_final,
+                        question=question or "",
+                        qtype=qtype,
+                        lang=eff_lang,
+                        slice_meta=dcr_love_meta,
+                    )
+                    text = _gk_out["text"]
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["gatekeeper_final_block"] = _gk_final.to_dict()
+            except Exception as _gk_fin_exc:
+                print(
+                    f"[raw_passthrough] EXECUTION_GATEKEEPER post-llm skipped: {_gk_fin_exc}",
+                    flush=True,
+                )
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "education_engine_v1":
+            try:
+                from ask_education.answer_guard import guard_education_answer
+
+                text, _eduguard = guard_education_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _eduguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] EDUCATION_ANSWER_GUARD repaired "
+                        f"issues={_eduguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _eduguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] EDUCATION_ANSWER_GUARD warn "
+                        f"issues={_eduguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _edag:
+                print(f"[raw_passthrough] EDUCATION_ANSWER_GUARD skipped: {_edag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "children_engine_v1":
+            try:
+                from ask_children.answer_guard import guard_children_answer
+
+                text, _childguard = guard_children_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _childguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] CHILDREN_ANSWER_GUARD repaired "
+                        f"issues={_childguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _childguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] CHILDREN_ANSWER_GUARD warn "
+                        f"issues={_childguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _chag:
+                print(f"[raw_passthrough] CHILDREN_ANSWER_GUARD skipped: {_chag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "property_engine_v1":
+            try:
+                from ask_property.answer_guard import guard_property_answer
+
+                text, _propguard = guard_property_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _propguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] PROPERTY_ANSWER_GUARD repaired "
+                        f"issues={_propguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _propguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] PROPERTY_ANSWER_GUARD warn "
+                        f"issues={_propguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _prag:
+                print(f"[raw_passthrough] PROPERTY_ANSWER_GUARD skipped: {_prag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "travel_engine_v1":
+            try:
+                from ask_travel.answer_guard import guard_travel_answer
+
+                text, _trvguard = guard_travel_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _trvguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] TRAVEL_ANSWER_GUARD repaired "
+                        f"issues={_trvguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _trvguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] TRAVEL_ANSWER_GUARD warn "
+                        f"issues={_trvguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _trvag:
+                print(f"[raw_passthrough] TRAVEL_ANSWER_GUARD skipped: {_trvag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "litigation_engine_v1":
+            try:
+                from ask_litigation.answer_guard import guard_litigation_answer
+
+                text, _litguard = guard_litigation_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _litguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] LITIGATION_ANSWER_GUARD repaired "
+                        f"issues={_litguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _litguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] LITIGATION_ANSWER_GUARD warn "
+                        f"issues={_litguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _litag:
+                print(f"[raw_passthrough] LITIGATION_ANSWER_GUARD skipped: {_litag}", flush=True)
+        if text and client and model:
+            try:
+                from ask_answer_fidelity import guard_answer_with_fidelity_loop
+
+                text, _answer_fidelity = guard_answer_with_fidelity_loop(
+                    client,
+                    model,
+                    question=question or "",
+                    answer=text,
+                    llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                    user_intent=_user_intent_hint,
+                    reply_lang=eff_lang,
+                    is_timing=bool(is_timing),
+                )
+                if _answer_fidelity.get("repairs"):
+                    print(
+                        f"[answer_fidelity] attempts={_answer_fidelity.get('attempts')} "
+                        f"ok={_answer_fidelity.get('ok')} "
+                        f"issues={_answer_fidelity.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _fid_exc:
+                print(f"[raw_passthrough] ANSWER_FIDELITY skipped: {_fid_exc}", flush=True)
+        if not text:
+            text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
+        # Skip robotic [Checked: ...] trace — user wants human replies only.
+        text = _ensure_checked_trace(
+            text,
+            question,
+            (_understanding or {}).get("topic") if isinstance(_understanding, dict) else None,
+            skip=True,
+        )
+        if dcr_love_meta and dcr_love_meta.get("buckets"):
+            text = _polish_dcr_love_answer(
+                text,
+                hide_technical=not wants_explain,
+                show_trace=False,
+            )
         # ── Prompt-cache telemetry ──────────────────────────────────────
         # OpenAI auto-caches static system prompts ≥1024 tokens. The full
         # mega-prompt is well above that threshold, so 2nd+ requests with

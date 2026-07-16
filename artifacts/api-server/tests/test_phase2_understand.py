@@ -48,6 +48,95 @@ class TestPhase2Understand(unittest.TestCase):
         # refuse collapses to engine — hard gates own real refusals
         self.assertEqual(normalize_branch("refuse"), "engine")
 
+    def test_followup_normalize_effective_question(self):
+        from ask_understand_phase2 import (
+            format_history_for_understand,
+            normalize_understand,
+        )
+
+        u = normalize_understand(
+            {
+                "turn_type": "followup",
+                "effective_question": "Meri shaadi kab hogi — exact month batao",
+                "wants_explain": False,
+                "branch": "engine",
+                "domain": "marriage",
+                "archetype": "marriage_timing",
+                "question_type": "timing",
+                "timing": True,
+                "knowledge": False,
+                "question_summary": "User pehle shaadi timing pooch chuka; ab exact month chahta hai.",
+                "confidence": 0.88,
+            },
+            question="exact month?",
+        )
+        self.assertEqual(u["turn_type"], "followup")
+        self.assertTrue(u["is_followup"])
+        self.assertIn("shaadi", u["effective_question"].lower())
+        self.assertTrue(u["timing"])
+
+        hist = format_history_for_understand(
+            [
+                {"role": "user", "text": "Meri shaadi kab hogi?"},
+                {"role": "assistant", "text": "2027 ke around window dikhti hai."},
+            ]
+        )
+        self.assertIn("User:", hist)
+        self.assertIn("shaadi", hist.lower())
+
+    def test_raw_passthrough_no_regex_followup_resolvers(self):
+        src = Path(__file__).resolve().parents[1].joinpath("openai_helper.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("history=history", src)
+        self.assertIn("effective_question", src)
+        # Regex follow-up resolvers must not run inside raw_passthrough_ask.
+        self.assertNotIn("resolve_general_followup_question", src)
+        self.assertNotIn("resolve_timing_followup_question", src)
+        self.assertNotIn("transparency follow-up → re-explain", src)
+
+    def test_run_understand_mocked_followup(self):
+        from ask_understand_phase2 import run_understand_phase2
+
+        class _Msg:
+            content = (
+                '{"turn_type":"followup","effective_question":"Meri career change kab — exact month?",'
+                '"wants_explain":false,"branch":"engine","domain":"career",'
+                '"archetype":"career_timing","question_type":"timing","timing":true,'
+                '"subject":"self","target":"self","knowledge":false,'
+                '"question_summary":"User pehle career timing pooch chuka; ab exact month.",'
+                '"confidence":0.9}'
+            )
+
+        class _Choice:
+            message = _Msg()
+
+        class _Resp:
+            choices = [_Choice()]
+
+        client = mock.Mock()
+        client.chat.completions.create.return_value = _Resp()
+        out = run_understand_phase2(
+            "exact month?",
+            client=client,
+            history=[
+                {"role": "user", "text": "Mera career change kab hoga?"},
+                {"role": "assistant", "text": "2026 me window dikhti hai."},
+            ],
+        )
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["turn_type"], "followup")
+        self.assertIn("career", out["effective_question"].lower())
+        call_kw = client.chat.completions.create.call_args
+        messages = (call_kw.kwargs or {}).get("messages")
+        if not messages and call_kw.args:
+            # unlikely positional — keep robust
+            messages = None
+        self.assertTrue(messages)
+        content = messages[0]["content"]
+        self.assertIn("Recent chat:", content)
+        self.assertIn("career", content.lower())
+
     def test_knowledge_fast_force_skips_regex_gate(self):
         from ask_knowledge_fast import try_astrology_knowledge_fast_answer
 
@@ -68,9 +157,8 @@ class TestPhase2Understand(unittest.TestCase):
         # Early regex shortcut must be gone; Phase2 marker must exist.
         self.assertIn("PHASE2_UNDERSTAND", src)
         self.assertIn("knowledge_fast after PHASE2", src)
-        # The old comment block should not call try_* before PHASE2.
+        # The old comment block should not call try_* before PHASE2 — still before PHASE2 — must not call KF.
         early = src.split("PHASE2_UNDERSTAND", 1)[0]
-        # After death/privacy section start — still before PHASE2 — must not call KF.
         self.assertNotIn("try_astrology_knowledge_fast_answer(question or \"\", lang=lang or \"hn\")", early)
 
     def test_phase2_enabled_by_default(self):
@@ -106,6 +194,8 @@ class TestPhase2Understand(unittest.TestCase):
         self.assertTrue(out["ok"])
         self.assertEqual(out["branch"], "knowledge")
         self.assertTrue(out["knowledge"])
+        self.assertEqual(out["turn_type"], "new")
+        self.assertEqual(out["effective_question"], "Leo lagna gemstone?")
 
 
 if __name__ == "__main__":

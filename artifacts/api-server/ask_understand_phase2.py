@@ -1,8 +1,9 @@
 """Phase 2 Understand — ONE LLM that owns branch + routing JSON.
 
 Authority for: branch, domain, archetype, question_type, timing,
-subject, target, knowledge. Downstream engines consume this JSON.
-Knowledge vs engine is decided HERE — not by regex first.
+subject, target, knowledge, and follow-up (new vs continuing thread).
+Downstream engines consume this JSON. Knowledge vs engine and follow-up
+resolution are decided HERE — not by regex first.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from typing import Any, Optional
 
 # Final architecture: exactly TWO execution branches after hard gates.
 BRANCHES = frozenset({"knowledge", "engine"})
+TURN_TYPES = frozenset({"new", "followup"})
 
 _DOMAINS = frozenset({
     "love", "marriage", "relationship", "career", "health", "finance",
@@ -43,9 +45,13 @@ _DOMAIN_ENGINE_KEY: dict[str, str] = {
 _TIMEOUT_S = 16
 
 _PROMPT = """You are Cosmo Understand — ONE classification step for an astrology Ask product.
-Read the question carefully (Hindi/Hinglish/English). Return STRICT JSON only:
+Read the CURRENT user message and Recent chat (if any). Hindi/Hinglish/English OK.
+Return STRICT JSON only:
 
 {{
+  "turn_type": "new|followup",
+  "effective_question": "<one standalone question to answer>",
+  "wants_explain": false,
   "branch": "knowledge|engine",
   "domain": "<one domain>",
   "archetype": "<snake_case theme bucket>",
@@ -54,25 +60,59 @@ Read the question carefully (Hindi/Hinglish/English). Return STRICT JSON only:
   "subject": "self|partner|couple|ex|family|friend|other|unknown",
   "target": "self|partner|couple|third_person|situation|unknown",
   "knowledge": false,
-  "question_summary": "<2-6 short Hinglish lines explaining what user wants — do NOT echo the question>",
+  "question_summary": "<2-6 short lines explaining what user wants — do NOT echo the question>",
   "confidence": 0.0
 }}
 
-branch (MOST IMPORTANT — pick FIRST; ONLY these two values):
+turn_type / effective_question (decide BEFORE branch):
+- new = fresh topic; effective_question = current message (cleaned).
+- followup = continues Recent chat (e.g. "aur detail", "exact month?", "kaise bataya?", "uske baare me", short "kab?" after a prior topic).
+  effective_question = rewrite as ONE clear standalone question using prior user topic + current message.
+  Example: prior "meri shaadi kab?" + current "exact month?" → "Meri shaadi kab hogi — exact month batao".
+- wants_explain=true ONLY if user asks how/why the previous answer was decided ("kaise bataya", "kya check kiya").
+  Then effective_question = the prior astrology question being explained.
+
+branch (ONLY these two values):
 - knowledge = general astrology THEORY / education / named-lagna advice NOT reading THIS user's personal chart.
-  Examples: "Leo lagna gemstone?", "dasha kya hoti hai?", "6th house me neech planet?", "kisi ka Singh lagna ratn?"
+  Examples: "Leo lagna gemstone?", "dasha kya hoti hai?", "3rd house strong for younger brother?"
   knowledge=true when branch=knowledge.
 - engine = personal life/chart outcome for THIS user (mera/meri/mujhe/my chart) OR clearly their future result.
-  Examples: "meri shaadi kab?", "mera career kaisa?", "partner loyal hai?", "mujhe kaunsa ratn pehenna chahiye?"
+  Examples: "meri shaadi kab?", "mera career kaisa?", "partner loyal hai?"
   knowledge=false when branch=engine.
 
 domain: love|marriage|relationship|career|health|finance|education|children|property|travel|litigation|vehicle|spiritual|remedy|general
-archetype: short snake_case theme (e.g. gemstone_remedy, marriage_timing, partner_loyalty, general_health). For love use theme ids like trust_loyalty, commitment, reconciliation_ex.
+archetype: short snake_case theme (e.g. gemstone_remedy, marriage_timing, partner_loyalty, younger_sibling).
 timing=true ONLY for a real WHEN anchor (kab/when/kis saal/month/date). "Kya hoga" alone → timing=false.
 question_summary: explain intent — never copy-paste the question.
 
-Question:
+Recent chat:
+{history}
+
+Current user message:
 {question}"""
+
+
+def format_history_for_understand(history: Any, *, max_turns: int = 6) -> str:
+    """Compact recent chat for Understand — empty string if none."""
+    if not isinstance(history, (list, tuple)) or not history:
+        return "(none)"
+    lines: list[str] = []
+    for item in list(history)[-max_turns:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        if role in ("user", "human"):
+            who = "User"
+        elif role in ("assistant", "cosmo", "bot", "ai"):
+            who = "Assistant"
+        else:
+            continue
+        text = str(item.get("text") or item.get("content") or "").strip()
+        if not text:
+            continue
+        text = re.sub(r"\s+", " ", text)[:220]
+        lines.append(f"{who}: {text}")
+    return "\n".join(lines) if lines else "(none)"
 
 
 def phase2_understand_enabled() -> bool:
@@ -228,6 +268,25 @@ def normalize_understand(data: dict[str, Any] | None, *, question: str = "") -> 
         confidence = 0.7
     confidence = max(0.0, min(1.0, confidence))
 
+    turn_raw = str(src.get("turn_type") or src.get("turn") or "new").strip().lower()
+    if turn_raw in ("follow_up", "follow-up", "continuation", "continue"):
+        turn_raw = "followup"
+    turn_type = turn_raw if turn_raw in TURN_TYPES else "new"
+    if _coerce_bool(src.get("is_followup")):
+        turn_type = "followup"
+
+    wants_explain = _coerce_bool(src.get("wants_explain"))
+    if wants_explain:
+        turn_type = "followup"
+
+    current_q = (question or "").strip()
+    effective = str(src.get("effective_question") or src.get("resolved_question") or "").strip()
+    effective = re.sub(r"\s+", " ", effective).strip()
+    if not effective:
+        effective = current_q
+    if len(effective) > 900:
+        effective = effective[:900].rstrip()
+
     answer_mode = "llm_knowledge" if branch == "knowledge" else "engine"
 
     return {
@@ -244,6 +303,10 @@ def normalize_understand(data: dict[str, Any] | None, *, question: str = "") -> 
         "user_wants": summary,
         "confidence": confidence,
         "answer_mode": answer_mode,
+        "turn_type": turn_type,
+        "is_followup": turn_type == "followup",
+        "effective_question": effective,
+        "wants_explain": wants_explain,
         "source": str(src.get("source") or "understand_phase2"),
         "latency_ms": int(src.get("latency_ms") or 0),
     }
@@ -263,7 +326,7 @@ def understand_to_question_dna(u: dict[str, Any], *, question: str = "") -> dict
         "tense": "future" if u.get("timing") else "present",
         "emotion": "neutral",
         "risk": "low",
-        "is_followup": False,
+        "is_followup": bool(u.get("is_followup") or u.get("turn_type") == "followup"),
         "followup_of": "",
         "confidence": float(u.get("confidence") or 0.7),
         "user_wants": str(u.get("question_summary") or "")[:400],
@@ -272,6 +335,9 @@ def understand_to_question_dna(u: dict[str, Any], *, question: str = "") -> dict
         "answer_approach": "phase2_understand",
         "bucket_match_confidence": "high",
         "engine_archetype": u.get("archetype"),
+        "turn_type": u.get("turn_type") or "new",
+        "effective_question": str(u.get("effective_question") or question or "")[:500],
+        "wants_explain": bool(u.get("wants_explain")),
     }
     return {
         "questions": [item],
@@ -279,6 +345,7 @@ def understand_to_question_dna(u: dict[str, Any], *, question: str = "") -> dict
         "latency_ms": int(u.get("latency_ms") or 0),
         "branch": u.get("branch"),
         "knowledge": bool(u.get("knowledge")),
+        "turn_type": u.get("turn_type") or "new",
     }
 
 
@@ -310,6 +377,10 @@ def understand_to_admin(u: dict[str, Any], *, question: str = "", question_raw: 
         "subject": u.get("subject"),
         "target": u.get("target"),
         "confidence": float(u.get("confidence") or 0.7),
+        "turn_type": u.get("turn_type") or "new",
+        "is_followup": bool(u.get("is_followup") or u.get("turn_type") == "followup"),
+        "effective_question": str(u.get("effective_question") or question or ""),
+        "wants_explain": bool(u.get("wants_explain")),
     }
     # Domain archetype keys used by classify_and_route_ask
     key_map = {
@@ -363,9 +434,11 @@ def run_understand_phase2(
     client: Any = None,
     model: Optional[str] = None,
     question_raw: str = "",
+    history: Any = None,
 ) -> dict[str, Any]:
     """ONE Understand LLM call. Never raises — returns normalized dict + ok flag."""
     q = (question or "").strip()
+    hist_block = format_history_for_understand(history)
     if not q:
         out = normalize_understand(
             {"branch": "engine", "domain": "general", "question_summary": "Empty question", "confidence": 1.0},
@@ -406,17 +479,18 @@ def run_understand_phase2(
 
     t0 = time.time()
     try:
+        prompt = _PROMPT.format(history=hist_block[:2400], question=q[:900])
         kwargs: dict[str, Any] = dict(
             model=model,
             temperature=0.1,
             timeout=_TIMEOUT_S,
             response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": _PROMPT.format(question=q[:900])}],
+            messages=[{"role": "user", "content": prompt}],
         )
         try:
-            resp = client.chat.completions.create(max_completion_tokens=600, **kwargs)
+            resp = client.chat.completions.create(max_completion_tokens=700, **kwargs)
         except TypeError:
-            resp = client.chat.completions.create(max_tokens=600, **kwargs)
+            resp = client.chat.completions.create(max_tokens=700, **kwargs)
         raw = (resp.choices[0].message.content or "").strip()
         data = json.loads(raw)
         if not isinstance(data, dict):

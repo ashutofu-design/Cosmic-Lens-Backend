@@ -103,7 +103,8 @@ class GatekeeperResult:
 
 
 def gatekeeper_enabled() -> bool:
-    return (os.environ.get("ASK_EXECUTION_GATEKEEPER") or "1").strip() != "0"
+    # Phase 1: default OFF — no post-narrator answer replacement.
+    return (os.environ.get("ASK_EXECUTION_GATEKEEPER") or "0").strip() != "0"
 
 
 def _primary_item(admin: dict[str, Any] | None) -> dict[str, Any]:

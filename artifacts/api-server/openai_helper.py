@@ -10591,38 +10591,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     )
     _use_unified_dna_judge = False
     _unified_dna_domain = ""
-    if (
-        isinstance(dcr_love_meta, dict)
-        and not bool(dcr_love_meta.get("skip_llm"))
-        and not (_use_health_dna_judge or _use_mr_dna_judge or _use_finance_dna_judge or _use_travel_dna_judge)
-    ):
-        try:
-            from ask_unified.specs import is_unified_slice, slice_to_domain
-
-            _sl = str(dcr_love_meta.get("slice") or "")
-            if is_unified_slice(_sl) and (
-                _mr_meta_checks.get("unified_execution")
-                or _mr_meta_checks.get("unified_domain")
-            ):
-                _use_unified_dna_judge = True
-                _unified_dna_domain = (
-                    str(_mr_meta_checks.get("unified_domain") or "")
-                    or slice_to_domain(_sl)
-                    or ""
-                )
-        except Exception:
-            _use_unified_dna_judge = False
-    if (
-        not (_use_health_dna_judge or _use_mr_dna_judge or _use_finance_dna_judge or _use_travel_dna_judge)
-        and bool(_eng_checks.get("llm_no_engine"))
-    ):
-        # No-engine fallback: one answer LLM call only — DNA judge + retry were
-        # adding 10–40s and causing mobile timeouts on personal gap asks.
-        _use_unified_dna_judge = False
-        _unified_dna_domain = ""
-        _eng_checks["dna_judge_skipped"] = "llm_no_engine_fast_path"
+    # Phase 1 architecture lock: Narrator = ONE plain completion.
+    # No DNA-judge wrappers / retries (they rewrite or re-call after create).
+    _use_health_dna_judge = False
+    _use_mr_dna_judge = False
+    _use_finance_dna_judge = False
+    _use_travel_dna_judge = False
+    _use_unified_dna_judge = False
+    _unified_dna_domain = ""
+    if isinstance(_eng_checks, dict):
+        _eng_checks["dna_judge_skipped"] = "phase1_no_post_narrator"
     try:
-        if _use_health_dna_judge:
+        if False:  # DNA judges disabled — kept for reference / easy rollback
             from ask_health.dna_judge import run_health_llm_with_dna_judge
 
             _health_meta = (
@@ -10953,353 +10933,27 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         }
 
     try:
-        text = _llm_raw_text
-        _answer_fidelity: dict = {}
-        if _mr_engine_narrator:
-            _adaptive_health = (
-                isinstance(dcr_love_meta, dict)
-                and dcr_love_meta.get("narrator_mode") == "adaptive_d1_health_context"
-            )
-            if not _adaptive_health:
-                from ask_cosmo_narrator import enforce_cosmo_engine_answer
-
-                _concise_enforce = _is_batch_concise_mode_safe()
-                try:
-                    text = enforce_cosmo_engine_answer(
-                        text,
-                        wants_explain=wants_explain,
-                        concise=_concise_enforce,
-                    )
-                except TypeError:
-                    text = enforce_cosmo_engine_answer(
-                        text,
-                        wants_explain=wants_explain,
-                    )
-        elif _direct_llm_bypass or _eng_checks.get("llm_no_engine"):
-            pass
-        else:
-            text = _enforce_one_line_answer(
-                text, wants_explain,
-                is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
-                is_partner_nature=_is_pn_minimal,
-                question_focus=_mr_question_focus,
-            )
-        if _mr_engine_narrator:
-            from ask_mr.narrator import polish_mr_confident_tone
-
-            text = polish_mr_confident_tone(text)
-            text = _strip_decision_template_labels(text)
-        if is_decision:
-            if _decision_needs_plain_rewrite(text):
-                try:
-                    _rewritten = _raw_rewrite_decision_plain(
-                        client, model, question, eff_lang, text,
-                    )
-                    if _rewritten:
-                        text = _enforce_one_line_answer(
-                            _rewritten, wants_explain,
-                            is_timing=False, is_decision=True,
-                        )
-                        print("[raw_passthrough] decision plain rewrite applied", flush=True)
-                except Exception as _dre:
-                    print(f"[raw_passthrough] decision rewrite skipped: {_dre}", flush=True)
-            text = _polish_decision_reply(text, eff_lang)
-        text = _strip_decision_template_labels(text)
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
-            "career_engine_v1",
-            "career_timing_v1",
-        ):
-            try:
-                from ask_career.answer_guard import guard_career_answer
-
-                text, _guard = guard_career_answer(
-                    client,
-                    model,
-                    question=question or "",
-                    answer=text,
-                    meta=dcr_love_meta,
-                    user_intent=_user_intent_hint,
-                    reply_lang=eff_lang,
-                )
-                text = _strip_decision_template_labels(text)
-                if _guard.get("repaired"):
-                    print(
-                        f"[raw_passthrough] CAREER_ANSWER_GUARD repaired "
-                        f"issues={_guard.get('issues')} ok={_guard.get('ok_after_repair')}",
-                        flush=True,
-                    )
-                elif not _guard.get("ok"):
-                    print(
-                        f"[raw_passthrough] CAREER_ANSWER_GUARD warn "
-                        f"issues={_guard.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _cag:
-                print(f"[raw_passthrough] CAREER_ANSWER_GUARD skipped: {_cag}", flush=True)
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "finance_engine_v1":
-            try:
-                from ask_finance.answer_guard import guard_finance_answer
-
-                text, _fguard = guard_finance_answer(
-                    question or "",
-                    text,
-                    dcr_love_meta,
-                )
-                text = _strip_decision_template_labels(text)
-                if _fguard.get("repaired"):
-                    print(
-                        f"[raw_passthrough] FINANCE_ANSWER_GUARD repaired "
-                        f"issues={_fguard.get('issues')}",
-                        flush=True,
-                    )
-                elif not _fguard.get("ok"):
-                    print(
-                        f"[raw_passthrough] FINANCE_ANSWER_GUARD warn "
-                        f"issues={_fguard.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _fag:
-                print(f"[raw_passthrough] FINANCE_ANSWER_GUARD skipped: {_fag}", flush=True)
-        # health answer_guard disabled — only health_engine_execution_v1 D1/D9 → LLM
-        # ── Execution Gatekeeper — final answer must match engine verdict ──
-        _gk_skip_health_post = bool(_is_health_static) or (
-            isinstance(dcr_love_meta, dict)
-            and dcr_love_meta.get("slice") == "health_engine_v1"
-        )
-        _mr_chk_final = (
-            dcr_love_meta.get("checks")
-            if isinstance(dcr_love_meta, dict) and isinstance(dcr_love_meta.get("checks"), dict)
-            else {}
-        )
-        _gk_skip_mr_unified_post = (
-            isinstance(dcr_love_meta, dict)
-            and dcr_love_meta.get("slice") == "mr_engine_v1"
-            and (
-                _mr_chk_final.get("unified_execution")
-                or _mr_chk_final.get("relationship_engine_execution")
-                or str(_mr_chk_final.get("engine_version") or "")
-                == "relationship_engine_execution_v1"
-            )
-        )
-        _gk_skip_finance_unified_post = (
-            isinstance(dcr_love_meta, dict)
-            and dcr_love_meta.get("slice") == "finance_engine_v1"
-            and (
-                _mr_chk_final.get("unified_execution")
-                or _mr_chk_final.get("finance_engine_execution")
-                or str(_mr_chk_final.get("engine_version") or "")
-                == "finance_engine_execution_v1"
-            )
-        )
-        if (
-            isinstance(dcr_love_meta, dict)
-            and dcr_love_meta.get("slice", "").endswith("_engine_v1")
-            and not _gk_skip_health_post
-            and not _gk_skip_mr_unified_post
-            and not _gk_skip_finance_unified_post
-        ):
-            try:
-                from ask_execution_gatekeeper import (
-                    build_blocked_response,
-                    check_final_answer_gate,
-                    extract_narrator_json_from_chart_text,
-                )
-
-                _nj_final = None
-                _chk_final = dcr_love_meta.get("checks")
-                if isinstance(_chk_final, dict) and isinstance(_chk_final.get("narrator_input"), dict):
-                    _nj_final = _chk_final["narrator_input"]
-                if not _nj_final:
-                    _nj_final = extract_narrator_json_from_chart_text(chart_text or "")
-                _gk_final = check_final_answer_gate(
-                    text,
-                    slice_meta=dcr_love_meta,
-                    narrator_json=_nj_final,
-                    admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
-                    question=question or "",
-                )
-                if not _gk_final.ok:
-                    if isinstance(_llm_intent_admin, dict):
-                        _llm_intent_admin["gatekeeper_blocked"] = _gk_final.to_dict()
-                    print(
-                        f"[raw_passthrough] EXECUTION_GATEKEEPER BLOCK post-llm "
-                        f"rule={_gk_final.rule} reason={_gk_final.reason}",
-                        flush=True,
-                    )
-                    _gk_out = build_blocked_response(
-                        _gk_final,
-                        question=question or "",
-                        qtype=qtype,
-                        lang=eff_lang,
-                        slice_meta=dcr_love_meta,
-                    )
-                    text = _gk_out["text"]
-                    if isinstance(_llm_intent_admin, dict):
-                        _llm_intent_admin["gatekeeper_final_block"] = _gk_final.to_dict()
-            except Exception as _gk_fin_exc:
-                print(
-                    f"[raw_passthrough] EXECUTION_GATEKEEPER post-llm skipped: {_gk_fin_exc}",
-                    flush=True,
-                )
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "education_engine_v1":
-            try:
-                from ask_education.answer_guard import guard_education_answer
-
-                text, _eduguard = guard_education_answer(
-                    question or "",
-                    text,
-                    dcr_love_meta,
-                )
-                text = _strip_decision_template_labels(text)
-                if _eduguard.get("repaired"):
-                    print(
-                        f"[raw_passthrough] EDUCATION_ANSWER_GUARD repaired "
-                        f"issues={_eduguard.get('issues')}",
-                        flush=True,
-                    )
-                elif not _eduguard.get("ok"):
-                    print(
-                        f"[raw_passthrough] EDUCATION_ANSWER_GUARD warn "
-                        f"issues={_eduguard.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _edag:
-                print(f"[raw_passthrough] EDUCATION_ANSWER_GUARD skipped: {_edag}", flush=True)
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "children_engine_v1":
-            try:
-                from ask_children.answer_guard import guard_children_answer
-
-                text, _childguard = guard_children_answer(
-                    question or "",
-                    text,
-                    dcr_love_meta,
-                )
-                text = _strip_decision_template_labels(text)
-                if _childguard.get("repaired"):
-                    print(
-                        f"[raw_passthrough] CHILDREN_ANSWER_GUARD repaired "
-                        f"issues={_childguard.get('issues')}",
-                        flush=True,
-                    )
-                elif not _childguard.get("ok"):
-                    print(
-                        f"[raw_passthrough] CHILDREN_ANSWER_GUARD warn "
-                        f"issues={_childguard.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _chag:
-                print(f"[raw_passthrough] CHILDREN_ANSWER_GUARD skipped: {_chag}", flush=True)
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "property_engine_v1":
-            try:
-                from ask_property.answer_guard import guard_property_answer
-
-                text, _propguard = guard_property_answer(
-                    question or "",
-                    text,
-                    dcr_love_meta,
-                )
-                text = _strip_decision_template_labels(text)
-                if _propguard.get("repaired"):
-                    print(
-                        f"[raw_passthrough] PROPERTY_ANSWER_GUARD repaired "
-                        f"issues={_propguard.get('issues')}",
-                        flush=True,
-                    )
-                elif not _propguard.get("ok"):
-                    print(
-                        f"[raw_passthrough] PROPERTY_ANSWER_GUARD warn "
-                        f"issues={_propguard.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _prag:
-                print(f"[raw_passthrough] PROPERTY_ANSWER_GUARD skipped: {_prag}", flush=True)
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "travel_engine_v1":
-            try:
-                from ask_travel.answer_guard import guard_travel_answer
-
-                text, _trvguard = guard_travel_answer(
-                    question or "",
-                    text,
-                    dcr_love_meta,
-                )
-                text = _strip_decision_template_labels(text)
-                if _trvguard.get("repaired"):
-                    print(
-                        f"[raw_passthrough] TRAVEL_ANSWER_GUARD repaired "
-                        f"issues={_trvguard.get('issues')}",
-                        flush=True,
-                    )
-                elif not _trvguard.get("ok"):
-                    print(
-                        f"[raw_passthrough] TRAVEL_ANSWER_GUARD warn "
-                        f"issues={_trvguard.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _trvag:
-                print(f"[raw_passthrough] TRAVEL_ANSWER_GUARD skipped: {_trvag}", flush=True)
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "litigation_engine_v1":
-            try:
-                from ask_litigation.answer_guard import guard_litigation_answer
-
-                text, _litguard = guard_litigation_answer(
-                    question or "",
-                    text,
-                    dcr_love_meta,
-                )
-                text = _strip_decision_template_labels(text)
-                if _litguard.get("repaired"):
-                    print(
-                        f"[raw_passthrough] LITIGATION_ANSWER_GUARD repaired "
-                        f"issues={_litguard.get('issues')}",
-                        flush=True,
-                    )
-                elif not _litguard.get("ok"):
-                    print(
-                        f"[raw_passthrough] LITIGATION_ANSWER_GUARD warn "
-                        f"issues={_litguard.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _litag:
-                print(f"[raw_passthrough] LITIGATION_ANSWER_GUARD skipped: {_litag}", flush=True)
-        if text and client and model:
-            try:
-                from ask_answer_fidelity import guard_answer_with_fidelity_loop
-
-                text, _answer_fidelity = guard_answer_with_fidelity_loop(
-                    client,
-                    model,
-                    question=question or "",
-                    answer=text,
-                    llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
-                    meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
-                    user_intent=_user_intent_hint,
-                    reply_lang=eff_lang,
-                    is_timing=bool(is_timing),
-                )
-                if _answer_fidelity.get("repairs"):
-                    print(
-                        f"[answer_fidelity] attempts={_answer_fidelity.get('attempts')} "
-                        f"ok={_answer_fidelity.get('ok')} "
-                        f"issues={_answer_fidelity.get('issues')}",
-                        flush=True,
-                    )
-            except Exception as _fid_exc:
-                print(f"[raw_passthrough] ANSWER_FIDELITY skipped: {_fid_exc}", flush=True)
+        # Phase 1 architecture: Narrator LLM output is FINAL — no post-modifiers.
+        # Disabled: Answer Fidelity, Guard Answer (*), Cosmo Enforce, One Line,
+        # Decision Rewrite, Final Answer Gate, DNA Retry, MR tone polish, DCR polish.
+        text = (_llm_raw_text or "").strip()
+        _answer_fidelity: dict = {
+            "skipped": "phase1_no_post_narrator",
+            "ok": True,
+            "attempts": 0,
+            "issues": [],
+            "repairs": [],
+        }
         if not text:
-            text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
-        # Skip robotic [Checked: ...] trace — user wants human replies only.
-        text = _ensure_checked_trace(
-            text,
-            question,
-            (_understanding or {}).get("topic") if isinstance(_understanding, dict) else None,
-            skip=True,
-        )
-        if dcr_love_meta and dcr_love_meta.get("buckets"):
-            text = _polish_dcr_love_answer(
-                text,
-                hide_technical=not wants_explain,
-                show_trace=False,
+            text = (
+                "Maaf kijiye, abhi response generate nahi ho paaya. "
+                "Phir try karein."
             )
+        print(
+            f"[raw_passthrough] PHASE1_RAW_NARRATOR no post-modifiers chars={len(text)}",
+            flush=True,
+        )
+
         # ── Prompt-cache telemetry ──────────────────────────────────────
         # OpenAI auto-caches static system prompts ≥1024 tokens. The full
         # mega-prompt is well above that threshold, so 2nd+ requests with

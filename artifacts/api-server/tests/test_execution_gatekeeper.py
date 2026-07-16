@@ -30,9 +30,9 @@ class ExecutionGatekeeperTests(unittest.TestCase):
         os.environ["ASK_EXECUTION_GATEKEEPER"] = "1"
         os.environ.pop("ASK_EXECUTION_GATEKEEPER_HEALTH", None)
 
-    def test_enabled_by_default(self):
+    def test_disabled_by_default_phase1(self):
         os.environ.pop("ASK_EXECUTION_GATEKEEPER", None)
-        self.assertTrue(gatekeeper_enabled())
+        self.assertFalse(gatekeeper_enabled())
 
     def test_health_slice_exempt_from_gatekeeper(self):
         meta = {

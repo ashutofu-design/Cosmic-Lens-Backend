@@ -361,6 +361,10 @@ _GAP_DNA_JUDGE_OFF_BY_DEFAULT = frozenset({
 
 
 def domain_dna_judge_enabled(domain: str) -> bool:
+    """Phase 1: DNA judge OFF by default (no post-narrator rewrite/retry).
+
+    Opt-in only: ASK_UNIFIED_DNA_JUDGE=1 or ASK_<DOMAIN>_DNA_JUDGE=1.
+    """
     d = (domain or "").strip().lower()
     env = f"ASK_{d.upper()}_DNA_JUDGE" if d else "ASK_UNIFIED_DNA_JUDGE"
     explicit = os.environ.get(env)
@@ -369,11 +373,7 @@ def domain_dna_judge_enabled(domain: str) -> bool:
     unified = os.environ.get("ASK_UNIFIED_DNA_JUDGE")
     if unified is not None and str(unified).strip() != "":
         return str(unified).strip() != "0"
-    # Gap / light domains: skip judge-by-default (latency). Health/MR/finance/
-    # travel keep their dedicated judge modules.
-    if d in _GAP_DNA_JUDGE_OFF_BY_DEFAULT:
-        return False
-    return True
+    return False
 
 
 def dna_judge_retry_enabled() -> bool:

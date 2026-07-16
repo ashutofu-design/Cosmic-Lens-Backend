@@ -65,7 +65,8 @@ _STOPWORDS = frozenset({
 
 
 def fidelity_enabled() -> bool:
-    return os.environ.get("ANSWER_FIDELITY_ENABLED", "true").strip().lower() in (
+    # Phase 1: default OFF — narrator output must not be repaired/rewritten.
+    return os.environ.get("ANSWER_FIDELITY_ENABLED", "false").strip().lower() in (
         "1", "true", "yes", "on",
     )
 

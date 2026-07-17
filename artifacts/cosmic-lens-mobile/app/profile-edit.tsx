@@ -483,6 +483,8 @@ export default function ProfileEditScreen() {
   const [fmError,      setFmError]      = useState("");
   const [fmPlaceFocused, setFmPlaceFocused] = useState(false);
   const [fmNameFocused, setFmNameFocused]   = useState(false);
+  const skipFmPlaceSearchRef = useRef(false);
+  const fmPlaceSearchGenRef  = useRef(0);
 
   const [fmDayOpen,   setFmDayOpen]   = useState(false);
   const [fmMonthOpen, setFmMonthOpen] = useState(false);
@@ -541,6 +543,7 @@ export default function ProfileEditScreen() {
     setFmPlaceQuery(bd.place);
     setFmGeoResults([]);
     setFmError("");
+    skipFmPlaceSearchRef.current = true;
     setFmVisible(true);
   }
 
@@ -558,31 +561,63 @@ export default function ProfileEditScreen() {
     setFmPlaceQuery(bd.place);
     setFmGeoResults([]);
     setFmError("");
+    skipFmPlaceSearchRef.current = true;
     setFmVisible(true);
   }
 
-  async function handleFmPlaceSearch() {
-    if (fmPlaceQuery.trim().length < 2) return;
-    setFmSearching(true); setFmGeoResults([]); setFmError("");
+  async function handleFmPlaceSearch(query?: string) {
+    const q = (query ?? fmPlaceQuery).trim();
+    if (q.length < 2) {
+      setFmGeoResults([]);
+      return;
+    }
+    const gen = ++fmPlaceSearchGenRef.current;
+    setFmSearching(true);
+    setFmError("");
     try {
-      const results = await searchPlaces(fmPlaceQuery);
+      const results = await searchPlaces(q);
+      if (gen !== fmPlaceSearchGenRef.current) return;
       setFmGeoResults(results);
       if (results.length === 0) {
         setFmError("No matching place found. Try different spelling or a nearby city.");
       }
     } catch (e: any) {
+      if (gen !== fmPlaceSearchGenRef.current) return;
       const msg = e?.name === "AbortError"
         ? "Search timed out. Check your internet and try again."
         : "Search failed. Please try again.";
       setFmError(msg);
     } finally {
-      setFmSearching(false);
+      if (gen === fmPlaceSearchGenRef.current) setFmSearching(false);
     }
   }
 
+  // Live suggestions while typing (debounced)
+  useEffect(() => {
+    if (!fmVisible) return;
+    if (skipFmPlaceSearchRef.current) {
+      skipFmPlaceSearchRef.current = false;
+      return;
+    }
+    const q = fmPlaceQuery.trim();
+    if (q.length < 2) {
+      fmPlaceSearchGenRef.current += 1;
+      setFmGeoResults([]);
+      setFmSearching(false);
+      return;
+    }
+    const timer = setTimeout(() => { void handleFmPlaceSearch(q); }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fmPlaceQuery, fmVisible]);
+
   async function fmSelectGeo(g: { label: string; lat: number; lon: number; tz: number }) {
+    skipFmPlaceSearchRef.current = true;
+    fmPlaceSearchGenRef.current += 1;
+    setFmGeoResults([]);
+    setFmSearching(false);
     setFmForm(prev => ({ ...prev, place: g.label, lat: g.lat, lon: g.lon, tz: g.tz }));
-    setFmPlaceQuery(g.label); setFmGeoResults([]);
+    setFmPlaceQuery(g.label);
     setFmTzLoading(true);
     try {
       const tz = await fetchTimezone(g.lat, g.lon);
@@ -921,15 +956,19 @@ export default function ProfileEditScreen() {
                     <TextInput
                       style={[s.inputTxt, { flex: 1, color: C.text }]}
                       value={fmPlaceQuery}
-                      onChangeText={setFmPlaceQuery}
-                      onSubmitEditing={handleFmPlaceSearch}
+                      onChangeText={(v) => {
+                        skipFmPlaceSearchRef.current = false;
+                        setFmPlaceQuery(v);
+                        setFmError("");
+                      }}
+                      onSubmitEditing={() => { void handleFmPlaceSearch(); }}
                       placeholder={t.pe_phCity}
                       placeholderTextColor={C.textDim}
                       returnKeyType="search"
                       onFocus={() => setFmPlaceFocused(true)}
                       onBlur={() => setFmPlaceFocused(false)}
                     />
-                    <Pressable onPress={handleFmPlaceSearch} style={[s.searchBtn, { borderColor: ac }]}>
+                    <Pressable onPress={() => { void handleFmPlaceSearch(); }} style={[s.searchBtn, { borderColor: ac }]}>
                       {fmSearching
                         ? <ActivityIndicator size="small" color={ac} />
                         : <Text style={[s.searchBtnTxt, { color: ac }]}>{t.pe_search}</Text>

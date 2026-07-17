@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -139,6 +139,8 @@ export default function OnboardingScreen() {
   const [selectedPlace, setSelectedPlace] = useState("");
   const [suggestions,   setSuggestions]   = useState<PlaceSuggestion[]>([]);
   const [searching,     setSearching]     = useState(false);
+  const skipPlaceSearchRef = useRef(false);
+  const placeSearchGenRef  = useRef(0);
 
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
@@ -164,34 +166,63 @@ export default function OnboardingScreen() {
     }
   }, [user?.name]);
 
-  async function doSearchPlace() {
-    if (placeQuery.trim().length < 2) return;
-    setSearching(true); setSuggestions([]); setError("");
+  async function doSearchPlace(query?: string) {
+    const q = (query ?? placeQuery).trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const gen = ++placeSearchGenRef.current;
+    setSearching(true);
+    setError("");
     try {
-      const results = await searchPlaces(placeQuery.trim());
+      const results = await searchPlaces(q);
+      if (gen !== placeSearchGenRef.current) return;
       setSuggestions(results);
       if (results.length === 0) {
         setError(L.noPlaceFound);
       }
     } catch (e: any) {
+      if (gen !== placeSearchGenRef.current) return;
       const msg = e?.name === "AbortError"
         ? L.searchTimeout
         : L.searchFailed;
       setError(msg);
     } finally {
-      setSearching(false);
+      if (gen === placeSearchGenRef.current) setSearching(false);
     }
   }
 
+  // Live suggestions while typing (debounced)
+  useEffect(() => {
+    if (skipPlaceSearchRef.current) {
+      skipPlaceSearchRef.current = false;
+      return;
+    }
+    const q = placeQuery.trim();
+    if (q.length < 2) {
+      placeSearchGenRef.current += 1;
+      setSuggestions([]);
+      setSearching(false);
+      return;
+    }
+    const timer = setTimeout(() => { void doSearchPlace(q); }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeQuery]);
+
   async function selectPlace(item: PlaceSuggestion) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    skipPlaceSearchRef.current = true;
+    placeSearchGenRef.current += 1;
+    setSuggestions([]);
+    setSearching(false);
     const tz = await fetchTimezone(item.lat, item.lon);
     setSelectedLat(item.lat);
     setSelectedLon(item.lon);
     setSelectedTz(tz);
     setSelectedPlace(item.label);
     setPlaceQuery(item.label);
-    setSuggestions([]);
   }
 
   async function handleSubmit() {
@@ -449,12 +480,18 @@ export default function OnboardingScreen() {
                 placeholder={t.searchCity}
                 placeholderTextColor={C.textDim}
                 value={placeQuery}
-                onChangeText={v => { setPlaceQuery(v); setSelectedLat(null); setSelectedPlace(""); }}
-                onSubmitEditing={doSearchPlace}
+                onChangeText={v => {
+                  skipPlaceSearchRef.current = false;
+                  setPlaceQuery(v);
+                  setSelectedLat(null);
+                  setSelectedPlace("");
+                  setError("");
+                }}
+                onSubmitEditing={() => { void doSearchPlace(); }}
                 returnKeyType="search"
               />
               <Pressable
-                onPress={doSearchPlace}
+                onPress={() => { void doSearchPlace(); }}
                 style={({ pressed }) => [s.searchBtn, { backgroundColor: C.accent }, pressed && { opacity: 0.7 }]}
               >
                 {searching

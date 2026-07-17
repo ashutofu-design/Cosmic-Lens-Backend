@@ -9338,6 +9338,69 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 flush=True,
             )
 
+    # ── Age ↔ dasha LLM verify (all timing EXCEPT marriage) ───────────────
+    # Engine can lock an imminent window that fails life-stage sanity
+    # (e.g. baby kab @ age 23 with "abhi" dasha). Verify, then re-lock.
+    _age_dasha_guard_audit: dict = {}
+    if (
+        is_timing
+        and (domain_timing_block or "").strip()
+        and _timing_ctx is not None
+        and isinstance(getattr(_timing_ctx, "raw", None), dict)
+        and not _is_marriage_timing_question(question or "")
+    ):
+        try:
+            from ask_timing.age_dasha_guard import apply_timing_age_dasha_guard
+
+            _agd_domain = ""
+            try:
+                _agd_domain = str(
+                    getattr(getattr(_timing_ctx, "demand", None), "domain", "") or ""
+                )
+            except Exception:
+                _agd_domain = ""
+            if not _agd_domain:
+                _agd_domain = str(_domain_timing_engine_id or "").split("_")[0] or "universal"
+            if _agd_domain.lower() != "marriage":
+                _old_dtb = domain_timing_block
+                domain_timing_block, _age_dasha_guard_audit = apply_timing_age_dasha_guard(
+                    client=client,
+                    model=os.environ.get(
+                        "RAW_PASSTHROUGH_MODEL",
+                        os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
+                    ),
+                    question=question or "",
+                    domain=_agd_domain,
+                    birth=birth,
+                    kundli=kundli,
+                    engine_raw=_timing_ctx.raw,
+                    prompt_block=domain_timing_block,
+                    user_age=getattr(getattr(_timing_ctx, "demand", None), "user_age", None),
+                    history=history,
+                    skip_marriage=True,
+                )
+                if domain_timing_block != _old_dtb:
+                    if _old_dtb and _old_dtb in chart_text:
+                        chart_text = chart_text.replace(_old_dtb, domain_timing_block, 1)
+                    elif domain_timing_block not in chart_text:
+                        chart_text = chart_text + "\n" + domain_timing_block
+                    try:
+                        _timing_ctx.raw["_prompt_block"] = domain_timing_block
+                    except Exception:
+                        pass
+                print(
+                    f"[raw_passthrough] age_dasha_guard "
+                    f"domain={_agd_domain} "
+                    f"result={_age_dasha_guard_audit.get('result') or _age_dasha_guard_audit.get('skipped')} "
+                    f"age={_age_dasha_guard_audit.get('user_age')}",
+                    flush=True,
+                )
+        except Exception as _agd_exc:
+            print(
+                f"[raw_passthrough] age_dasha_guard skipped: {str(_agd_exc)[:200]}",
+                flush=True,
+            )
+
     # Last-chance M17 — shaadi kab must not reach LLM without engine block.
     if (
         not (marriage_block or "").strip()
@@ -11704,6 +11767,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     f"{str(_timing_admin_exc)[:200]}",
                     flush=True,
                 )
+        if _age_dasha_guard_audit:
+            _pt_checks["age_dasha_guard"] = _age_dasha_guard_audit
+            if isinstance(dcr_love_meta, dict):
+                _hc_agd = dict(dcr_love_meta.get("checks") or {})
+                _hc_agd["age_dasha_guard"] = _age_dasha_guard_audit
+                dcr_love_meta["checks"] = _hc_agd
         _pt_blocks = {"chart_context": chart_text}
         if kp_block:
             _pt_blocks["kp"] = kp_block.strip()

@@ -57,6 +57,8 @@ import {
   ASK_REPLY_LANG_OPTIONS,
   ASK_REPLY_LANG_STORAGE_KEY,
   askLangToApi,
+  askReplyLangLabel,
+  detectAskLangFromQuestion,
   loadAskReplyLang,
   type AskReplyLang,
 } from "@/lib/askReplyLang";
@@ -258,240 +260,6 @@ function PressScale({
   );
 }
 
-const DNA_DOMAIN_LABEL: Record<string, string> = {
-  love: "Relationship",
-  marriage: "Marriage",
-  career: "Career",
-  finance: "Finance",
-  health: "Health",
-  family: "Family",
-  education: "Education",
-  travel: "Travel",
-  legal: "Legal",
-  spiritual: "Spiritual",
-  general: "General",
-};
-
-const DNA_BUCKET_LABEL: Record<string, string> = {
-  relationship_promise: "Relationship Promise",
-  love_feelings: "Love & Feelings",
-  partner_nature: "Partner Nature",
-  compatibility: "Compatibility",
-  commitment: "Commitment",
-  trust_loyalty: "Trust & Loyalty",
-  communication: "Communication",
-  emotional_bonding: "Emotional Bonding",
-  physical_intimacy: "Physical & Intimacy",
-  third_person_infidelity: "Third Person / Infidelity",
-  dating_courtship: "Dating & Courtship",
-  long_distance: "Long Distance",
-  family_social_acceptance: "Family & Social Acceptance",
-  relationship_challenges: "Relationship Challenges",
-  toxicity_red_flags: "Toxicity & Red Flags",
-  breakup_separation: "Breakup & Separation",
-  reconciliation_ex: "Reconciliation & Ex",
-  marriage_potential: "Marriage Potential",
-  relationship_future: "Relationship Outcome / Long-term Stability",
-  relationship_decisions: "Relationship Decisions",
-  spiritual_karmic: "Soulmate & Karmic Connection",
-  relationship_remedies: "Relationship Remedies",
-  unknown_relationship_intent: "Unknown (Audit)",
-  general_mr: "Marriage General",
-  govt_job: "Government Job",
-  career_milestones: "Career Milestones",
-};
-
-const DNA_ENGINE_ARCHETYPE_LABEL: Record<string, string> = {
-  karmic_marriage: "Soulmate & Karmic Connection",
-  relationship_future: "Relationship Outcome / Long-term Stability",
-};
-
-const DNA_SUBJECT_LABEL: Record<string, string> = {
-  self: "Self",
-  partner: "Partner",
-  spouse: "Spouse",
-  family_member: "Family Member",
-  other_person: "Other Person",
-  subject_person: "Subject Person",
-};
-
-const DNA_TARGET_LABEL: Record<string, string> = {
-  self: "Self",
-  self_relationship: "Self (Relationship)",
-  subject_person: "Subject Person",
-  event: "Event",
-  situation: "Situation",
-};
-
-function dnaDisplayLabel(map: Record<string, string>, key?: string | null): string {
-  if (!key) return "—";
-  return map[key] || key.replace(/_/g, " ");
-}
-
-function dnaYesNo(v?: boolean | null): string {
-  if (v === true) return "Yes";
-  if (v === false) return "No";
-  return "—";
-}
-
-function dnaConfPct(v?: number | null): string {
-  if (typeof v !== "number" || Number.isNaN(v)) return "—";
-  return `${(v * 100).toFixed(0)}%`;
-}
-
-type DnaCopySub = {
-  normalized_question?: string;
-  domain?: string;
-  bucket?: string;
-  engine_archetype?: string | null;
-  intent?: string;
-  subject?: string;
-  target?: string;
-  question_type?: string;
-  timing?: boolean;
-  tense?: string;
-  emotion?: string;
-  risk?: string;
-  is_followup?: boolean;
-  followup_of?: string;
-  confidence?: number;
-  bucket_match_score?: number;
-  bucket_match_confidence?: string;
-  bucket_coerced?: boolean;
-  required_modules?: string[];
-};
-
-type DnaCopyItem = {
-  index?: number;
-  question: string;
-  normalized_question?: string;
-  domain?: string;
-  bucket?: string;
-  engine_archetype?: string | null;
-  intent?: string;
-  subject?: string;
-  target?: string;
-  question_type?: string;
-  timing?: boolean;
-  tense?: string;
-  emotion?: string;
-  risk?: string;
-  is_followup?: boolean;
-  followup_of?: string;
-  confidence?: number;
-  bucket_match_score?: number;
-  bucket_match_confidence?: string;
-  bucket_coerced?: boolean;
-  required_modules?: string[];
-  latency_ms?: number;
-  dna?: { questions?: DnaCopySub[] };
-};
-
-function dnaSubsFromItem(it: DnaCopyItem): DnaCopySub[] {
-  const subs = it.dna?.questions;
-  const multi = Array.isArray(subs) && subs.length > 1;
-  if (multi) return subs!;
-  return [{
-    normalized_question: it.normalized_question || it.question,
-    domain: it.domain,
-    bucket: it.bucket,
-    engine_archetype: it.engine_archetype,
-    intent: it.intent,
-    subject: it.subject,
-    target: it.target,
-    question_type: it.question_type,
-    timing: it.timing,
-    tense: it.tense,
-    emotion: it.emotion,
-    risk: it.risk,
-    is_followup: it.is_followup,
-    followup_of: it.followup_of,
-    confidence: it.confidence,
-    bucket_match_score: it.bucket_match_score,
-    bucket_match_confidence: it.bucket_match_confidence,
-    bucket_coerced: it.bucket_coerced,
-    required_modules: it.required_modules,
-  }];
-}
-
-function formatDnaSubForCopy(sub: DnaCopySub, splitLabel?: string): string {
-  const lines: string[] = [];
-  if (splitLabel) lines.push(splitLabel);
-  const add = (label: string, value: string) => lines.push(`${label}: ${value}`);
-  add("Normalized", sub.normalized_question || "—");
-  add("Domain", `${dnaDisplayLabel(DNA_DOMAIN_LABEL, sub.domain)} (${sub.domain || "—"})`);
-  add("Bucket", `${dnaDisplayLabel(DNA_BUCKET_LABEL, sub.bucket)} (${sub.bucket || "—"})`);
-  add("Intent", sub.intent || "—");
-  add("Subject", `${dnaDisplayLabel(DNA_SUBJECT_LABEL, sub.subject)} (${sub.subject || "—"})`);
-  add("Target", `${dnaDisplayLabel(DNA_TARGET_LABEL, sub.target)} (${sub.target || "—"})`);
-  add("Question Type", sub.question_type ? sub.question_type.replace(/_/g, " ") : "—");
-  add("Timing Required", dnaYesNo(sub.timing));
-  add("Time Context", sub.tense && sub.tense !== "unspecified" ? sub.tense : "—");
-  add("Follow-up", dnaYesNo(sub.is_followup));
-  if (sub.is_followup && sub.followup_of) add("Follow-up Of", sub.followup_of);
-  add("Emotion", sub.emotion ? String(sub.emotion).replace(/_/g, " ") : "—");
-  add("Risk", sub.risk ? String(sub.risk) : "—");
-  add("Engine Archetype", dnaDisplayLabel(DNA_ENGINE_ARCHETYPE_LABEL, sub.engine_archetype));
-  add(
-    "Modules",
-    Array.isArray(sub.required_modules) && sub.required_modules.length > 0
-      ? sub.required_modules.join(", ")
-      : "—",
-  );
-  add("Confidence", dnaConfPct(sub.confidence));
-  add(
-    "Bucket Match",
-    sub.bucket_match_confidence
-      ? `${String(sub.bucket_match_confidence).toUpperCase()}${
-          typeof sub.bucket_match_score === "number"
-            ? ` (${(sub.bucket_match_score * 100).toFixed(0)}%)`
-            : ""
-        }`
-      : "—",
-  );
-  return lines.join("\n");
-}
-
-function formatAllDnaResultsForCopy(items: DnaCopyItem[]): string {
-  if (!items.length) return "";
-  const blocks = items.map((it, i) => {
-    const subs = dnaSubsFromItem(it);
-    const multi = subs.length > 1;
-    const header = [
-      `=== Q${it.index ?? i + 1}${
-        typeof it.latency_ms === "number" ? ` · ${it.latency_ms}ms` : ""
-      }${multi ? ` · split ×${subs.length}` : ""} ===`,
-      `Question: ${it.question}`,
-    ].join("\n");
-    const body = subs
-      .map((sub, si) =>
-        formatDnaSubForCopy(sub, multi ? `--- Split ${si + 1} of ${subs.length} ---` : undefined),
-      )
-      .join("\n\n");
-    return `${header}\n\n${body}`;
-  });
-  return blocks.join("\n\n" + "─".repeat(48) + "\n\n");
-}
-
-function DnaFieldRow({
-  label,
-  value,
-  textColor,
-  mutedColor,
-}: {
-  label: string;
-  value: string;
-  textColor: string;
-  mutedColor: string;
-}) {
-  return (
-    <View style={{ flexDirection: "row", marginTop: 5, gap: 8 }}>
-      <Text style={{ color: mutedColor, fontSize: 12, width: 132, fontWeight: "600" }}>{label}</Text>
-      <Text style={{ color: textColor, fontSize: 12, flex: 1, lineHeight: 18 }}>{value}</Text>
-    </View>
-  );
-}
-
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
@@ -522,8 +290,8 @@ export default function AskScreen() {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Mode picker: null = landing, "chat" = Ask Anything, "batch" = Batch Test, "dna" = DNA Check
-  const [mode, setMode] = useState<"chat" | "batch" | "dna" | null>(null);
+  // Mode picker: null = landing, "chat" = Ask Anything
+  const [mode, setMode] = useState<"chat" | null>(null);
   const [askReplyLang, setAskReplyLang] = useState<AskReplyLang>("hn");
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [langPickerDraft, setLangPickerDraft] = useState<AskReplyLang>("hn");
@@ -578,16 +346,16 @@ export default function AskScreen() {
   const { setHidden } = useTabBar();
   useFocusEffect(
     useCallback(() => {
-      setHidden(mode === "chat" || mode === "batch" || mode === "dna");
+      setHidden(mode === "chat");
       return () => setHidden(false);
     }, [mode, setHidden]),
   );
 
-  // ── Back handling: chat/batch → landing (not pop tab stack).
+  // ── Back handling: chat → landing (not pop tab stack).
   useFocusEffect(
     useCallback(() => {
       const onBack = () => {
-        if (mode === "chat" || mode === "batch" || mode === "dna") {
+        if (mode === "chat") {
           setMode(null);
           return true;
         }
@@ -598,7 +366,7 @@ export default function AskScreen() {
     }, [mode]),
   );
 
-  const tabBarHidden = mode === "chat" || mode === "batch" || mode === "dna";
+  const tabBarHidden = mode === "chat";
   // Resting bottom padding (keyboard CLOSED). When open, the KeyboardAvoiding
   // View lifts the whole row above the keyboard so we only need a tiny gap.
   //   keyboard open → 10px flush gap above the keyboard.
@@ -706,448 +474,6 @@ export default function AskScreen() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [batchInput, setBatchInput] = useState("");
-  const [batchRunning, setBatchRunning] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<string | null>(null);
-  const [batchResult, setBatchResult] = useState<string | null>(null);
-  const [batchItems, setBatchItems] = useState<Array<{
-    index?: number;
-    question: string;
-    answer: string;
-    topic?: string;
-    source?: string;
-    engine_tag?: string;
-  }>>([]);
-  const batchScrollRef = useRef<ScrollView>(null);
-
-  type DnaItem = {
-    index?: number;
-    question: string;
-    normalized_question?: string;
-    domain?: string;
-    bucket?: string;
-    engine_archetype?: string | null;
-    intent?: string;
-    subject?: string;
-    target?: string;
-    question_type?: string;
-    timing?: boolean;
-    tense?: string;
-    emotion?: string;
-    risk?: string;
-    is_followup?: boolean;
-    followup_of?: string;
-    confidence?: number;
-    bucket_match_score?: number;
-    bucket_match_confidence?: string;
-    bucket_coerced?: boolean;
-    required_modules?: string[];
-    split_count?: number;
-    source?: string;
-    latency_ms?: number;
-    dna?: { questions?: Array<Record<string, unknown>> };
-  };
-  const [dnaInput, setDnaInput] = useState("");
-  const [dnaRunning, setDnaRunning] = useState(false);
-  const [dnaProgress, setDnaProgress] = useState<string | null>(null);
-  const [dnaItems, setDnaItems] = useState<DnaItem[]>([]);
-  const [dnaCopiedAll, setDnaCopiedAll] = useState(false);
-  const dnaScrollRef = useRef<ScrollView>(null);
-  const dnaCopiedAllTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const dnaItemFromPayload = (question: string, dna: any, index = 1): DnaItem => {
-    const primary = (dna?.questions || [])[0] || {};
-    return {
-      index,
-      question,
-      normalized_question: primary.normalized_question,
-      domain: primary.domain,
-      bucket: primary.bucket,
-      engine_archetype: primary.engine_archetype,
-      intent: primary.intent,
-      subject: primary.subject,
-      target: primary.target,
-      question_type: primary.question_type,
-      timing: primary.timing,
-      tense: primary.tense,
-      emotion: primary.emotion,
-      risk: primary.risk,
-      is_followup: primary.is_followup,
-      followup_of: primary.followup_of,
-      confidence: primary.confidence,
-      bucket_match_score: primary.bucket_match_score,
-      bucket_match_confidence: primary.bucket_match_confidence,
-      bucket_coerced: primary.bucket_coerced,
-      required_modules: primary.required_modules,
-      split_count: Array.isArray(dna?.questions) ? dna.questions.length : 1,
-      source: dna?.source,
-      latency_ms: dna?.latency_ms,
-      dna,
-    };
-  };
-
-  const runDnaCheck = useCallback(async () => {
-    if (showDemo) {
-      router.push("/onboarding");
-      return;
-    }
-    if (dnaRunning) return;
-    const lines = (dnaInput || "")
-      .split(/\n+/)
-      .map((x) => x.trim())
-      .filter(Boolean);
-    if (!lines.length) return;
-
-    const qs = lines.slice(0, 500);
-    setDnaRunning(true);
-    setDnaProgress(`0/${qs.length} — starting…`);
-    setDnaItems([]);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream, application/json",
-    };
-    if (user?.api_key) headers["X-API-Key"] = user.api_key;
-
-    const failDna = async (res: Response) => {
-      const j = await res.json().catch(() => null);
-      const msg = j?.message || j?.error || "";
-      if (res.status === 405 || res.status === 404) {
-        setDnaProgress(
-          `DNA API not deployed on server (${res.status}). VPS par flask_app.py + ask_dna_runner.py upload karke pm2 restart karein.`,
-        );
-        return;
-      }
-      setDnaProgress(
-        msg ? `Failed (${res.status}): ${msg}` : `Failed (HTTP ${res.status})`,
-      );
-    };
-
-    const parseDnaEvent = (raw: string) => {
-      const dataLine = raw.split("\n").find((l) => l.startsWith("data:"));
-      if (!dataLine) return null;
-      const dataStr = dataLine.slice(5).trim();
-      if (!dataStr) return null;
-      try {
-        return JSON.parse(dataStr);
-      } catch {
-        return null;
-      }
-    };
-
-    try {
-      // Single question — simple JSON endpoint (no SSE)
-      if (qs.length === 1) {
-        const res = await fetch(`${API_BASE}/api/ask/dna`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ question: qs[0], user_id: user?.id }),
-        });
-        if (res.status === 401) {
-          setDnaProgress("Session expired — logout karke phir login karein.");
-          return;
-        }
-        if (!res.ok) {
-          await failDna(res);
-          return;
-        }
-        const json = await res.json();
-        const item = dnaItemFromPayload(json?.question || qs[0], json?.dna, 1);
-        setDnaItems([item]);
-        setDnaProgress("1/1 complete");
-        setTimeout(() => dnaScrollRef.current?.scrollToEnd({ animated: true }), 200);
-        return;
-      }
-
-      const res = await fetch(`${API_BASE}/api/ask/dna/batch/stream`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ questions: qs, user_id: user?.id }),
-      });
-
-      if (res.status === 401) {
-        setDnaProgress("Session expired — logout karke phir login karein.");
-        return;
-      }
-      if (!res.ok) {
-        await failDna(res);
-        return;
-      }
-
-      const ct = (res.headers.get("content-type") || "").toLowerCase();
-      const isStream = ct.includes("text/event-stream");
-      const collected: DnaItem[] = [];
-
-      const handleEvt = (evt: any) => {
-        if (!evt || typeof evt !== "object") return;
-        if (evt.error) {
-          setDnaProgress(String(evt.error));
-          return;
-        }
-        if (evt.kind === "started" && typeof evt.total === "number") {
-          setDnaProgress(`0/${evt.total} — running…`);
-          return;
-        }
-        if (evt.kind === "item") {
-          const item: DnaItem = {
-            index: evt.index,
-            question: evt.question || "",
-            domain: evt.domain,
-            bucket: evt.bucket,
-            engine_archetype: evt.engine_archetype ?? (evt.dna?.questions?.[0] as any)?.engine_archetype,
-            intent: evt.intent,
-            subject: evt.subject,
-            target: evt.target,
-            question_type: evt.question_type,
-            timing: evt.timing,
-            tense: evt.tense,
-            emotion: evt.emotion,
-            risk: evt.risk,
-            is_followup: evt.is_followup,
-            followup_of: evt.followup_of,
-            normalized_question: evt.normalized_question,
-            confidence: evt.confidence,
-            required_modules: evt.required_modules,
-            split_count: evt.split_count,
-            source: evt.source,
-            latency_ms: evt.latency_ms,
-            dna: evt.dna,
-          };
-          collected.push(item);
-          setDnaItems([...collected]);
-          setDnaProgress(`${collected.length}/${evt.total ?? qs.length} done`);
-          setTimeout(() => dnaScrollRef.current?.scrollToEnd({ animated: true }), 120);
-        }
-        if (evt.kind === "done") {
-          setDnaProgress(`${collected.length}/${evt.total ?? collected.length} complete`);
-        }
-      };
-
-      if (isStream && res.body) {
-        const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let buf = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          const parts = buf.split("\n\n");
-          buf = parts.pop() || "";
-          for (const part of parts) {
-            const evt = parseDnaEvent(part);
-            if (evt) handleEvt(evt);
-          }
-        }
-        if (buf.trim()) {
-          const evt = parseDnaEvent(buf);
-          if (evt) handleEvt(evt);
-        }
-      } else {
-        const json = await res.json();
-        if (json?.dna) {
-          setDnaItems([dnaItemFromPayload(qs[0], json.dna, 1)]);
-          setDnaProgress("1/1 complete");
-        }
-      }
-      setTimeout(() => dnaScrollRef.current?.scrollToEnd({ animated: true }), 200);
-    } catch (e: any) {
-      setDnaProgress(e?.message || "Network error — try again.");
-    } finally {
-      setDnaRunning(false);
-    }
-  }, [dnaInput, dnaRunning, showDemo, user?.api_key, user?.id]);
-
-  const copyAllDnaResults = useCallback(() => {
-    if (!dnaItems.length) return;
-    const value = formatAllDnaResultsForCopy(dnaItems);
-    if (!value) return;
-    void (async () => {
-      try {
-        await Clipboard.setStringAsync(value);
-        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-      } catch {}
-      setDnaCopiedAll(true);
-      if (dnaCopiedAllTimerRef.current) clearTimeout(dnaCopiedAllTimerRef.current);
-      dnaCopiedAllTimerRef.current = setTimeout(() => setDnaCopiedAll(false), 2000);
-    })();
-  }, [dnaItems]);
-
-  const runBatchTest = useCallback(async () => {
-    if (showDemo) {
-      router.push("/onboarding");
-      return;
-    }
-    if (batchRunning) return;
-    const lines = (batchInput || "")
-      .split(/\n+/)
-      .map((x) => x.trim())
-      .filter(Boolean);
-    if (!lines.length) return;
-
-    const qs = lines.slice(0, 60);
-    setBatchRunning(true);
-    setBatchProgress(`0/${qs.length} — starting…`);
-    setBatchResult(null);
-    setBatchItems([]);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    const body = JSON.stringify({
-      questions: qs,
-      batch_title: "Batch Test",
-      kundli,
-      birthData,
-      history: [],
-      lang: askLangToApi(askReplyLang),
-      user_id: user?.id,
-    });
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream, application/json",
-    };
-    if (user?.api_key) headers["X-API-Key"] = user.api_key;
-
-    const parseBatchEvent = (raw: string) => {
-      const dataLine = raw.split("\n").find((l) => l.startsWith("data:"));
-      if (!dataLine) return null;
-      const dataStr = dataLine.slice(5).trim();
-      if (!dataStr) return null;
-      try {
-        return JSON.parse(dataStr);
-      } catch {
-        return null;
-      }
-    };
-
-    try {
-      const res = await fetch(`${API_BASE}/api/ask/batch/stream`, {
-        method: "POST",
-        headers,
-        body,
-      });
-
-      if (res.status === 402) {
-        const json = await res.json().catch(() => ({} as any));
-        setBatchResult(json?.message || "Daily limit poora");
-        setQuotaModal({
-          used: json?.quota?.used ?? 0,
-          limit: json?.quota?.limit ?? 0,
-          plan: json?.plan ?? "free",
-          message: json?.message ?? t.askDailyLimitOver,
-        });
-        return;
-      }
-      if (res.status === 401) {
-        setBatchResult("Session expired — logout karke phir login karein.");
-        return;
-      }
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        setBatchResult(
-          j?.message
-            ? `Batch failed: ${j.message}`
-            : `Batch failed (status ${res.status}) — please try again.`,
-        );
-        return;
-      }
-
-      const ct = (res.headers.get("content-type") || "").toLowerCase();
-      const isStream = ct.includes("text/event-stream");
-      const collected: typeof batchItems = [];
-      let sawDone = false;
-      let streamError: string | null = null;
-
-      const handleEvt = (evt: any) => {
-        if (!evt || typeof evt !== "object") return;
-        if (evt.error) {
-          streamError = String(evt.error);
-          return;
-        }
-        if (evt.kind === "started" && typeof evt.total === "number") {
-          setBatchProgress(`0/${evt.total} — processing…`);
-          return;
-        }
-        if (evt.kind === "item" && evt.item && typeof evt.item === "object") {
-          collected.push(evt.item);
-          setBatchItems([...collected]);
-          const idx = evt.index ?? collected.length;
-          const total = evt.total ?? qs.length;
-          setBatchProgress(`${idx}/${total} done`);
-          setTimeout(() => batchScrollRef.current?.scrollToEnd({ animated: true }), 120);
-          return;
-        }
-        if (evt.kind === "done") {
-          sawDone = true;
-          const items = Array.isArray(evt.items) ? evt.items : collected;
-          setBatchItems(items);
-          setBatchResult(
-            evt.text
-            || items.map((it: any, i: number) => `### ${i + 1}. ${it.question}\n\n${it.answer || ""}`).join("\n\n---\n\n"),
-          );
-          setBatchProgress(null);
-        }
-      };
-
-      if (isStream) {
-        const reader: ReadableStreamDefaultReader<Uint8Array> | null =
-          (res.body && typeof (res.body as any).getReader === "function")
-            ? (res.body as any).getReader()
-            : null;
-        const decoder: TextDecoder | null =
-          typeof TextDecoder !== "undefined" ? new TextDecoder() : null;
-
-        if (reader && decoder) {
-          let buffer = "";
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            let nlnl: number;
-            while ((nlnl = buffer.indexOf("\n\n")) >= 0) {
-              const evtRaw = buffer.slice(0, nlnl);
-              buffer = buffer.slice(nlnl + 2);
-              handleEvt(parseBatchEvent(evtRaw));
-            }
-          }
-          if (buffer.trim()) handleEvt(parseBatchEvent(buffer));
-        } else {
-          const textBody = await res.text();
-          for (const part of textBody.split("\n\n")) {
-            if (part.trim()) handleEvt(parseBatchEvent(part));
-          }
-        }
-      } else {
-        const j = await res.json().catch(() => ({} as any));
-        handleEvt({ kind: "done", ...j });
-      }
-
-      if (!sawDone) {
-        if (collected.length > 0) {
-          setBatchItems(collected);
-          setBatchResult(
-            collected.map((it, i) => `### ${i + 1}. ${it.question}\n\n${it.answer || ""}`).join("\n\n---\n\n"),
-          );
-        } else {
-          setBatchResult(streamError || "Batch failed — connection ended early. Please try again.");
-        }
-      } else {
-        setTimeout(() => batchScrollRef.current?.scrollToEnd({ animated: true }), 200);
-      }
-    } catch (err: any) {
-      const msg = String(err?.message || err || "").trim();
-      setBatchResult(
-        msg && /network|fetch|failed/i.test(msg)
-          ? `Batch failed: ${msg} (12+ questions ke liye server deploy zaroori hai)`
-          : msg
-            ? `Batch failed: ${msg}`
-            : "Batch failed — please try again.",
-      );
-    } finally {
-      setBatchRunning(false);
-      setBatchProgress(null);
-    }
-  }, [batchInput, batchRunning, showDemo, user?.api_key, user?.id, kundli, birthData, askReplyLang, t.askDailyLimitOver]);
   const [copiedUserMsgId, setCopiedUserMsgId] = useState<string | null>(null);
   const copiedUserMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copiedAssistantMsgId, setCopiedAssistantMsgId] = useState<string | null>(null);
@@ -1347,7 +673,10 @@ export default function AskScreen() {
             kundli,
             birthData,
             history,
-            lang: askLangToApi(askReplyLang),
+            // Question script wins — picker is only a fallback when undetectable.
+            lang: askLangToApi(
+              detectAskLangFromQuestion(text.trim()) || askReplyLang,
+            ),
             user_id: user?.id,
           }),
           signal: ctrl.signal,
@@ -2041,7 +1370,7 @@ export default function AskScreen() {
       {/* Header */}
       <FadeInView delay={0}>
         <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: C.border }]}>
-        {mode === "chat" || mode === "batch" || mode === "dna" ? (
+        {mode === "chat" ? (
           <Pressable
             onPress={() => { Haptics.selectionAsync(); setMode(null); }}
             hitSlop={12}
@@ -2057,53 +1386,34 @@ export default function AskScreen() {
           />
           <Feather name="cpu" size={15} color={C.accent} style={{ marginRight: 6 }} />
           <Text style={[s.headerTitle, { color: C.text, textShadowColor: `${C.accent}88` }]}>
-            {mode === "batch" ? "Batch Test" : mode === "dna" ? "DNA Check" : "Cosmic Intelligence"}
+            Cosmic Intelligence
           </Text>
           <View style={{ marginLeft: 8 }}>
             <GlowDot color="#10b981" size={7} />
           </View>
         </View>
         <Text style={[s.headerSub, { color: C.textMuted }]}>
-          {mode === "batch"
-            ? "Paste 20–60 questions — answers run one by one"
-            : mode === "dna"
-              ? "Paste questions — DNA metadata only (no answer)"
-              : "Multi System Pattern Engine V2.0"}
+          Multi System Pattern Engine V2.0
         </Text>
-        {mode === "chat" && (
-          <View style={s.askLangRow}>
-            <Feather name="globe" size={12} color={C.textMuted} />
-            <Text style={[s.askLangLabel, { color: C.textMuted }]}>Reply:</Text>
-            {ASK_REPLY_LANG_OPTIONS.map((opt) => {
-              const active = askReplyLang === opt.id;
-              return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    void persistAskReplyLang(opt.id, true);
-                  }}
-                  style={[
-                    s.askLangChip,
-                    {
-                      backgroundColor: active ? `${C.accent}22` : C.bgCard2,
-                      borderColor: active ? C.accent : C.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      s.askLangChipText,
-                      { color: active ? C.accent : C.textMid },
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+        {/* ONE selected language only — never render English + Hinglish + हिंदी together */}
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            setLangPickerDraft(askReplyLang);
+            setLangPickerVisible(true);
+          }}
+          style={[
+            s.askLangOnlyBtn,
+            { backgroundColor: `${C.accent}18`, borderColor: C.accent },
+          ]}
+          accessibilityLabel={`Reply language ${askReplyLangLabel(askReplyLang)}`}
+        >
+          <Feather name="globe" size={12} color={C.accent} />
+          <Text style={[s.askLangOnlyText, { color: C.accent }]}>
+            Reply · {askReplyLangLabel(askReplyLang)}
+          </Text>
+          <Feather name="chevron-down" size={12} color={C.accent} />
+        </Pressable>
         </View>
       </FadeInView>
 
@@ -2140,50 +1450,8 @@ export default function AskScreen() {
             </View>
           </FadeInView>
 
-          {/* Card 1: DNA Check — Step 1 classifier lab (above Ask Anything) */}
+          {/* Card 1: Ask Anything (Chat) */}
           <FadeInView delay={staggerDelay(1, 70, 80)}>
-            <PressScale
-              accessibilityLabel="DNA Check"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                if (showDemo) { router.push("/onboarding"); return; }
-                setDnaItems([]);
-                setDnaProgress(null);
-                setMode("dna");
-              }}
-              style={[s.modeCard, { shadowColor: "#0d9488" }]}
-            >
-              <LinearGradient
-                colors={["#0f766e", "#0d9488", "#14b8a6"]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={s.modeGrad}
-              >
-                <CardShimmer />
-                <View style={s.modeIconWrap}>
-                  <Text style={s.modeEmoji}>🧬</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={s.modeTitle}>DNA Check</Text>
-                    <View style={s.modeBadge}>
-                      <Text style={s.modeBadgeText}>Step 1</Text>
-                    </View>
-                  </View>
-                  <Text style={s.modeBody}>
-                    Questions paste karo — domain, bucket, intent, timing DNA dikhega. Answer nahi — sirf classification test (500 tak).
-                  </Text>
-                  <View style={s.modeMeta}>
-                    <Feather name="git-branch" size={11} color="#ffffffcc" />
-                    <Text style={s.modeMetaText}>Routing audit · No quota · Classify only</Text>
-                  </View>
-                </View>
-                <Feather name="chevron-right" size={20} color="#fff" />
-              </LinearGradient>
-            </PressScale>
-          </FadeInView>
-
-          {/* Card 2: Ask Anything (Chat) */}
-          <FadeInView delay={staggerDelay(2, 70, 80)}>
             <PressScale
             accessibilityLabel="Ask Anything"
             onPress={() => {
@@ -2218,93 +1486,11 @@ export default function AskScreen() {
             </PressScale>
           </FadeInView>
 
-          {/* Card 3: Prashna Kundli (KP 1-249) */}
-          <FadeInView delay={staggerDelay(3, 70, 80)}>
-            <PressScale
-            accessibilityLabel="Prashna Kundli"
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              if (showDemo) { router.push("/onboarding"); return; }
-              router.push("/prashna-kundli");
-            }}
-            style={[s.modeCard, { shadowColor: "#0891b2" }]}
-          >
-            <LinearGradient
-              colors={["#0e7490", "#0891b2", "#14b8a6"]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={s.modeGrad}
-            >
-              <CardShimmer />
-              <View style={s.modeIconWrap}>
-                <Text style={s.modeEmoji}>🔢</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={s.modeTitle}>Prashna Kundli</Text>
-                  <View style={s.modeBadge}>
-                    <Text style={s.modeBadgeText}>KP 1-249</Text>
-                  </View>
-                </View>
-                <Text style={s.modeBody}>
-                  Mann mein ek number 1-249 socho — wahi sankhya aapki kundli ka lagna banegi, cusp sub-lord se sahi jawab.
-                </Text>
-                <View style={s.modeMeta}>
-                  <Feather name="hash" size={11} color="#ffffffcc" />
-                  <Text style={s.modeMetaText}>K. S. Krishnamurti · Cuspal Interlinks</Text>
-                </View>
-              </View>
-              <Feather name="chevron-right" size={20} color="#fff" />
-            </LinearGradient>
-            </PressScale>
-          </FadeInView>
-
-          {/* Card 4: Batch Test — opens dedicated screen (like Ask Anything) */}
-          <FadeInView delay={staggerDelay(4, 70, 80)}>
-            <PressScale
-              accessibilityLabel="Batch Test"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                if (showDemo) { router.push("/onboarding"); return; }
-                setBatchResult(null);
-                setBatchItems([]);
-                setMode("batch");
-              }}
-              style={[s.modeCard, { shadowColor: "#7c3aed" }]}
-            >
-              <LinearGradient
-                colors={["#5b21b6", "#7c3aed", "#a855f7"]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={s.modeGrad}
-              >
-                <CardShimmer />
-                <View style={s.modeIconWrap}>
-                  <Text style={s.modeEmoji}>📋</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={s.modeTitle}>Batch Test</Text>
-                    <View style={s.modeBadge}>
-                      <Text style={s.modeBadgeText}>20–60 Q</Text>
-                    </View>
-                  </View>
-                  <Text style={s.modeBody}>
-                    Ek saath bahut sare questions paste karo — har ek ka jawab one-by-one aayega. Admin me sab ek parent entry ke andar dikhega.
-                  </Text>
-                  <View style={s.modeMeta}>
-                    <Feather name="layers" size={11} color="#ffffffcc" />
-                    <Text style={s.modeMetaText}>Testing · Routing audit · Admin nested log</Text>
-                  </View>
-                </View>
-                <Feather name="chevron-right" size={20} color="#fff" />
-              </LinearGradient>
-            </PressScale>
-          </FadeInView>
-
           {/* Recent Questions MOVED into the chat view (fresh-thread only).
               Landing picker now stays focused on the mode cards. */}
 
           {/* Optional: small Divya Prashna link (legacy, less prominent) */}
-          <FadeInView delay={staggerDelay(5, 70, 120)}>
+          <FadeInView delay={staggerDelay(2, 70, 120)}>
             <Pressable
             onPress={() => {
               Haptics.selectionAsync();
@@ -2322,416 +1508,6 @@ export default function AskScreen() {
         </ScrollView>
       )}
 
-      {/* ───── DNA Check Mode (Step 1 classifier lab) ───────────────────── */}
-      {mode === "dna" && (
-        <ScrollView
-          ref={dnaScrollRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: botPad + 24 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={{ color: C.textMid, fontSize: 13, marginBottom: 10, lineHeight: 20 }}>
-            Har line ek question. Run dabao — har ek ka DNA (domain, bucket, intent, timing…) niche aayega. Koi answer nahi, quota bhi nahi lagta.
-          </Text>
-          <TextInput
-            style={{
-              minHeight: 160,
-              maxHeight: 320,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              backgroundColor: C.isDark ? "#1C1C22" : C.bgCard2,
-              borderColor: C.isDark ? "rgba(255,255,255,0.10)" : C.border,
-              borderWidth: 1,
-              borderRadius: 16,
-              color: C.text,
-              fontSize: 15,
-              lineHeight: 22,
-              textAlignVertical: "top",
-            }}
-            value={dnaInput}
-            onChangeText={setDnaInput}
-            placeholder={"Government job kab milegi?\nMeri shaadi kab hogi?\nKya mera partner loyal hai?"}
-            placeholderTextColor={C.textMuted}
-            multiline
-            editable={!showDemo && !dnaRunning}
-          />
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 12, marginBottom: 20 }}>
-            <Pressable
-              onPress={() => void runDnaCheck()}
-              disabled={dnaRunning || !dnaInput.trim()}
-              style={({ pressed }) => [{ flex: 2, opacity: pressed ? 0.9 : 1 }]}
-            >
-              <LinearGradient
-                colors={["#0f766e", "#0d9488", "#14b8a6"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  borderRadius: 14,
-                  paddingVertical: 14,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
-              >
-                {dnaRunning ? (
-                  <AcharyaTypingDots caption={dnaProgress || "Extracting DNA…"} />
-                ) : (
-                  <>
-                    <Feather name="play" size={16} color="#fff" />
-                    <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Run DNA Check</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </Pressable>
-            <Pressable
-              onPress={() => { setDnaInput(""); setDnaItems([]); setDnaProgress(null); }}
-              disabled={dnaRunning}
-              style={({ pressed }) => [
-                {
-                  flex: 1,
-                  borderRadius: 14,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: C.bgCard,
-                  borderWidth: 1,
-                  borderColor: C.border,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Text style={{ color: C.textMid, fontWeight: "700" }}>Clear</Text>
-            </Pressable>
-          </View>
-
-          {dnaProgress && !dnaRunning && dnaItems.length === 0 ? (
-            <Text style={{ color: C.warningText, fontSize: 13, marginBottom: 12 }}>{dnaProgress}</Text>
-          ) : null}
-
-          {dnaItems.length > 0 ? (
-            <View style={{ gap: 12 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <Text style={{ color: C.textMuted, fontSize: 12, fontWeight: "700", flex: 1 }}>
-                  DNA RESULTS ({dnaItems.length})
-                  {dnaProgress ? ` · ${dnaProgress}` : ""}
-                </Text>
-                <Pressable
-                  onPress={copyAllDnaResults}
-                  disabled={dnaRunning}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 10,
-                    backgroundColor: dnaCopiedAll ? "#10b98122" : `${C.accent}18`,
-                    borderWidth: 1,
-                    borderColor: dnaCopiedAll ? "#10b98155" : `${C.accent}44`,
-                    opacity: pressed ? 0.85 : 1,
-                  })}
-                >
-                  <Feather name={dnaCopiedAll ? "check" : "copy"} size={14} color={dnaCopiedAll ? "#10b981" : C.accent} />
-                  <Text style={{ color: dnaCopiedAll ? "#10b981" : C.accent, fontSize: 12, fontWeight: "700" }}>
-                    {dnaCopiedAll ? "Copied!" : "Copy All"}
-                  </Text>
-                </Pressable>
-              </View>
-              {dnaItems.map((it, i) => {
-                const subs = it.dna?.questions;
-                const multi = Array.isArray(subs) && subs.length > 1;
-                return (
-                  <View
-                    key={`dna_${it.index ?? i}_${it.question.slice(0, 20)}`}
-                    style={{
-                      padding: 14,
-                      borderRadius: 16,
-                      backgroundColor: C.bgCard,
-                      borderWidth: 1,
-                      borderColor: `${C.accent}33`,
-                    }}
-                  >
-                    <Text style={{ color: "#0d9488", fontSize: 12, fontWeight: "700", marginBottom: 6 }}>
-                      Q{it.index ?? i + 1}
-                      {multi ? ` · split ×${subs!.length}` : ""}
-                      {typeof it.latency_ms === "number" ? ` · ${it.latency_ms}ms` : ""}
-                    </Text>
-                    <Text style={{ color: C.text, fontWeight: "600", marginBottom: 10 }}>{it.question}</Text>
-                    {(multi ? subs! : [{
-                      normalized_question: it.normalized_question || it.question,
-                      domain: it.domain,
-                      bucket: it.bucket,
-                      engine_archetype: it.engine_archetype,
-                      intent: it.intent,
-                      subject: it.subject,
-                      target: it.target,
-                      question_type: it.question_type,
-                      timing: it.timing,
-                      tense: it.tense,
-                      emotion: it.emotion,
-                      risk: it.risk,
-                      is_followup: it.is_followup,
-                      followup_of: it.followup_of,
-                      confidence: it.confidence,
-                      bucket_match_score: it.bucket_match_score,
-                      bucket_match_confidence: it.bucket_match_confidence,
-                      bucket_coerced: it.bucket_coerced,
-                      required_modules: it.required_modules,
-                    }]).map((sub: any, si: number) => (
-                      <View
-                        key={`sub_${si}`}
-                        style={{
-                          marginTop: si > 0 ? 10 : 0,
-                          paddingTop: si > 0 ? 10 : 0,
-                          borderTopWidth: si > 0 ? 1 : 0,
-                          borderTopColor: C.border,
-                        }}
-                      >
-                        {multi ? (
-                          <Text style={{ color: C.textMuted, fontSize: 11, marginBottom: 6, fontWeight: "700" }}>
-                            Split {si + 1} of {subs!.length}
-                          </Text>
-                        ) : null}
-                        <DnaFieldRow
-                          label="Normalized"
-                          value={sub.normalized_question || "—"}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow
-                          label="Domain"
-                          value={`${dnaDisplayLabel(DNA_DOMAIN_LABEL, sub.domain)} (${sub.domain || "—"})`}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow
-                          label="Bucket"
-                          value={`${dnaDisplayLabel(DNA_BUCKET_LABEL, sub.bucket)} (${sub.bucket || "—"})`}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow label="Intent" value={sub.intent || "—"} textColor={C.text} mutedColor={C.textMuted} />
-                        <DnaFieldRow
-                          label="Subject"
-                          value={`${dnaDisplayLabel(DNA_SUBJECT_LABEL, sub.subject)} (${sub.subject || "—"})`}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow
-                          label="Target"
-                          value={`${dnaDisplayLabel(DNA_TARGET_LABEL, sub.target)} (${sub.target || "—"})`}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow
-                          label="Question Type"
-                          value={sub.question_type ? sub.question_type.replace(/_/g, " ") : "—"}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow label="Timing Required" value={dnaYesNo(sub.timing)} textColor={C.text} mutedColor={C.textMuted} />
-                        <DnaFieldRow
-                          label="Time Context"
-                          value={sub.tense && sub.tense !== "unspecified" ? sub.tense : "—"}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow label="Follow-up" value={dnaYesNo(sub.is_followup)} textColor={C.text} mutedColor={C.textMuted} />
-                        {sub.is_followup && sub.followup_of ? (
-                          <DnaFieldRow label="Follow-up Of" value={sub.followup_of} textColor={C.text} mutedColor={C.textMuted} />
-                        ) : null}
-                        {multi ? (
-                          <DnaFieldRow label="Multiple Questions" value="Yes" textColor={C.text} mutedColor={C.textMuted} />
-                        ) : si === 0 ? (
-                          <DnaFieldRow label="Multiple Questions" value="No" textColor={C.text} mutedColor={C.textMuted} />
-                        ) : null}
-                        <DnaFieldRow
-                          label="Emotion"
-                          value={sub.emotion ? String(sub.emotion).replace(/_/g, " ") : "—"}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow
-                          label="Risk"
-                          value={sub.risk ? String(sub.risk) : "—"}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow
-                          label="Engine Archetype"
-                          value={dnaDisplayLabel(DNA_ENGINE_ARCHETYPE_LABEL, sub.engine_archetype)}
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow
-                          label="Modules"
-                          value={
-                            Array.isArray(sub.required_modules) && sub.required_modules.length > 0
-                              ? sub.required_modules.join(", ")
-                              : "—"
-                          }
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                        <DnaFieldRow label="Confidence" value={dnaConfPct(sub.confidence)} textColor={C.text} mutedColor={C.textMuted} />
-                        <DnaFieldRow
-                          label="Bucket Match"
-                          value={
-                            sub.bucket_match_confidence
-                              ? `${String(sub.bucket_match_confidence).toUpperCase()}${
-                                  typeof sub.bucket_match_score === "number"
-                                    ? ` (${(sub.bucket_match_score * 100).toFixed(0)}%)`
-                                    : ""
-                                }`
-                              : "—"
-                          }
-                          textColor={C.text}
-                          mutedColor={C.textMuted}
-                        />
-                      </View>
-                    ))}
-                  </View>
-                );
-              })}
-            </View>
-          ) : null}
-        </ScrollView>
-      )}
-
-      {/* ───── Batch Test Mode (dedicated screen) ───────────────────────── */}
-      {mode === "batch" && (
-        <ScrollView
-          ref={batchScrollRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: botPad + 24 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={{ color: C.textMid, fontSize: 13, marginBottom: 10, lineHeight: 20 }}>
-            Har line ek alag question. Paste karke Run dabao — answers niche ek-ek karke aayenge. Admin panel me sab ek hi parent question ke andar save hoga.
-          </Text>
-          <TextInput
-            style={{
-              minHeight: 160,
-              maxHeight: 280,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              backgroundColor: C.isDark ? "#1C1C22" : C.bgCard2,
-              borderColor: C.isDark ? "rgba(255,255,255,0.10)" : C.border,
-              borderWidth: 1,
-              borderRadius: 16,
-              color: C.text,
-              fontSize: 15,
-              lineHeight: 22,
-              textAlignVertical: "top",
-            }}
-            value={batchInput}
-            onChangeText={setBatchInput}
-            placeholder={"Kya hum dono compatible hain?\nKya hamare values same hain?\nKya hum mentally compatible hain?"}
-            placeholderTextColor={C.textMuted}
-            multiline
-            editable={!showDemo && !batchRunning}
-          />
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 12, marginBottom: 20 }}>
-            <Pressable
-              onPress={() => void runBatchTest()}
-              disabled={batchRunning || !batchInput.trim()}
-              style={({ pressed }) => [{ flex: 2, opacity: pressed ? 0.9 : 1 }]}
-            >
-              <LinearGradient
-                colors={["#5b21b6", "#7c3aed", "#a855f7"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  borderRadius: 14,
-                  paddingVertical: 14,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
-              >
-                {batchRunning ? (
-                  <AcharyaTypingDots caption={batchProgress || "Processing batch…"} />
-                ) : (
-                  <>
-                    <Feather name="play" size={16} color="#fff" />
-                    <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Run Batch</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </Pressable>
-            <Pressable
-              onPress={() => { setBatchInput(""); setBatchResult(null); setBatchItems([]); }}
-              disabled={batchRunning}
-              style={({ pressed }) => [
-                {
-                  flex: 1,
-                  borderRadius: 14,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: C.bgCard,
-                  borderWidth: 1,
-                  borderColor: C.border,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Text style={{ color: C.textMid, fontWeight: "700" }}>Clear</Text>
-            </Pressable>
-          </View>
-
-          {(batchItems.length > 0 || batchResult) ? (
-            <View style={{ gap: 12 }}>
-              <Text style={{ color: C.textMuted, fontSize: 12, fontWeight: "700" }}>
-                BATCH RESULTS ({batchItems.length || "…"})
-              </Text>
-              {batchItems.length > 0 ? batchItems.map((it, i) => (
-                <View
-                  key={`${it.index ?? i}_${it.question.slice(0, 24)}`}
-                  style={{
-                    padding: 14,
-                    borderRadius: 16,
-                    backgroundColor: C.bgCard,
-                    borderWidth: 1,
-                    borderColor: `${C.accent}33`,
-                  }}
-                >
-                  <Text style={{ color: C.accent, fontSize: 12, fontWeight: "700", marginBottom: 6 }}>
-                    Q{it.index ?? i + 1}
-                  </Text>
-                  <Text style={{ color: C.text, fontWeight: "600", marginBottom: 8 }}>{it.question}</Text>
-                  {(it.source || it.topic) ? (
-                    <Text style={{ color: C.textMuted, fontSize: 11, marginBottom: 8 }}>
-                      {[it.source, it.topic].filter(Boolean).join(" · ")}
-                    </Text>
-                  ) : null}
-                  <MarkdownReply text={it.answer || ""} />
-                </View>
-              )) : batchResult ? (
-                <View
-                  style={{
-                    padding: 14,
-                    borderRadius: 16,
-                    backgroundColor: C.bgCard,
-                    borderWidth: 1,
-                    borderColor: `${C.accent}33`,
-                  }}
-                >
-                  <MarkdownReply text={batchResult} />
-                </View>
-              ) : null}
-            </View>
-          ) : batchRunning ? (
-            <View style={{ paddingVertical: 24, alignItems: "center" }}>
-              <AcharyaTypingDots caption="Questions process ho rahe hain…" />
-            </View>
-          ) : null}
-        </ScrollView>
-      )}
 
       {/* ───── Chat Mode ────────────────────────────────────────────────── */}
       {mode === "chat" && (<>
@@ -2939,7 +1715,14 @@ export default function AskScreen() {
               );
             })}
             <Pressable
-              onPress={() => enterAskChat(langPickerDraft)}
+              onPress={() => {
+                if (mode === "chat") {
+                  void persistAskReplyLang(langPickerDraft, true);
+                  setLangPickerVisible(false);
+                } else {
+                  enterAskChat(langPickerDraft);
+                }
+              }}
               style={({ pressed }) => [{ width: "100%", marginTop: 14, opacity: pressed ? 0.9 : 1 }]}
             >
               <LinearGradient
@@ -2948,8 +1731,8 @@ export default function AskScreen() {
                 end={{ x: 1, y: 0 }}
                 style={qm.cta}
               >
-                <Feather name="message-circle" size={15} color="#fff" />
-                <Text style={qm.ctaText}>Start chatting</Text>
+                <Feather name={mode === "chat" ? "check" : "message-circle"} size={15} color="#fff" />
+                <Text style={qm.ctaText}>{mode === "chat" ? "Apply" : "Start chatting"}</Text>
               </LinearGradient>
             </Pressable>
             <Pressable onPress={() => setLangPickerVisible(false)} style={qm.dismiss}>
@@ -3020,9 +1803,21 @@ const s = StyleSheet.create({
     textShadowRadius: 12,
   },
   headerSub:   { color: "#3d5a7a", fontSize: 11 },
+  askLangOnlyBtn: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  askLangOnlyText: { fontSize: 12, fontWeight: "700" },
   askLangRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,

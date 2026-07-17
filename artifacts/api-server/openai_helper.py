@@ -278,6 +278,33 @@ def _text_has_devanagari(text: str) -> bool:
     return False
 
 
+def _marriage_answer_lang(
+    question: str,
+    lang: str = "",
+    preferred: str | None = None,
+) -> str:
+    """
+    One rule for marriage timing answers:
+      Devanagari question → hi
+      Roman Hindi / Hinglish → hn
+      English → en
+    Question script always wins over the client picker.
+    """
+    return _resolve_response_lang(question or "", lang or "", preferred)
+
+
+def _norm_ask_lang(lang: str) -> str:
+    """Collapse aliases to hi | hn | en."""
+    code = (lang or "hn").strip().lower()
+    if code in ("hi", "hindi", "hin", "devanagari"):
+        return "hi"
+    if code in ("en", "english", "eng"):
+        return "en"
+    if code in ("hn", "hinglish", "hg", "hi-latin"):
+        return "hn"
+    return "hn"
+
+
 def _marriage_timing_reply_parts(
     window: str,
     reply_idx: int = 0,
@@ -285,37 +312,37 @@ def _marriage_timing_reply_parts(
     question: str = "",
 ) -> tuple[str, str]:
     """Deterministic marriage timing: (one-line window answer, engage chip)."""
-    # Question script wins — Devanagari Q must never get Roman Hinglish reply.
-    if _text_has_devanagari(question):
-        lang = "hi"
+    code = _norm_ask_lang(_marriage_answer_lang(question, lang))
     w = (window or "").strip()
-    code = (lang or "hn").strip().lower()
-    if code in ("hi", "hindi", "hin", "devanagari"):
+    if code == "hi":
         w_hi = _localize_timing_window_label(w, "hi") if w else ""
-        if w_hi:
-            line1 = f"आपकी शादी {w_hi} के बीच होगी।"
-        else:
-            line1 = "अभी कुंडली से शादी का स्पष्ट समय नहीं दिख रहा।"
-    elif code in ("en", "english", "eng"):
-        if w:
-            line1 = f"Your marriage timing falls between {w}."
-        else:
-            line1 = "The chart does not show a clear marriage window yet."
+        line1 = (
+            f"आपकी शादी {w_hi} के बीच होगी।"
+            if w_hi
+            else "अभी कुंडली से शादी का स्पष्ट समय नहीं दिख रहा।"
+        )
+    elif code == "en":
+        line1 = (
+            f"Your marriage timing falls between {w}."
+            if w
+            else "The chart does not show a clear marriage window yet."
+        )
     else:
-        if w:
-            line1 = f"Aapki shaadi {w} ke beech hogi."
-        else:
-            line1 = "Abhi chart se shaadi ka clear period nahi dikh raha."
-    engage = _pick_marriage_engagement_question(reply_idx, lang)
+        line1 = (
+            f"Aapki shaadi {w} ke beech hogi."
+            if w
+            else "Abhi chart se shaadi ka clear period nahi dikh raha."
+        )
+    engage = _pick_marriage_engagement_question(reply_idx, code)
     return line1, engage
 
 
 def _force_devanagari_marriage_timing_answer(question: str, text: str) -> str:
-    """Last-resort scrub: Devanagari Q must not leave with Roman 'Aapki shaadi…'."""
+    """Safety net only: if a Devanagari Q still has a Roman timing line, fix it."""
     body = (text or "").strip()
     if not body or not _text_has_devanagari(question or ""):
         return body
-    if not _re_mb_M17.search(r"(?i)\baapki\s+shaadi\b", body):
+    if not _re_mb_M17.search(r"(?i)\baapki\s+shaadi\b|\byour\s+marriage\s+timing\b", body):
         return body
     m = _re_mb_M17.search(
         r"(?i)aapki\s+shaadi\s+(.+?)\s+ke\s+beech\s+hogi\.?",
@@ -340,11 +367,11 @@ def _compose_marriage_timing_reply(
     lang: str = "hn",
     question: str = "",
 ) -> str:
-    """Legacy combined text (line1 only — engage Q lives in follow_ups)."""
+    """One-line timing answer in the question's language (engage Q in follow_ups)."""
     line1, _engage = _marriage_timing_reply_parts(
         window, reply_idx, lang, question=question,
     )
-    return _force_devanagari_marriage_timing_answer(question or "", line1)
+    return line1
 
 
 def _compose_marriage_timing_alt_reply(
@@ -353,26 +380,20 @@ def _compose_marriage_timing_alt_reply(
     question: str = "",
 ) -> str:
     """Backup / next window when user rejects the primary timing period."""
-    if _text_has_devanagari(question):
-        lang = "hi"
+    code = _norm_ask_lang(_marriage_answer_lang(question, lang))
     w = (window or "").strip()
-    code = (lang or "hn").strip().lower()
-    if code in ("hi", "hindi", "hin", "devanagari"):
+    if code == "hi":
         w_hi = _localize_timing_window_label(w, "hi") if w else ""
         if w_hi:
-            body = f"अगर पहला समय छूट जाए, तो अगला मजबूत समय {w_hi} के बीच दिखता है।"
-        else:
-            body = "अभी कुंडली से अगला स्पष्ट बैकअप समय नहीं दिख रहा।"
-    elif code in ("en", "english", "eng"):
+            return f"अगर पहला समय छूट जाए, तो अगला मजबूत समय {w_hi} के बीच दिखता है।"
+        return "अभी कुंडली से अगला स्पष्ट बैकअप समय नहीं दिख रहा।"
+    if code == "en":
         if w:
-            body = f"If the first window is missed, the next strong period is between {w}."
-        else:
-            body = "The chart does not show a clear backup window yet."
-    elif w:
-        body = f"Agar pehla period miss ho, agla strong window {w} ke beech dikhta hai."
-    else:
-        body = "Abhi chart se agla clear backup period nahi dikh raha."
-    return _force_devanagari_marriage_timing_answer(question or "", body)
+            return f"If the first window is missed, the next strong period is between {w}."
+        return "The chart does not show a clear backup window yet."
+    if w:
+        return f"Agar pehla period miss ho, agla strong window {w} ke beech dikhta hai."
+    return "Abhi chart se agla clear backup period nahi dikh raha."
 
 
 _MONTH_EN_TO_HI = {
@@ -1002,16 +1023,12 @@ def _marriage_timing_m17_passthrough_response(
     aw = _extract_primary_window_from_m17_block(marriage_block)
     if not aw and isinstance(marriage_engine_raw, dict):
         aw = (marriage_engine_raw.get("primary_window") or "").strip()
+    reply_lang = _marriage_answer_lang(question, lang)
     text = _compose_marriage_timing_reply(
-        aw,
-        reply_idx,
-        _resolve_response_lang(question, lang, None),
-        question=question or "",
+        aw, reply_idx, reply_lang, question=question or "",
     )
-    text = _force_devanagari_marriage_timing_answer(question or "", text)
     print(
-        f"[marriage_timing_m17] reply_lang="
-        f"{_resolve_response_lang(question, lang, None)!r} "
+        f"[marriage_timing_m17] reply_lang={reply_lang!r} "
         f"deva={_text_has_devanagari(question or '')} "
         f"text={text[:80]!r}",
         flush=True,
@@ -12738,12 +12755,13 @@ def _normalize_client_lang(lang: str) -> Optional[str]:
 def _resolve_response_lang(question: str, lang: str,
                            preferred_language: Optional[str]) -> str:
     """
-    Reply language MUST match the question:
+    GLOBAL Ask rule — reply language MUST match the question:
 
       • Devanagari Hindi question  → `hi` (देवनागरी answer)
       • Roman Hindi / Hinglish Q   → `hn` (Hinglish answer)
       • English question           → `en` (English answer)
 
+    Applies to EVERY Ask question (timing, career, health, general, …).
     Client picker / preferred_language are used ONLY when the question is
     empty or has no detectable language signal.
     """
@@ -12762,6 +12780,23 @@ def _resolve_response_lang(question: str, lang: str,
     if client_lang:
         return client_lang
     return "en"
+
+
+def _ask_lang_for_request(
+    question: str,
+    lang: str = "",
+    preferred_language: Optional[str] = None,
+) -> tuple[str, str]:
+    """
+    Resolve Ask reply language from the question (picker is fallback only).
+
+    Returns:
+      (code, api_lang) where code is hi|hn|en and api_lang is
+      hindi|hinglish|english for routes that still use long names.
+    """
+    code = _resolve_response_lang(question, lang, preferred_language)
+    api = {"hi": "hindi", "hn": "hinglish", "en": "english"}.get(code, "hinglish")
+    return code, api
 
 
 def _strict_lang_block(code: str) -> str:
@@ -16124,7 +16159,7 @@ def _try_marriage_timing_shortcuts_after_understand(
             _alt_w = extract_alt_window_str(_eng_alt) if _eng_alt else ""
             if not _alt_w and isinstance(_eng_alt, dict):
                 _alt_w = (_eng_alt.get("backup_window") or "").strip()
-            _eff_lang_alt = _resolve_response_lang(question, lang, None)
+            _eff_lang_alt = _marriage_answer_lang(question, lang)
             _text_alt = _compose_marriage_timing_alt_reply(
                 _alt_w, _eff_lang_alt, question=question or "",
             )
@@ -24330,34 +24365,48 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                                 render_marriage_output as _render_marriage_lock_pt,
                             )
                             _llm_text_snapshot_pt = _text_pt_scrubbed
-                            _locked_pt = _render_marriage_lock_pt(
-                                engine_result          = _mvo_pt,
-                                lang                   = "hinglish",
-                                llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_pt,
-                                include_footer_in_text = False,
+                            # translator_lock templates are Hinglish-only —
+                            # never overwrite hi/en answers.
+                            _tlock_lang_pt = _norm_ask_lang(
+                                _resolve_response_lang(
+                                    question or "", lang or "", preferred_language,
+                                )
                             )
-                            _text_pt_scrubbed = _locked_pt["text"]
-                            _translator_lock_meta_pt = {
-                                "path_used":         _locked_pt["path_used"],
-                                "severity":          _locked_pt["severity"],
-                                "llm_rejected":      _locked_pt["llm_rejected"],
-                                "rejection_reason":  _locked_pt.get("rejection_reason"),
-                                "snapshot_hash":     _locked_pt["snapshot_hash"],
-                                "ui_badge":          _locked_pt["ui_badge"],
-                                "provenance_footer": _locked_pt["provenance_footer"],
-                            }
-                            # Phase 2.10.5 STEP M15 — A/B telemetry counter.
-                            _record_translator_lock_event(
-                                _translator_lock_meta_pt, "passthrough_sync",
-                            )
-                            _engine_tag_pt = "ans-engine"  # translator_lock IS engine grounding
-                            _trace(req_id, "4e.TRANSLATOR_LOCK", {
-                                "path":         "passthrough_sync",
-                                "path_used":    _locked_pt["path_used"],
-                                "severity":     _locked_pt["severity"],
-                                "llm_rejected": _locked_pt["llm_rejected"],
-                                "reason":       _locked_pt.get("rejection_reason"),
-                            })
+                            if _tlock_lang_pt != "hn":
+                                _trace(req_id, "4e.TRANSLATOR_LOCK_SKIP", {
+                                    "path": "passthrough_sync",
+                                    "reason": "non_hinglish_question",
+                                    "lang": _tlock_lang_pt,
+                                })
+                            else:
+                                _locked_pt = _render_marriage_lock_pt(
+                                    engine_result          = _mvo_pt,
+                                    lang                   = "hinglish",
+                                    llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_pt,
+                                    include_footer_in_text = False,
+                                )
+                                _text_pt_scrubbed = _locked_pt["text"]
+                                _translator_lock_meta_pt = {
+                                    "path_used":         _locked_pt["path_used"],
+                                    "severity":          _locked_pt["severity"],
+                                    "llm_rejected":      _locked_pt["llm_rejected"],
+                                    "rejection_reason":  _locked_pt.get("rejection_reason"),
+                                    "snapshot_hash":     _locked_pt["snapshot_hash"],
+                                    "ui_badge":          _locked_pt["ui_badge"],
+                                    "provenance_footer": _locked_pt["provenance_footer"],
+                                }
+                                # Phase 2.10.5 STEP M15 — A/B telemetry counter.
+                                _record_translator_lock_event(
+                                    _translator_lock_meta_pt, "passthrough_sync",
+                                )
+                                _engine_tag_pt = "ans-engine"  # translator_lock IS engine grounding
+                                _trace(req_id, "4e.TRANSLATOR_LOCK", {
+                                    "path":         "passthrough_sync",
+                                    "path_used":    _locked_pt["path_used"],
+                                    "severity":     _locked_pt["severity"],
+                                    "llm_rejected": _locked_pt["llm_rejected"],
+                                    "reason":       _locked_pt.get("rejection_reason"),
+                                })
                 except Exception as _tlock_exc_pt:  # noqa: BLE001
                     _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                            f"passthrough_sync:{str(_tlock_exc_pt)[:180]}")
@@ -25184,7 +25233,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "avoid_n":        len(_payload.get("what_to_avoid") or []),
         })
     elif build_meta.get("marriage_timing_composed"):
-        text = build_meta["marriage_timing_composed"]
+        text = _force_devanagari_marriage_timing_answer(
+            question or "", build_meta["marriage_timing_composed"] or "",
+        )
         _trace(req_id, "4.MARRIAGE_TIMING_DETERMINISTIC", {
             "window": build_meta.get("active_window"),
             "text": text,
@@ -25193,9 +25244,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
           and topic == "marriage"
           and marriage_subtype in ("timing", "remedy")):
         _aw = (build_meta.get("active_window") or "").strip()
-        _mt_lang = _resolve_response_lang(question, lang, preferred_language)
         text = _compose_marriage_timing_reply(
-            _aw, reply_idx, _mt_lang, question=question or "",
+            _aw,
+            reply_idx,
+            _marriage_answer_lang(question, lang, preferred_language),
+            question=question or "",
         )
         _trace(req_id, "4.MARRIAGE_TIMING_DETERMINISTIC", {
             "window": _aw, "text": text,
@@ -27468,34 +27521,44 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             # (Phase 2.10.5 fix: deterministic template path drops anything
             # appended by upstream stages — re-attach if it was present).
             _had_warn_footer = (_ENGINE_WARN_FOOTER_MARKER in text)
-            _locked = _render_marriage_lock(
-                engine_result          = _mvo_sync,
-                lang                   = "hinglish",
-                llm_polish_fn          = lambda _t, _e: _llm_text_snapshot,
-                include_footer_in_text = False,
+            _tlock_lang_sync = _norm_ask_lang(
+                _resolve_response_lang(question or "", lang or "", preferred_language)
             )
-            text = _locked["text"]
-            if (_had_warn_footer
-                    and _locked["path_used"] in ("TEMPLATE", "BLOCKED")
-                    and _ENGINE_WARN_FOOTER_MARKER not in text):
-                text = text.rstrip() + _ENGINE_WARN_FOOTER_TEXT
-            if isinstance(out_meta, dict):
-                out_meta["translator_lock"] = {
-                    "path_used":         _locked["path_used"],
-                    "severity":          _locked["severity"],
-                    "llm_rejected":      _locked["llm_rejected"],
-                    "rejection_reason":  _locked.get("rejection_reason"),
-                    "snapshot_hash":     _locked["snapshot_hash"],
-                    "ui_badge":          _locked["ui_badge"],
-                    "provenance_footer": _locked["provenance_footer"],
-                }
-            _trace(req_id, "4e.TRANSLATOR_LOCK", {
-                "path":         "sync",
-                "path_used":    _locked["path_used"],
-                "severity":     _locked["severity"],
-                "llm_rejected": _locked["llm_rejected"],
-                "reason":       _locked.get("rejection_reason"),
-            })
+            if _tlock_lang_sync != "hn":
+                _trace(req_id, "4e.TRANSLATOR_LOCK_SKIP", {
+                    "path": "sync",
+                    "reason": "non_hinglish_question",
+                    "lang": _tlock_lang_sync,
+                })
+            else:
+                _locked = _render_marriage_lock(
+                    engine_result          = _mvo_sync,
+                    lang                   = "hinglish",
+                    llm_polish_fn          = lambda _t, _e: _llm_text_snapshot,
+                    include_footer_in_text = False,
+                )
+                text = _locked["text"]
+                if (_had_warn_footer
+                        and _locked["path_used"] in ("TEMPLATE", "BLOCKED")
+                        and _ENGINE_WARN_FOOTER_MARKER not in text):
+                    text = text.rstrip() + _ENGINE_WARN_FOOTER_TEXT
+                if isinstance(out_meta, dict):
+                    out_meta["translator_lock"] = {
+                        "path_used":         _locked["path_used"],
+                        "severity":          _locked["severity"],
+                        "llm_rejected":      _locked["llm_rejected"],
+                        "rejection_reason":  _locked.get("rejection_reason"),
+                        "snapshot_hash":     _locked["snapshot_hash"],
+                        "ui_badge":          _locked["ui_badge"],
+                        "provenance_footer": _locked["provenance_footer"],
+                    }
+                _trace(req_id, "4e.TRANSLATOR_LOCK", {
+                    "path":         "sync",
+                    "path_used":    _locked["path_used"],
+                    "severity":     _locked["severity"],
+                    "llm_rejected": _locked["llm_rejected"],
+                    "reason":       _locked.get("rejection_reason"),
+                })
     except Exception as _tlock_exc:  # noqa: BLE001
         _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                f"sync:{str(_tlock_exc)[:180]}")
@@ -28151,34 +28214,46 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                             render_marriage_output as _render_marriage_lock_pt_s,
                         )
                         _llm_text_snapshot_pt_s = _full_text_pt_s_scrubbed
-                        _locked_pt_s = _render_marriage_lock_pt_s(
-                            engine_result          = _mvo_pt_s,
-                            lang                   = "hinglish",
-                            llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_pt_s,
-                            include_footer_in_text = False,
+                        _tlock_lang_pt_s = _norm_ask_lang(
+                            _resolve_response_lang(
+                                question or "", lang or "", preferred_language,
+                            )
                         )
-                        _full_text_pt_s_scrubbed = _locked_pt_s["text"]
-                        _translator_lock_meta_pt_s = {
-                            "path_used":         _locked_pt_s["path_used"],
-                            "severity":          _locked_pt_s["severity"],
-                            "llm_rejected":      _locked_pt_s["llm_rejected"],
-                            "rejection_reason":  _locked_pt_s.get("rejection_reason"),
-                            "snapshot_hash":     _locked_pt_s["snapshot_hash"],
-                            "ui_badge":          _locked_pt_s["ui_badge"],
-                            "provenance_footer": _locked_pt_s["provenance_footer"],
-                        }
-                        # Phase 2.10.5 STEP M15 — A/B telemetry counter.
-                        _record_translator_lock_event(
-                            _translator_lock_meta_pt_s, "passthrough_stream",
-                        )
-                        _engine_tag_pt_s = "ans-engine"
-                        _trace(req_id, "4e.TRANSLATOR_LOCK", {
-                            "path":         "passthrough_stream",
-                            "path_used":    _locked_pt_s["path_used"],
-                            "severity":     _locked_pt_s["severity"],
-                            "llm_rejected": _locked_pt_s["llm_rejected"],
-                            "reason":       _locked_pt_s.get("rejection_reason"),
-                        })
+                        if _tlock_lang_pt_s != "hn":
+                            _trace(req_id, "4e.TRANSLATOR_LOCK_SKIP", {
+                                "path": "passthrough_stream",
+                                "reason": "non_hinglish_question",
+                                "lang": _tlock_lang_pt_s,
+                            })
+                        else:
+                            _locked_pt_s = _render_marriage_lock_pt_s(
+                                engine_result          = _mvo_pt_s,
+                                lang                   = "hinglish",
+                                llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_pt_s,
+                                include_footer_in_text = False,
+                            )
+                            _full_text_pt_s_scrubbed = _locked_pt_s["text"]
+                            _translator_lock_meta_pt_s = {
+                                "path_used":         _locked_pt_s["path_used"],
+                                "severity":          _locked_pt_s["severity"],
+                                "llm_rejected":      _locked_pt_s["llm_rejected"],
+                                "rejection_reason":  _locked_pt_s.get("rejection_reason"),
+                                "snapshot_hash":     _locked_pt_s["snapshot_hash"],
+                                "ui_badge":          _locked_pt_s["ui_badge"],
+                                "provenance_footer": _locked_pt_s["provenance_footer"],
+                            }
+                            # Phase 2.10.5 STEP M15 — A/B telemetry counter.
+                            _record_translator_lock_event(
+                                _translator_lock_meta_pt_s, "passthrough_stream",
+                            )
+                            _engine_tag_pt_s = "ans-engine"
+                            _trace(req_id, "4e.TRANSLATOR_LOCK", {
+                                "path":         "passthrough_stream",
+                                "path_used":    _locked_pt_s["path_used"],
+                                "severity":     _locked_pt_s["severity"],
+                                "llm_rejected": _locked_pt_s["llm_rejected"],
+                                "reason":       _locked_pt_s.get("rejection_reason"),
+                            })
             except Exception as _tlock_exc_pt_s:  # noqa: BLE001
                 _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                        f"passthrough_stream:{str(_tlock_exc_pt_s)[:180]}")
@@ -29114,34 +29189,44 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # Preserve engine warn-footer across translator_lock fallback
             # (Phase 2.10.5 fix: see sync wrap above for rationale).
             _had_warn_footer_s = (_ENGINE_WARN_FOOTER_MARKER in final_text)
-            _locked_s = _render_marriage_lock_s(
-                engine_result          = _mvo_stream,
-                lang                   = "hinglish",
-                llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_s,
-                include_footer_in_text = False,
+            _tlock_lang_stream = _norm_ask_lang(
+                _resolve_response_lang(question or "", lang or "", preferred_language)
             )
-            final_text = _locked_s["text"]
-            if (_had_warn_footer_s
-                    and _locked_s["path_used"] in ("TEMPLATE", "BLOCKED")
-                    and _ENGINE_WARN_FOOTER_MARKER not in final_text):
-                final_text = final_text.rstrip() + _ENGINE_WARN_FOOTER_TEXT
-            if isinstance(build_meta_stream, dict):
-                build_meta_stream["translator_lock"] = {
-                    "path_used":         _locked_s["path_used"],
-                    "severity":          _locked_s["severity"],
-                    "llm_rejected":      _locked_s["llm_rejected"],
-                    "rejection_reason":  _locked_s.get("rejection_reason"),
-                    "snapshot_hash":     _locked_s["snapshot_hash"],
-                    "ui_badge":          _locked_s["ui_badge"],
-                    "provenance_footer": _locked_s["provenance_footer"],
-                }
-            _trace(req_id, "4e.TRANSLATOR_LOCK", {
-                "path":         "stream",
-                "path_used":    _locked_s["path_used"],
-                "severity":     _locked_s["severity"],
-                "llm_rejected": _locked_s["llm_rejected"],
-                "reason":       _locked_s.get("rejection_reason"),
-            })
+            if _tlock_lang_stream != "hn":
+                _trace(req_id, "4e.TRANSLATOR_LOCK_SKIP", {
+                    "path": "stream",
+                    "reason": "non_hinglish_question",
+                    "lang": _tlock_lang_stream,
+                })
+            else:
+                _locked_s = _render_marriage_lock_s(
+                    engine_result          = _mvo_stream,
+                    lang                   = "hinglish",
+                    llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_s,
+                    include_footer_in_text = False,
+                )
+                final_text = _locked_s["text"]
+                if (_had_warn_footer_s
+                        and _locked_s["path_used"] in ("TEMPLATE", "BLOCKED")
+                        and _ENGINE_WARN_FOOTER_MARKER not in final_text):
+                    final_text = final_text.rstrip() + _ENGINE_WARN_FOOTER_TEXT
+                if isinstance(build_meta_stream, dict):
+                    build_meta_stream["translator_lock"] = {
+                        "path_used":         _locked_s["path_used"],
+                        "severity":          _locked_s["severity"],
+                        "llm_rejected":      _locked_s["llm_rejected"],
+                        "rejection_reason":  _locked_s.get("rejection_reason"),
+                        "snapshot_hash":     _locked_s["snapshot_hash"],
+                        "ui_badge":          _locked_s["ui_badge"],
+                        "provenance_footer": _locked_s["provenance_footer"],
+                    }
+                _trace(req_id, "4e.TRANSLATOR_LOCK", {
+                    "path":         "stream",
+                    "path_used":    _locked_s["path_used"],
+                    "severity":     _locked_s["severity"],
+                    "llm_rejected": _locked_s["llm_rejected"],
+                    "reason":       _locked_s.get("rejection_reason"),
+                })
     except Exception as _tlock_exc_s:  # noqa: BLE001
         _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                f"stream:{str(_tlock_exc_s)[:180]}")

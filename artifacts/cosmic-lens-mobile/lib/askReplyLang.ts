@@ -37,3 +37,36 @@ export function askLangToApi(lang: AskReplyLang): string {
 export function loadAskReplyLang(raw: string | null | undefined): AskReplyLang {
   return coerceUILang(raw || "hn");
 }
+
+/**
+ * Detect reply language from the question text.
+ * Same rule as server `_resolve_response_lang`:
+ *   Devanagari → hi | Roman Hindi/Hinglish → hn | English → en
+ */
+export function detectAskLangFromQuestion(question: string): AskReplyLang | null {
+  const q = (question || "").trim();
+  if (!q) return null;
+
+  for (const ch of q) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0x0900 && code <= 0x097f) return "hi";
+  }
+
+  const tokens = q.toLowerCase().match(/[a-z]+/g) || [];
+  if (!tokens.length) return null;
+
+  const hinglish = new Set([
+    "mera", "meri", "mere", "mujhe", "mujhko", "main", "mai", "mein", "me",
+    "kya", "kab", "kaise", "kaisa", "kaisi", "kyun", "kyu", "kitna", "kitne",
+    "hai", "hain", "hoga", "hogi", "honge", "ho", "hua", "hui",
+    "shaadi", "shadi", "naukri", "job", "paisa", "paise", "ghar",
+    "kabhi", "abhi", "bahut", "thoda", "acha", "accha", "theek",
+    "aap", "aapki", "aapka", "tumhara", "tumhari", "uska", "uski",
+    "wala", "wali", "ke", "ki", "ka", "se", "par", "pe", "ko",
+    "aur", "ya", "nahi", "nhi", "mat", "bas", "sirf",
+  ]);
+  const hits = tokens.filter((t) => hinglish.has(t)).length;
+  if (hits >= 2) return "hn";
+  if (hits >= 1 && hits / tokens.length >= 0.1) return "hn";
+  return "en";
+}

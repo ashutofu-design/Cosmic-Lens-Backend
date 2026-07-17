@@ -7893,6 +7893,18 @@ def ask_route():
     if not question:
         return jsonify({"error": "question is required"}), 400
 
+    # GLOBAL: answer language = question language (picker only if undetectable).
+    try:
+        from openai_helper import _ask_lang_for_request
+
+        _code, lang = _ask_lang_for_request(question, lang, None)
+        print(
+            f"[ask] reply_lang={_code!r} api_lang={lang!r} q={question[:40]!r}",
+            flush=True,
+        )
+    except Exception as _lang_exc:
+        print(f"[ask] lang resolve skipped: {_lang_exc}", flush=True)
+
     # Greetings / help only — language/scope/privacy/normalize run once inside RP.
     _shortcut_early = None
     try:
@@ -8634,9 +8646,8 @@ def ask_route():
     # deterministic rule-based engine so the user never sees an outage.
     result = None
     used_ai = False
-    # Sticky reply-language preference: set by user in app settings; overrides
-    # per-question language detection. None → fall back to detection + lang.
-    preferred_language = user.preferred_language if user else None
+    # Ask reply language follows the QUESTION script — never sticky profile.
+    preferred_language = None
 
     if openai_available():
         try:
@@ -8902,6 +8913,19 @@ def ask_stream_route():
         question = prepare_ask_question(question)
     except Exception:
         pass
+
+    # GLOBAL: answer language = question language (picker only if undetectable).
+    try:
+        from openai_helper import _ask_lang_for_request
+
+        _code_s, lang = _ask_lang_for_request(question, lang, None)
+        print(
+            f"[ask/stream] reply_lang={_code_s!r} api_lang={lang!r} "
+            f"q={question[:40]!r}",
+            flush=True,
+        )
+    except Exception as _lang_exc_s:
+        print(f"[ask/stream] lang resolve skipped: {_lang_exc_s}", flush=True)
 
     # Greetings / help — before language & scope gates (hi/hello are not "personal" astro Qs).
     _shortcut_early_s = None
@@ -9287,7 +9311,7 @@ def ask_stream_route():
     else:
         quota = {"used": 0, "limit": 1}
 
-    preferred_language = user.preferred_language if user else None
+    preferred_language = None  # Ask: question script wins — no sticky profile override
     quota_payload = {"used": quota["used"], "limit": quota["limit"]}
     plan_payload = effective_plan(user) if user else "free"
 
@@ -9899,7 +9923,7 @@ def _parse_batch_ask_request(data: dict):
         "limit": (quota or {}).get("limit", 0),
     }
     plan_payload = effective_plan(user) if user else "free"
-    preferred_language = user.preferred_language if user else None
+    preferred_language = None  # Ask: question script wins — no sticky profile override
     user_id_int = int(user.id) if user is not None else None
     primary_kundli_id = _batch_primary_kundli_id(user)
 
@@ -10339,98 +10363,6 @@ def prashna_number_ask_route():
         )
 
     return jsonify(result)
-
-
-@app.route("/api/prashna/simple-ask", methods=["GET", "POST", "OPTIONS"])
-@app.route("/api/prashna/simple-ask/", methods=["GET", "POST", "OPTIONS"])
-def prashna_simple_ask_route():
-    """Prashna Kundli simple Q&A — NOT Ask Anything.
-
-    Personal → user D1 + dasha(timing only) + short LLM.
-    Knowledge → knowledge_fast.
-    Body: { question, user_id?, kundli?, lang? }
-    """
-    if request.method == "OPTIONS":
-        return ("", 204)
-    if request.method == "GET":
-        return jsonify(
-            {
-                "ok": True,
-                "service": "prashna_simple_ask",
-                "hint": "POST JSON {question, user_id?, lang?}",
-            }
-        )
-
-    from prashna_simple_ask import ask_prashna_simple
-    from subscription_helper import consume_question, effective_plan
-
-    data = request.get_json(force=True, silent=True) or {}
-    question = (data.get("question") or "").strip()
-    user_id = data.get("user_id")
-    lang = (data.get("lang") or "hn").strip().lower() or "hn"
-    kundli = data.get("kundli") or data.get("chart_data")
-    if kundli is not None and not isinstance(kundli, dict):
-        kundli = None
-
-    if not question:
-        return jsonify({"error": "question is required", "ok": False}), 400
-
-    user = None
-    if user_id:
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({"error": "User not found", "ok": False}), 404
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key or user.api_key != api_key:
-            return jsonify({"error": "Unauthorized", "ok": False}), 401
-
-        quota = consume_question(user)
-        if not quota["allowed"]:
-            return (
-                jsonify(
-                    {
-                        "ok": False,
-                        "error": "daily_limit_reached",
-                        "message": (
-                            f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
-                            "Pro upgrade karein for unlimited."
-                        ),
-                        "text": (
-                            f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
-                            "Pro upgrade karein for unlimited."
-                        ),
-                        "quota": {"used": quota["used"], "limit": quota["limit"]},
-                        "plan": effective_plan(user),
-                        "upgrade_required": True,
-                    }
-                ),
-                402,
-            )
-
-    try:
-        result = ask_prashna_simple(
-            question,
-            kundli=kundli if isinstance(kundli, dict) else None,
-            user=user,
-            lang=lang,
-        )
-    except Exception:
-        app.logger.exception("[Prashna Simple] failed")
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "internal_error",
-                    "text": "Abhi jawab nahi ban paya. Punah try karein.",
-                }
-            ),
-            500,
-        )
-
-    status = 200 if result.get("ok") else 400
-    if result.get("error") == "kundli_required":
-        status = 400
-    return jsonify(result), status
 
 
 # ── Vastu Drishti Scan (vision) ───────────────────────────────────────────────

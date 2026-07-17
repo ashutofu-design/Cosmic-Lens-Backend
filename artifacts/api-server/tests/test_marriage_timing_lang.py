@@ -1,4 +1,4 @@
-"""Marriage timing reply language = question language (hi | hn | en)."""
+"""Marriage timing reply matches question language AND intent."""
 from __future__ import annotations
 
 import sys
@@ -25,13 +25,13 @@ class TestMarriageTimingLang(unittest.TestCase):
             "en",
         )
 
-    def test_devanagari_question_gets_devanagari_answer(self):
+    def test_devanagari_shaadi_question(self):
         from openai_helper import _compose_marriage_timing_reply
 
         text = _compose_marriage_timing_reply(
             "February – April 2033",
             0,
-            "hn",  # picker says hinglish — question still wins
+            "hn",
             question="मेरा शादी कब और किससे होगा",
         )
         self.assertEqual(
@@ -39,7 +39,34 @@ class TestMarriageTimingLang(unittest.TestCase):
             "आपकी शादी फरवरी – अप्रैल 2033 के बीच होगी।",
         )
 
-    def test_hinglish_question_gets_hinglish_answer(self):
+    def test_devanagari_jeevansathi_meet_question(self):
+        from openai_helper import _compose_marriage_timing_reply
+
+        text = _compose_marriage_timing_reply(
+            "February – April 2033",
+            0,
+            "hn",
+            question="मुझे मेरा जीवनसाथी कब मिलेगा?",
+        )
+        self.assertEqual(
+            text,
+            "आपको जीवनसाथी फरवरी – अप्रैल 2033 के बीच मिलने का समय दिखता है।",
+        )
+        self.assertNotIn("शादी", text)
+
+    def test_hinglish_meet_question(self):
+        from openai_helper import _compose_marriage_timing_reply
+
+        text = _compose_marriage_timing_reply(
+            "February – April 2033",
+            0,
+            "hi",
+            question="Mujhe mera jeevansathi kab milega?",
+        )
+        self.assertIn("jeevansathi", text.lower())
+        self.assertNotIn("shaadi", text.lower())
+
+    def test_hinglish_shaadi_question(self):
         from openai_helper import _compose_marriage_timing_reply
 
         text = _compose_marriage_timing_reply(
@@ -67,24 +94,15 @@ class TestMarriageTimingLang(unittest.TestCase):
             "Your marriage timing falls between February – April 2033.",
         )
 
-    def test_devanagari_timing_detected(self):
-        from openai_helper import _is_marriage_timing_question
+    def test_scrub_wrong_shaadi_frame_for_meet_q(self):
+        from openai_helper import align_ask_reply_to_question_lang
 
-        self.assertTrue(
-            _is_marriage_timing_question("मेरा शादी कब और किससे होगा")
-        )
-
-    def test_safety_scrub_if_roman_leaks(self):
-        from openai_helper import _force_devanagari_marriage_timing_answer
-
-        scrubbed = _force_devanagari_marriage_timing_answer(
-            "मेरा शादी कब होगा",
-            "Aapki shaadi February – April 2033 ke beech hogi.",
-        )
-        self.assertEqual(
-            scrubbed,
+        scrubbed = align_ask_reply_to_question_lang(
+            "मुझे मेरा जीवनसाथी कब मिलेगा?",
             "आपकी शादी फरवरी – अप्रैल 2033 के बीच होगी।",
         )
+        self.assertIn("जीवनसाथी", scrubbed)
+        self.assertNotIn("शादी", scrubbed)
 
 
 if __name__ == "__main__":

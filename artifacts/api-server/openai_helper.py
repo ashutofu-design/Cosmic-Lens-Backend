@@ -305,6 +305,88 @@ def _norm_ask_lang(lang: str) -> str:
     return "hn"
 
 
+def _is_meet_life_partner_timing_question(question: str) -> bool:
+    """True for 'jeevansathi kab milega' — meet partner, not 'shaadi kab'."""
+    if not isinstance(question, str) or not question.strip():
+        return False
+    q = question.strip()
+    ql = q.lower()
+    # Explicit marriage wedding wording → not "meet" framing
+    if _re_mb_M17.search(
+        r"(शादी|विवाह)|(\b(shaadi|shadi|marriage|wedding|vivah|vivaah)\b)",
+        q,
+        _re_mb_M17.IGNORECASE,
+    ):
+        return False
+    meet_hi = bool(
+        _re_mb_M17.search(
+            r"(मिलेगा|मिलेगी|मिलेंगे|मिलना|मिल\s*जाएगा|मिल\s*जाएगी|कब\s*मिल)",
+            q,
+        )
+    )
+    meet_en = bool(
+        _re_mb_M17.search(
+            r"\b(meet|meeting|milega|milegi|milenge|milna|mil\s*jayega|mil\s*jayegi)\b",
+            ql,
+        )
+    )
+    if not (meet_hi or meet_en):
+        return False
+    partner = bool(
+        _re_mb_M17.search(
+            r"(जीवनसाथी|जीवन\s*साथी|पति|पत्नी|दूल्हा|दुल्हन)|"
+            r"(\b(jeevan\s*saathi|jeevansathi|jeevansaathi|life\s*partner|"
+            r"soulmate|spouse|husband|wife|pati|patni)\b)",
+            q,
+            _re_mb_M17.IGNORECASE,
+        )
+    )
+    return partner
+
+
+def _marriage_timing_line(window: str, lang: str, *, meet_partner: bool) -> str:
+    """One-line answer; wording matches ask (meet partner vs marriage)."""
+    code = _norm_ask_lang(lang)
+    w = (window or "").strip()
+    if meet_partner:
+        if code == "hi":
+            w_hi = _localize_timing_window_label(w, "hi") if w else ""
+            return (
+                f"आपको जीवनसाथी {w_hi} के बीच मिलने का समय दिखता है।"
+                if w_hi
+                else "अभी कुंडली से जीवनसाथी मिलने का स्पष्ट समय नहीं दिख रहा।"
+            )
+        if code == "en":
+            return (
+                f"Your life-partner meeting window falls between {w}."
+                if w
+                else "The chart does not show a clear partner-meeting window yet."
+            )
+        return (
+            f"Aapka jeevansathi {w} ke beech milne ka period dikhta hai."
+            if w
+            else "Abhi chart se jeevansathi milne ka clear period nahi dikh raha."
+        )
+    if code == "hi":
+        w_hi = _localize_timing_window_label(w, "hi") if w else ""
+        return (
+            f"आपकी शादी {w_hi} के बीच होगी।"
+            if w_hi
+            else "अभी कुंडली से शादी का स्पष्ट समय नहीं दिख रहा।"
+        )
+    if code == "en":
+        return (
+            f"Your marriage timing falls between {w}."
+            if w
+            else "The chart does not show a clear marriage window yet."
+        )
+    return (
+        f"Aapki shaadi {w} ke beech hogi."
+        if w
+        else "Abhi chart se shaadi ka clear period nahi dikh raha."
+    )
+
+
 def _marriage_timing_reply_parts(
     window: str,
     reply_idx: int = 0,
@@ -313,59 +395,53 @@ def _marriage_timing_reply_parts(
 ) -> tuple[str, str]:
     """Deterministic marriage timing: (one-line window answer, engage chip)."""
     code = _norm_ask_lang(_marriage_answer_lang(question, lang))
-    w = (window or "").strip()
-    if code == "hi":
-        w_hi = _localize_timing_window_label(w, "hi") if w else ""
-        line1 = (
-            f"आपकी शादी {w_hi} के बीच होगी।"
-            if w_hi
-            else "अभी कुंडली से शादी का स्पष्ट समय नहीं दिख रहा।"
-        )
-    elif code == "en":
-        line1 = (
-            f"Your marriage timing falls between {w}."
-            if w
-            else "The chart does not show a clear marriage window yet."
-        )
-    else:
-        line1 = (
-            f"Aapki shaadi {w} ke beech hogi."
-            if w
-            else "Abhi chart se shaadi ka clear period nahi dikh raha."
-        )
+    meet = _is_meet_life_partner_timing_question(question or "")
+    line1 = _marriage_timing_line(window, code, meet_partner=meet)
     engage = _pick_marriage_engagement_question(reply_idx, code)
     return line1, engage
 
 
 def _force_devanagari_marriage_timing_answer(question: str, text: str) -> str:
-    """Safety net only: if a Devanagari Q still has a Roman timing line, fix it."""
+    """Safety net: Devanagari Q must not leave with Roman timing; wording matches ask."""
     body = (text or "").strip()
     if not body or not _text_has_devanagari(question or ""):
         return body
-    if not _re_mb_M17.search(r"(?i)\baapki\s+shaadi\b|\byour\s+marriage\s+timing\b", body):
+    meet = _is_meet_life_partner_timing_question(question or "")
+    # Wrong frame: asked meet-partner but answered "शादी" / shaadi
+    if meet and _re_mb_M17.search(r"(शादी)|(shaadi)|(marriage timing)", body, _re_mb_M17.I):
+        m = _re_mb_M17.search(
+            r"(?:आपकी\s+शादी|aapki\s+shaadi|your\s+marriage\s+timing\s+falls\s+between)\s+"
+            r"(.+?)(?:\s+के\s+बीच\s+होगी|\s+ke\s+beech\s+hogi|\.)",
+            body,
+            _re_mb_M17.IGNORECASE,
+        )
+        if m:
+            return _marriage_timing_line(m.group(1).strip(), "hi", meet_partner=True)
+    if not _re_mb_M17.search(
+        r"(?i)\baapki\s+shaadi\b|\baapka\s+jeevansathi\b|\byour\s+(?:marriage|life-partner)",
+        body,
+    ):
         return body
     m = _re_mb_M17.search(
-        r"(?i)aapki\s+shaadi\s+(.+?)\s+ke\s+beech\s+hogi\.?",
+        r"(?i)(?:aapki\s+shaadi|aapka\s+jeevansathi)\s+(.+?)\s+"
+        r"(?:ke\s+beech\s+hogi|ke\s+beech\s+milne\s+ka\s+period\s+dikhta\s+hai)\.?",
         body,
     )
     if m:
-        w = _localize_timing_window_label(m.group(1).strip(), "hi")
-        return f"आपकी शादी {w} के बीच होगी।"
+        return _marriage_timing_line(m.group(1).strip(), "hi", meet_partner=meet)
     m2 = _re_mb_M17.search(
-        r"(?i)your\s+marriage\s+timing\s+falls\s+between\s+(.+?)\.?\s*$",
+        r"(?i)your\s+(?:marriage\s+timing|life-partner\s+meeting\s+window)\s+"
+        r"falls\s+between\s+(.+?)\.?\s*$",
         body,
     )
     if m2:
-        w = _localize_timing_window_label(m2.group(1).strip(), "hi")
-        return f"आपकी शादी {w} के बीच होगी।"
-    # Age-form from engine audit: "Aapki shaadi age 30 ke around — WINDOW ke beech hogi."
+        return _marriage_timing_line(m2.group(1).strip(), "hi", meet_partner=meet)
     m3 = _re_mb_M17.search(
         r"(?i)aapki\s+shaadi\s+age\s+\d+\s+ke\s+around\s*[—\-]\s*(.+?)\s+ke\s+beech\s+hogi\.?",
         body,
     )
     if m3:
-        w = _localize_timing_window_label(m3.group(1).strip(), "hi")
-        return f"आपकी शादी {w} के बीच होगी।"
+        return _marriage_timing_line(m3.group(1).strip(), "hi", meet_partner=meet)
     return body
 
 

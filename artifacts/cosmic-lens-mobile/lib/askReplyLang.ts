@@ -17,6 +17,16 @@ export const ASK_REPLY_LANG_OPTIONS: {
   { id: "hi", label: "हिंदी", sublabel: "देवनागरी में jawab" },
 ];
 
+/** Single display label for the currently selected reply language. */
+export function askReplyLangLabel(lang: AskReplyLang | string | null | undefined): string {
+  const id = coerceUILang(lang || "hn");
+  const hit = ASK_REPLY_LANG_OPTIONS.find((o) => o.id === id);
+  if (hit) return hit.label;
+  if (id === "en") return "English";
+  if (id === "hi") return "हिंदी";
+  return "Hinglish";
+}
+
 /** API body `lang` — flask accepts english | hinglish | hindi (or en/hn/hi). */
 export function askLangToApi(lang: AskReplyLang): string {
   if (lang === "en") return "english";

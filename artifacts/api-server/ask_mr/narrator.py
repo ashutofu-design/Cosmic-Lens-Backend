@@ -90,10 +90,19 @@ def build_mr_narrator_user_lang_block(code: str) -> str:
     """Minimal language lock for MR narrator (~80 chars vs ~350)."""
     c = (code or "hn").strip().lower()
     if c == "hi":
-        return "Lang: Hindi (Devanagari).\n\n"
+        return (
+            "MATCH QUESTION LANGUAGE: Devanagari Hindi → reply ENTIRELY in "
+            "Hindi (Devanagari). No Roman Hinglish.\n\n"
+        )
     if c == "en":
-        return "Lang: English.\n\n"
-    return "Lang: Hinglish (Roman).\n\n"
+        return (
+            "MATCH QUESTION LANGUAGE: English → reply ENTIRELY in English. "
+            "No Hindi/Hinglish.\n\n"
+        )
+    return (
+        "MATCH QUESTION LANGUAGE: Hinglish → reply ENTIRELY in Hinglish (Roman). "
+        "No Devanagari.\n\n"
+    )
 
 
 def _archetype_extra_rules(

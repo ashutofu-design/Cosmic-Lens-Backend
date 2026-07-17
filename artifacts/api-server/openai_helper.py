@@ -175,10 +175,13 @@ import re as _re_mb_M17
 # Devanagari anchors sit outside \b group (\b doesn't anchor on
 # Devanagari). Mirrors the legacy 2.8.27 keyword regex.
 # User mandate (May 2026): marriage TIMING = Line1 window only + Line2 engage Q.
+# Language of Line1 follows resolved reply lang (hi / hn / en).
 _MARRIAGE_TIMING_ONLY_REPLY = (
     "TIMING REPLY (binding) — ONE sentence only in the answer bubble:\n"
-    "  \"Aapki shaadi <WINDOW VERBATIM> ke beech hogi.\"\n"
-    "Engagement question goes in follow_ups chip (LINE-2 below), not in the bubble.\n"
+    "  Hinglish: \"Aapki shaadi <WINDOW VERBATIM> ke beech hogi.\"\n"
+    "  Hindi (Devanagari): \"आपकी शादी <WINDOW> के बीच होगी।\"\n"
+    "  English: \"Your marriage timing falls between <WINDOW>.\"\n"
+    "Match the LANGUAGE LOCK above. Engagement question goes in follow_ups chip, not in the bubble.\n"
     "FORBIDDEN in answer: shall, should, may, might, ho sakta/ho sakti, shayad, "
     "around, chance, possibly, dasha, planets, Upay, Jaimini, KP, verdict label.\n"
     "FORBIDDEN: greeting, bullets, backup window, delay lecture.\n"
@@ -269,10 +272,23 @@ def _marriage_timing_reply_parts(
 ) -> tuple[str, str]:
     """Deterministic marriage timing: (one-line window answer, engage chip)."""
     w = (window or "").strip()
-    if w:
-        line1 = f"Aapki shaadi {w} ke beech hogi."
+    code = (lang or "hn").strip().lower()
+    if code in ("hi", "hindi", "hin", "devanagari"):
+        w_hi = _localize_timing_window_label(w, "hi") if w else ""
+        if w_hi:
+            line1 = f"आपकी शादी {w_hi} के बीच होगी।"
+        else:
+            line1 = "अभी कुंडली से शादी का स्पष्ट समय नहीं दिख रहा।"
+    elif code in ("en", "english", "eng"):
+        if w:
+            line1 = f"Your marriage timing falls between {w}."
+        else:
+            line1 = "The chart does not show a clear marriage window yet."
     else:
-        line1 = "Abhi chart se shaadi ka clear period nahi dikh raha."
+        if w:
+            line1 = f"Aapki shaadi {w} ke beech hogi."
+        else:
+            line1 = "Abhi chart se shaadi ka clear period nahi dikh raha."
     engage = _pick_marriage_engagement_question(reply_idx, lang)
     return line1, engage
 
@@ -289,11 +305,48 @@ def _compose_marriage_timing_reply(
 
 def _compose_marriage_timing_alt_reply(window: str, lang: str = "hn") -> str:
     """Backup / next window when user rejects the primary timing period."""
-    _ = lang
     w = (window or "").strip()
+    code = (lang or "hn").strip().lower()
+    if code in ("hi", "hindi", "hin", "devanagari"):
+        w_hi = _localize_timing_window_label(w, "hi") if w else ""
+        if w_hi:
+            return f"अगर पहला समय छूट जाए, तो अगला मजबूत समय {w_hi} के बीच दिखता है।"
+        return "अभी कुंडली से अगला स्पष्ट बैकअप समय नहीं दिख रहा।"
+    if code in ("en", "english", "eng"):
+        if w:
+            return f"If the first window is missed, the next strong period is between {w}."
+        return "The chart does not show a clear backup window yet."
     if w:
         return f"Agar pehla period miss ho, agla strong window {w} ke beech dikhta hai."
     return "Abhi chart se agla clear backup period nahi dikh raha."
+
+
+_MONTH_EN_TO_HI = {
+    "january": "जनवरी", "february": "फरवरी", "march": "मार्च",
+    "april": "अप्रैल", "may": "मई", "june": "जून",
+    "july": "जुलाई", "august": "अगस्त", "september": "सितंबर",
+    "october": "अक्टूबर", "november": "नवंबर", "december": "दिसंबर",
+    "jan": "जनवरी", "feb": "फरवरी", "mar": "मार्च", "apr": "अप्रैल",
+    "jun": "जून", "jul": "जुलाई", "aug": "अगस्त",
+    "sep": "सितंबर", "sept": "सितंबर", "oct": "अक्टूबर",
+    "nov": "नवंबर", "dec": "दिसंबर",
+}
+
+
+def _localize_timing_window_label(window: str, lang: str) -> str:
+    """Keep engine window dates; for Hindi, swap English month names to Devanagari."""
+    text = (window or "").strip()
+    if not text:
+        return text
+    code = (lang or "").strip().lower()
+    if code not in ("hi", "hindi", "hin", "devanagari"):
+        return text
+    out = text
+    # Longer names first so "September" wins over "Sep"
+    for en in sorted(_MONTH_EN_TO_HI.keys(), key=len, reverse=True):
+        hi = _MONTH_EN_TO_HI[en]
+        out = _re_mb_M17.sub(rf"\b{en}\b", hi, out, flags=_re_mb_M17.IGNORECASE)
+    return out
 
 
 _CHECKED_TRACE_RX = re.compile(r"\[Checked:\s*[^]]+\]\s*$", re.IGNORECASE | re.DOTALL)
@@ -3836,9 +3889,18 @@ def is_available() -> bool:
 # ════════════════════════════════════════════════════════════════════════════
 
 _RAW_LANG_INSTR = {
-    "hi": "Reply ENTIRELY in Hindi (Devanagari script). No English except proper nouns.",
-    "hn": "Reply ENTIRELY in Hinglish (Hindi in Roman script). Natural conversational tone.",
-    "en": "Reply ENTIRELY in plain English. No Hindi words in Roman or Devanagari.",
+    "hi": (
+        "MATCH THE QUESTION LANGUAGE: user asked in Devanagari Hindi. "
+        "Reply ENTIRELY in Hindi (Devanagari script). No English/Hinglish except proper nouns."
+    ),
+    "hn": (
+        "MATCH THE QUESTION LANGUAGE: user asked in Hinglish/Roman Hindi. "
+        "Reply ENTIRELY in Hinglish (Hindi in Roman script). No Devanagari."
+    ),
+    "en": (
+        "MATCH THE QUESTION LANGUAGE: user asked in English. "
+        "Reply ENTIRELY in plain English. No Hindi words in Roman or Devanagari."
+    ),
 }
 
 # ── Ultra-brief default (token save) — explain only on explicit ask ───────
@@ -4027,8 +4089,9 @@ def _build_universal_ask_system_prompt(
         _rl = "hn"
     lang_block = (
         f"════════════════ LANGUAGE (MANDATORY — entire reply) ════════════════\n"
+        f"First CHECK the user's question language, then answer in the SAME language.\n"
         f"{_RAW_LANG_INSTR[_rl]}\n"
-        f"NEVER reply in a different language than specified above.\n"
+        f"NEVER reply in a different language than the question.\n"
         f"═══════════════════════════════════════════════════════════════════"
     )
 
@@ -12610,26 +12673,30 @@ def _normalize_client_lang(lang: str) -> Optional[str]:
 def _resolve_response_lang(question: str, lang: str,
                            preferred_language: Optional[str]) -> str:
     """
-    Final language decision per the Language Intelligence spec:
-      1. user.preferred_language    (highest — sticky personal pref)
-      2. explicit client `lang` (Ask language picker: english/hinglish/hindi)
-      3. detected language of the question (per-message smart match)
-      4. app default language `lang`        (lowest — fallback)
+    Reply language MUST match the question:
 
-    Hindi content (Devanagari or Roman) replies in Devanagari (`hi`) unless
-    the user explicitly set preferred_language or client lang to `hn`.
+      • Devanagari Hindi question  → `hi` (देवनागरी answer)
+      • Roman Hindi / Hinglish Q   → `hn` (Hinglish answer)
+      • English question           → `en` (English answer)
+
+    Client picker / preferred_language are used ONLY when the question is
+    empty or has no detectable language signal.
     """
+    q = (question or "").strip()
     pl = (preferred_language or "").strip().lower()
     client_lang = _normalize_client_lang(lang)
+
+    if q:
+        # Always detect from THIS message — do not let picker override script.
+        detected = _detect_question_lang(q, "en")
+        if detected in ("hi", "hn", "en"):
+            return detected
+
     if pl in {"en", "hi", "hn"}:
-        resolved = pl
-    elif client_lang:
-        resolved = client_lang
-    else:
-        resolved = _detect_question_lang(question, lang or "en")
-    if resolved == "hn" and pl != "hn" and client_lang != "hn":
-        resolved = "hi"
-    return resolved
+        return pl
+    if client_lang:
+        return client_lang
+    return "en"
 
 
 def _strict_lang_block(code: str) -> str:
@@ -12638,7 +12705,8 @@ def _strict_lang_block(code: str) -> str:
     consistency MUST hold for the entire reply; no mid-response switching."""
     if code == "hi":
         return (
-            "════════════════════ LANGUAGE LOCK — हिन्दी ════════════════════\n"
+            "════════════════════ LANGUAGE LOCK — हिन्दी (Devanagari) ═══════════\n"
+            "MATCH THE QUESTION: user wrote in Devanagari Hindi → YOU reply in Devanagari.\n"
             "Reply ENTIRELY in pure Hindi (Devanagari script — देवनागरी).\n"
             "  • Every sentence must be Hindi. No Hinglish (no Roman script).\n"
             "  • No English words except proper nouns (names, places).\n"
@@ -12651,28 +12719,25 @@ def _strict_lang_block(code: str) -> str:
     if code == "hn":
         return (
             "═════════════════ LANGUAGE LOCK — HINGLISH ═════════════════\n"
+            "MATCH THE QUESTION: user wrote in Roman Hindi / Hinglish → YOU reply in Hinglish.\n"
             "Reply ENTIRELY in Hinglish (Hindi words written in English/Roman script).\n"
-            "  • Natural conversational Hinglish — clear, expert tone (NOT guru\n"
-            "    style): e.g. \"Aapki kundli mein Saturn 7th house mein hai...\".\n"
+            "  • Natural conversational Hinglish — clear, expert tone:\n"
+            "    e.g. \"Aapki kundli mein Saturn 7th house mein hai...\".\n"
             "  • NO Devanagari script anywhere. NO pure-English-only paragraphs.\n"
             "  • Astrology terms in Roman: Saptamesh, Karaka, Mahadasha, Sade-Sati.\n"
-            "  • Even if the devotee wrote the question in Devanagari Hindi or\n"
-            "    pure English, you MUST still reply in Hinglish — this is the\n"
-            "    devotee's chosen preference.\n"
             "  • The ENTIRE response stays in Hinglish — never switch mid-reply.\n"
             "═══════════════════════════════════════════════════════════════\n\n"
         )
     # default: English
     return (
         "═════════════════ LANGUAGE LOCK — ENGLISH ═════════════════\n"
+        "MATCH THE QUESTION: user wrote in English → YOU reply in English.\n"
         "Reply ENTIRELY in clear, natural English.\n"
         "  • No Hindi/Hinglish words mixed in. Use English equivalents:\n"
         "    \"7th lord\" not \"Saptamesh\", \"main period\" not \"Mahadasha\",\n"
         "    \"7-and-a-half year Saturn cycle\" not \"Sade-Sati\".\n"
         "  • Sanskrit names of yogas/planets are allowed (e.g. \"Mangal Dosha\",\n"
         "    \"Gajakesari Yoga\") but ALWAYS followed by a brief English meaning.\n"
-        "  • Even if the devotee wrote the question in Hindi or Hinglish, you\n"
-        "    MUST still reply in English — this is the devotee's chosen preference.\n"
         "  • The ENTIRE response stays in English — never switch mid-reply.\n"
         "═══════════════════════════════════════════════════════════════\n\n"
     )

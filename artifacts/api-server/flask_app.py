@@ -8104,6 +8104,20 @@ def ask_route():
                 }
         out = _finalize_ask_out_after_llm(out, rp_user, quota_on_success=rp_quota)
         out["plan"] = rp_plan
+        try:
+            from openai_helper import align_ask_reply_to_question_lang as _align_lang
+
+            if isinstance(out, dict) and isinstance(out.get("text"), str):
+                _before = out["text"]
+                out["text"] = _align_lang(question, out["text"])
+                if out["text"] != _before:
+                    print(
+                        f"[ask:RP] lang_align fixed roman→devanagari "
+                        f"q={(question or '')[:40]!r}",
+                        flush=True,
+                    )
+        except Exception as _align_exc:
+            print(f"[ask:RP] lang_align skipped: {_align_exc}", flush=True)
         # Phase 2.5.11.19 — Ask Q&A persistence (sync raw passthrough exit).
         if rp_user is not None and out.get("source") != "raw_passthrough_error":
             try:
@@ -9180,6 +9194,20 @@ def ask_stream_route():
                 }
         out_s = _finalize_ask_out_after_llm(out_s, rp_user_s, quota_on_success=rp_quota_s)
         out_s["plan"] = rp_plan_s
+        try:
+            from openai_helper import align_ask_reply_to_question_lang as _align_lang_s
+
+            if isinstance(out_s, dict) and isinstance(out_s.get("text"), str):
+                _before_s = out_s["text"]
+                out_s["text"] = _align_lang_s(question, out_s["text"])
+                if out_s["text"] != _before_s:
+                    print(
+                        f"[ask/stream:RP] lang_align fixed roman→devanagari "
+                        f"q={(question or '')[:40]!r}",
+                        flush=True,
+                    )
+        except Exception as _align_exc_s:
+            print(f"[ask/stream:RP] lang_align skipped: {_align_exc_s}", flush=True)
         if rp_user_s is not None and out_s.get("source") != "raw_passthrough_error":
             try:
                 from question_history import persist_ask_question_result

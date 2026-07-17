@@ -358,7 +358,23 @@ def _force_devanagari_marriage_timing_answer(question: str, text: str) -> str:
     if m2:
         w = _localize_timing_window_label(m2.group(1).strip(), "hi")
         return f"आपकी शादी {w} के बीच होगी।"
+    # Age-form from engine audit: "Aapki shaadi age 30 ke around — WINDOW ke beech hogi."
+    m3 = _re_mb_M17.search(
+        r"(?i)aapki\s+shaadi\s+age\s+\d+\s+ke\s+around\s*[—\-]\s*(.+?)\s+ke\s+beech\s+hogi\.?",
+        body,
+    )
+    if m3:
+        w = _localize_timing_window_label(m3.group(1).strip(), "hi")
+        return f"आपकी शादी {w} के बीच होगी।"
     return body
+
+
+def align_ask_reply_to_question_lang(question: str, text: str) -> str:
+    """
+    Final gate for EVERY Ask answer: question script wins.
+    Currently enforces Devanagari marriage-timing one-liners; safe no-op otherwise.
+    """
+    return _force_devanagari_marriage_timing_answer(question or "", text or "")
 
 
 def _compose_marriage_timing_reply(
@@ -371,7 +387,7 @@ def _compose_marriage_timing_reply(
     line1, _engage = _marriage_timing_reply_parts(
         window, reply_idx, lang, question=question,
     )
-    return line1
+    return align_ask_reply_to_question_lang(question or "", line1)
 
 
 def _compose_marriage_timing_alt_reply(

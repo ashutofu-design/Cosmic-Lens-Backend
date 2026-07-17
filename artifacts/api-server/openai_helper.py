@@ -242,6 +242,12 @@ def _is_marriage_timing_question(question: str) -> bool:
     except Exception:
         pass
     q = question.lower()
+    # Devanagari timing markers (\\b does not anchor Devanagari reliably)
+    if _re_mb_M17.search(
+        r"(कब|किस\s*साल|किस\s*महीने|किस\s*माह|समय|साल|वर्ष|मुहूर्त|टाइमिंग)",
+        question,
+    ):
+        return True
     if _re_mb_M17.search(
         r"\b(kyun|why|kaise\s+hai|detail|explain|samjha|7th\s*lord|"
         r"delay\s*kyu|kaun\s+sa\s+grah)\b",
@@ -304,6 +310,30 @@ def _marriage_timing_reply_parts(
     return line1, engage
 
 
+def _force_devanagari_marriage_timing_answer(question: str, text: str) -> str:
+    """Last-resort scrub: Devanagari Q must not leave with Roman 'Aapki shaadi…'."""
+    body = (text or "").strip()
+    if not body or not _text_has_devanagari(question or ""):
+        return body
+    if not _re_mb_M17.search(r"(?i)\baapki\s+shaadi\b", body):
+        return body
+    m = _re_mb_M17.search(
+        r"(?i)aapki\s+shaadi\s+(.+?)\s+ke\s+beech\s+hogi\.?",
+        body,
+    )
+    if m:
+        w = _localize_timing_window_label(m.group(1).strip(), "hi")
+        return f"आपकी शादी {w} के बीच होगी।"
+    m2 = _re_mb_M17.search(
+        r"(?i)your\s+marriage\s+timing\s+falls\s+between\s+(.+?)\.?\s*$",
+        body,
+    )
+    if m2:
+        w = _localize_timing_window_label(m2.group(1).strip(), "hi")
+        return f"आपकी शादी {w} के बीच होगी।"
+    return body
+
+
 def _compose_marriage_timing_reply(
     window: str,
     reply_idx: int = 0,
@@ -314,7 +344,7 @@ def _compose_marriage_timing_reply(
     line1, _engage = _marriage_timing_reply_parts(
         window, reply_idx, lang, question=question,
     )
-    return line1
+    return _force_devanagari_marriage_timing_answer(question or "", line1)
 
 
 def _compose_marriage_timing_alt_reply(
@@ -330,15 +360,19 @@ def _compose_marriage_timing_alt_reply(
     if code in ("hi", "hindi", "hin", "devanagari"):
         w_hi = _localize_timing_window_label(w, "hi") if w else ""
         if w_hi:
-            return f"अगर पहला समय छूट जाए, तो अगला मजबूत समय {w_hi} के बीच दिखता है।"
-        return "अभी कुंडली से अगला स्पष्ट बैकअप समय नहीं दिख रहा।"
-    if code in ("en", "english", "eng"):
+            body = f"अगर पहला समय छूट जाए, तो अगला मजबूत समय {w_hi} के बीच दिखता है।"
+        else:
+            body = "अभी कुंडली से अगला स्पष्ट बैकअप समय नहीं दिख रहा।"
+    elif code in ("en", "english", "eng"):
         if w:
-            return f"If the first window is missed, the next strong period is between {w}."
-        return "The chart does not show a clear backup window yet."
-    if w:
-        return f"Agar pehla period miss ho, agla strong window {w} ke beech dikhta hai."
-    return "Abhi chart se agla clear backup period nahi dikh raha."
+            body = f"If the first window is missed, the next strong period is between {w}."
+        else:
+            body = "The chart does not show a clear backup window yet."
+    elif w:
+        body = f"Agar pehla period miss ho, agla strong window {w} ke beech dikhta hai."
+    else:
+        body = "Abhi chart se agla clear backup period nahi dikh raha."
+    return _force_devanagari_marriage_timing_answer(question or "", body)
 
 
 _MONTH_EN_TO_HI = {
@@ -974,6 +1008,7 @@ def _marriage_timing_m17_passthrough_response(
         _resolve_response_lang(question, lang, None),
         question=question or "",
     )
+    text = _force_devanagari_marriage_timing_answer(question or "", text)
     print(
         f"[marriage_timing_m17] reply_lang="
         f"{_resolve_response_lang(question, lang, None)!r} "
@@ -24263,7 +24298,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 _translator_lock_meta_pt: dict | None = None
                 try:
                     _qt_topic_pt = (_qu_topic or "").lower()
+                    # Marriage TIMING already has a deterministic one-liner
+                    # (hi/hn/en). translator_lock is Hinglish-only and would
+                    # overwrite Devanagari answers — skip it for timing Qs.
                     if (_qt_topic_pt == "marriage"
+                            and not _is_marriage_timing_question(question or "")
                             and isinstance(kundli, dict)
                             and kundli.get("planets")
                             and isinstance(_text_pt_scrubbed, str)
@@ -24322,7 +24361,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 except Exception as _tlock_exc_pt:  # noqa: BLE001
                     _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                            f"passthrough_sync:{str(_tlock_exc_pt)[:180]}")
-
+                _text_pt_scrubbed = _force_devanagari_marriage_timing_answer(
+                    question or "", _text_pt_scrubbed or "",
+                )
                 # H2.7.7 — post-cap belt-and-braces (sync passthrough).
                 # Mirrors health_static contract. Prompt-level guidance
                 # (LENGTH & FOCUS LOCK in _PT_SYS_INTRO) is primary lever;
@@ -27407,10 +27448,12 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # polish, translator_lock = verifier. On fact mismatch falls back to
     # deterministic engine template; on CRITICAL severity hard-blocks.
     # Footer hidden from user text (kept in meta for ops/frontend).
+    # Skip for marriage TIMING — deterministic hi/hn/en one-liner must win.
     try:
         _mvo_sync = (out_meta or {}).get("marriage_verdict_obj") \
             if isinstance(out_meta, dict) else None
         if (topic == "marriage"
+                and not _is_marriage_timing_question(question or "")
                 and isinstance(_mvo_sync, dict)
                 and _mvo_sync
                 and isinstance(text, str)
@@ -27457,6 +27500,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                f"sync:{str(_tlock_exc)[:180]}")
 
+    text = _force_devanagari_marriage_timing_answer(question or "", text or "")
     text = _ensure_checked_trace(
         text,
         question,
@@ -28076,10 +28120,12 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # text is still meaningful. ADD-ONLY, gated on
             # `_topic_id_s == "marriage"` (regex-based topic from
             # `_detect_topic`, available in stream passthrough scope).
+            # Skip marriage TIMING — keep deterministic hi/hn/en one-liner.
             _translator_lock_meta_pt_s: dict | None = None
             _engine_tag_pt_s = "ans-engine" if _locked_facts_pt_s else "ans-cosmo"
             try:
                 if (_topic_id_s == "marriage"
+                        and not _is_marriage_timing_question(question or "")
                         and isinstance(kundli, dict)
                         and kundli.get("planets")
                         and isinstance(_full_text_pt_s_scrubbed, str)
@@ -28136,7 +28182,9 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             except Exception as _tlock_exc_pt_s:  # noqa: BLE001
                 _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                        f"passthrough_stream:{str(_tlock_exc_pt_s)[:180]}")
-
+            _full_text_pt_s_scrubbed = _force_devanagari_marriage_timing_answer(
+                question or "", _full_text_pt_s_scrubbed or "",
+            )
             # 5. Final envelope (matches mobile client expected schema)
             # Phase 2.8.27 — engine_tag tells UI whether deterministic
             # engine LOCKED FACTS were injected (ans-engine) or it was a
@@ -29047,10 +29095,12 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # Mirror of sync wrap above. ADD-ONLY safety net for marriage topic
     # only. Footer hidden from user text (kept in build_meta_stream for
     # ops/frontend badge rendering).
+    # Skip marriage TIMING — keep deterministic hi/hn/en one-liner.
     try:
         _mvo_stream = (build_meta_stream or {}).get("marriage_verdict_obj") \
             if isinstance(build_meta_stream, dict) else None
         if (topic == "marriage"
+                and not _is_marriage_timing_question(question or "")
                 and isinstance(_mvo_stream, dict)
                 and _mvo_stream
                 and isinstance(final_text, str)
@@ -29096,6 +29146,9 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                f"stream:{str(_tlock_exc_s)[:180]}")
 
+    final_text = _force_devanagari_marriage_timing_answer(
+        question or "", final_text or "",
+    )
     _trace(req_id, "5.FINAL_OUTPUT(stream)", final_text)
 
     # ── Phase 7.2 — VERIFIER (stream, full path) ──────────────────────

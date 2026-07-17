@@ -53,6 +53,24 @@ class TestMarriageTimingLang(unittest.TestCase):
         self.assertIn("आपकी शादी", text)
         self.assertNotIn("Aapki shaadi", text)
 
+    def test_force_scrub_roman_answer(self):
+        from openai_helper import _force_devanagari_marriage_timing_answer
+
+        scrubbed = _force_devanagari_marriage_timing_answer(
+            "मेरा शादी कब होगा",
+            "Aapki shaadi February – April 2033 ke beech hogi.",
+        )
+        self.assertIn("आपकी शादी", scrubbed)
+        self.assertIn("फरवरी", scrubbed)
+        self.assertNotIn("Aapki shaadi", scrubbed)
+
+    def test_timing_question_detected_for_devanagari(self):
+        from openai_helper import _is_marriage_timing_question
+
+        self.assertTrue(
+            _is_marriage_timing_question("मेरा शादी कब और किससे होगा")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

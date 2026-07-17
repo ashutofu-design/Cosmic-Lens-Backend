@@ -98,7 +98,44 @@ class TestTimingAgeDashaGuard(unittest.TestCase):
         self.assertFalse(a2.get("wants_next"))
         self.assertIn("STABLE TIMING LOCK", out2)
 
-    def test_llm_mismatch_advances_next_only(self):
+    def test_baby_age_23_all_early_windows_delay(self):
+        from ask_timing.age_dasha_guard import apply_timing_age_dasha_guard
+
+        now_y = 2026
+        raw = {
+            "next_3_windows": [
+                {"start": f"{now_y}-06", "end": f"{now_y}-12", "window": f"{now_y}-06 → {now_y}-12", "lords": "Saturn"},
+                {"start": f"{now_y}-07", "end": f"{now_y}-11", "window": f"{now_y}-07", "lords": "Moon"},
+            ],
+            "user_age": 23,
+        }
+        block = f">>> NARRATE THIS WINDOW EXACTLY AS (#1 PRIMARY): {now_y}-06 → {now_y}-12\n"
+        out, audit = apply_timing_age_dasha_guard(
+            client=None,
+            question="baby kab hoga ladka ya ladki",
+            domain="children",
+            engine_raw=raw,
+            prompt_block=block,
+            user_age=23,
+        )
+        self.assertEqual(audit.get("result"), "delay_frame")
+        self.assertIn("DELAY FRAME", out)
+        self.assertGreaterEqual(int(audit.get("earliest_year") or 0), now_y + 1)
+
+    def test_gender_claim_scrubbed(self):
+        from ask_children.answer_guard import guard_children_answer
+
+        text, meta = guard_children_answer(
+            "baby kab hoga ladka ya ladki",
+            "Aapka baby June 2026 se December tak. Mars strong hai isliye ladka hone ki sambhavna zyada lagti hai.",
+            {},
+            is_timing=True,
+        )
+        self.assertTrue(meta.get("repaired"))
+        self.assertIn("gender_claim", meta.get("issues") or [])
+        self.assertNotRegex(text, r"(?i)ladka hone ki sambhavna")
+        self.assertIn("uncertain", text.lower())
+
         from ask_timing.age_dasha_guard import apply_timing_age_dasha_guard
 
         client = MagicMock()

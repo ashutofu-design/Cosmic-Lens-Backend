@@ -173,7 +173,13 @@ def format_baby_timing_for_prompt(v: dict, question: str = "") -> str:
             f"({ncw.get('priority', '')})"
         )
     if not extra:
-        return block
+        # Always append gender ban even when no D7 extras.
+        extra = []
+    extra.append(
+        "⛔ NO GENDER PREDICTION: Never say ladka/ladki/beta/beti/boy/girl likelihood "
+        "or 'sambhavna zyada'. Chart cannot confirm sex. If user asked gender, "
+        "say uncertain only — then give timing window."
+    )
     lines = block.split("\n")
     insert_at = len(lines) - 2 if len(lines) > 2 else len(lines)
     for i, line in enumerate(extra):

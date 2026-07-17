@@ -128,6 +128,17 @@ def _typical_onset(domain: str) -> int:
     return int(_TYPICAL_ONSET_AGE.get((domain or "universal").lower(), 20))
 
 
+def _earliest_year_for_age(
+    user_age: int,
+    domain: str,
+    now_year: int | None = None,
+) -> int:
+    """Calendar year when native reaches typical onset for this domain."""
+    cy = now_year if now_year is not None else datetime.now().year
+    onset = _typical_onset(domain)
+    return int(cy) + max(0, int(onset) - int(user_age))
+
+
 def _heuristic_fail(
     *,
     domain: str,
@@ -141,7 +152,10 @@ def _heuristic_fail(
     cy = now_year if now_year is not None else datetime.now().year
     y = _window_start_year(locked)
     age_at = _age_at_year(user_age, y, cy)
+    earliest = _earliest_year_for_age(user_age, domain, cy)
 
+    if y is not None and y < earliest:
+        issues.append(f"window_year_{y}_before_age_floor_{earliest}")
     if age_at is not None and age_at < onset:
         issues.append(f"age_at_window_{age_at}_below_typical_onset_{onset}")
     if _is_imminent_window(locked, cy) and user_age < onset:
@@ -391,6 +405,45 @@ def _rewrite_locked_block(
     return (cleaned + "\n" + "\n".join(guard_lines) + "\n").strip() + "\n"
 
 
+def _rewrite_delay_block(
+    block: str,
+    *,
+    user_age: int,
+    domain: str,
+    earliest_year: int,
+    lock_note: str,
+) -> str:
+    """No age-ok dasha left — forbid imminent dates; delay frame for narrator."""
+    onset = _typical_onset(domain)
+    lines = []
+    for line in (block or "").splitlines():
+        s = line.strip()
+        if s.startswith(">>> NARRATE THIS WINDOW"):
+            continue
+        if s.startswith(">>> AGE-DASHA GUARD"):
+            continue
+        if s.startswith(">>> STABLE TIMING LOCK"):
+            continue
+        if s.startswith(">>> DELAY FRAME"):
+            continue
+        if s.startswith("=== AGE–DASHA LLM VERIFY") or s.startswith("=== AGE-DASHA LLM VERIFY"):
+            continue
+        lines.append(line)
+    cleaned = "\n".join(lines).rstrip()
+    guard = [
+        "",
+        "=== AGE-DASHA LLM VERIFY (LOCKED — bind narrator) ===",
+        f">>> DELAY FRAME: Native age {user_age}. Is event ({domain}) realistic ~age {onset}+ "
+        f"(calendar ~{earliest_year}+). Do NOT give {earliest_year - 1} or earlier months as the answer.",
+        ">>> STABLE TIMING LOCK: same timing Q dubara → same delay framing; invent new near dates mat karo.",
+        "Speak: later readiness / delay tone. Optional later dasha ONLY if start year "
+        f">= {earliest_year}.",
+    ]
+    if lock_note:
+        guard.append(f">>> AGE-DASHA GUARD: {lock_note.strip()[:320]}")
+    return (cleaned + "\n" + "\n".join(guard) + "\n").strip() + "\n"
+
+
 def apply_timing_age_dasha_guard(
     *,
     client: Any,
@@ -527,28 +580,52 @@ def apply_timing_age_dasha_guard(
 
         # Mismatch → next dasha
         if idx >= len(windows) - 1:
-            final_reason = "exhausted_use_last"
+            final_reason = "exhausted_windows"
             break
         idx += 1
         final_reason = "advance_next_dasha"
 
     picked = dict(windows[idx])
+    still_fail, still_issues = _heuristic_fail(
+        domain=dom, user_age=age, locked=picked,
+    )
+    earliest = _earliest_year_for_age(age, dom)
     audit["llm_trace"] = llm_trace
     audit["picked_rank"] = idx + 1
     audit["picked_window"] = picked.get("window") or picked.get("start")
     audit["base_age_ok_rank"] = base_idx + 1
-    audit["result"] = "locked"
-    audit["reason"] = final_reason
+    audit["earliest_year"] = earliest
+    audit["still_fail_after_walk"] = still_fail
+    audit["still_issues"] = still_issues
 
     if not lock_note:
         from event_timing._shared.timing_window_pick import window_range_label
 
         label = window_range_label(picked) or str(picked.get("window") or "")
         lock_note = (
-            f"Age {age} + question matched to dasha #{idx + 1}: {label}. "
-            f"Same Q dubara → yahi timing."
+            f"Age {age} + question → dasha check. "
+            + (
+                f"No age-ok window — delay until ~{earliest}+."
+                if still_fail
+                else f"Matched #{idx + 1}: {label}. Same Q → yahi timing."
+            )
         )
 
+    if still_fail:
+        audit["result"] = "delay_frame"
+        audit["reason"] = final_reason if final_reason == "exhausted_windows" else "post_walk_age_fail"
+        new_block = _rewrite_delay_block(
+            block,
+            user_age=age,
+            domain=dom,
+            earliest_year=earliest,
+            lock_note=lock_note,
+        )
+        _stamp_engine(engine_raw, audit, picked)
+        return new_block, audit
+
+    audit["result"] = "locked"
+    audit["reason"] = final_reason
     new_block = _rewrite_locked_block(
         block, picked=picked, rank=idx, lock_note=lock_note,
     )

@@ -11303,14 +11303,23 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _edag:
                 print(f"[raw_passthrough] EDUCATION_ANSWER_GUARD skipped: {_edag}", flush=True)
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "children_engine_v1":
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
+            "children_engine_v1",
+            "children_timing_v1",
+        ):
             try:
                 from ask_children.answer_guard import guard_children_answer
 
+                _child_is_timing = (
+                    bool(is_timing)
+                    or str(dcr_love_meta.get("slice") or "") == "children_timing_v1"
+                    or "timing" in str(_domain_timing_engine_id or "").lower()
+                )
                 text, _childguard = guard_children_answer(
                     question or "",
                     text,
                     dcr_love_meta,
+                    is_timing=_child_is_timing,
                 )
                 text = _strip_decision_template_labels(text)
                 if _childguard.get("repaired"):

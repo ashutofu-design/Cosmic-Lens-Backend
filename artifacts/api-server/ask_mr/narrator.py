@@ -34,7 +34,10 @@ TONE — confident chart reading (engine already decided; do NOT sound doubtful)
 _NARRATOR_LANG = {
     "hn": "Reply in natural Hinglish (Roman script). No Devanagari. No planet/house jargon.",
     "hi": "Reply in Hindi (Devanagari). No planet/house jargon.",
-    "en": "Reply in simple English. No jargon.",
+    "en": (
+        "Reply ENTIRELY in clear natural English. No Hinglish / Roman Hindi / Devanagari. "
+        "No planet/house jargon in the user-facing sentences."
+    ),
 }
 
 _MR_HEDGE_RX: list[tuple[re.Pattern[str], str]] = [
@@ -96,8 +99,11 @@ def build_mr_narrator_user_lang_block(code: str) -> str:
         )
     if c == "en":
         return (
-            "MATCH QUESTION LANGUAGE: English → reply ENTIRELY in English. "
-            "No Hindi/Hinglish.\n\n"
+            "MATCH QUESTION LANGUAGE — BINDING:\n"
+            "User wrote in English → YOU MUST reply ENTIRELY in clear English.\n"
+            "FORBIDDEN: Hinglish, Roman Hindi, Devanagari, words like "
+            "aapke/hai/mein/ghar/dosh/upay as Hindi fillers.\n"
+            "Astrology terms may stay (Jupiter, Saturn, D9) with English explanation.\n\n"
         )
     return (
         "MATCH QUESTION LANGUAGE: Hinglish → reply ENTIRELY in Hinglish (Roman). "

@@ -12737,27 +12737,57 @@ def _summarise_history(history: list) -> tuple[str, dict]:
 # (not English homographs).
 _HINGLISH_TOKENS = {
     "kab", "kya", "kyon", "kyun", "kaise", "kaun", "kahan", "kitna", "kitne",
-    "hai", "hain", "ho", "hoga", "hogi", "hoyega", "hua", "hui", "tha", "thi", "the",
-    "mai", "main", "mei", "mein", "me",
+    "hai", "hain", "hoga", "hogi", "hoyega", "hua", "hui", "tha", "thi",
+    "mai", "main", "mein", "mei",
     "mera", "meri", "mere", "mujhe", "mujhko", "humara", "humari", "hamara",
     "aap", "aapka", "aapki", "aapke", "tum", "tera", "teri", "tumhara",
-    "acharya", "ji", "beta", "guruji", "panditji", "maharaj",
+    "acharya", "beta", "guruji", "panditji", "maharaj",
     "shaadi", "shadi", "vivah", "biwi", "pati", "patni", "rishta",
     "naukri", "naukari", "kaam", "paisa", "paise", "dhan", "santaan", "santan", "bachcha",
     "swasthya", "bimari", "tabiyat", "padhai", "pyaar", "pyar", "rishtey",
     "upay", "upaay", "mantra", "puja", "daan", "vrat", "totka",
     "batao", "bataiye", "bataenge", "kijiye", "karke", "karna",
-    "karu", "karoon", "karunga", "karungi", "karenge", "karna",
+    "karu", "karoon", "karunga", "karungi", "karenge",
     "jau", "jaun", "jaunga", "jaungi", "jaye", "jaayega", "jaayegi",
     "ruk", "rukna", "ruke", "rukoon",
     "soch", "socha", "sochna", "raha", "rahi", "rahe", "rahega", "rahegi",
-    "lega", "legi", "lega", "milega", "milegi", "milti", "milta",
-    "nahi", "nahin", "haan", "han", "bilkul", "thoda", "bahut", "zyada", "kam",
+    "lega", "legi", "milega", "milegi", "milti", "milta",
+    "nahi", "nahin", "haan", "bilkul", "thoda", "bahut", "zyada", "kam",
     "kundli", "rashi", "nakshatra", "dasha", "graha", "yog", "dosh", "manglik",
     "maa", "pita", "papa", "mummy", "bhai", "behan", "didi", "ghar", "gharwale",
-    "abhi", "kabhi", "phir", "fir", "pehle", "baad", "se", "tak", "ya", "aur",
+    "abhi", "kabhi", "phir", "fir", "pehle", "baad", "aur",
     "kr", "krna", "hojayegi", "hojayega", "lagta", "lagti", "lagte",
     "chahiye", "chahie", "shuru", "apna", "apni", "apne", "sahi", "khud", "naya", "nayi",
+    "lekin", "magar", "kyunki", "toh", "bhi", "kuch", "kaisa", "kaisi",
+}
+
+# English function words — long English prose must not be misread as Hinglish
+# just because a few tokens collide (old bug: "the" / "me" in Hinglish set).
+_ENGLISH_FUNC_TOKENS = {
+    "the", "a", "an", "and", "or", "but", "if", "then", "so", "because",
+    "as", "of", "to", "in", "on", "for", "with", "at", "by", "from", "into",
+    "through", "during", "before", "after", "above", "below", "between",
+    "under", "again", "further", "once", "here", "there", "when", "where",
+    "why", "how", "all", "each", "few", "more", "most", "other", "some",
+    "such", "no", "nor", "not", "only", "own", "same", "than", "too", "very",
+    "can", "will", "just", "should", "would", "could", "may", "might",
+    "shall", "must", "am", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "having", "this", "that",
+    "these", "those", "i", "my", "mine", "myself", "we", "our", "ours",
+    "you", "your", "yours", "he", "him", "his", "she", "her", "hers",
+    "they", "them", "their", "what", "which", "who", "whom", "it", "its",
+    "me", "us", "about", "also", "really", "even", "still", "already",
+    "please", "could", "tell", "analyze", "situation", "currently",
+}
+
+# High-signal Roman Hindi markers (short Qs + long prose guard)
+_STRONG_HINGLISH_TOKENS = {
+    "kab", "kya", "kyon", "kyun", "kaise", "kaun", "kahan", "kitna", "kitne",
+    "hai", "hain", "hoga", "hogi", "mera", "meri", "mere", "mujhe", "mujhko",
+    "aap", "aapka", "aapki", "aapke", "mai", "main", "mein", "shaadi", "shadi",
+    "naukri", "batao", "nahi", "nahin", "kundli", "dasha", "milega", "milegi",
+    "karu", "chahiye", "abhi", "kabhi", "lekin", "kyunki", "toh", "bhi",
+    "kaisa", "kaisi", "patni", "pati", "vivah", "rishta", "upay",
 }
 
 
@@ -12767,7 +12797,9 @@ def _detect_question_lang(question: str, fallback: str) -> str:
       'hi' → Devanagari script (pure Hindi)
       'hn' → Roman-Hindi (Hinglish — Hindi words written in English letters)
       'en' → English
-      Other Indian-script lang codes pass through from `fallback`.
+
+    Permanent rule: long English prose must stay English. Never let common
+    English words (the/me/and/…) flip the answer language to Hinglish.
     """
     q = (question or "").strip()
     if not q:
@@ -12778,22 +12810,31 @@ def _detect_question_lang(question: str, fallback: str) -> str:
         if "\u0900" <= ch <= "\u097F":
             return "hi"
 
-    # Hinglish (Roman-Hindi) detection — tokenise on word boundaries
     import re
     tokens = re.findall(r"[a-zA-Z]+", q.lower())
     if not tokens:
         return fallback or "en"
 
-    hinglish_hits = sum(1 for t in tokens if t in _HINGLISH_TOKENS)
-    # ≥1 Hinglish token AND ≥10% of tokens, OR ≥2 absolute hits → Hinglish.
-    # Tighter threshold catches short prompts like "Mai abhi job switch karu ya ruk jau?"
-    if hinglish_hits >= 2:
+    n = len(tokens)
+    unique = set(tokens)
+    hinglish_unique = {t for t in unique if t in _HINGLISH_TOKENS}
+    strong_unique = {t for t in unique if t in _STRONG_HINGLISH_TOKENS}
+    en_func = sum(1 for t in tokens if t in _ENGLISH_FUNC_TOKENS)
+
+    # Long English paragraph (user's marriage essay style) → English unless
+    # there are clear Roman-Hindi markers.
+    if n >= 18 and (en_func / n) >= 0.20:
+        if len(strong_unique) < 2:
+            return "en"
+
+    # Short / mixed: need distinct Hinglish markers (not repeated "the")
+    if len(strong_unique) >= 2:
         return "hn"
-    if hinglish_hits >= 1 and (hinglish_hits / max(1, len(tokens))) >= 0.10:
+    if len(hinglish_unique) >= 2 and len(strong_unique) >= 1:
+        return "hn"
+    if len(strong_unique) >= 1 and (len(strong_unique) / max(1, len(unique))) >= 0.12:
         return "hn"
 
-    # If the user explicitly chose 'hi' or 'hn' in app settings, honor it
-    # rather than collapsing to English.
     fb = (fallback or "").lower()
     if fb in {"hi", "hn"}:
         return fb
@@ -12925,7 +12966,8 @@ def _strict_lang_block(code: str) -> str:
         "═════════════════ LANGUAGE LOCK — ENGLISH ═════════════════\n"
         "MATCH THE QUESTION: user wrote in English → YOU reply in English.\n"
         "Reply ENTIRELY in clear, natural English.\n"
-        "  • No Hindi/Hinglish words mixed in. Use English equivalents:\n"
+        "  • No Hindi/Hinglish words mixed in (no aapke/hai/mein/ghar as fillers).\n"
+        "  • Use English equivalents:\n"
         "    \"7th lord\" not \"Saptamesh\", \"main period\" not \"Mahadasha\",\n"
         "    \"7-and-a-half year Saturn cycle\" not \"Sade-Sati\".\n"
         "  • Sanskrit names of yogas/planets are allowed (e.g. \"Mangal Dosha\",\n"

@@ -38,10 +38,34 @@ export function loadAskReplyLang(raw: string | null | undefined): AskReplyLang {
   return coerceUILang(raw || "hn");
 }
 
+const STRONG_HINGLISH = new Set([
+  "kab", "kya", "kyon", "kyun", "kaise", "kaun", "kahan", "kitna", "kitne",
+  "hai", "hain", "hoga", "hogi", "mera", "meri", "mere", "mujhe", "mujhko",
+  "aap", "aapka", "aapki", "aapke", "mai", "main", "mein", "shaadi", "shadi",
+  "naukri", "batao", "nahi", "nahin", "kundli", "dasha", "milega", "milegi",
+  "karu", "chahiye", "abhi", "kabhi", "lekin", "kyunki", "toh", "bhi",
+  "kaisa", "kaisi", "patni", "pati", "vivah", "rishta", "upay",
+]);
+
+const ENGLISH_FUNC = new Set([
+  "the", "a", "an", "and", "or", "but", "if", "then", "so", "because",
+  "as", "of", "to", "in", "on", "for", "with", "at", "by", "from", "into",
+  "through", "during", "before", "after", "between", "under", "when", "where",
+  "why", "how", "all", "each", "few", "more", "most", "other", "some", "such",
+  "no", "nor", "not", "only", "own", "same", "than", "too", "very", "can",
+  "will", "just", "should", "would", "could", "may", "might", "shall", "must",
+  "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+  "do", "does", "did", "this", "that", "these", "those", "i", "my", "mine",
+  "we", "our", "you", "your", "he", "him", "his", "she", "her", "they", "them",
+  "their", "what", "which", "who", "whom", "it", "its", "me", "us", "about",
+  "also", "really", "even", "still", "already", "please", "tell", "analyze",
+  "situation", "currently",
+]);
+
 /**
  * Detect reply language from the question text.
- * Same rule as server `_resolve_response_lang`:
- *   Devanagari → hi | Roman Hindi/Hinglish → hn | English → en
+ * Same rule as server `_detect_question_lang`:
+ *   Devanagari → hi | clear Roman Hindi → hn | English prose → en
  */
 export function detectAskLangFromQuestion(question: string): AskReplyLang | null {
   const q = (question || "").trim();
@@ -55,18 +79,19 @@ export function detectAskLangFromQuestion(question: string): AskReplyLang | null
   const tokens = q.toLowerCase().match(/[a-z]+/g) || [];
   if (!tokens.length) return null;
 
-  const hinglish = new Set([
-    "mera", "meri", "mere", "mujhe", "mujhko", "main", "mai", "mein", "me",
-    "kya", "kab", "kaise", "kaisa", "kaisi", "kyun", "kyu", "kitna", "kitne",
-    "hai", "hain", "hoga", "hogi", "honge", "ho", "hua", "hui",
-    "shaadi", "shadi", "naukri", "job", "paisa", "paise", "ghar",
-    "kabhi", "abhi", "bahut", "thoda", "acha", "accha", "theek",
-    "aap", "aapki", "aapka", "tumhara", "tumhari", "uska", "uski",
-    "wala", "wali", "ke", "ki", "ka", "se", "par", "pe", "ko",
-    "aur", "ya", "nahi", "nhi", "mat", "bas", "sirf",
-  ]);
-  const hits = tokens.filter((t) => hinglish.has(t)).length;
-  if (hits >= 2) return "hn";
-  if (hits >= 1 && hits / tokens.length >= 0.1) return "hn";
+  const unique = new Set(tokens);
+  const strong = [...unique].filter((t) => STRONG_HINGLISH.has(t));
+  const enFunc = tokens.filter((t) => ENGLISH_FUNC.has(t)).length;
+  const n = tokens.length;
+
+  // Long English prose must not flip to Hinglish
+  if (n >= 18 && enFunc / n >= 0.2) {
+    if (strong.length < 2) return "en";
+  }
+
+  if (strong.length >= 2) return "hn";
+  if (strong.length >= 1 && strong.length / Math.max(1, unique.size) >= 0.12) {
+    return "hn";
+  }
   return "en";
 }

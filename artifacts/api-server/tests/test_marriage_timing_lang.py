@@ -40,13 +40,18 @@ class TestMarriageTimingLang(unittest.TestCase):
         self.assertIn("2033", text)
         self.assertNotIn("Aapki shaadi", text)
 
-    def test_compose_hinglish_still_works(self):
+    def test_compose_forces_hi_from_devanagari_question(self):
         from openai_helper import _compose_marriage_timing_reply
 
+        # Even if lang=hn, Devanagari question forces Hindi reply
         text = _compose_marriage_timing_reply(
-            "February – April 2033", 0, "hn",
+            "February – April 2033",
+            0,
+            "hn",
+            question="मेरा शादी कब और किससे होगा",
         )
-        self.assertIn("Aapki shaadi", text)
+        self.assertIn("आपकी शादी", text)
+        self.assertNotIn("Aapki shaadi", text)
 
 
 if __name__ == "__main__":

@@ -265,12 +265,23 @@ def _is_marriage_timing_question(question: str) -> bool:
     return False
 
 
+def _text_has_devanagari(text: str) -> bool:
+    for ch in text or "":
+        if "\u0900" <= ch <= "\u097F":
+            return True
+    return False
+
+
 def _marriage_timing_reply_parts(
     window: str,
     reply_idx: int = 0,
     lang: str = "hn",
+    question: str = "",
 ) -> tuple[str, str]:
     """Deterministic marriage timing: (one-line window answer, engage chip)."""
+    # Question script wins — Devanagari Q must never get Roman Hinglish reply.
+    if _text_has_devanagari(question):
+        lang = "hi"
     w = (window or "").strip()
     code = (lang or "hn").strip().lower()
     if code in ("hi", "hindi", "hin", "devanagari"):
@@ -297,14 +308,23 @@ def _compose_marriage_timing_reply(
     window: str,
     reply_idx: int = 0,
     lang: str = "hn",
+    question: str = "",
 ) -> str:
     """Legacy combined text (line1 only — engage Q lives in follow_ups)."""
-    line1, _engage = _marriage_timing_reply_parts(window, reply_idx, lang)
+    line1, _engage = _marriage_timing_reply_parts(
+        window, reply_idx, lang, question=question,
+    )
     return line1
 
 
-def _compose_marriage_timing_alt_reply(window: str, lang: str = "hn") -> str:
+def _compose_marriage_timing_alt_reply(
+    window: str,
+    lang: str = "hn",
+    question: str = "",
+) -> str:
     """Backup / next window when user rejects the primary timing period."""
+    if _text_has_devanagari(question):
+        lang = "hi"
     w = (window or "").strip()
     code = (lang or "hn").strip().lower()
     if code in ("hi", "hindi", "hin", "devanagari"):
@@ -949,7 +969,17 @@ def _marriage_timing_m17_passthrough_response(
     if not aw and isinstance(marriage_engine_raw, dict):
         aw = (marriage_engine_raw.get("primary_window") or "").strip()
     text = _compose_marriage_timing_reply(
-        aw, reply_idx, _resolve_response_lang(question, lang, None),
+        aw,
+        reply_idx,
+        _resolve_response_lang(question, lang, None),
+        question=question or "",
+    )
+    print(
+        f"[marriage_timing_m17] reply_lang="
+        f"{_resolve_response_lang(question, lang, None)!r} "
+        f"deva={_text_has_devanagari(question or '')} "
+        f"text={text[:80]!r}",
+        flush=True,
     )
     out = {
         "text": text,
@@ -13892,7 +13922,7 @@ def _build_messages(
 
         _engage_q = _pick_marriage_engagement_question(reply_idx, detected)
         _composed = _compose_marriage_timing_reply(
-            active_window, reply_idx=reply_idx, lang=detected,
+            active_window, reply_idx=reply_idx, lang=detected, question=question or "",
         )
         if isinstance(out_meta, dict):
             out_meta["marriage_timing_composed"] = _composed
@@ -16060,7 +16090,9 @@ def _try_marriage_timing_shortcuts_after_understand(
             if not _alt_w and isinstance(_eng_alt, dict):
                 _alt_w = (_eng_alt.get("backup_window") or "").strip()
             _eff_lang_alt = _resolve_response_lang(question, lang, None)
-            _text_alt = _compose_marriage_timing_alt_reply(_alt_w, _eff_lang_alt)
+            _text_alt = _compose_marriage_timing_alt_reply(
+                _alt_w, _eff_lang_alt, question=question or "",
+            )
             _out_alt = {
                 "text": _text_alt,
                 "topic": "timing",
@@ -24198,7 +24230,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         _marriage_block_pt
                     )
                     _text_pt_scrubbed = _compose_marriage_timing_reply(
-                        _aw_pt, reply_idx, _eff_lang_pt,
+                        _aw_pt, reply_idx, _eff_lang_pt, question=question or "",
                     )
                     _trace(req_id, "PASSTHROUGH.MARRIAGE_TIMING_ONLY", {
                         "window": _aw_pt,
@@ -25121,7 +25153,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
           and marriage_subtype in ("timing", "remedy")):
         _aw = (build_meta.get("active_window") or "").strip()
         _mt_lang = _resolve_response_lang(question, lang, preferred_language)
-        text = _compose_marriage_timing_reply(_aw, reply_idx, _mt_lang)
+        text = _compose_marriage_timing_reply(
+            _aw, reply_idx, _mt_lang, question=question or "",
+        )
         _trace(req_id, "4.MARRIAGE_TIMING_DETERMINISTIC", {
             "window": _aw, "text": text,
         })
@@ -27969,7 +28003,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     _marriage_block_pt_s
                 )
                 _full_text_pt_s_scrubbed = _compose_marriage_timing_reply(
-                    _aw_s, reply_idx, _eff_lang_pt_s,
+                    _aw_s, reply_idx, _eff_lang_pt_s, question=question or "",
                 )
                 _trace(req_id, "PASSTHROUGH(stream).MARRIAGE_TIMING_ONLY", {
                     "window": _aw_s,

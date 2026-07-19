@@ -144,7 +144,9 @@ function formatHealthChartFactsSteps(
         ? facts.finance_houses || facts.health_houses || []
         : domain === "travel"
           ? (anyFacts.travel_houses as typeof facts.health_houses) || facts.health_houses || []
-          : facts.health_houses || [];
+          : domain === "domain"
+            ? (anyFacts.domain_houses as typeof facts.health_houses) || facts.health_houses || []
+            : facts.health_houses || [];
   const houseLabel =
     domain === "relationship"
       ? `${chartLabel} · Relationship Houses`
@@ -152,7 +154,9 @@ function formatHealthChartFactsSteps(
         ? `${chartLabel} · Finance Houses`
         : domain === "travel"
           ? `${chartLabel} · Travel Houses (3/4/7/9/12)`
-          : `${chartLabel} · Health Houses (6)`;
+          : domain === "domain"
+            ? `${chartLabel} · Focus Houses`
+            : `${chartLabel} · Health Houses (6)`;
 
   return [
     { label: `${chartLabel} · Lagna + Lagnesh`, value: lagnaLine },
@@ -329,9 +333,47 @@ function formatTravelPackExtras(
   return steps;
 }
 
+function formatDomainPackExtras(
+  pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
+): { label: string; value: string }[] {
+  if (!pack) return [];
+  const steps: { label: string; value: string }[] = [];
+  const dims = pack.dimensions || pack.d1?.dimensions || null;
+  if (dims && typeof dims === "object") {
+    const lines = Object.entries(dims).map(([key, val]) => {
+      const row = (val || {}) as {
+        verdict?: string;
+        reason?: string;
+        tier?: string;
+        score?: number;
+      };
+      const score = row.score != null ? ` · score ${row.score}` : "";
+      const tier = row.tier ? ` · ${row.tier}` : "";
+      const reason = row.reason ? `\n  ${row.reason}` : "";
+      return `${key}: ${row.verdict || "?"}${tier}${score}${reason}`;
+    });
+    steps.push({ label: "Dimensions", value: lines.join("\n") || "—" });
+  }
+  const anyPack = pack as Record<string, unknown>;
+  const d1 = (pack.d1 || {}) as Record<string, unknown>;
+  const yogas = (anyPack.yogas as string[] | undefined)
+    || (d1.yogas as string[] | undefined)
+    || [];
+  steps.push({ label: "Yogas", value: yogas.length ? yogas.join(", ") : "none" });
+  const score = anyPack.composite_score ?? d1.composite_score;
+  const label = anyPack.strength_label ?? d1.strength_label;
+  if (score != null || label) {
+    steps.push({
+      label: "Theme Strength",
+      value: `${score != null ? `${score}/100` : "—"} — ${label || ""}`.trim(),
+    });
+  }
+  return steps;
+}
+
 function formatHealthEngineExecutionSteps(
   pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
-  opts?: { domain?: "health" | "relationship" | "finance" | "travel" },
+  opts?: { domain?: "health" | "relationship" | "finance" | "travel" | "domain" },
 ): { label: string; value: string }[] {
   if (!pack?.schema_version && !pack?.d1) return [];
   const domain = opts?.domain || "health";
@@ -357,6 +399,9 @@ function formatHealthEngineExecutionSteps(
   }
   if (domain === "travel") {
     steps.push(...formatTravelPackExtras(pack));
+  }
+  if (domain === "domain") {
+    steps.push(...formatDomainPackExtras(pack));
   }
   steps.push(...formatDashaTimingCompactSteps(pack.dasha_timing_compact));
 
@@ -436,9 +481,28 @@ function buildEngineExecutionSteps(
     }];
   }
 
+  const generalSteps = formatHealthEngineExecutionSteps(
+    (exec as { general_chart_engine_execution?: import("./askObservability").ObservabilityHealthEngineExecution | null })
+      ?.general_chart_engine_execution,
+    { domain: "domain" },
+  );
+  if (
+    generalSteps.length ||
+    exec?.display_mode === "general_charts" ||
+    (exec as { general_chart_engine_execution?: unknown })?.general_chart_engine_execution
+  ) {
+    if (generalSteps.length) {
+      return generalSteps;
+    }
+    return [{
+      label: "General Chart Pack",
+      value: `D1 + D9 + DASHA pack load nahi hua. Naya general question pucho after API deploy (v${OBS_DEBUGGER_VERSION}+).`,
+    }];
+  }
+
   const domainPack = (exec as { domain_engine_execution?: import("./askObservability").ObservabilityHealthEngineExecution | null })
     ?.domain_engine_execution;
-  const domainSteps = formatHealthEngineExecutionSteps(domainPack, { domain: "travel" });
+  const domainSteps = formatHealthEngineExecutionSteps(domainPack, { domain: "domain" });
   if (domainSteps.length || exec?.display_mode === "domain_charts" || domainPack) {
     if (domainSteps.length) {
       return domainSteps;
@@ -484,8 +548,10 @@ function HealthDnaJudgePanel({
   if (!audit?.applies) {
     return (
       <p className="detail-muted">
-        Question DNA Judge applies to health, relationship, finance, and travel (unified) questions. Re-ask
-        after API deploy ({domainLabel}).
+        Question DNA Judge: health, relationship, finance, travel, general chart, plus Unified+Gap
+        (anger, career, charity, children, dreams, education, enemies, fame, litigation, luck,
+        network, parents, personality, pets, property, remedy, settlement, siblings, spiritual,
+        vastu, vehicle, wellness). Re-ask after API+admin deploy ({domainLabel}).
       </p>
     );
   }
@@ -584,8 +650,10 @@ function HealthSelectedBlocksPanel({
   if (!audit?.applies) {
     return (
       <p className="detail-muted">
-        Question-selected JSON blocks apply to health, relationship, and finance (unified) questions.
-        Re-ask after API deploy ({domainLabel}).
+        LLM Selected JSON Blocks: health, relationship, finance, travel, general chart, plus
+        Unified+Gap (anger, career, charity, children, dreams, education, enemies, fame,
+        litigation, luck, network, parents, personality, pets, property, remedy, settlement,
+        siblings, spiritual, vastu, vehicle, wellness). Re-ask after API+admin deploy ({domainLabel}).
       </p>
     );
   }
@@ -682,20 +750,23 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
     obs.relationship_dna_judge_audit,
     obs.finance_dna_judge_audit,
     obs.travel_dna_judge_audit,
+    obs.unified_dna_judge_audit,
   ];
+  // Only pick audits that explicitly apply — never fall back to {applies:false}
+  // (that bug showed "health/relationship/finance/travel only" on career/gap rows).
   const dnaJudgeAudit = normalizeHealthDnaJudgeAudit(
-    dnaJudgeCandidates.find((a) => a?.applies) || dnaJudgeCandidates.find(Boolean),
+    dnaJudgeCandidates.find((a) => a?.applies === true),
   );
   const selectedBlocksCandidates = [
     obs.health_selected_blocks,
     obs.relationship_selected_blocks,
     obs.finance_selected_blocks,
     obs.travel_selected_blocks,
+    obs.general_selected_blocks,
+    obs.unified_selected_blocks,
     (dnaJudgeAudit as ObservabilityHealthDnaJudgeAudit | undefined)?.selected_blocks,
   ];
-  const selectedBlocks =
-    selectedBlocksCandidates.find((b) => b?.applies) ||
-    selectedBlocksCandidates.find(Boolean);
+  const selectedBlocks = selectedBlocksCandidates.find((b) => b?.applies === true);
   const domainLabel = obs.health_dna_judge_audit?.applies
     ? "health"
     : obs.relationship_dna_judge_audit?.applies
@@ -704,7 +775,15 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         ? "finance"
         : obs.travel_dna_judge_audit?.applies
           ? "travel"
-          : "health/relationship/finance/travel";
+          : obs.general_selected_blocks?.applies
+            ? "general"
+            : obs.unified_dna_judge_audit?.applies || obs.unified_selected_blocks?.applies
+              ? String(
+                  (obs.unified_dna_judge_audit as { domain?: string } | undefined)?.domain ||
+                    exec.unified_domain ||
+                    "unified",
+                )
+              : "all domains";
 
   return (
     <div className="obs-debugger">
@@ -772,6 +851,31 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
               Travel charts: <code>D1 + D9</code>
               {exec.travel_engine_execution?.schema_version
                 ? ` · ${exec.travel_engine_execution.schema_version}`
+                : null}
+            </>
+          ) : exec.display_mode === "general_charts" ||
+            (exec as { general_chart_engine_execution?: { schema_version?: string } | null })
+              .general_chart_engine_execution ? (
+            <>
+              General charts: <code>D1 + D9 + DASHA</code>
+              {(exec as { general_chart_engine_execution?: { schema_version?: string } | null })
+                .general_chart_engine_execution?.schema_version
+                ? ` · ${(exec as { general_chart_engine_execution?: { schema_version?: string } }).general_chart_engine_execution?.schema_version}`
+                : null}
+            </>
+          ) : exec.display_mode === "domain_charts" || exec.domain_engine_execution ? (
+            <>
+              {(() => {
+                const dom = String(
+                  (exec as { unified_domain?: string | null }).unified_domain || "",
+                ).trim();
+                const label = dom
+                  ? dom.charAt(0).toUpperCase() + dom.slice(1)
+                  : "Domain";
+                return <>{label} charts: <code>D1 + D9</code></>;
+              })()}
+              {exec.domain_engine_execution?.schema_version
+                ? ` · ${exec.domain_engine_execution.schema_version}`
                 : null}
             </>
           ) : (

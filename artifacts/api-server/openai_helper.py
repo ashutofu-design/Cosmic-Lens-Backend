@@ -4269,12 +4269,28 @@ def _build_universal_ask_system_prompt(
         f"═══════════════════════════════════════════════════════════════════"
     )
 
+    # Universal time anchor — the model has no clock; without this it treats a
+    # PAST dasha/transit month as "future". Question DNA drives WHAT runs; this
+    # keeps the human-form answer time-accurate across every engine.
+    from datetime import datetime as _dt_today
+
+    _now_today = _dt_today.utcnow()
+    today_block = (
+        f"TODAY'S DATE: {_now_today:%d %b %Y} (current month: {_now_today:%B %Y}).\n"
+        f"- Treat this as 'now'. Any dasha / antardasha / transit / period date "
+        f"BEFORE today is already PAST — never describe it as upcoming or future.\n"
+        f"- Only call a period 'chal raha / current' if today falls inside it.\n"
+        f"- If the chart block gives no dasha/period data, do NOT name any dasha or dates."
+    )
+
     # Decision Qs get a SEPARATE prompt — the generic "READ 10H/10L" block
     # causes house-lord dumps despite "plain language" rules (conflicting instructions).
     if is_decision:
         return f"""You are Cosmo — an experienced Vedic astrologer.
 
 {lang_block}
+
+{today_block}
 
 DECISION QUESTION — user must choose between TWO paths (job vs business, start vs wait, etc.).
 
@@ -4296,6 +4312,8 @@ CHART FACTS (internal reference only):
         return f"""You are Cosmo — an experienced Vedic astrologer.
 
 {lang_block}
+
+{today_block}
 
 FINANCE / PAISA QUESTION — user wants to know WHY money behaves this way (save, spend, income, debt).
 
@@ -4333,6 +4351,8 @@ NARRATIVE MODE (pattern / quality / yes-no — NOT timing):
     return f"""You are Cosmo — an experienced Vedic astrologer. Answer ONLY from the chart facts below; never invent placements, lords, houses, signs, nakshatras, D9 facts, or timing.
 
 {lang_block}
+
+{today_block}
 
 UNDERSTAND THE QUESTION
 - Identify what the user wants: fact, yes/no, quality, strength, luck, career, marriage, money, psychology, placement, etc.
@@ -7472,6 +7492,160 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             f"q={(question or '')[:60]!r}",
             flush=True,
         )
+    # ── DNA → ENGINE WIRE (bucket + intent + domain = executed engine) ──
+    # Single authority: Question DNA decides which static engine runs and
+    # which archetype label it gets. Regex / follow-up / MR recovery cannot
+    # override after this block.
+    _dna_wire: dict | None = None
+    if not _direct_llm_bypass and not _is_open_chart_qa:
+        try:
+            from ask_dna_engine_wire import resolve_dna_engine_wire
+            from ask_execution_gatekeeper import dna_routing_enforce_enabled
+
+            if dna_routing_enforce_enabled():
+                _dna_wire = resolve_dna_engine_wire(
+                    _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    question=question or "",
+                )
+                if _dna_wire:
+                    _dna_eng_g = str(_dna_wire.get("engine_key") or "")
+                    _dna_wants_timing = bool(_dna_wire.get("is_timing"))
+                    _dna_arch_g = str(_dna_wire.get("archetype") or "")
+                    _before_g = {
+                        "mr": _is_mr_static,
+                        "finance": _is_finance_static,
+                        "career": _is_career_static,
+                        "health": _is_health_static,
+                        "is_timing": bool(is_timing),
+                    }
+
+                    # One-hot: only DNA domain engine (unless DNA timing path).
+                    _is_mr_static = False
+                    _is_health_static = False
+                    _is_career_static = False
+                    _is_finance_static = False
+                    _is_education_static = False
+                    _is_children_static = False
+                    _is_property_static = False
+                    _is_vehicle_static = False
+                    _is_travel_static = False
+                    _is_litigation_static = False
+                    _is_luck_static = False
+                    _is_network_static = False
+                    _is_gap_static = False
+
+                    if _dna_wants_timing:
+                        is_timing = True
+                        qtype = "TIMING"
+                    else:
+                        is_timing = False
+                        qtype = "STATIC"
+                        if _dna_eng_g == "finance":
+                            _is_finance_static = True
+                            if _dna_arch_g:
+                                _finance_archetype_override = _dna_arch_g
+                        elif _dna_eng_g == "career":
+                            _is_career_static = True
+                            if _dna_arch_g:
+                                _career_archetype_override = _dna_arch_g
+                        elif _dna_eng_g == "health":
+                            _is_health_static = True
+                            if _dna_arch_g:
+                                _health_archetype_override = _dna_arch_g
+                        elif _dna_eng_g == "education":
+                            _is_education_static = True
+                            if _dna_arch_g:
+                                _education_archetype_override = _dna_arch_g
+                        elif _dna_eng_g == "children":
+                            _is_children_static = True
+                            if _dna_arch_g:
+                                _children_archetype_override = _dna_arch_g
+                        elif _dna_eng_g == "property":
+                            _is_property_static = True
+                            if _dna_arch_g:
+                                _property_archetype_override = _dna_arch_g
+                        elif _dna_eng_g == "vehicle":
+                            _is_vehicle_static = True
+                        elif _dna_eng_g == "travel":
+                            _is_travel_static = True
+                            if _dna_arch_g:
+                                _travel_archetype_override = _dna_arch_g
+                        elif _dna_eng_g == "litigation":
+                            _is_litigation_static = True
+                            if _dna_arch_g:
+                                _litigation_archetype_override = _dna_arch_g
+                        elif _dna_eng_g == "luck":
+                            _is_luck_static = True
+                        elif _dna_eng_g == "network":
+                            _is_network_static = True
+                        elif _dna_eng_g == "gap":
+                            _is_gap_static = True
+                        elif _dna_eng_g == "mr":
+                            _is_mr_static = True
+                            if _dna_arch_g:
+                                _mr_archetype_override = _dna_arch_g
+
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["dna_engine_wire"] = _dna_wire
+                        _llm_intent_admin["dna_engine_archetype"] = _dna_arch_g
+                        if _dna_eng_g == "finance" and _dna_arch_g:
+                            _llm_intent_admin["finance_archetype"] = _dna_arch_g
+
+                    print(
+                        f"[raw_passthrough] DNA_ENGINE_WIRE "
+                        f"domain={_dna_wire.get('domain')} "
+                        f"engine={_dna_eng_g} "
+                        f"archetype={_dna_arch_g} "
+                        f"bucket={_dna_wire.get('bucket')} "
+                        f"timing={_dna_wants_timing} "
+                        f"intent={str(_dna_wire.get('intent') or '')[:60]!r} "
+                        f"before={_before_g} "
+                        f"finance={_is_finance_static} mr={_is_mr_static} "
+                        f"q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
+        except Exception as _dna_wire_exc:
+            print(f"[raw_passthrough] DNA_ENGINE_WIRE skipped: {_dna_wire_exc}", flush=True)
+
+    # ── GENERAL CHART (DNA domain=general only) ──────────────────────────
+    # No specialist engine. Full D1 + D9 + dasha → pure LLM study guided by
+    # Question DNA + Selected JSON blocks.
+    _is_general_chart = False
+    if not _direct_llm_bypass:
+        try:
+            from ask_general_chart import dna_wants_general_chart
+
+            if dna_wants_general_chart(
+                _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None
+            ):
+                _is_general_chart = True
+                _is_open_chart_qa = False
+                is_timing = False
+                qtype = "STATIC"
+                _is_mr_static = False
+                _is_health_static = False
+                _is_career_static = False
+                _is_finance_static = False
+                _is_education_static = False
+                _is_children_static = False
+                _is_property_static = False
+                _is_vehicle_static = False
+                _is_travel_static = False
+                _is_litigation_static = False
+                _is_luck_static = False
+                _is_network_static = False
+                _is_gap_static = False
+                if isinstance(_llm_intent_admin, dict):
+                    _llm_intent_admin["general_chart"] = True
+                    _llm_intent_admin["routed_domain"] = "general"
+                print(
+                    f"[raw_passthrough] GENERAL_CHART_DNA "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+        except Exception as _gc_exc:
+            print(f"[raw_passthrough] GENERAL_CHART detect skipped: {_gc_exc}", flush=True)
+
     try:
         if not _direct_llm_bypass:
             try:
@@ -7482,7 +7656,39 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _is_health_static = True
             except Exception as _hso_pre_exc:
                 print(f"[raw_passthrough] health pre-chart force skipped: {_hso_pre_exc}", flush=True)
-        if not _direct_llm_bypass and is_timing and not _is_health_static:
+        if not _direct_llm_bypass and _is_general_chart:
+            try:
+                from ask_general_chart import (
+                    general_chart_slice_meta,
+                    run_general_chart_engine,
+                )
+                from ask_general_chart.presenter import to_general_chart_llm_payload
+
+                _gc_result = run_general_chart_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+                )
+                chart_text = to_general_chart_llm_payload(
+                    _gc_result, question=question or "",
+                )
+                dcr_love_meta = general_chart_slice_meta(_gc_result)
+                _chart_slice_type = "general_chart_engine_v1"
+                print(
+                    f"[raw_passthrough] GENERAL_CHART_ENGINE "
+                    f"charts={(_gc_result.checks or {}).get('charts_used')} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _gc_run_exc:
+                print(f"[raw_passthrough] GENERAL_CHART_ENGINE failed: {_gc_run_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=True, static_dasha_hint=False,
+                )
+                dcr_love_meta = None
+                _is_general_chart = False
+        elif not _direct_llm_bypass and is_timing and not _is_health_static:
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=True, static_dasha_hint=False,
             )
@@ -8233,6 +8439,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     llm_archetype=_finance_archetype_override,
                     interpretation=_finance_interp,
                 )
+                # DNA bucket/intent wire wins over regex when present.
+                if (
+                    isinstance(_dna_wire, dict)
+                    and _dna_wire.get("engine_key") == "finance"
+                    and _dna_wire.get("archetype")
+                ):
+                    _resolved_finance_arch = str(_dna_wire["archetype"])
+                    _finance_arch_reason = str(_dna_wire.get("reason") or "dna_engine_wire")
                 if _finance_arch_reason:
                     print(
                         f"[raw_passthrough] FINANCE_ARCHETYPE_ROUTE "
@@ -8715,6 +8929,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
         if (
             not _direct_llm_bypass
+            and not _is_general_chart
             and not is_timing
             and not _domain_engine_meta
             and not _is_mr_static
@@ -8751,6 +8966,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
         if _direct_llm_bypass:
             _chart_slice_type = "llm_no_engine_v1"
+        elif _is_general_chart or (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "general_chart_engine_v1"
+        ):
+            _chart_slice_type = "general_chart_engine_v1"
         elif _is_mr_static:
             _chart_slice_type = (
                 "mr_engine_v1"
@@ -10545,6 +10765,38 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
             except Exception:
                 _mr_recovery = bool(_is_mr_static)
+        if _mr_recovery:
+            # DNA engine wire: bucket/intent/domain own execution — never
+            # force-attach relationship pack for a finance/career/... DNA Q
+            # just because "d1 d9 study" matched the MR regex.
+            try:
+                from ask_dna_engine_wire import resolve_dna_engine_wire
+                from ask_execution_gatekeeper import dna_routing_enforce_enabled
+
+                if dna_routing_enforce_enabled():
+                    _wire_rec = resolve_dna_engine_wire(
+                        _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                        question=question or "",
+                    )
+                    if (
+                        _wire_rec
+                        and _wire_rec.get("engine_key")
+                        and _wire_rec.get("engine_key") != "mr"
+                    ):
+                        _mr_recovery = False
+                        print(
+                            f"[raw_passthrough] DNA_ENGINE_WIRE blocked MR_ENGINE_RECOVERY "
+                            f"engine={_wire_rec.get('engine_key')} "
+                            f"domain={_wire_rec.get('domain')} "
+                            f"bucket={_wire_rec.get('bucket')} "
+                            f"q={(question or '')[:60]!r}",
+                            flush=True,
+                        )
+            except Exception as _mr_rec_gexc:
+                print(
+                    f"[raw_passthrough] MR recovery DNA wire skipped: {_mr_rec_gexc}",
+                    flush=True,
+                )
         if _mr_recovery and (os.environ.get("ASK_MR_ENGINE") or "1").strip() != "0":
             from ask_mr import run_mr_static_engine  # type: ignore
             from ask_mr.engine import mr_engine_slice_meta
@@ -10578,8 +10830,34 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         print(f"[raw_passthrough] MR_ENGINE_RECOVERY skipped: {_mr_rec_exc}", flush=True)
 
     # ── Promotion timing — engine window is the answer (no LLM drift) ───────
+    # DNA answer style rules the format: if DNA asked for a paragraph
+    # (short_paragraph / detailed), the LLM narrates (window stays LOCKED via
+    # the NARRATE-THIS-WINDOW instruction + chart proof from selected blocks).
+    # The 1-line deterministic shortcut only fires for brief styles.
+    _dna_wants_paragraph = False
+    try:
+        _qd_it_p: dict = {}
+        if isinstance(_llm_intent_admin, dict):
+            _qd0_p = _llm_intent_admin.get("question_dna")
+            if isinstance(_qd0_p, dict):
+                _qs0_p = _qd0_p.get("questions")
+                if isinstance(_qs0_p, list) and _qs0_p and isinstance(_qs0_p[0], dict):
+                    _qd_it_p = _qs0_p[0]
+        _style_p = str(
+            _qd_it_p.get("answer_style")
+            or _qd_it_p.get("answer_length")
+            or (_llm_intent_admin or {}).get("answer_style")
+            or ""
+        ).strip().lower()
+        _dna_wants_paragraph = any(
+            k in _style_p
+            for k in ("paragraph", "detailed", "explain", "long", "medium")
+        )
+    except Exception:
+        _dna_wants_paragraph = False
     if (
         not wants_explain
+        and not _dna_wants_paragraph
         and isinstance(_career_verdict, dict)
         and str(_career_verdict.get("bucket") or "").strip().lower() == "promotion"
     ):

@@ -195,11 +195,14 @@ def to_domain_llm_payload(
         if priority:
             parts.append(priority)
             checks[f"{domain}_selected_blocks_preview"] = {
+                "applies": True,
                 "focus": selected.get("focus"),
                 "focus_label": selected.get("focus_label"),
                 "expected_blocks": (selected.get("expected_blocks") or [])[:8],
+                "available_blocks": (selected.get("expected_blocks") or [])[:8],
                 "priority_facts_for_llm": priority,
                 "source": f"{domain}_engine_execution",
+                "domain": domain,
             }
             result.checks = checks
     except Exception:
@@ -324,9 +327,17 @@ def build_domain_selected_blocks(
             f"score={pack.get('composite_score')}/100 — {pack.get('strength_label') or ''}".strip(" —"),
             priority=40, role="neutral")
 
-    blocks.sort(key=lambda b: (-int(b.get("priority") or 0), str(b.get("id") or "")))
-    for i, b in enumerate(blocks, start=1):
-        b["rank"] = i
+    _boost_applied: list[str] = []
+    try:
+        from ask_selected_blocks_common import dna_boost_selected_blocks
+
+        blocks, _boost_applied = dna_boost_selected_blocks(
+            question or "", blocks, meta=meta, pack=pack,
+        )
+    except Exception:
+        blocks.sort(key=lambda b: (-int(b.get("priority") or 0), str(b.get("id") or "")))
+        for i, b in enumerate(blocks, start=1):
+            b["rank"] = i
 
     lines = [
         "QUESTION_PRIORITY_FACTS (from Engine Execution only — use in this order):",
@@ -340,7 +351,7 @@ def build_domain_selected_blocks(
         )
     priority_text = "\n".join(lines) if blocks else ""
     used = [n for n in _PLANET_NAMES if re.search(rf"(?i)\b{re.escape(n)}\b", answer or "")]
-    return {
+    audit = {
         "applies": True,
         "source": f"{domain}_engine_execution",
         "focus": focus,
@@ -350,7 +361,33 @@ def build_domain_selected_blocks(
         "priority_facts_for_llm": priority_text,
         "used_in_answer": {"planets": used},
         "note": f"Question focus={focus}: priority facts for LLM.",
+        "domain": domain,
     }
+    try:
+        from ask_selected_blocks_common import (
+            coverage_check_selected_blocks,
+            coverage_note_lines,
+            dna_boost_note_lines,
+            question_wants_everything,
+        )
+
+        if question_wants_everything(question or "", meta) and spec:
+            # Widen limit already encoded in blocks; tag coverage notes.
+            pass
+        coverage = coverage_check_selected_blocks(
+            question or "",
+            meta=meta,
+            audit=audit,
+            execution=pack,
+            general_focus=str(spec.default_archetype if spec else f"general_{domain}"),
+        )
+        audit["coverage"] = coverage
+        audit["overlap_notes"] = (
+            coverage_note_lines(coverage) + dna_boost_note_lines(_boost_applied)
+        )
+    except Exception:
+        pass
+    return audit
 
 
 _GAP_DNA_JUDGE_OFF_BY_DEFAULT = frozenset({
@@ -358,6 +395,68 @@ _GAP_DNA_JUDGE_OFF_BY_DEFAULT = frozenset({
     "dreams", "anger", "remedy", "charity", "settlement", "vastu", "pets",
     "wellness", "luck", "network",
 })
+
+
+def build_domain_dna_judge_display(
+    question: str,
+    answer: str,
+    meta: dict[str, Any],
+    *,
+    domain: str,
+    stored_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Debugger display for unified/gap DNA judge (observability; never blocks answer)."""
+    from ask_health.answer_validator import _enrich_dna_contract, _resolve_dna_contract
+
+    audit = stored_audit if isinstance(stored_audit, dict) else {}
+    contract = _resolve_dna_contract(meta)
+    if not contract and question:
+        contract = _enrich_dna_contract(dict(meta), question)
+    judge_audit = audit.get("dna_judge") if isinstance(audit.get("dna_judge"), dict) else {}
+    if not judge_audit and audit.get("judge"):
+        judge_audit = audit
+
+    fix_hint = str(audit.get("fix_hint") or "").strip()
+    if not fix_hint:
+        fix_hint = str((judge_audit.get("parsed") or {}).get("fix_hint") or "").strip()
+
+    passed = judge_audit.get("passed")
+    if passed is None:
+        passed = audit.get("passed")
+    enabled = judge_audit.get(
+        "enabled", audit.get("enabled", domain_dna_judge_enabled(domain))
+    )
+    issues = list(audit.get("issues") or judge_audit.get("issues") or [])
+    contract_summary = {
+        k: contract.get(k)
+        for k in (
+            "normalized_question", "intent", "user_wants", "question_type",
+            "domain", "bucket", "answer_style", "answer_approach",
+        )
+        if contract.get(k)
+    } if isinstance(contract, dict) else {}
+
+    return {
+        "applies": True,
+        "enabled": bool(enabled),
+        "passed": passed if passed is not None else (None if not enabled else True),
+        "issues": issues,
+        "fix_hint": fix_hint,
+        "contract": contract_summary or audit.get("contract") or {},
+        "judge_version": judge_audit.get("judge") or f"{domain}_dna_v1",
+        "contract_keys": list((audit.get("contract") or contract_summary or {}).keys()),
+        "skipped": judge_audit.get("skipped"),
+        "error": judge_audit.get("error"),
+        "domain": domain,
+        "mode": "observability_display",
+        "note": (
+            "Observability only — answer is never blocked by DNA Judge. "
+            f"Source: {'stored' if stored_audit else 'recomputed'}"
+        ),
+    }
+
+
+# domain_dna_judge_enabled defined below (used at call-time by display builder).
 
 
 def domain_dna_judge_enabled(domain: str) -> bool:

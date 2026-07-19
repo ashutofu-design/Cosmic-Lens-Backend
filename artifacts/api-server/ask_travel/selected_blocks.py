@@ -126,9 +126,17 @@ _FOCUS_WANT: dict[str, dict[str, Any]] = {
 
 
 def _detect_focus(question: str, routing_label: str = "") -> str:
+    # DNA routing label is boss; "sab chahiye" widens only when DNA gave no focus.
     label = (routing_label or "").strip().lower()
     if label in _FOCUS_WANT:
         return label
+    try:
+        from ask_selected_blocks_common import question_wants_everything
+
+        if question_wants_everything(question or ""):
+            return "general_travel"
+    except Exception:
+        pass
     try:
         from ask_travel.classifier import classify_travel_archetype
 
@@ -338,16 +346,26 @@ def build_travel_selected_blocks(
     focus, focus_label, blocks = question_relevant_blocks_from_execution(
         question or "", pack, routing_label=label,
     )
+    _boost_applied: list[str] = []
+    try:
+        from ask_selected_blocks_common import dna_boost_selected_blocks
+
+        blocks, _boost_applied = dna_boost_selected_blocks(
+            question or "", blocks, meta=meta, pack=pack,
+        )
+    except Exception:
+        pass
     priority_text = format_priority_facts_for_llm(blocks, limit=5)
     used_planets = [
         n for n in _PLANET_NAMES
         if re.search(rf"(?i)\b{re.escape(n)}\b", answer or "")
     ]
-    return {
+    audit = {
         "applies": True,
         "source": "travel_engine_execution",
         "focus": focus,
         "focus_label": focus_label,
+        "known_focuses": sorted(_FOCUS_WANT.keys()),
         "expected_blocks": blocks,
         "available_blocks": blocks,
         "priority_facts_for_llm": priority_text,
@@ -356,3 +374,25 @@ def build_travel_selected_blocks(
             f"Question focus={focus}: top facts are for LLM priority reading (not full EE dump)."
         ),
     }
+    try:
+        from ask_selected_blocks_common import (
+            coverage_check_selected_blocks,
+            coverage_note_lines,
+        )
+
+        coverage = coverage_check_selected_blocks(
+            question or "",
+            meta=meta,
+            audit=audit,
+            execution=pack,
+            general_focus="general_travel",
+        )
+        audit["coverage"] = coverage
+        from ask_selected_blocks_common import dna_boost_note_lines
+
+        audit["overlap_notes"] = (
+            coverage_note_lines(coverage) + dna_boost_note_lines(_boost_applied)
+        )
+    except Exception:
+        pass
+    return audit

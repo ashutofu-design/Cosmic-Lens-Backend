@@ -122,6 +122,14 @@ def classify_health_question_focus(question: str) -> str:
         return "respiratory"
     if _CHRONIC_RX.search(q):
         return "chronic"
+    try:
+        from ask_selected_blocks_common import question_wants_everything
+
+        # No specific topic matched — "sab / full health study" → whole pack.
+        if question_wants_everything(q):
+            return "general_health"
+    except Exception:
+        pass
     if _OVERVIEW_RX.search(q):
         return "overview"
     if re.search(r"(?ix)\b(kyun|kyon|why|kaise|how)\b", q):
@@ -508,6 +516,15 @@ def build_health_selected_blocks(
     meta = meta if isinstance(meta, dict) else {}
     pack = execution if isinstance(execution, dict) and execution else _execution_from_meta(meta)
     focus, focus_label, relevant = question_relevant_blocks_from_execution(question, pack)
+    _boost_applied: list[str] = []
+    try:
+        from ask_selected_blocks_common import dna_boost_selected_blocks
+
+        relevant, _boost_applied = dna_boost_selected_blocks(
+            question or "", relevant, meta=meta, pack=pack,
+        )
+    except Exception:
+        pass
     used = used_blocks_from_execution(
         answer, pack, relevant_ids={b["id"] for b in relevant},
     )
@@ -527,11 +544,12 @@ def build_health_selected_blocks(
     if not relevant:
         notes.append("No matching question-relevant keys found inside Engine Execution.")
 
-    return {
+    audit = {
         "applies": True,
         "source": "health_engine_execution",
         "focus": focus,
         "focus_label": focus_label,
+        "known_focuses": sorted(_FOCUS_WANT.keys()),
         "available_blocks": relevant,
         "expected_blocks": relevant,
         "used_in_answer": used,
@@ -543,3 +561,25 @@ def build_health_selected_blocks(
         "has_d9": bool(_chart_ok(pack.get("d9"))),
         "question": (question or "").strip()[:200],
     }
+    try:
+        from ask_selected_blocks_common import (
+            coverage_check_selected_blocks,
+            coverage_note_lines,
+        )
+
+        coverage = coverage_check_selected_blocks(
+            question or "",
+            meta=meta,
+            audit=audit,
+            execution=pack,
+            general_focus="general_health",
+        )
+        audit["coverage"] = coverage
+        from ask_selected_blocks_common import dna_boost_note_lines
+
+        audit["overlap_notes"] = (
+            coverage_note_lines(coverage) + dna_boost_note_lines(_boost_applied) + notes
+        )
+    except Exception:
+        pass
+    return audit

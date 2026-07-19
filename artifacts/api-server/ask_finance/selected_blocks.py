@@ -134,9 +134,18 @@ _FOCUS_WANT: dict[str, dict[str, Any]] = {
 
 
 def _detect_focus(question: str, routing_label: str = "") -> str:
+    # DNA label is boss — it already scoped the question. Only when DNA gave no
+    # specific focus does "sab chahiye / full study" widen to the general pack.
     label = (routing_label or "").strip().lower()
     if label in _FOCUS_WANT:
         return label
+    try:
+        from ask_selected_blocks_common import question_wants_everything
+
+        if question_wants_everything(question or ""):
+            return "general_finance"
+    except Exception:
+        pass
     try:
         from ask_finance.classifier import classify_finance_archetype
 
@@ -277,6 +286,19 @@ def question_relevant_blocks_from_execution(
                 role="weak" if fk in ("leak_active", "debt_burden_high") else "support",
             )
 
+    # Real dasha rows when the user asked for dasha — LLM cites THIS, never invents.
+    try:
+        from ask_selected_blocks_common import dasha_blocks_from_pack, question_wants_dasha
+
+        if question_wants_dasha(question or ""):
+            out.extend(
+                dasha_blocks_from_pack(
+                    execution.get("dasha_timing_compact"), focus=focus,
+                )
+            )
+    except Exception:
+        pass
+
     out.sort(key=lambda b: (-int(b.get("priority") or 0), str(b.get("id") or "")))
     for i, block in enumerate(out, start=1):
         block["rank"] = i
@@ -325,16 +347,34 @@ def build_finance_selected_blocks(
     focus, focus_label, blocks = question_relevant_blocks_from_execution(
         question or "", pack, routing_label=label,
     )
-    priority_text = format_priority_facts_for_llm(blocks, limit=5)
+    _boost_applied: list[str] = []
+    try:
+        from ask_selected_blocks_common import dna_boost_selected_blocks
+
+        blocks, _boost_applied = dna_boost_selected_blocks(
+            question or "", blocks, meta=meta, pack=pack,
+        )
+    except Exception:
+        pass
+    _limit = 5
+    try:
+        from ask_selected_blocks_common import question_wants_everything
+
+        if question_wants_everything(question or "", meta):
+            _limit = 9  # full-study ask → serve more facts, LLM explains all of them
+    except Exception:
+        pass
+    priority_text = format_priority_facts_for_llm(blocks, limit=_limit)
     used_planets = [
         n for n in _PLANET_NAMES
         if re.search(rf"(?i)\b{re.escape(n)}\b", answer or "")
     ]
-    return {
+    audit = {
         "applies": True,
         "source": "finance_engine_execution",
         "focus": focus,
         "focus_label": focus_label,
+        "known_focuses": sorted(_FOCUS_WANT.keys()),
         "expected_blocks": blocks,
         "available_blocks": blocks,
         "priority_facts_for_llm": priority_text,
@@ -343,3 +383,25 @@ def build_finance_selected_blocks(
             f"Question focus={focus}: top facts are for LLM priority reading (not full EE dump)."
         ),
     }
+    try:
+        from ask_selected_blocks_common import (
+            coverage_check_selected_blocks,
+            coverage_note_lines,
+        )
+
+        coverage = coverage_check_selected_blocks(
+            question or "",
+            meta=meta,
+            audit=audit,
+            execution=pack,
+            general_focus="general_finance",
+        )
+        audit["coverage"] = coverage
+        from ask_selected_blocks_common import dna_boost_note_lines
+
+        audit["overlap_notes"] = (
+            coverage_note_lines(coverage) + dna_boost_note_lines(_boost_applied)
+        )
+    except Exception:
+        pass
+    return audit

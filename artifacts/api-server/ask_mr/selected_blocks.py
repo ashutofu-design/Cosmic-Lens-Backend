@@ -167,9 +167,17 @@ def classify_relationship_question_focus(
     *,
     routing_label: str = "",
 ) -> str:
+    # DNA routing label is boss; "sab chahiye" widens only when DNA gave no focus.
     label = (routing_label or "").strip().lower()
     if label in _FOCUS_WANT:
         return label
+    try:
+        from ask_selected_blocks_common import question_wants_everything
+
+        if question_wants_everything(question or ""):
+            return "general_mr"
+    except Exception:
+        pass
     q = (question or "").strip()
     if not q:
         return "general_mr"
@@ -561,6 +569,15 @@ def build_relationship_selected_blocks(
     focus, focus_label, relevant = question_relevant_blocks_from_execution(
         question, pack, routing_label=routing,
     )
+    _boost_applied: list[str] = []
+    try:
+        from ask_selected_blocks_common import dna_boost_selected_blocks
+
+        relevant, _boost_applied = dna_boost_selected_blocks(
+            question or "", relevant, meta=meta, pack=pack,
+        )
+    except Exception:
+        pass
     used = used_blocks_from_execution(
         answer, pack, relevant_ids={b["id"] for b in relevant},
     )
@@ -580,12 +597,13 @@ def build_relationship_selected_blocks(
     if not relevant:
         notes.append("No matching question-relevant keys found inside Engine Execution.")
 
-    return {
+    audit = {
         "applies": True,
         "source": "relationship_engine_execution",
         "focus": focus,
         "focus_label": focus_label,
         "routing_label": routing,
+        "known_focuses": sorted(_FOCUS_WANT.keys()),
         "available_blocks": relevant,
         "expected_blocks": relevant,
         "used_in_answer": used,
@@ -597,3 +615,25 @@ def build_relationship_selected_blocks(
         "has_d9": bool(_chart_ok(pack.get("d9"))),
         "question": (question or "").strip()[:200],
     }
+    try:
+        from ask_selected_blocks_common import (
+            coverage_check_selected_blocks,
+            coverage_note_lines,
+        )
+
+        coverage = coverage_check_selected_blocks(
+            question or "",
+            meta=meta,
+            audit=audit,
+            execution=pack,
+            general_focus="general_mr",
+        )
+        audit["coverage"] = coverage
+        from ask_selected_blocks_common import dna_boost_note_lines
+
+        audit["overlap_notes"] = (
+            coverage_note_lines(coverage) + dna_boost_note_lines(_boost_applied) + notes
+        )
+    except Exception:
+        pass
+    return audit

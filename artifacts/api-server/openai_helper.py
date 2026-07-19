@@ -4481,37 +4481,73 @@ def _raw_passthrough_max_tokens(
     is_finance: bool,
     dcr_love_meta: object,
     is_sensitive: bool,
+    reply_lang: str = "",
+    question: str = "",
 ) -> int:
-    """Completion budget — engine narrators need 480+ tokens for 3-section answers."""
+    """Completion budget — engine narrators need enough tokens to finish sentences.
+
+    Devanagari (hi) + mantra/upay answers burn ~1.5–2× English tokens. A 100-token
+    cap was cutting answers mid-mantra (e.g. \"ॐ ग्रां ग्रीं ग्रौं सः गुरवे\").
+    """
     try:
         from ask_batch_runner import is_batch_concise_mode
 
         if is_batch_concise_mode():
-            return 120
+            return 180  # still finish a short Hindi sentence; was 120
     except Exception:
         pass
     env = (os.environ.get("RAW_PASSTHROUGH_MAX_TOKENS") or "").strip()
     if env:
         return int(env)
+
+    lang = (reply_lang or "").strip().lower()
+    hi_boost = 1 if lang in ("hi", "hn", "hinglish", "hi-in") else 0
+    q = (question or "").strip()
+    wants_remedy = bool(
+        q
+        and re.search(
+            r"(?ix)\b(upay|upaay|उपाय|mantra|मंत्र|remedy|totka|जप|jap)\b",
+            q,
+        )
+    )
+
+    def _hi(n: int) -> int:
+        # Hindi/Hinglish + remedy mantra needs headroom so the last sentence finishes.
+        out = n + (120 if hi_boost else 0) + (80 if wants_remedy else 0)
+        return min(out, 750)
+
     try:
         from ask_cosmo_narrator import is_cosmo_engine_slice
 
         if isinstance(dcr_love_meta, dict) and is_cosmo_engine_slice(
             str(dcr_love_meta.get("slice") or "")
         ):
-            return 650 if wants_explain else 480
+            return _hi(650 if wants_explain else 480)
     except Exception:
         pass
+
+    # ANY domain engine slice (education/remedy/gap/vehicle/general_chart/...) —
+    # never fall through to the old 100-token trap that mid-cut Hindi answers.
+    if isinstance(dcr_love_meta, dict):
+        slice_id = str(dcr_love_meta.get("slice") or "")
+        if (
+            slice_id.endswith("_engine_v1")
+            or dcr_love_meta.get("narrator_mode") == "engine_facts_only"
+            or dcr_love_meta.get("topic")
+            or dcr_love_meta.get("unified_execution")
+        ):
+            return _hi(650 if wants_explain else 420)
+
     if wants_explain:
-        return 480
+        return _hi(480)
     if is_timing:
-        return 140
+        return _hi(220)
     if is_decision:
-        return 180
+        return _hi(220)
     if is_finance:
-        return 160
+        return _hi(220)
     if is_sensitive:
-        return 120
+        return _hi(180)
     if isinstance(dcr_love_meta, dict) and (
         dcr_love_meta.get("slice") == "partner_nature_minimal"
         or (
@@ -4519,10 +4555,38 @@ def _raw_passthrough_max_tokens(
             and dcr_love_meta.get("archetype") == "partner_nature"
         )
     ):
-        return 180
+        return _hi(220)
     if dcr_love_meta:
-        return 100
-    return 90
+        return _hi(280)
+    return _hi(220)
+
+
+def _repair_truncated_answer(text: str) -> str:
+    """If the model was cut mid-sentence/mantra, end on the last complete sentence.
+
+    Prefer keeping a finished answer over a dangling quote like
+    'ॐ ग्रां ग्रीं ग्रौं सः गुरवे' with no closing.
+    """
+    t = (text or "").strip()
+    if not t:
+        return t
+    if t[-1] in ".!?।":
+        return t
+    # Drop dangling open quote / incomplete mantra fragment.
+    for qch in ('"', "“", "'", "‘"):
+        if t.count(qch) % 2 == 1:
+            idx = t.rfind(qch)
+            if idx > 40:
+                t = t[:idx].rstrip(" ,;—-:(")
+                break
+    if t and t[-1] in ".!?।":
+        return t
+    for sep in ("।", ". ", "! ", "? ", "\n"):
+        idx = t.rfind(sep)
+        if idx > max(40, len(t) // 3):
+            end = idx + (1 if sep.strip() else 0)
+            return t[:end].strip()
+    return t.rstrip(" ,;—-\"'“”‘’") + ("।" if any("\u0900" <= c <= "\u097F" for c in t) else ".")
 
 
 def _enforce_partner_nature_paragraphs(
@@ -10729,6 +10793,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_finance=is_finance,
         dcr_love_meta=dcr_love_meta,
         is_sensitive=is_sensitive,
+        reply_lang=str(lang or ""),
+        question=question or "",
     )
     if _direct_llm_bypass or _chart_slice_type == "llm_no_engine_v1":
         _max_tok = 650 if wants_explain else 480
@@ -11513,6 +11579,21 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 max_tokens=_max_tok,
             )
             _llm_raw_text = (resp.choices[0].message.content or "").strip()
+            try:
+                _fr = str(getattr(resp.choices[0], "finish_reason", "") or "")
+                if _fr == "length":
+                    print(
+                        f"[raw_passthrough] LLM_TRUNCATED_BY_MAX_TOKENS "
+                        f"max_tokens={_max_tok} chars={len(_llm_raw_text)} "
+                        f"q={(question or '')[:50]!r}",
+                        flush=True,
+                    )
+                    _llm_raw_text = _repair_truncated_answer(_llm_raw_text)
+                elif _llm_raw_text and _llm_raw_text[-1] not in ".!?।\"'”’":
+                    # Safety: mid-cut without finish_reason=length (some providers).
+                    _llm_raw_text = _repair_truncated_answer(_llm_raw_text)
+            except Exception:
+                pass
     except Exception as exc:
         try:
             print(f"[raw_passthrough] OpenAI call failed: {exc}", flush=True)

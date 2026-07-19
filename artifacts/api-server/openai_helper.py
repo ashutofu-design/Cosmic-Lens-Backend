@@ -4473,6 +4473,102 @@ _DECISION_ASK_RE = _re_explain_gate.compile(
 )
 
 
+def _resolve_ask_word_budget(
+    *,
+    wants_explain: bool = False,
+    dcr_love_meta: object = None,
+    llm_intent: object = None,
+    question: str = "",
+) -> int:
+    """Target word count the narrator must fit inside (complete sentences only)."""
+    # DNA answer_style is the primary length contract.
+    style = ""
+    try:
+        if isinstance(llm_intent, dict):
+            dna = llm_intent.get("question_dna")
+            items = dna.get("questions") if isinstance(dna, dict) else None
+            if isinstance(items, list) and items and isinstance(items[0], dict):
+                style = str(items[0].get("answer_style") or "").strip().lower()
+            if not style:
+                style = str(llm_intent.get("answer_style") or "").strip().lower()
+    except Exception:
+        style = ""
+    style = style.replace(" ", "_").replace("-", "_")
+    if style in ("short_2_3_lines", "brief", "one_liner"):
+        base = 55
+    elif style in ("detailed_explain", "detailed", "long"):
+        base = 140
+    elif style in ("short_paragraph",):
+        base = 95
+    else:
+        base = 85
+    if wants_explain:
+        base = max(base, 120)
+    if isinstance(dcr_love_meta, dict):
+        try:
+            wb = int(dcr_love_meta.get("word_budget") or 0)
+            if wb > 0:
+                base = max(base, min(wb + 25, 160))  # headroom past engine budget
+        except (TypeError, ValueError):
+            pass
+    q = (question or "").strip()
+    if q and re.search(
+        r"(?ix)\b(upay|upaay|उपाय|mantra|मंत्र|remedy|totka|जप|jap)\b", q
+    ):
+        base = max(base, 110)  # mantra lines need room
+    return max(45, min(base, 180))
+
+
+def _tokens_for_word_budget(word_budget: int, *, reply_lang: str = "") -> int:
+    """Token ceiling that always exceeds the word budget (never mid-cut).
+
+    Devanagari ~2–3 tokens/word; English ~1.3. Give ≥2.8× headroom so the
+    model finishes punctuation even if it slightly overshoots the word target.
+    """
+    lang = (reply_lang or "").strip().lower()
+    mult = 3.2 if lang in ("hi", "hn", "hinglish", "hi-in") else 2.4
+    tok = int(word_budget * mult) + 80
+    return max(280, min(tok, 900))
+
+
+def _complete_answer_lock(word_budget: int, *, reply_lang: str = "") -> str:
+    """Prompt lock: LLM must stay inside budget AND finish every sentence."""
+    lang = (reply_lang or "").strip().lower()
+    end = "।" if lang in ("hi", "hi-in") else "."
+    return (
+        f"\n\n=== COMPLETE ANSWER LOCK (never mid-cut) ===\n"
+        f"WORD BUDGET: max {word_budget} words. Plan the whole answer inside this budget.\n"
+        f"RULES:\n"
+        f"1. Prefer a SHORT COMPLETE answer over a LONG CUT answer.\n"
+        f"2. Every sentence must be finished — last char MUST be {end!r} or ? or !\n"
+        f"3. NEVER stop mid-mantra / mid-quote / mid-word. If budget is tight, "
+        f"skip the mantra OR give a short name only (e.g. 'Budh mantra 108×'), "
+        f"but do NOT leave an unfinished string.\n"
+        f"4. Cover what the user asked; drop fluff before dropping completeness.\n"
+    )
+
+
+def _answer_looks_incomplete(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return True
+    if t[-1] in ".!?।":
+        return False
+    # Closing quote after a finished sentence is OK: ...gurave।"
+    if t[-1] in "\"'”’" and len(t) > 1 and t[-2] in ".!?।\"'”’":
+        # walk back past trailing quotes
+        i = len(t) - 1
+        while i >= 0 and t[i] in "\"'”’":
+            i -= 1
+        if i >= 0 and t[i] in ".!?।":
+            return False
+    if t.count('"') % 2 == 1 or t.count("“") != t.count("”"):
+        return True
+    if t[-1] in ",;:—-(":
+        return True
+    return True
+
+
 def _raw_passthrough_max_tokens(
     *,
     wants_explain: bool,
@@ -4483,51 +4579,40 @@ def _raw_passthrough_max_tokens(
     is_sensitive: bool,
     reply_lang: str = "",
     question: str = "",
+    word_budget: int | None = None,
 ) -> int:
-    """Completion budget — engine narrators need enough tokens to finish sentences.
-
-    Devanagari (hi) + mantra/upay answers burn ~1.5–2× English tokens. A 100-token
-    cap was cutting answers mid-mantra (e.g. \"ॐ ग्रां ग्रीं ग्रौं सः गुरवे\").
-    """
+    """Completion budget — always ≥ word-budget headroom so answers never mid-cut."""
     try:
         from ask_batch_runner import is_batch_concise_mode
 
         if is_batch_concise_mode():
-            return 180  # still finish a short Hindi sentence; was 120
+            return max(220, _tokens_for_word_budget(60, reply_lang=reply_lang))
     except Exception:
         pass
     env = (os.environ.get("RAW_PASSTHROUGH_MAX_TOKENS") or "").strip()
     if env:
         return int(env)
 
-    lang = (reply_lang or "").strip().lower()
-    hi_boost = 1 if lang in ("hi", "hn", "hinglish", "hi-in") else 0
-    q = (question or "").strip()
-    wants_remedy = bool(
-        q
-        and re.search(
-            r"(?ix)\b(upay|upaay|उपाय|mantra|मंत्र|remedy|totka|जप|jap)\b",
-            q,
+    wb = int(word_budget or 0)
+    if wb <= 0:
+        wb = _resolve_ask_word_budget(
+            wants_explain=wants_explain,
+            dcr_love_meta=dcr_love_meta,
+            question=question or "",
         )
-    )
+    floor = _tokens_for_word_budget(wb, reply_lang=reply_lang)
 
-    def _hi(n: int) -> int:
-        # Hindi/Hinglish + remedy mantra needs headroom so the last sentence finishes.
-        out = n + (120 if hi_boost else 0) + (80 if wants_remedy else 0)
-        return min(out, 750)
-
+    # Legacy path floors (kept as minimums; word-budget headroom wins).
+    legacy = 280
     try:
         from ask_cosmo_narrator import is_cosmo_engine_slice
 
         if isinstance(dcr_love_meta, dict) and is_cosmo_engine_slice(
             str(dcr_love_meta.get("slice") or "")
         ):
-            return _hi(650 if wants_explain else 480)
+            legacy = 650 if wants_explain else 480
     except Exception:
         pass
-
-    # ANY domain engine slice (education/remedy/gap/vehicle/general_chart/...) —
-    # never fall through to the old 100-token trap that mid-cut Hindi answers.
     if isinstance(dcr_love_meta, dict):
         slice_id = str(dcr_love_meta.get("slice") or "")
         if (
@@ -4536,29 +4621,15 @@ def _raw_passthrough_max_tokens(
             or dcr_love_meta.get("topic")
             or dcr_love_meta.get("unified_execution")
         ):
-            return _hi(650 if wants_explain else 420)
+            legacy = max(legacy, 650 if wants_explain else 420)
+    elif wants_explain:
+        legacy = 480
+    elif is_timing or is_decision or is_finance:
+        legacy = 280
+    elif is_sensitive:
+        legacy = 220
 
-    if wants_explain:
-        return _hi(480)
-    if is_timing:
-        return _hi(220)
-    if is_decision:
-        return _hi(220)
-    if is_finance:
-        return _hi(220)
-    if is_sensitive:
-        return _hi(180)
-    if isinstance(dcr_love_meta, dict) and (
-        dcr_love_meta.get("slice") == "partner_nature_minimal"
-        or (
-            dcr_love_meta.get("slice") == "mr_engine_v1"
-            and dcr_love_meta.get("archetype") == "partner_nature"
-        )
-    ):
-        return _hi(220)
-    if dcr_love_meta:
-        return _hi(280)
-    return _hi(220)
+    return max(floor, legacy)
 
 
 def _repair_truncated_answer(text: str) -> str:
@@ -10655,6 +10726,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if _dna_narrator_rules:
         extra_rules += _dna_narrator_rules
 
+    # Word budget + complete-answer lock — LLM plans inside budget; never mid-cut.
+    _ask_word_budget = _resolve_ask_word_budget(
+        wants_explain=wants_explain,
+        dcr_love_meta=dcr_love_meta,
+        llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else _llm_intent,
+        question=question or "",
+    )
+    extra_rules += _complete_answer_lock(_ask_word_budget, reply_lang=str(eff_lang or lang or ""))
+
     # Open relationship question with no dedicated engine — narrator reads the
     # full D1 chart facts and answers the exact question itself.
     _open_chart_qa = False
@@ -10783,6 +10863,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     if _dna_narrator_rules and _mr_engine_narrator and _dna_narrator_rules not in system_prompt:
         system_prompt += _dna_narrator_rules
+    # Always attach complete-answer lock to system prompt (MR narrator path
+    # may skip extra_rules; universal path already has it via extra_rules).
+    try:
+        _cal = _complete_answer_lock(
+            _ask_word_budget, reply_lang=str(eff_lang or lang or "")
+        )
+        if _cal and _cal not in system_prompt:
+            system_prompt += _cal
+    except Exception:
+        pass
 
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
@@ -10795,9 +10885,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_sensitive=is_sensitive,
         reply_lang=str(lang or ""),
         question=question or "",
+        word_budget=_ask_word_budget,
     )
     if _direct_llm_bypass or _chart_slice_type == "llm_no_engine_v1":
-        _max_tok = 650 if wants_explain else 480
+        _max_tok = max(
+            _max_tok,
+            _tokens_for_word_budget(
+                max(_ask_word_budget, 120 if wants_explain else 90),
+                reply_lang=str(lang or ""),
+            ),
+        )
 
     # ── Last-chance MR engine when love/relationship Q understood but engine skipped ─
     try:
@@ -11581,17 +11678,48 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _llm_raw_text = (resp.choices[0].message.content or "").strip()
             try:
                 _fr = str(getattr(resp.choices[0], "finish_reason", "") or "")
-                if _fr == "length":
+                _incomplete = (_fr == "length") or _answer_looks_incomplete(_llm_raw_text)
+                if _incomplete and _llm_raw_text:
                     print(
-                        f"[raw_passthrough] LLM_TRUNCATED_BY_MAX_TOKENS "
-                        f"max_tokens={_max_tok} chars={len(_llm_raw_text)} "
+                        f"[raw_passthrough] LLM_INCOMPLETE "
+                        f"finish_reason={_fr!r} max_tokens={_max_tok} "
+                        f"chars={len(_llm_raw_text)} — retrying complete rewrite "
                         f"q={(question or '')[:50]!r}",
                         flush=True,
                     )
-                    _llm_raw_text = _repair_truncated_answer(_llm_raw_text)
-                elif _llm_raw_text and _llm_raw_text[-1] not in ".!?।\"'”’":
-                    # Safety: mid-cut without finish_reason=length (some providers).
-                    _llm_raw_text = _repair_truncated_answer(_llm_raw_text)
+                    _retry_tok = min(_max_tok + 200, 900)
+                    _retry_msgs = list(_llm_messages) + [
+                        {"role": "assistant", "content": _llm_raw_text},
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Your previous reply was cut mid-sentence / mid-mantra. "
+                                f"Rewrite the FULL answer in at most {_ask_word_budget} words. "
+                                f"Every sentence must be complete. End with a full stop (। or .). "
+                                f"Never stop mid-quote or mid-mantra — if budget is tight, "
+                                f"omit the long mantra and keep a short remedy name only."
+                            ),
+                        },
+                    ]
+                    try:
+                        _resp2 = client.chat.completions.create(
+                            model=model,
+                            messages=_retry_msgs,
+                            max_tokens=_retry_tok,
+                        )
+                        _t2 = (_resp2.choices[0].message.content or "").strip()
+                        if _t2 and not _answer_looks_incomplete(_t2):
+                            _llm_raw_text = _t2
+                        elif _t2:
+                            _llm_raw_text = _repair_truncated_answer(_t2)
+                        else:
+                            _llm_raw_text = _repair_truncated_answer(_llm_raw_text)
+                    except Exception as _retry_exc:
+                        print(
+                            f"[raw_passthrough] complete-rewrite retry failed: {_retry_exc}",
+                            flush=True,
+                        )
+                        _llm_raw_text = _repair_truncated_answer(_llm_raw_text)
             except Exception:
                 pass
     except Exception as exc:

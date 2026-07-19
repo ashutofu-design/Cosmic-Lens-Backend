@@ -341,6 +341,30 @@ def apply_question_dna_to_routing(
         admin.get("mr_archetype") or admin.get("routed_archetype") or ""
     ).strip().lower()
 
+    # Follow-up domain re-check: a follow-up may switch domain (e.g. previous
+    # thread was relationship, new question is wealth). Purge archetypes that
+    # belong to OTHER domains so the engine resolver can't reuse the previous
+    # turn's engine — DNA domain is the single source of truth here.
+    _own_arch_key = _DOMAIN_ARCHETYPE_KEY.get(domain)
+    _stale_keys = [
+        k for k in set(_DOMAIN_ARCHETYPE_KEY.values())
+        if k != _own_arch_key and admin.get(k)
+    ]
+    if _stale_keys:
+        for k in _stale_keys:
+            admin.pop(k, None)
+            if isinstance(llm_intent, dict):
+                llm_intent.pop(k, None)
+        if admin.get("routed_archetype"):
+            admin["routed_archetype"] = None
+        # Re-set below when the new domain resolves an archetype.
+        admin.pop("dna_engine_archetype", None)
+        print(
+            f"[question_dna] FOLLOWUP_DOMAIN_SWITCH purge={_stale_keys} "
+            f"new_domain={domain} q={(question or '')[:72]!r}",
+            flush=True,
+        )
+
     admin["domain"] = domain
     admin["routed_domain"] = domain
     admin["bucket"] = bucket
@@ -873,7 +897,8 @@ def build_question_dna_narrator_rules(
         )
     lines.append(
         "BINDING: Final answer MUST match Answer Style length AND follow LLM Answer Plan "
-        "structure. Do NOT use a longer or different format than Answer Style specifies."
+        "structure. Prefer a SHORT COMPLETE answer over a LONG CUT answer — never stop "
+        "mid-sentence or mid-mantra; last character must be । or . or ?"
     )
     return "\n".join(lines) + "\n"
 

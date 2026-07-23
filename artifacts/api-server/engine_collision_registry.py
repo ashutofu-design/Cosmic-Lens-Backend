@@ -8,6 +8,7 @@ import re
 DOMAIN_PRIMARY_ENGINE: dict[str, str] = {
     "love": "mr",
     "marriage": "mr",
+    "relationship": "mr",  # alias — prefer normalize to love upstream
     "health": "health",
     "career": "career",
     "finance": "finance",
@@ -42,6 +43,7 @@ DOMAIN_PRIMARY_ENGINE: dict[str, str] = {
 DOMAIN_MUTEX_CLEAR: dict[str, frozenset[str]] = {
     "love": frozenset({"health", "career", "finance", "education", "property", "vehicle", "travel", "litigation", "luck", "network", "gap"}),
     "marriage": frozenset({"health", "career", "finance", "education", "property", "vehicle", "travel", "litigation", "luck", "network", "gap"}),
+    "relationship": frozenset({"health", "career", "finance", "education", "property", "vehicle", "travel", "litigation", "luck", "network", "gap"}),
     "health": frozenset({"mr", "career", "finance", "education", "property", "vehicle", "travel", "litigation", "luck", "network", "gap"}),
     "career": frozenset({"mr", "health", "children", "property", "vehicle", "travel", "litigation", "luck", "network", "gap"}),
     "finance": frozenset({"mr", "health", "career", "education", "children", "vehicle", "travel", "litigation", "luck", "network", "gap"}),

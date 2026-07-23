@@ -38,8 +38,8 @@ _DOMAIN_ENGINE_KEY: dict[str, str] = {
     "litigation": "litigation",
     "vehicle": "vehicle",
     "spiritual": "gap",
-    "remedy": "mr",
-    "general": "mr",
+    "remedy": "gap",
+    # general → no specialist engine (chart / direct LLM)
 }
 
 _TIMEOUT_S = 16
@@ -69,6 +69,8 @@ turn_type / effective_question (decide BEFORE branch):
 - followup = continues Recent chat (e.g. "aur detail", "exact month?", "kaise bataya?", "uske baare me", short "kab?" after a prior topic).
   effective_question = rewrite as ONE clear standalone question using prior user topic + current message.
   Example: prior "meri shaadi kab?" + current "exact month?" → "Meri shaadi kab hogi — exact month batao".
+  CRITICAL on followup: KEEP the SAME domain + archetype theme as the prior user astrology question
+  (do NOT switch love→career or health→finance). History lines may include domain=/bucket= hints — honor them.
 - wants_explain=true ONLY if user asks how/why the previous answer was decided ("kaise bataya", "kya check kiya").
   Then effective_question = the prior astrology question being explained.
 
@@ -93,7 +95,11 @@ Current user message:
 
 
 def format_history_for_understand(history: Any, *, max_turns: int = 6) -> str:
-    """Compact recent chat for Understand — empty string if none."""
+    """Compact recent chat for Understand — empty string if none.
+
+    Includes domain/bucket when prior turns attached them so follow-ups
+    keep the same specialist engine.
+    """
     if not isinstance(history, (list, tuple)) or not history:
         return "(none)"
     lines: list[str] = []
@@ -111,7 +117,15 @@ def format_history_for_understand(history: Any, *, max_turns: int = 6) -> str:
         if not text:
             continue
         text = re.sub(r"\s+", " ", text)[:220]
-        lines.append(f"{who}: {text}")
+        meta_bits: list[str] = []
+        for key in ("domain", "bucket", "topic", "archetype", "subject"):
+            val = item.get(key)
+            if val not in (None, ""):
+                meta_bits.append(f"{key}={val}")
+        if meta_bits:
+            lines.append(f"{who}[{','.join(meta_bits)}]: {text}")
+        else:
+            lines.append(f"{who}: {text}")
     return "\n".join(lines) if lines else "(none)"
 
 
@@ -135,8 +149,9 @@ def normalize_branch(raw: Any) -> str:
 
 
 def domain_to_engine_key(domain: str) -> str:
+    """Return static engine key, or '' when no specialist engine (general/chart)."""
     d = _normalize_domain(domain)
-    return _DOMAIN_ENGINE_KEY.get(d, "mr")
+    return _DOMAIN_ENGINE_KEY.get(d, "")
 
 
 def phase2_engine_static_flags(u: dict[str, Any] | None) -> dict[str, bool]:
@@ -152,8 +167,6 @@ def phase2_engine_static_flags(u: dict[str, Any] | None) -> dict[str, bool]:
     eng = domain_to_engine_key(str(src.get("domain") or "general"))
     if eng in flags:
         flags[eng] = True
-    else:
-        flags["mr"] = True
     return flags
 
 
@@ -205,6 +218,7 @@ def _normalize_domain(raw: Any) -> str:
         "sehat": "health",
         "shaadi": "marriage",
         "pyaar": "love",
+        "relationship": "love",  # catalog + MR flag use love
         "self": "general",
         "family": "general",
         "partner": "love",
@@ -313,11 +327,18 @@ def normalize_understand(data: dict[str, Any] | None, *, question: str = "") -> 
 
 
 def understand_to_question_dna(u: dict[str, Any], *, question: str = "") -> dict[str, Any]:
-    """Synthetic DNA payload so existing DNA fast-path routing keeps working."""
-    item = {
+    """Synthetic DNA payload so existing DNA fast-path routing keeps working.
+
+    Always coerce free-form Phase-2 archetype onto the DNA catalog so
+    engine routing never sees partner_loyalty / marriage_timing invents.
+    """
+    domain = _normalize_domain(u.get("domain") or "general")
+    # relationship already aliased in normalize_understand → love
+    raw_bucket = str(u.get("archetype") or u.get("bucket") or "general")
+    item_raw = {
         "normalized_question": (question or "").strip()[:500],
-        "domain": u.get("domain") or "general",
-        "bucket": u.get("archetype") or u.get("bucket") or "general",
+        "domain": domain,
+        "bucket": raw_bucket,
         "intent": str(u.get("question_summary") or "")[:400],
         "subject": u.get("subject") or "unknown",
         "target": u.get("target") or "unknown",
@@ -333,12 +354,26 @@ def understand_to_question_dna(u: dict[str, Any], *, question: str = "") -> dict
         "understanding_confidence": float(u.get("confidence") or 0.7),
         "answer_style": "short_paragraph",
         "answer_approach": "phase2_understand",
-        "bucket_match_confidence": "high",
         "engine_archetype": u.get("archetype"),
         "turn_type": u.get("turn_type") or "new",
         "effective_question": str(u.get("effective_question") or question or "")[:500],
         "wants_explain": bool(u.get("wants_explain")),
     }
+    try:
+        from ask_question_dna import validate_question_dna_item
+
+        item = validate_question_dna_item(item_raw, original_question=question or "")
+        # Preserve Phase-2 follow-up metadata after catalog coerce.
+        item["turn_type"] = u.get("turn_type") or "new"
+        item["effective_question"] = str(u.get("effective_question") or question or "")[:500]
+        item["wants_explain"] = bool(u.get("wants_explain"))
+        item["is_followup"] = bool(u.get("is_followup") or u.get("turn_type") == "followup")
+    except Exception:
+        item = {
+            **item_raw,
+            "bucket_match_confidence": "medium",
+            "engine_archetype": raw_bucket,
+        }
     return {
         "questions": [item],
         "source": "understand_phase2",
@@ -352,9 +387,20 @@ def understand_to_question_dna(u: dict[str, Any], *, question: str = "") -> dict
 def understand_to_admin(u: dict[str, Any], *, question: str = "", question_raw: str = "") -> dict[str, Any]:
     """Admin intent dict consumed by raw_passthrough / master router."""
     dna = understand_to_question_dna(u, question=question)
+    item = (dna.get("questions") or [{}])[0] if isinstance(dna, dict) else {}
     summary = str(u.get("question_summary") or "").strip()
-    domain = str(u.get("domain") or "general")
-    archetype = str(u.get("archetype") or "general")
+    domain = str(item.get("domain") or u.get("domain") or "general")
+    archetype = str(
+        item.get("engine_archetype")
+        or item.get("bucket")
+        or u.get("archetype")
+        or "general"
+    )
+    # Keep u.archetype in sync with coerced catalog id for downstream flags.
+    u = dict(u)
+    u["domain"] = domain
+    u["archetype"] = archetype
+    u["bucket"] = str(item.get("bucket") or archetype)
     admin: dict[str, Any] = {
         "branch": u.get("branch"),
         "knowledge": bool(u.get("knowledge")),
@@ -374,9 +420,11 @@ def understand_to_admin(u: dict[str, Any], *, question: str = "", question_raw: 
         "question_dna": dna,
         "understand_phase2": u,
         "dna_routing_applied": True,
-        "subject": u.get("subject"),
-        "target": u.get("target"),
-        "confidence": float(u.get("confidence") or 0.7),
+        "dna_engine_archetype": archetype,
+        "bucket": str(item.get("bucket") or archetype),
+        "subject": item.get("subject") or u.get("subject"),
+        "target": item.get("target") or u.get("target"),
+        "confidence": float(item.get("confidence") or u.get("confidence") or 0.7),
         "turn_type": u.get("turn_type") or "new",
         "is_followup": bool(u.get("is_followup") or u.get("turn_type") == "followup"),
         "effective_question": str(u.get("effective_question") or question or ""),

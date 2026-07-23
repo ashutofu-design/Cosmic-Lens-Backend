@@ -111,6 +111,13 @@ LOVE_BUCKET_SUB_INTENTS: dict[str, tuple[str, ...]] = {
 # Legacy MR archetype ids → new DNA bucket (transition / LLM habit)
 LOVE_BUCKET_ALIASES: dict[str, str] = {
     "loyalty_trust": "trust_loyalty",
+    "partner_loyalty": "trust_loyalty",
+    "loyalty": "trust_loyalty",
+    "loyal": "trust_loyalty",
+    "dhoka": "trust_loyalty",
+    "cheat": "trust_loyalty",
+    "cheating": "trust_loyalty",
+    "betrayal": "trust_loyalty",
     "general_mr": "relationship_future",
     "secret_relationship": "third_person_infidelity",
     "emotional_attachment": "emotional_bonding",
@@ -129,7 +136,8 @@ LOVE_BUCKET_ALIASES: dict[str, str] = {
 
 # DNA bucket → MR engine archetype (for shadow routing / future wiring)
 LOVE_BUCKET_TO_MR_ARCHETYPE: dict[str, str] = {
-    "relationship_promise": "loyalty_trust",
+    # Promise / "will I find love" is NOT loyalty — use future outlook engine.
+    "relationship_promise": "relationship_future",
     "love_feelings": "emotional_attachment",
     "partner_nature": "partner_nature",
     "compatibility": "compatibility",

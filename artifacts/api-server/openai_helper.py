@@ -344,47 +344,188 @@ def _is_meet_life_partner_timing_question(question: str) -> bool:
     return partner
 
 
-def _marriage_timing_line(window: str, lang: str, *, meet_partner: bool) -> str:
-    """One-line answer; wording matches ask (meet partner vs marriage)."""
+def _marriage_ages_from_engine(engine_result: Any) -> tuple[int | None, int | None]:
+    """(user_age_now, predicted_marriage_age) from M17 / engine payload."""
+    if not isinstance(engine_result, dict):
+        return None, None
+
+    def _as_int(v: Any) -> int | None:
+        try:
+            if v is None or v == "":
+                return None
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    ua = _as_int((engine_result.get("step0") or {}).get("user_age"))
+    if ua is None:
+        ua = _as_int(engine_result.get("user_age"))
+    if ua is None:
+        ua = _as_int((engine_result.get("age_context") or {}).get("user_age"))
+    if ua is None:
+        ua = _as_int((engine_result.get("timing_eligibility") or {}).get("user_age"))
+
+    pred = _as_int((engine_result.get("step8") or {}).get("predicted_bcp_age"))
+    if pred is None:
+        pred = _as_int((engine_result.get("step8_prediction") or {}).get("predicted_bcp_age"))
+    if pred is None:
+        pred = _as_int(engine_result.get("predicted_bcp_age"))
+    if pred is None:
+        # BCP primary reference often equals predicted marriage age band.
+        pred = _as_int(
+            ((engine_result.get("step0a") or engine_result.get("step0") or {})
+             .get("dasha_scan_plan") or {})
+            .get("primary_reference_age")
+        )
+    return ua, pred
+
+
+def _marriage_timing_line(
+    window: str,
+    lang: str,
+    *,
+    meet_partner: bool,
+    user_age: int | None = None,
+    predicted_age: int | None = None,
+) -> str:
+    """One-line answer — always age-aware when age is known (not calendar-only)."""
     code = _norm_ask_lang(lang)
     w = (window or "").strip()
+    ua = user_age if isinstance(user_age, int) and user_age > 0 else None
+    pred = predicted_age if isinstance(predicted_age, int) and predicted_age > 0 else None
+    young = bool(ua is not None and ua < 21)
+
     if meet_partner:
         if code == "hi":
             w_hi = _localize_timing_window_label(w, "hi") if w else ""
-            return (
-                f"आपको जीवनसाथी {w_hi} के बीच मिलने का समय दिखता है।"
-                if w_hi
-                else "अभी कुंडली से जीवनसाथी मिलने का स्पष्ट समय नहीं दिख रहा।"
-            )
+            if not w_hi:
+                return "अभी कुंडली से जीवनसाथी मिलने का स्पष्ट समय नहीं दिख रहा।"
+            if ua is not None and pred is not None:
+                base = (
+                    f"आप अभी {ua} साल के हैं। जीवनसाथी लगभग {pred} साल की उम्र के आसपास "
+                    f"— {w_hi} के बीच मिलने का समय दिखता है।"
+                )
+            elif ua is not None:
+                base = (
+                    f"आप अभी {ua} साल के हैं। जीवनसाथी {w_hi} के बीच मिलने का समय दिखता है।"
+                )
+            elif pred is not None:
+                base = (
+                    f"जीवनसाथी लगभग {pred} साल की उम्र के आसपास — {w_hi} के बीच मिलने का समय दिखता है।"
+                )
+            else:
+                base = f"आपको जीवनसाथी {w_hi} के बीच मिलने का समय दिखता है।"
+            if young:
+                return f"आप अभी {ua} साल के हैं — जल्दी शादी/मिलन का समय नहीं; " + base.split("। ", 1)[-1]
+            return base
         if code == "en":
-            return (
-                f"Your life-partner meeting window falls between {w}."
-                if w
-                else "The chart does not show a clear partner-meeting window yet."
+            if not w:
+                return "The chart does not show a clear partner-meeting window yet."
+            if ua is not None and pred is not None:
+                base = (
+                    f"You're about {ua} now. Partner meeting looks around age {pred} "
+                    f"— between {w}."
+                )
+            elif ua is not None:
+                base = f"You're about {ua} now. Partner meeting looks between {w}."
+            elif pred is not None:
+                base = f"Partner meeting looks around age {pred} — between {w}."
+            else:
+                base = f"Your life-partner meeting window falls between {w}."
+            if young:
+                return f"At {ua}, this is still early — {base[0].lower() + base[1:]}"
+            return base
+        # Hinglish
+        if not w:
+            return "Abhi chart se jeevansathi milne ka clear period nahi dikh raha."
+        if ua is not None and pred is not None:
+            base = (
+                f"Aap abhi {ua} saal ke ho. Jeevansathi lagbhag age {pred} ke around "
+                f"— {w} ke beech milne ka period dikhta hai."
             )
-        return (
-            f"Aapka jeevansathi {w} ke beech milne ka period dikhta hai."
-            if w
-            else "Abhi chart se jeevansathi milne ka clear period nahi dikh raha."
-        )
+        elif ua is not None:
+            base = (
+                f"Aap abhi {ua} saal ke ho. Jeevansathi {w} ke beech milne ka period dikhta hai."
+            )
+        elif pred is not None:
+            base = (
+                f"Jeevansathi lagbhag age {pred} ke around — {w} ke beech milne ka period dikhta hai."
+            )
+        else:
+            base = f"Aapka jeevansathi {w} ke beech milne ka period dikhta hai."
+        if young:
+            return (
+                f"Aap abhi {ua} saal ke ho — abhi jaldi milne ka phase nahi; "
+                + (base.split(". ", 1)[-1] if ". " in base else base)
+            )
+        return base
+
+    # Marriage / shaadi framing
     if code == "hi":
         w_hi = _localize_timing_window_label(w, "hi") if w else ""
-        return (
-            f"आपकी शादी {w_hi} के बीच होगी।"
-            if w_hi
-            else "अभी कुंडली से शादी का स्पष्ट समय नहीं दिख रहा।"
-        )
+        if not w_hi:
+            return "अभी कुंडली से शादी का स्पष्ट समय नहीं दिख रहा।"
+        if ua is not None and pred is not None:
+            base = (
+                f"आप अभी {ua} साल के हैं। शादी लगभग {pred} साल की उम्र के आसपास "
+                f"— {w_hi} के बीच दिखती है।"
+            )
+        elif ua is not None:
+            base = f"आप अभी {ua} साल के हैं। शादी {w_hi} के बीच दिखती है।"
+        elif pred is not None:
+            base = (
+                f"शादी लगभग {pred} साल की उम्र के आसपास — {w_hi} के बीच दिखती है।"
+            )
+        else:
+            base = f"आपकी शादी {w_hi} के बीच होगी।"
+        if young:
+            return (
+                f"आप अभी {ua} साल के हैं — शादी अभी जल्दी नहीं; "
+                f"चार्ट पर समय लगभग {pred or 'बाद में'} / {w_hi} के आसपास है।"
+                if pred
+                else f"आप अभी {ua} साल के हैं — शादी अभी जल्दी नहीं; चार्ट पर समय {w_hi} के आसपास है।"
+            )
+        return base
     if code == "en":
-        return (
-            f"Your marriage timing falls between {w}."
-            if w
-            else "The chart does not show a clear marriage window yet."
+        if not w:
+            return "The chart does not show a clear marriage window yet."
+        if ua is not None and pred is not None:
+            base = (
+                f"You're about {ua} now. Marriage looks around age {pred} "
+                f"— between {w}."
+            )
+        elif ua is not None:
+            base = f"You're about {ua} now. Marriage looks between {w}."
+        elif pred is not None:
+            base = f"Marriage looks around age {pred} — between {w}."
+        else:
+            base = f"Your marriage timing falls between {w}."
+        if young:
+            return (
+                f"At {ua}, marriage is still early — chart points around "
+                f"{f'age {pred} / ' if pred else ''}{w}."
+            )
+        return base
+    # Hinglish
+    if not w:
+        return "Abhi chart se shaadi ka clear period nahi dikh raha."
+    if ua is not None and pred is not None:
+        base = (
+            f"Aap abhi {ua} saal ke ho. Shaadi lagbhag age {pred} ke around "
+            f"— {w} ke beech dikhti hai."
         )
-    return (
-        f"Aapki shaadi {w} ke beech hogi."
-        if w
-        else "Abhi chart se shaadi ka clear period nahi dikh raha."
-    )
+    elif ua is not None:
+        base = f"Aap abhi {ua} saal ke ho. Shaadi {w} ke beech dikhti hai."
+    elif pred is not None:
+        base = f"Shaadi lagbhag age {pred} ke around — {w} ke beech dikhti hai."
+    else:
+        base = f"Aapki shaadi {w} ke beech hogi."
+    if young:
+        return (
+            f"Aap abhi {ua} saal ke ho — shaadi abhi jaldi nahi; "
+            f"chart pe window {f'age {pred} / ' if pred else ''}{w} ke around hai."
+        )
+    return base
 
 
 def _marriage_timing_reply_parts(
@@ -392,16 +533,31 @@ def _marriage_timing_reply_parts(
     reply_idx: int = 0,
     lang: str = "hn",
     question: str = "",
+    *,
+    user_age: int | None = None,
+    predicted_age: int | None = None,
 ) -> tuple[str, str]:
     """Deterministic marriage timing: (one-line window answer, engage chip)."""
     code = _norm_ask_lang(_marriage_answer_lang(question, lang))
     meet = _is_meet_life_partner_timing_question(question or "")
-    line1 = _marriage_timing_line(window, code, meet_partner=meet)
+    line1 = _marriage_timing_line(
+        window,
+        code,
+        meet_partner=meet,
+        user_age=user_age,
+        predicted_age=predicted_age,
+    )
     engage = _pick_marriage_engagement_question(reply_idx, code)
     return line1, engage
 
 
-def _force_devanagari_marriage_timing_answer(question: str, text: str) -> str:
+def _force_devanagari_marriage_timing_answer(
+    question: str,
+    text: str,
+    *,
+    user_age: int | None = None,
+    predicted_age: int | None = None,
+) -> str:
     """Safety net: Devanagari Q must not leave with Roman timing; wording matches ask."""
     body = (text or "").strip()
     if not body or not _text_has_devanagari(question or ""):
@@ -416,9 +572,19 @@ def _force_devanagari_marriage_timing_answer(question: str, text: str) -> str:
             _re_mb_M17.IGNORECASE,
         )
         if m:
-            return _marriage_timing_line(m.group(1).strip(), "hi", meet_partner=True)
+            return _marriage_timing_line(
+                m.group(1).strip(),
+                "hi",
+                meet_partner=True,
+                user_age=user_age,
+                predicted_age=predicted_age,
+            )
+    # Already age-aware Devanagari — leave it
+    if _re_mb_M17.search(r"आप अभी\s+\d+\s+साल", body):
+        return body
     if not _re_mb_M17.search(
-        r"(?i)\baapki\s+shaadi\b|\baapka\s+jeevansathi\b|\byour\s+(?:marriage|life-partner)",
+        r"(?i)\baapki\s+shaadi\b|\baapka\s+jeevansathi\b|\byour\s+(?:marriage|life-partner)|"
+        r"आपकी\s+शादी|आपको\s+जीवनसाथी",
         body,
     ):
         return body
@@ -428,21 +594,97 @@ def _force_devanagari_marriage_timing_answer(question: str, text: str) -> str:
         body,
     )
     if m:
-        return _marriage_timing_line(m.group(1).strip(), "hi", meet_partner=meet)
+        return _marriage_timing_line(
+            m.group(1).strip(),
+            "hi",
+            meet_partner=meet,
+            user_age=user_age,
+            predicted_age=predicted_age,
+        )
     m2 = _re_mb_M17.search(
         r"(?i)your\s+(?:marriage\s+timing|life-partner\s+meeting\s+window)\s+"
         r"falls\s+between\s+(.+?)\.?\s*$",
         body,
     )
     if m2:
-        return _marriage_timing_line(m2.group(1).strip(), "hi", meet_partner=meet)
+        return _marriage_timing_line(
+            m2.group(1).strip(),
+            "hi",
+            meet_partner=meet,
+            user_age=user_age,
+            predicted_age=predicted_age,
+        )
     m3 = _re_mb_M17.search(
-        r"(?i)aapki\s+shaadi\s+age\s+\d+\s+ke\s+around\s*[—\-]\s*(.+?)\s+ke\s+beech\s+hogi\.?",
+        r"(?i)aapki\s+shaadi\s+age\s+(\d+)\s+ke\s+around\s*[—\-]\s*(.+?)\s+ke\s+beech\s+hogi\.?",
         body,
     )
     if m3:
-        return _marriage_timing_line(m3.group(1).strip(), "hi", meet_partner=meet)
+        try:
+            _pred_from_text = int(m3.group(1))
+        except (TypeError, ValueError):
+            _pred_from_text = predicted_age
+        return _marriage_timing_line(
+            m3.group(2).strip(),
+            "hi",
+            meet_partner=meet,
+            user_age=user_age,
+            predicted_age=_pred_from_text if _pred_from_text is not None else predicted_age,
+        )
+    m4 = _re_mb_M17.search(
+        r"आपकी\s+शादी\s+(.+?)\s+के\s+बीच\s+होगी",
+        body,
+    )
+    if m4:
+        return _marriage_timing_line(
+            m4.group(1).strip(),
+            "hi",
+            meet_partner=meet,
+            user_age=user_age,
+            predicted_age=predicted_age,
+        )
     return body
+
+
+def _compose_marriage_timing_reply(
+    window: str,
+    reply_idx: int = 0,
+    lang: str = "hn",
+    question: str = "",
+    *,
+    user_age: int | None = None,
+    predicted_age: int | None = None,
+) -> str:
+    """One-line timing answer in the question's language (engage Q in follow_ups)."""
+    line1, _engage = _marriage_timing_reply_parts(
+        window,
+        reply_idx,
+        lang,
+        question=question,
+        user_age=user_age,
+        predicted_age=predicted_age,
+    )
+    text = _force_devanagari_marriage_timing_answer(
+        question or "",
+        line1,
+        user_age=user_age,
+        predicted_age=predicted_age,
+    )
+    # Extra safety: child/teen must never get bare near-term shaadi date.
+    try:
+        from event_timing._shared.age_aware_timing_reply import prepend_opener_to_answer
+
+        text = prepend_opener_to_answer(
+            text,
+            "marriage",
+            user_age=user_age,
+            window=window or "",
+            lang=_marriage_answer_lang(question, lang),
+            question=question or "",
+            predicted_age=predicted_age,
+        )
+    except Exception:
+        pass
+    return text
 
 
 def align_ask_reply_to_question_lang(question: str, text: str) -> str:
@@ -451,19 +693,6 @@ def align_ask_reply_to_question_lang(question: str, text: str) -> str:
     Currently enforces Devanagari marriage-timing one-liners; safe no-op otherwise.
     """
     return _force_devanagari_marriage_timing_answer(question or "", text or "")
-
-
-def _compose_marriage_timing_reply(
-    window: str,
-    reply_idx: int = 0,
-    lang: str = "hn",
-    question: str = "",
-) -> str:
-    """One-line timing answer in the question's language (engage Q in follow_ups)."""
-    line1, _engage = _marriage_timing_reply_parts(
-        window, reply_idx, lang, question=question,
-    )
-    return align_ask_reply_to_question_lang(question or "", line1)
 
 
 def _compose_marriage_timing_alt_reply(
@@ -1116,8 +1345,14 @@ def _marriage_timing_m17_passthrough_response(
     if not aw and isinstance(marriage_engine_raw, dict):
         aw = (marriage_engine_raw.get("primary_window") or "").strip()
     reply_lang = _marriage_answer_lang(question, lang)
+    _ua, _pred = _marriage_ages_from_engine(marriage_engine_raw)
     text = _compose_marriage_timing_reply(
-        aw, reply_idx, reply_lang, question=question or "",
+        aw,
+        reply_idx,
+        reply_lang,
+        question=question or "",
+        user_age=_ua,
+        predicted_age=_pred,
     )
     print(
         f"[marriage_timing_m17] reply_lang={reply_lang!r} "
@@ -1437,6 +1672,8 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
                 birth=birth,
                 kundli=kundli,
                 user_age=int(_m17_age) if _m17_age is not None else None,
+                window=str(engine_result.get("primary_window") or ""),
+                predicted_age=_marriage_ages_from_engine(engine_result)[1],
             )
         except Exception:
             pass
@@ -1538,6 +1775,12 @@ def _passthrough_career_block(question, kundli, intel, birth, llm_intent=None):
                 birth=birth,
                 kundli=kundli,
                 user_age=int(_age) if _age is not None else None,
+                window=str(
+                    verdict.get("primary_window")
+                    or verdict.get("window")
+                    or ((verdict.get("timing") or {}).get("window") if isinstance(verdict.get("timing"), dict) else "")
+                    or ""
+                ),
             )
         except Exception:
             pass
@@ -5905,6 +6148,35 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     question=question or "",
                     question_raw=_question_raw or _user_turn_question,
                 )
+                # ── Follow-up lock: same DNA domain/bucket/engine as prior turn ──
+                try:
+                    from ask_followup_lock import apply_followup_lock
+
+                    _fu = apply_followup_lock(
+                        _user_turn_question or question or "",
+                        history,
+                        phase2=_phase2_understand,
+                        admin=_llm_intent_admin,
+                    )
+                    if _fu.get("is_followup"):
+                        _general_followup = True
+                        _eff_locked = str(_fu.get("effective_question") or "").strip()
+                        if _eff_locked:
+                            question = _eff_locked
+                        if isinstance(_fu.get("admin"), dict):
+                            _llm_intent_admin = _fu["admin"]
+                        if _llm_intent_admin.get("routed_timing"):
+                            _timing_refine_followup = True
+                        print(
+                            f"[raw_passthrough] FOLLOWUP_LOCK "
+                            f"reason={_fu.get('reason')} "
+                            f"domain={_llm_intent_admin.get('domain')} "
+                            f"bucket={_llm_intent_admin.get('bucket')} "
+                            f"eff={(question or '')[:72]!r}",
+                            flush=True,
+                        )
+                except Exception as _fu_exc:
+                    print(f"[raw_passthrough] FOLLOWUP_LOCK skipped: {_fu_exc}", flush=True)
                 _p2_branch = str(_phase2_understand.get("branch") or "engine")
                 print(
                     f"[raw_passthrough] PHASE2_UNDERSTAND branch={_p2_branch} "
@@ -6011,6 +6283,32 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
         except Exception as _uq_early_exc:
             print(f"[raw_passthrough] early question_understand skipped: {_uq_early_exc}", flush=True)
+        # Follow-up lock even when Phase-2 failed (regex + prior DNA in history).
+        try:
+            from ask_followup_lock import apply_followup_lock
+
+            _fu_fb = apply_followup_lock(
+                _user_turn_question or question or "",
+                history,
+                phase2=None,
+                admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else {},
+            )
+            if _fu_fb.get("is_followup"):
+                _general_followup = True
+                _eff_fb = str(_fu_fb.get("effective_question") or "").strip()
+                if _eff_fb:
+                    question = _eff_fb
+                if isinstance(_fu_fb.get("admin"), dict):
+                    _llm_intent_admin = _fu_fb["admin"]
+                print(
+                    f"[raw_passthrough] FOLLOWUP_LOCK (no phase2) "
+                    f"reason={_fu_fb.get('reason')} "
+                    f"domain={(_llm_intent_admin or {}).get('domain')} "
+                    f"eff={(question or '')[:72]!r}",
+                    flush=True,
+                )
+        except Exception as _fu_fb_exc:
+            print(f"[raw_passthrough] FOLLOWUP_LOCK fallback skipped: {_fu_fb_exc}", flush=True)
 
     try:
         from chart_fact_answer import answer_hypothetical_placement_change
@@ -7741,6 +8039,150 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
         except Exception as _dna_wire_exc:
             print(f"[raw_passthrough] DNA_ENGINE_WIRE skipped: {_dna_wire_exc}", flush=True)
+
+    # ── ENGINE MATCH GATE — DNA domain/bucket/intent/subject must match engine ──
+    # Mismatch → retry coerce/reclass (≤ ~60s). Gate opens only for:
+    #   path=engine (winner == DNA engine)  OR  path=direct_llm (no engine needed).
+    # Wrong engine pe answer NEVER.
+    _engine_match_decision = None
+    if not _direct_llm_bypass and not _is_open_chart_qa:
+        try:
+            from ask_engine_match_gate import (
+                apply_match_decision_to_static_bools,
+                ensure_correct_engine_route,
+            )
+            from ask_execution_gatekeeper import build_blocked_response
+
+            _pre_flags = {
+                "education": _is_education_static,
+                "children": _is_children_static,
+                "property": _is_property_static,
+                "vehicle": _is_vehicle_static,
+                "travel": _is_travel_static,
+                "litigation": _is_litigation_static,
+                "gap": _is_gap_static,
+                "network": _is_network_static,
+                "luck": _is_luck_static,
+                "career": _is_career_static,
+                "finance": _is_finance_static,
+                "health": _is_health_static,
+                "mr": _is_mr_static,
+            }
+            _engine_match_decision = ensure_correct_engine_route(
+                question or "",
+                _llm_intent_admin if isinstance(_llm_intent_admin, dict) else {},
+                _pre_flags,
+                client=client,
+                history=history,
+                is_timing=bool(is_timing),
+                direct_llm_bypass=False,
+            )
+            if isinstance(_llm_intent_admin, dict):
+                _llm_intent_admin["engine_match_gate"] = _engine_match_decision.to_dict()
+
+            if not _engine_match_decision.ok and _engine_match_decision.path == "blocked":
+                print(
+                    f"[raw_passthrough] ENGINE_MATCH_GATE blocked "
+                    f"expected={_engine_match_decision.engine_key} "
+                    f"failed={_engine_match_decision.failed_checks} "
+                    f"attempts={_engine_match_decision.attempts} "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+                from ask_execution_gatekeeper import GatekeeperResult
+
+                _block = build_blocked_response(
+                    GatekeeperResult(
+                        ok=False,
+                        stage="routing",
+                        reason="routing_error",
+                        rule="engine_match_gate",
+                        failed_checks=list(_engine_match_decision.failed_checks or []),
+                        retry_engine_key=_engine_match_decision.engine_key,
+                    ),
+                    question=question or "",
+                    qtype=qtype,
+                    lang=lang or "hn",
+                )
+                _block["engine_match_gate"] = _engine_match_decision.to_dict()
+                return _block
+
+            _matched_flags = apply_match_decision_to_static_bools(_engine_match_decision)
+            if _engine_match_decision.path == "direct_llm":
+                _is_mr_static = False
+                _is_health_static = False
+                _is_career_static = False
+                _is_finance_static = False
+                _is_education_static = False
+                _is_children_static = False
+                _is_property_static = False
+                _is_vehicle_static = False
+                _is_travel_static = False
+                _is_litigation_static = False
+                _is_gap_static = False
+                _is_luck_static = False
+                _is_network_static = False
+                if not _engine_match_decision.is_timing:
+                    # Keep timing path if DNA marked timing without static engine.
+                    pass
+                print(
+                    f"[raw_passthrough] ENGINE_MATCH_GATE open=direct_llm "
+                    f"reason={_engine_match_decision.reason} "
+                    f"domain={_engine_match_decision.domain} "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+            elif _engine_match_decision.path == "engine":
+                _is_education_static = _matched_flags.get("education", False)
+                _is_children_static = _matched_flags.get("children", False)
+                _is_property_static = _matched_flags.get("property", False)
+                _is_vehicle_static = _matched_flags.get("vehicle", False)
+                _is_travel_static = _matched_flags.get("travel", False)
+                _is_litigation_static = _matched_flags.get("litigation", False)
+                _is_gap_static = _matched_flags.get("gap", False)
+                _is_network_static = _matched_flags.get("network", False)
+                _is_luck_static = _matched_flags.get("luck", False)
+                _is_career_static = _matched_flags.get("career", False)
+                _is_finance_static = _matched_flags.get("finance", False)
+                _is_health_static = _matched_flags.get("health", False)
+                _is_mr_static = _matched_flags.get("mr", False)
+                if _engine_match_decision.is_timing:
+                    is_timing = True
+                    qtype = "TIMING"
+                    _is_mr_static = False
+                    _is_health_static = False
+                    _is_career_static = False
+                    _is_finance_static = False
+                    _is_education_static = False
+                    _is_children_static = False
+                    _is_property_static = False
+                    _is_vehicle_static = False
+                    _is_travel_static = False
+                    _is_litigation_static = False
+                    _is_gap_static = False
+                    _is_luck_static = False
+                    _is_network_static = False
+                _arch_m = str(_engine_match_decision.archetype or "")
+                if _arch_m and _is_mr_static:
+                    _mr_archetype_override = _arch_m
+                elif _arch_m and _is_career_static:
+                    _career_archetype_override = _arch_m
+                elif _arch_m and _is_finance_static:
+                    _finance_archetype_override = _arch_m
+                elif _arch_m and _is_health_static:
+                    _health_archetype_override = _arch_m
+                print(
+                    f"[raw_passthrough] ENGINE_MATCH_GATE open=engine "
+                    f"engine={_engine_match_decision.engine_key} "
+                    f"domain={_engine_match_decision.domain} "
+                    f"bucket={_engine_match_decision.bucket} "
+                    f"subject={_engine_match_decision.subject} "
+                    f"attempts={_engine_match_decision.attempts} "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+        except Exception as _emg_exc:
+            print(f"[raw_passthrough] ENGINE_MATCH_GATE skipped: {_emg_exc}", flush=True)
 
     # ── GENERAL CHART (DNA domain=general only) ──────────────────────────
     # No specialist engine. Full D1 + D9 + dasha → pure LLM study guided by
@@ -10114,9 +10556,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
 
                 if not _gk_pre.ok and allow_llm_fallback_on_gate_fail(
-                    _gk_pre, question or ""
+                    _gk_pre,
+                    question or "",
+                    _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                 ):
-                    # Policy: engine mismatch → Cosmo LLM + full chart (don't block user).
+                    # Policy: only when DNA does not require a specialist engine
+                    # (chart interpretive / no engine) — never wrong-engine → LLM.
                     print(
                         f"[raw_passthrough] EXECUTION_GATEKEEPER → LLM fallback "
                         f"rule={_gk_pre.rule} reason={_gk_pre.reason}",
@@ -12254,6 +12699,40 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "follow_ups": [],
         }
         try:
+            from ask_followup_chips import enrich_ask_result_followups
+
+            _dom_out = ""
+            _buck_out = ""
+            if isinstance(_llm_intent_admin, dict):
+                _dom_out = str(
+                    _llm_intent_admin.get("routed_domain")
+                    or _llm_intent_admin.get("domain")
+                    or ""
+                )
+                _buck_out = str(
+                    _llm_intent_admin.get("bucket")
+                    or _llm_intent_admin.get("dna_engine_archetype")
+                    or ""
+                )
+                if _dom_out:
+                    _out["domain"] = _dom_out
+                    # Prefer life-area topic for chips / next-turn history
+                    if _out.get("topic") in ("static", "timing", "general", ""):
+                        _out["topic"] = _dom_out
+                if _buck_out:
+                    _out["bucket"] = _buck_out
+                if _llm_intent_admin.get("subject"):
+                    _out["subject"] = _llm_intent_admin.get("subject")
+                if _llm_intent_admin.get("dna_engine_archetype"):
+                    _out["archetype"] = _llm_intent_admin.get("dna_engine_archetype")
+            enrich_ask_result_followups(
+                _out,
+                lang=lang or "hn",
+                admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+            )
+        except Exception as _fu_chip_exc:
+            print(f"[raw_passthrough] followup chips skipped: {_fu_chip_exc}", flush=True)
+        try:
             from ask_token_telemetry import usage_from_response
 
             _out.update(usage_from_response(resp, model))
@@ -13683,7 +14162,7 @@ def _build_messages(
                 # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS
                 # in legacy LLM_FULL_CHART_MODE passthrough too (parity with
                 # newer sync + stream passthroughs). Same helper, same args.
-                _marriage_block_pt, _ = _passthrough_marriage_block(
+                _marriage_block_pt, _marriage_engine_pt = _passthrough_marriage_block(
                     question, kundli, _intel_obj_pt, birth
                 )
                 # ── KP-ALWAYS-FULL (user request, 2026-05-05): legacy
@@ -14094,6 +14573,8 @@ def _build_messages(
                     "marriage_denied":   v.get("marriage_denied"),
                     "delay":             v.get("delay"),
                     "jaimini":           _ul_facts,
+                    "user_age":         _marriage_ages_from_engine(v)[0],
+                    "predicted_age":    _marriage_ages_from_engine(v)[1],
                 }
                 print(f"[openai_helper] marriage verdict: "
                       f"verdict='{marriage_facts['verdict']}' "
@@ -14613,7 +15094,12 @@ def _build_messages(
 
         _engage_q = _pick_marriage_engagement_question(reply_idx, detected)
         _composed = _compose_marriage_timing_reply(
-            active_window, reply_idx=reply_idx, lang=detected, question=question or "",
+            active_window,
+            reply_idx=reply_idx,
+            lang=detected,
+            question=question or "",
+            user_age=f.get("user_age"),
+            predicted_age=f.get("predicted_age"),
         )
         if isinstance(out_meta, dict):
             out_meta["marriage_timing_composed"] = _composed
@@ -17666,10 +18152,19 @@ _FOLLOW_UPS_BY_TOPIC = {
     },
 }
 
-def _derive_follow_ups(topic: str, lang: str) -> list[str]:
-    """Return 3 short, deterministic follow-up suggestion chips for the
-    given topic + reply language. Falls back to general topic and Hinglish
-    if either key is unknown. Pure-Python, zero LLM cost."""
+def _derive_follow_ups(topic: str, lang: str, *, domain: str = "", bucket: str = "") -> list[str]:
+    """Return 3 short follow-up chips — DNA/bucket-aware when available."""
+    try:
+        from ask_followup_chips import derive_follow_up_chips
+
+        return derive_follow_up_chips(
+            topic=topic or "",
+            domain=domain or topic or "",
+            bucket=bucket or "",
+            lang=lang or "hn",
+        )
+    except Exception:
+        pass
     key = (topic or "general").lower()
     if key not in _FOLLOW_UPS_BY_TOPIC:
         key = "general"
@@ -24696,7 +25191,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS
                 # so the 25-rule + 6-trust-layer engine actually reaches the
                 # LLM in passthrough mode (was being completely bypassed).
-                _marriage_block_pt, _ = _passthrough_marriage_block(
+                _marriage_block_pt, _marriage_engine_pt = _passthrough_marriage_block(
                     question, kundli, _intel_obj_pt, birth
                 )
                 # Phase 2.8.42 — emotion-aware tone hint. Returns "" for
@@ -24920,11 +25415,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     _aw_pt = _extract_primary_window_from_m17_block(
                         _marriage_block_pt
                     )
+                    _ua_pt, _pred_pt = _marriage_ages_from_engine(_marriage_engine_pt)
                     _text_pt_scrubbed = _compose_marriage_timing_reply(
-                        _aw_pt, reply_idx, _eff_lang_pt, question=question or "",
+                        _aw_pt,
+                        reply_idx,
+                        _eff_lang_pt,
+                        question=question or "",
+                        user_age=_ua_pt,
+                        predicted_age=_pred_pt,
                     )
                     _trace(req_id, "PASSTHROUGH.MARRIAGE_TIMING_ONLY", {
                         "window": _aw_pt,
+                        "user_age": _ua_pt,
+                        "predicted_age": _pred_pt,
                         "text": _text_pt_scrubbed,
                     })
                 elif _marriage_block_pt:
@@ -24937,6 +25440,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                             "before_chars": len(_before_v),
                             "after_chars":  len(_text_pt_scrubbed),
                         })
+
+                # Career / job timing — force age opener (child ≠ "6 mahine mein naukri").
+                try:
+                    from ask_career.timing_registry import is_career_timing_question as _ictq
+                    from event_timing._shared.age_aware_timing_reply import (
+                        prepend_opener_to_answer,
+                        resolve_user_age_for_timing,
+                    )
+
+                    if _ictq(question or "", None):
+                        _cua = resolve_user_age_for_timing(
+                            question=question or "",
+                            birth=birth,
+                            kundli=kundli,
+                        )
+                        _text_pt_scrubbed = prepend_opener_to_answer(
+                            _text_pt_scrubbed,
+                            "career",
+                            user_age=_cua,
+                            window="",
+                            lang=_eff_lang_pt,
+                            question=question or "",
+                        )
+                except Exception as _age_c_exc:
+                    print(f"[ai_ask] career age scrub skip: {_age_c_exc}", flush=True)
 
                 # Phase 2.8.27 — engine_tag tells UI whether deterministic
                 # engine LOCKED FACTS were injected into the system prompt
@@ -25854,8 +26382,12 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "avoid_n":        len(_payload.get("what_to_avoid") or []),
         })
     elif build_meta.get("marriage_timing_composed"):
+        _mf = build_meta.get("marriage_facts") or {}
         text = _force_devanagari_marriage_timing_answer(
-            question or "", build_meta["marriage_timing_composed"] or "",
+            question or "",
+            build_meta["marriage_timing_composed"] or "",
+            user_age=_mf.get("user_age") if isinstance(_mf, dict) else None,
+            predicted_age=_mf.get("predicted_age") if isinstance(_mf, dict) else None,
         )
         _trace(req_id, "4.MARRIAGE_TIMING_DETERMINISTIC", {
             "window": build_meta.get("active_window"),
@@ -25865,11 +26397,14 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
           and topic == "marriage"
           and marriage_subtype in ("timing", "remedy")):
         _aw = (build_meta.get("active_window") or "").strip()
+        _mf = build_meta.get("marriage_facts") or {}
         text = _compose_marriage_timing_reply(
             _aw,
             reply_idx,
             _marriage_answer_lang(question, lang, preferred_language),
             question=question or "",
+            user_age=_mf.get("user_age") if isinstance(_mf, dict) else None,
+            predicted_age=_mf.get("predicted_age") if isinstance(_mf, dict) else None,
         )
         _trace(req_id, "4.MARRIAGE_TIMING_DETERMINISTIC", {
             "window": _aw, "text": text,
@@ -28405,7 +28940,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # so the 25-rule + 6-trust-layer engine actually reaches the LLM
             # in passthrough mode (was being completely bypassed → LLM was
             # guessing love/arrange instead of using engine output).
-            _marriage_block_pt_s, _ = _passthrough_marriage_block(
+            _marriage_block_pt_s, _marriage_engine_pt_s = _passthrough_marriage_block(
                 question, kundli, _intel_obj_pt_s, birth
             )
 
@@ -28730,11 +29265,19 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 _aw_s = _extract_primary_window_from_m17_block(
                     _marriage_block_pt_s
                 )
+                _ua_s, _pred_s = _marriage_ages_from_engine(_marriage_engine_pt_s)
                 _full_text_pt_s_scrubbed = _compose_marriage_timing_reply(
-                    _aw_s, reply_idx, _eff_lang_pt_s, question=question or "",
+                    _aw_s,
+                    reply_idx,
+                    _eff_lang_pt_s,
+                    question=question or "",
+                    user_age=_ua_s,
+                    predicted_age=_pred_s,
                 )
                 _trace(req_id, "PASSTHROUGH(stream).MARRIAGE_TIMING_ONLY", {
                     "window": _aw_s,
+                    "user_age": _ua_s,
+                    "predicted_age": _pred_s,
                     "text": _full_text_pt_s_scrubbed,
                 })
             elif _marriage_block_pt_s:
@@ -28747,6 +29290,31 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                         "before_chars": len(_before_v_s),
                         "after_chars":  len(_full_text_pt_s_scrubbed),
                     })
+
+            # Career timing age lock (stream final text)
+            try:
+                from ask_career.timing_registry import is_career_timing_question as _ictq_s
+                from event_timing._shared.age_aware_timing_reply import (
+                    prepend_opener_to_answer,
+                    resolve_user_age_for_timing,
+                )
+
+                if _ictq_s(question or "", None):
+                    _cua_s = resolve_user_age_for_timing(
+                        question=question or "",
+                        birth=birth,
+                        kundli=kundli,
+                    )
+                    _full_text_pt_s_scrubbed = prepend_opener_to_answer(
+                        _full_text_pt_s_scrubbed,
+                        "career",
+                        user_age=_cua_s,
+                        window="",
+                        lang=_eff_lang_pt_s,
+                        question=question or "",
+                    )
+            except Exception as _age_cs:
+                print(f"[stream] career age scrub skip: {_age_cs}", flush=True)
 
             _trace(req_id, "PASSTHROUGH(stream).OPENAI_DONE", {
                 "text_chars":   len(_full_text_pt_s_scrubbed),

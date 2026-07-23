@@ -446,7 +446,7 @@ LEGAL_HTML = """<!DOCTYPE html>
 </ul>
 
 <h3>How to Request a Refund</h3>
-<p>Email <a href=\"mailto:support@cosmiclens.app\">support@cosmiclens.app</a> with:</p>
+<p>Email <a href=\"mailto:supportcosmiclens@gmail.com\">supportcosmiclens@gmail.com</a> with:</p>
 <ul>
   <li>Your registered mobile number</li>
   <li>Order ID (visible on your subscription page)</li>
@@ -476,7 +476,7 @@ LEGAL_HTML = """<!DOCTYPE html>
 <h2 id=\"contact\">5. Contact Us</h2>
 <div class=\"contact\">
   <p style=\"margin:4px 0\"><strong>Cosmic Lens Support</strong></p>
-  <p style=\"margin:4px 0\">Email: <a href=\"mailto:support@cosmiclens.app\">support@cosmiclens.app</a></p>
+  <p style=\"margin:4px 0\">Email: <a href=\"mailto:supportcosmiclens@gmail.com\">supportcosmiclens@gmail.com</a></p>
   <p style=\"margin:4px 0\">For refund requests, mention &quot;Refund&quot; in the subject line.</p>
   <p style=\"margin:4px 0\">Response time: within 2 business days.</p>
 </div>
@@ -1658,7 +1658,7 @@ def geocode():
         req = urllib.request.Request(
             provider_url,
             headers={
-                "User-Agent": "CosmicLens/1.0 (support@cosmiclens.app)",
+                "User-Agent": "CosmicLens/1.0 (supportcosmiclens@gmail.com)",
                 "Accept-Language": "en",
                 "Accept": "application/json",
             },
@@ -2257,7 +2257,8 @@ def panchang_vivah_muhurat():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@app.route("/api/auth/firebase-verify", methods=["POST"])
+@app.route("/api/auth/firebase-verify", methods=["POST", "OPTIONS"], strict_slashes=False)
+@app.route("/api/auth/firebase_verify", methods=["POST", "OPTIONS"], strict_slashes=False)
 def firebase_verify_route():
     """
     Firebase Authentication login — Google Sign-In only.
@@ -2269,6 +2270,9 @@ def firebase_verify_route():
     On success: 200 (existing user) or 201 (new user).
     On failure: 401 with { ok: False, error: "..." }.
     """
+    if request.method == "OPTIONS":
+        return "", 204
+
     from sqlalchemy.exc import IntegrityError
 
     from firebase_admin_helper import (
@@ -2389,6 +2393,7 @@ def _firebase_verify_phone_user(*, phone_e164, name, auto_start_trial_on_signup,
             phone=phone_e164,
             country_code=cc_norm,
             api_key=secrets.token_hex(32),
+            ask_v1_free_questions_used=0,
         )
         db.session.add(user)
         try:
@@ -2454,6 +2459,7 @@ def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_
             email=email,
             google_id=firebase_uid or None,
             api_key=secrets.token_hex(32),
+            ask_v1_free_questions_used=0,
         )
         db.session.add(user)
         try:
@@ -2511,28 +2517,17 @@ def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_
 
 @app.route("/api/auth/demo", methods=["POST"])
 def demo_login_route():
-    """Idempotent demo user — for testing only.
-    Returns a real backend user with valid id + api_key so payment & quota flows work.
-    """
-    from demo_login_helper import perform_demo_login
-
-    try:
-        payload, status = perform_demo_login()
-        return jsonify(payload), status
-    except Exception as exc:
-        db.session.rollback()
-        app.logger.exception("[demo-login] failed: %s", exc)
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "demo_login_failed",
-                    "message": "Demo login could not complete. Please try again.",
-                    "detail": str(exc)[:500],
-                }
-            ),
-            500,
-        )
+    """Removed — demo login permanently disabled. Use Google/Firebase only."""
+    return (
+        jsonify(
+            {
+                "ok": False,
+                "error": "demo_login_removed",
+                "message": "Demo login is permanently disabled. Please continue with Google.",
+            }
+        ),
+        410,
+    )
 
 
 @app.route("/api/auth/signup", methods=["POST"])
@@ -2720,6 +2715,55 @@ def get_authed_user(user_id: int):
     if not api_key or user.api_key != api_key:
         return None, (jsonify({"error": "Unauthorized — invalid API key"}), 401)
     return user, None
+
+
+@app.route("/api/user/<int:user_id>/app-usage", methods=["POST"])
+def record_app_usage(user_id: int):
+    """Accumulate authenticated foreground time in an IST daily bucket."""
+    user, err = get_authed_user(user_id)
+    if err:
+        return err
+
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        elapsed_seconds = int(data.get("elapsed_seconds") or 0)
+    except (TypeError, ValueError):
+        elapsed_seconds = 0
+    # Mobile sends a heartbeat every minute. A cap prevents stale/background
+    # timers or forged payloads from inflating analytics.
+    elapsed_seconds = max(0, min(elapsed_seconds, 120))
+    session_start = bool(data.get("session_start"))
+    if elapsed_seconds <= 0 and not session_start:
+        return jsonify({"ok": True})
+
+    from models import AppUsageDay
+
+    now = datetime.utcnow()
+    usage_date = (now + timedelta(hours=5, minutes=30)).date().isoformat()
+    row = AppUsageDay.query.filter_by(user_id=user.id, usage_date=usage_date).first()
+    if not row:
+        row = AppUsageDay(
+            user_id=user.id,
+            usage_date=usage_date,
+            foreground_seconds=0,
+            session_count=0,
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+        db.session.add(row)
+    row.foreground_seconds = int(row.foreground_seconds or 0) + elapsed_seconds
+    if session_start:
+        row.session_count = int(row.session_count or 0) + 1
+    row.last_seen_at = now
+    user.last_active = now
+    db.session.commit()
+    return jsonify(
+        {
+            "ok": True,
+            "usage_date": usage_date,
+            "foreground_seconds": row.foreground_seconds,
+        }
+    )
 
 
 # ── Kundli save/load routes ────────────────────────────────────────────────────
@@ -3266,9 +3310,38 @@ def admin_users():
     )
 
 
+@app.route("/api/admin/user-lookup", methods=["GET"])
+def admin_user_lookup():
+    """Resolve an exact database ID or public COSMO ID and return full detail."""
+    err = require_admin()
+    if err:
+        return err
+
+    raw = (request.args.get("id") or "").strip()
+    if not raw:
+        return jsonify({"error": "User ID is required"}), 400
+
+    user = None
+    if raw.isdigit():
+        user = db.session.get(User, int(raw))
+    if user is None:
+        user = User.query.filter(
+            db.func.upper(User.cosmo_user_id) == raw.upper()
+        ).first()
+    if user is None:
+        return jsonify({"error": "User not found"}), 404
+
+    from admin_dashboard import build_user_detail
+
+    return jsonify(build_user_detail(user.id))
+
+
 @app.route("/api/admin/transactions", methods=["GET"])
 def admin_transactions():
-    """All users' paid purchases — for admin transaction history."""
+    """All users' paid purchases — for admin transaction history.
+
+    Includes reports, AstroVastu, gemstones, career, V1 packs, V3 live, etc.
+    """
     err = require_admin()
     if err:
         return err
@@ -3376,6 +3449,297 @@ def admin_love_reality_orders_route():
     return jsonify(list_human_orders(page=page, per_page=per_page, status=status))
 
 
+@app.route("/api/admin/lifemap-orders", methods=["GET"])
+def admin_lifemap_orders_route():
+    """LifeMap admin view: 4 pending report queues with booking details."""
+    err = require_admin()
+    if err:
+        return err
+
+    # Default to pending working queue (delivered orders leave the queue).
+    status = (request.args.get("status") or "pending").strip() or None
+    if status and status.lower() in ("all", "*"):
+        status = None
+    limit = 80
+
+    from lifemap_admin_deliver import (
+        enrich_astrovastu_row,
+        enrich_business_vastu_row,
+        enrich_love_row,
+        enrich_milan_row,
+        enrich_numerology_row,
+    )
+
+    love_rows: list[dict] = []
+    try:
+        from love_reality_human_orders import list_human_orders
+
+        for row in list_human_orders(page=1, per_page=limit, status=status).get(
+            "orders"
+        ) or []:
+            love_rows.append(enrich_love_row(row))
+    except Exception as exc:
+        print(f"[admin/lifemap] love reality list failed: {exc}", flush=True)
+
+    milan_rows: list[dict] = []
+    try:
+        from milan_human_orders import list_milan_human_orders
+
+        for row in list_milan_human_orders(page=1, per_page=limit, status=status).get(
+            "orders"
+        ) or []:
+            milan_rows.append(enrich_milan_row(row))
+    except Exception as exc:
+        print(f"[admin/lifemap] milan list failed: {exc}", flush=True)
+
+    numerology_rows: list[dict] = []
+    try:
+        from numerology_human_orders import list_human_orders as list_num_orders
+
+        for row in list_num_orders(page=1, per_page=limit, status=status).get(
+            "orders"
+        ) or []:
+            numerology_rows.append(enrich_numerology_row(row))
+    except Exception as exc:
+        print(f"[admin/lifemap] numerology list failed: {exc}", flush=True)
+
+    astro_rows: list[dict] = []
+    try:
+        from astrovastu_human_orders import list_human_orders as list_av_orders
+
+        for row in list_av_orders(page=1, per_page=limit, status=status).get(
+            "items"
+        ) or []:
+            astro_rows.append(enrich_astrovastu_row(row))
+    except Exception as exc:
+        print(f"[admin/lifemap] astrovastu list failed: {exc}", flush=True)
+
+    business_rows: list[dict] = []
+    try:
+        from business_vastu_human_orders import list_business_vastu_orders
+
+        for row in list_business_vastu_orders(
+            page=1, per_page=limit, status=status
+        ).get("orders") or []:
+            business_rows.append(enrich_business_vastu_row(row))
+    except Exception as exc:
+        print(f"[admin/lifemap] business vastu list failed: {exc}", flush=True)
+
+    def _pack(title: str, key: str, rows: list[dict]) -> dict:
+        return {
+            "key": key,
+            "title": title,
+            "orders": rows,
+            "total": len(rows),
+        }
+
+    sections = [
+        _pack("Love Reality Pro", "love_reality_pro", love_rows),
+        _pack("Kundli Milan Pro", "milan_pro", milan_rows),
+        _pack("Numerology Pro Report", "numerology_pro", numerology_rows),
+        _pack("AstroVastu Pro Report", "astrovastu_pro", astro_rows),
+        _pack("Business Vastu", "business_vastu_pro", business_rows),
+    ]
+    unaccepted = sum(
+        1
+        for s in sections
+        for row in (s.get("orders") or [])
+        if not row.get("admin_accepted_at")
+    )
+    return jsonify(
+        {
+            "sections": sections,
+            "total": sum(s["total"] for s in sections),
+            "unaccepted_count": unaccepted,
+        }
+    )
+
+
+@app.route("/api/admin/lifemap-orders/astrovastu/<order_id>/media", methods=["GET"])
+def admin_lifemap_astrovastu_media_route(order_id: str):
+    """Serve the user's submitted room photo / PDF for founder review."""
+    err = require_admin()
+    if err:
+        return err
+
+    from astrovastu_human_orders import get_order
+
+    order = get_order(order_id)
+    if not order:
+        return jsonify({"error": "order_not_found"}), 404
+
+    data_url = str(order.get("image_data_url") or order.get("data_url") or "")
+    if not data_url.startswith("data:"):
+        return jsonify({"error": "no_media"}), 404
+
+    try:
+        header, b64 = data_url.split(",", 1)
+        mime = header.split(":", 1)[1].split(";", 1)[0] or "application/octet-stream"
+        import base64 as _b64
+
+        raw = _b64.b64decode(b64)
+    except Exception:
+        return jsonify({"error": "media_decode_failed"}), 500
+
+    ext = "pdf" if "pdf" in mime else ("png" if "png" in mime else "jpg")
+    resp = Response(raw, mimetype=mime)
+    resp.headers["Content-Disposition"] = (
+        f'inline; filename="room_{str(order.get("order_id") or "order")[:8]}.{ext}"'
+    )
+    resp.headers["Cache-Control"] = "private, max-age=300"
+    return resp
+
+
+@app.route("/api/admin/lifemap-orders/business-vastu/<order_id>/media", methods=["GET"])
+def admin_lifemap_business_vastu_media_route(order_id: str):
+    """Serve a Business Vastu room photo (?item=N) or floor plan PDF (?item=plan)."""
+    err = require_admin()
+    if err:
+        return err
+
+    from business_vastu_human_orders import get_order
+
+    order = get_order(order_id)
+    if not order:
+        return jsonify({"error": "order_not_found"}), 404
+
+    item = (request.args.get("item") or "0").strip().lower()
+    data_url = ""
+    if item == "plan":
+        fp = order.get("floor_plan_upload") if isinstance(order.get("floor_plan_upload"), dict) else {}
+        data_url = str(fp.get("data_url") or "")
+        if not data_url and fp.get("base64"):
+            data_url = "data:application/pdf;base64," + str(fp["base64"])
+    else:
+        try:
+            idx = int(item)
+        except ValueError:
+            idx = 0
+        photos = order.get("room_photos") if isinstance(order.get("room_photos"), list) else []
+        if 0 <= idx < len(photos) and isinstance(photos[idx], dict):
+            data_url = str(photos[idx].get("image_data_url") or photos[idx].get("data_url") or "")
+
+    if not data_url.startswith("data:"):
+        return jsonify({"error": "no_media"}), 404
+
+    try:
+        header, b64 = data_url.split(",", 1)
+        mime = header.split(":", 1)[1].split(";", 1)[0] or "application/octet-stream"
+        import base64 as _b64
+
+        raw = _b64.b64decode(b64)
+    except Exception:
+        return jsonify({"error": "media_decode_failed"}), 500
+
+    ext = "pdf" if "pdf" in mime else ("png" if "png" in mime else "jpg")
+    resp = Response(raw, mimetype=mime)
+    resp.headers["Content-Disposition"] = (
+        f'inline; filename="business_{str(order.get("order_id") or "order")[:8]}_{item}.{ext}"'
+    )
+    resp.headers["Cache-Control"] = "private, max-age=300"
+    return resp
+
+
+@app.route("/api/admin/lifemap-orders/deliver", methods=["POST"])
+def admin_lifemap_deliver_route():
+    """Paste founder report text → branded PDF → user My Reports."""
+    err = require_admin()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    kind = str(data.get("kind") or "").strip()
+    order_id = str(data.get("order_id") or data.get("order_prefix") or "").strip()
+    body = str(data.get("body") or data.get("text") or data.get("report") or "")
+
+    from lifemap_admin_deliver import deliver_lifemap_order
+
+    result = deliver_lifemap_order(kind, order_id, body)
+    if not result.get("ok"):
+        code = str(result.get("error") or "deliver_failed")
+        status_code = 400
+        if code in ("order_not_found",):
+            status_code = 404
+        elif code in ("order_already_delivered",):
+            status_code = 409
+        elif code in ("pdf_render_failed", "report_save_failed"):
+            status_code = 500
+        return jsonify(result), status_code
+    # Tag delivery source for admin-initiated fulfill (Love/Milan reuse path).
+    try:
+        if kind in ("love_reality_pro", "milan_pro") and result.get("order_id"):
+            from love_reality_human_orders import get_order as get_lr
+            from love_reality_human_orders import save_order_record as save_lr
+            from milan_human_orders import get_order as get_ml
+            from milan_human_orders import save_order_record as save_ml
+
+            oid = str(result.get("order_id"))
+            rec = get_ml(oid) if kind == "milan_pro" else get_lr(oid)
+            if rec and not rec.get("delivery_source"):
+                rec["delivery_source"] = "admin_lifemap"
+                (save_ml if kind == "milan_pro" else save_lr)(rec)
+            # Love fulfill may have saved milan under milan folder — also try the other.
+            if kind == "love_reality_pro" and not rec:
+                rec = get_ml(oid)
+                if rec and not rec.get("delivery_source"):
+                    rec["delivery_source"] = "admin_lifemap"
+                    save_ml(rec)
+    except Exception as exc:
+        print(f"[admin/lifemap] delivery_source tag failed: {exc}", flush=True)
+
+    return jsonify(result), 200
+
+
+@app.route("/api/admin/lifemap-orders/delete", methods=["POST"])
+def admin_lifemap_delete_route():
+    """Remove a pending LifeMap booking from the admin queue."""
+    err = require_admin()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    kind = str(data.get("kind") or "").strip()
+    order_id = str(data.get("order_id") or data.get("order_prefix") or "").strip()
+
+    from lifemap_admin_deliver import delete_lifemap_order
+
+    result = delete_lifemap_order(kind, order_id)
+    if not result.get("ok"):
+        code = str(result.get("error") or "delete_failed")
+        status_code = 400
+        if code in ("order_not_found",):
+            status_code = 404
+        elif code in ("order_already_delivered",):
+            status_code = 409
+        return jsonify(result), status_code
+    return jsonify(result), 200
+
+
+@app.route("/api/admin/lifemap-orders/accept", methods=["POST"])
+def admin_lifemap_accept_route():
+    """Acknowledge a LifeMap order (stops Telegram reminders; still deliver PDF later)."""
+    err = require_admin()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    kind = str(data.get("kind") or "").strip()
+    order_id = str(data.get("order_id") or data.get("order_prefix") or "").strip()
+
+    from lifemap_admin_deliver import accept_lifemap_order
+
+    result = accept_lifemap_order(kind, order_id, source="admin")
+    if not result.get("ok"):
+        code = str(result.get("error") or "accept_failed")
+        status_code = 400
+        if code in ("order_not_found",):
+            status_code = 404
+        elif code in ("order_already_delivered", "order_cancelled"):
+            status_code = 409
+        return jsonify(result), status_code
+    return jsonify(result), 200
+
+
 @app.route("/api/admin/astrovastu-room-orders", methods=["GET"])
 def admin_astrovastu_room_orders_route():
     """Paid room photo uploads awaiting founder Vastu report."""
@@ -3416,6 +3780,1160 @@ def admin_business_vastu_order_detail_route(order_id: str):
     if not rec:
         return jsonify({"error": "not_found"}), 404
     return jsonify(rec)
+
+
+@app.route("/api/admin/birth-time-rectification-orders", methods=["GET"])
+def admin_birth_time_rectification_orders_route():
+    """Birth time rectification intake forms awaiting founder review."""
+    err = require_admin()
+    if err:
+        return err
+    from birth_time_rectification_orders import list_birth_time_rectification_orders
+
+    page = request.args.get("page", type=int) or 1
+    per_page = request.args.get("per_page", type=int) or 50
+    status = (request.args.get("status") or "").strip() or None
+    return jsonify(
+        list_birth_time_rectification_orders(page=page, per_page=per_page, status=status)
+    )
+
+
+@app.route("/api/admin/birth-time-rectification-orders/<order_id>", methods=["GET"])
+def admin_birth_time_rectification_order_detail_route(order_id: str):
+    """Full birth time rectification submission for admin review."""
+    err = require_admin()
+    if err:
+        return err
+    from birth_time_rectification_orders import get_birth_time_rectification_order
+
+    rec = get_birth_time_rectification_order((order_id or "").strip())
+    if not rec:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(rec)
+
+
+@app.route(
+    "/api/birth-time-rectification/submit",
+    methods=["POST", "OPTIONS"],
+    strict_slashes=False,
+)
+def birth_time_rectification_submit_route():
+    """User intake form → founder queue."""
+    if request.method == "OPTIONS":
+        return "", 204
+
+    import uuid as _uuid
+    from datetime import datetime, timezone
+
+    from birth_time_rectification_orders import _clean_events, _save_order
+    from models import User
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    full_name = (data.get("full_name") or "").strip()
+    gender = (data.get("gender") or "").strip()
+    dob = (data.get("dob") or "").strip()
+    approx_tob = (data.get("approx_tob") or "").strip()
+    birth_place = (data.get("birth_place") or "").strip()
+    last_15y = (data.get("last_15y_events_text") or "").strip()
+    events = _clean_events(data.get("milestone_events"))
+
+    if not full_name:
+        return jsonify({"error": "full_name_required", "message": "Full name is required."}), 400
+    if not gender:
+        return jsonify({"error": "gender_required", "message": "Gender is required."}), 400
+    if not dob:
+        return jsonify({"error": "dob_required", "message": "Date of birth is required."}), 400
+    if not approx_tob:
+        return jsonify(
+            {"error": "approx_tob_required", "message": "Approximate birth time is required."}
+        ), 400
+    if not birth_place:
+        return jsonify(
+            {"error": "birth_place_required", "message": "Birth place is required."}
+        ), 400
+    if len(events) < 5:
+        return jsonify(
+            {
+                "error": "events_required",
+                "message": "Select and complete at least 5 life milestones with Month, Year, and Impact.",
+            }
+        ), 400
+    for ev in events:
+        my = (ev.get("month_year") or "").strip()
+        month = (ev.get("month") or "").strip()
+        year = (ev.get("year") or "").strip()
+        impact = (ev.get("impact") or "").strip()
+        if not my and not (month and year):
+            return jsonify(
+                {
+                    "error": "month_year_required",
+                    "message": "Each selected milestone needs Month and Year.",
+                }
+            ), 400
+        if impact not in ("positive", "negative", "mixed"):
+            return jsonify(
+                {
+                    "error": "impact_required",
+                    "message": "Each selected milestone needs Impact (Positive / Negative / Mixed).",
+                }
+            ), 400
+    if len(last_15y) < 40:
+        return jsonify(
+            {
+                "error": "last_15y_required",
+                "message": (
+                    "Please fill the last 15 years box with your top 5 events "
+                    "(Event · Month/Year · Impact)."
+                ),
+            }
+        ), 400
+
+    cosmo_user_id = ""
+    try:
+        from cosmo_user_id import cosmo_display_id_for_user_id
+
+        cosmo_user_id = cosmo_display_id_for_user_id(user.id)
+    except Exception:
+        cosmo_user_id = ""
+
+    order_id = str(_uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    record = {
+        "order_id": order_id,
+        "created_at": now,
+        "user_id": user.id,
+        "cosmo_user_id": cosmo_user_id,
+        "user_email": getattr(user, "email", None) or "",
+        "user_phone": getattr(user, "phone", None) or "",
+        "full_name": full_name[:120],
+        "gender": gender[:40],
+        "dob": dob[:40],
+        "approx_tob": approx_tob[:40],
+        "birth_place": birth_place[:200],
+        "milestone_events": events,
+        "last_15y_events_text": last_15y[:8000],
+        "status": "pending",
+        "delivery": "founder_manual_birth_time_rectification",
+    }
+    _save_order(record)
+    return jsonify(
+        {
+            "ok": True,
+            "order_id": order_id,
+            "status": "pending",
+            "message": (
+                "Request received. Our astrologer will review your events "
+                "and rectify your birth time. We will contact you soon."
+            ),
+        }
+    )
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/request",
+    methods=["POST", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_request_route():
+    """User picks a live pack → durable FIFO queue (even if admin offline/busy)."""
+    if request.method == "OPTIONS":
+        return "", 204
+
+    from cosmic_intelligence_v3_sessions import (
+        get_v3_chat_settings,
+        has_active_or_awaiting_v3_session,
+        queue_position_for,
+        session_public_view,
+    )
+    from models import User
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    pack_id = str(data.get("pack_id") or "").strip()
+    preferred_language = str(
+        data.get("preferred_language") or data.get("lang") or ""
+    ).strip()
+    # Payment required — free connect disabled. Clients must pay via /api/ask-v3/create-order.
+    purchase_id_raw = data.get("purchase_id")
+    try:
+        purchase_id = int(purchase_id_raw) if purchase_id_raw is not None else None
+    except (TypeError, ValueError):
+        purchase_id = None
+
+    import ask_v3_billing as _av3b
+
+    if not purchase_id:
+        return jsonify(
+            {
+                "error": "payment_required",
+                "message": "Please pay for a V3 live pack first.",
+                "packs": _av3b.list_packs(),
+            }
+        ), 402
+
+    from models import V3LivePurchase
+
+    purchase = V3LivePurchase.query.get(purchase_id)
+    if (
+        not purchase
+        or purchase.user_id != int(user.id)
+        or purchase.status != "paid"
+    ):
+        return jsonify(
+            {
+                "error": "payment_required",
+                "message": "Valid paid V3 pack purchase required.",
+            }
+        ), 402
+
+    if purchase.session_id:
+        from cosmic_intelligence_v3_sessions import (
+            queue_position_for,
+            session_public_view,
+        )
+
+        pub = session_public_view(str(purchase.session_id)) or {}
+        qpos = pub.get("queue_position") or queue_position_for(str(purchase.session_id))
+        return jsonify(
+            {
+                "ok": True,
+                "session_id": purchase.session_id,
+                "queue_position": qpos,
+                "reused": True,
+                **pub,
+            }
+        )
+
+    if preferred_language and not purchase.preferred_language:
+        purchase.preferred_language = preferred_language
+        from database import db
+
+        db.session.commit()
+
+    # Paid purchase → create/reuse queue session (idempotent).
+    grant = _av3b.grant_purchase_idempotent(purchase)
+    sid = str(grant.get("session_id") or purchase.session_id or "")
+    if not sid:
+        # Reload after grant side-effects
+        purchase = V3LivePurchase.query.get(purchase_id)
+        sid = str((purchase.session_id if purchase else "") or "")
+    if not sid:
+        return jsonify(
+            {
+                "error": "session_create_failed",
+                "message": "Payment ok but live session could not start. Contact support.",
+            }
+        ), 500
+
+    pub = session_public_view(sid) or {}
+    qpos = pub.get("queue_position") or queue_position_for(sid)
+    chat_enabled = bool(get_v3_chat_settings().get("enabled"))
+    engine_busy = has_active_or_awaiting_v3_session()
+
+    busy_msg = (
+        "Cosmic Intelligence Engine is currently busy with another consultation. "
+        "You are in the waiting list — your turn will come after the current chat ends."
+    )
+    pack_meta = _av3b.get_pack(str(purchase.pack_id)) or {}
+    return jsonify(
+        {
+            "ok": True,
+            "session_id": sid,
+            "status": pub.get("status") or "queued",
+            "minutes": pub.get("minutes") or pack_meta.get("minutes"),
+            "price_inr": pub.get("price_inr") or pack_meta.get("price_inr"),
+            "label": pub.get("label") or pack_meta.get("label"),
+            "queue_position": qpos,
+            "engine_busy": engine_busy or not chat_enabled,
+            "chat_enabled": chat_enabled,
+            "queued": True,
+            "message": busy_msg if (engine_busy or not chat_enabled or (qpos and qpos > 1)) else (
+                "Request queued. Cosmic Intelligence Engine will invite you when ready."
+            ),
+        }
+    )
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/availability",
+    methods=["GET", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_availability_route():
+    if request.method == "OPTIONS":
+        return "", 204
+    from cosmic_intelligence_v3_sessions import get_v3_chat_settings
+
+    settings = get_v3_chat_settings()
+    return jsonify({"ok": True, **settings})
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/session/<session_id>",
+    methods=["GET", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_session_status_route(session_id: str):
+    """User polls until admin accepts."""
+    if request.method == "OPTIONS":
+        return "", 204
+
+    from cosmic_intelligence_v3_sessions import get_v3_session, session_public_view
+    from models import User
+
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    user_id = request.args.get("user_id", type=int)
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    rec = get_v3_session((session_id or "").strip())
+    if not rec or int(rec.get("user_id") or 0) != int(user.id):
+        return jsonify({"error": "not_found"}), 404
+    pub = session_public_view(session_id) or {}
+    return jsonify({"ok": True, **pub})
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/session/<session_id>/messages",
+    methods=["GET", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_messages_get_route(session_id: str):
+    if request.method == "OPTIONS":
+        return "", 204
+    from cosmic_intelligence_v3_sessions import get_v3_messages
+    from models import User
+
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    user_id = request.args.get("user_id", type=int)
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    from cosmic_intelligence_v3_sessions import get_v3_session
+
+    rec = get_v3_session((session_id or "").strip())
+    if not rec or int(rec.get("user_id") or 0) != int(user.id):
+        return jsonify({"error": "not_found"}), 404
+    after = (request.args.get("after") or "").strip() or None
+    return jsonify(get_v3_messages(session_id, after_ts=after))
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/session/<session_id>/message",
+    methods=["POST", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_message_post_route(session_id: str):
+    if request.method == "OPTIONS":
+        return "", 204
+    from cosmic_intelligence_v3_sessions import append_v3_message, get_v3_session, save_v3_image_data_url
+    from models import User
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    rec = get_v3_session((session_id or "").strip())
+    if not rec or int(rec.get("user_id") or 0) != int(user.id):
+        return jsonify({"error": "not_found"}), 404
+
+    image_url = str(data.get("image_url") or "").strip()
+    data_url = str(data.get("data_url") or data.get("image_data_url") or "").strip()
+    if data_url and not image_url:
+        saved = save_v3_image_data_url(data_url)
+        if not saved:
+            return jsonify({"error": "image_invalid"}), 400
+        image_url = saved
+
+    result = append_v3_message(
+        session_id,
+        sender="user",
+        text=str(data.get("text") or ""),
+        image_url=image_url,
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/session/<session_id>/accept",
+    methods=["POST", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_user_accept_route(session_id: str):
+    """User confirms Ready → start timer and open live chat."""
+    if request.method == "OPTIONS":
+        return "", 204
+    from cosmic_intelligence_v3_sessions import session_public_view, user_accept_v3_session
+    from models import User
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    result = user_accept_v3_session((session_id or "").strip(), user_id=int(user.id))
+    if not result.get("ok"):
+        code = 404 if result.get("error") == "not_found" else 400
+        pub = result.get("session")
+        if not pub and result.get("error") != "not_found":
+            pub = session_public_view((session_id or "").strip())
+        out = {**result}
+        if pub:
+            out["session"] = pub
+        return jsonify(out), code
+
+    sid = (session_id or "").strip()
+    return jsonify(
+        {
+            "ok": True,
+            "already_live": bool(result.get("already_live")),
+            "session": session_public_view(sid) or result.get("session"),
+        }
+    )
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/session/<session_id>/cancel-waitlist",
+    methods=["POST", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_cancel_waitlist_route(session_id: str):
+    """User permanently leaves the queued/awaiting V3 waitlist."""
+    if request.method == "OPTIONS":
+        return "", 204
+    from cosmic_intelligence_v3_sessions import cancel_v3_waitlist
+    from models import User
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    result = cancel_v3_waitlist(
+        (session_id or "").strip(),
+        user_id=int(user.id),
+    )
+    if not result.get("ok"):
+        code = 404 if result.get("error") == "not_found" else 400
+        return jsonify(result), code
+    return jsonify(
+        {
+            "ok": True,
+            "cancelled": True,
+            "already": bool(result.get("already")),
+        }
+    )
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/session/<session_id>/end",
+    methods=["POST", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_end_route(session_id: str):
+    """User taps End — permanently close the live session."""
+    if request.method == "OPTIONS":
+        return "", 204
+    from cosmic_intelligence_v3_sessions import get_v3_session, leave_or_end_v3_session
+    from models import User
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    rec = get_v3_session((session_id or "").strip())
+    if not rec or int(rec.get("user_id") or 0) != int(user.id):
+        return jsonify({"error": "not_found"}), 404
+
+    result = leave_or_end_v3_session((session_id or "").strip())
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/active",
+    methods=["GET", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_active_route():
+    """User's queued / awaiting_user / resumable accepted session, if any."""
+    if request.method == "OPTIONS":
+        return "", 204
+    from cosmic_intelligence_v3_sessions import find_active_v3_session_for_user
+    from models import User
+
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    user_id = request.args.get("user_id", type=int)
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    return jsonify({"ok": True, "session": find_active_v3_session_for_user(int(user.id))})
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/history",
+    methods=["GET", "OPTIONS"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_history_route():
+    """My Reports → Last talked: past live chat sessions for this user."""
+    if request.method == "OPTIONS":
+        return "", 204
+    from cosmic_intelligence_v3_sessions import list_v3_chat_history_for_user
+    from models import User
+
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    user_id = request.args.get("user_id", type=int)
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+    limit = request.args.get("limit", type=int) or 40
+    chats = list_v3_chat_history_for_user(int(user.id), limit=limit)
+    return jsonify({"ok": True, "chats": chats, "total": len(chats)})
+
+
+@app.route(
+    "/api/cosmic-intelligence-v3/media/<filename>",
+    methods=["GET"],
+    strict_slashes=False,
+)
+def cosmic_intelligence_v3_media_route(filename: str):
+    from cosmic_intelligence_v3_sessions import read_v3_media
+
+    got = read_v3_media(filename)
+    if not got:
+        return jsonify({"error": "not_found"}), 404
+    raw, mime = got
+    return Response(raw, mimetype=mime)
+
+
+@app.route("/api/admin/cosmic-intelligence-v3-sessions", methods=["GET"])
+def admin_cosmic_intelligence_v3_sessions_route():
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import list_v3_sessions
+
+    page = request.args.get("page", type=int) or 1
+    per_page = request.args.get("per_page", type=int) or 50
+    status = (request.args.get("status") or "").strip() or None
+    return jsonify(list_v3_sessions(page=page, per_page=per_page, status=status))
+
+
+@app.route("/api/admin/push/vapid-public-key", methods=["GET"])
+def admin_push_vapid_public_key_route():
+    err = require_admin()
+    if err:
+        return err
+    try:
+        from admin_push import get_vapid_public_key
+
+        return jsonify({"ok": True, "key": get_vapid_public_key()})
+    except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"error": "push_setup_failed", "detail": f"{type(exc).__name__}: {exc}"}), 503
+
+
+@app.route("/api/admin/push/subscribe", methods=["POST"])
+def admin_push_subscribe_route():
+    err = require_admin()
+    if err:
+        return err
+    from admin_push import save_subscription
+
+    data = request.get_json(silent=True) or {}
+    result = save_subscription(data.get("subscription") or data)
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route("/api/admin/push/test", methods=["POST"])
+def admin_push_test_route():
+    err = require_admin()
+    if err:
+        return err
+    try:
+        from admin_push import send_test_push
+
+        sent = send_test_push()
+        return jsonify({"ok": True, "sent": sent})
+    except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"error": "push_failed", "detail": f"{type(exc).__name__}: {exc}"}), 503
+
+
+@app.route("/api/admin/cosmic-intelligence-v3-settings", methods=["GET", "POST"])
+def admin_cosmic_intelligence_v3_settings_route():
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import get_v3_chat_settings, set_v3_chat_enabled
+
+    if request.method == "GET":
+        return jsonify({"ok": True, **get_v3_chat_settings()})
+    data = request.get_json(silent=True) or {}
+    if "enabled" not in data:
+        return jsonify({"error": "enabled_required"}), 400
+    enabled = bool(data.get("enabled"))
+    settings = set_v3_chat_enabled(enabled)
+    if enabled:
+        # Users queued while chat was closed → ring admin for FIFO head now.
+        # Fire-and-forget so the Enable toggle can NEVER hang on notifications.
+        def _ring_head() -> None:
+            try:
+                from cosmic_intelligence_v3_sessions import (
+                    alert_admin_for_queue_head_if_idle,
+                )
+
+                alert_admin_for_queue_head_if_idle()
+            except Exception:
+                pass
+
+        import threading as _threading
+
+        _threading.Thread(target=_ring_head, daemon=True).start()
+    return jsonify({"ok": True, **settings})
+
+
+@app.route(
+    "/api/admin/cosmic-intelligence-v3-sessions/<session_id>/accept",
+    methods=["POST"],
+)
+def admin_cosmic_intelligence_v3_accept_route(session_id: str):
+    """Admin Accept → awaiting_user (notify user). Timer starts only after user Accept."""
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import (
+        admin_ready_v3_session,
+        notify_user_v3_ready,
+        session_public_view,
+    )
+
+    data = request.get_json(silent=True) or {}
+    sid = (session_id or "").strip()
+    result = admin_ready_v3_session(sid, admin_note=str(data.get("note") or ""))
+    if not result.get("ok"):
+        err_code = result.get("error") or "failed"
+        http = 404 if err_code == "not_found" else 409
+        return jsonify(result), http
+
+    pub = session_public_view(sid) or result.get("session")
+    if not result.get("already") and not result.get("already_live"):
+        try:
+            notify_user_v3_ready(result.get("session") or {})
+        except Exception:
+            pass
+    return jsonify(
+        {
+            "ok": True,
+            "awaiting_user": True,
+            "already": bool(result.get("already")),
+            "already_live": bool(result.get("already_live")),
+            "session": pub,
+            "message": "User notified — waiting for Accept to start timer.",
+        }
+    )
+
+
+@app.route(
+    "/api/admin/cosmic-intelligence-v3-sessions/<session_id>/reject",
+    methods=["POST"],
+)
+def admin_cosmic_intelligence_v3_reject_route(session_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import reject_v3_session
+
+    rec = reject_v3_session((session_id or "").strip())
+    if not rec:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify({"ok": True, "session": rec})
+
+
+@app.route(
+    "/api/admin/cosmic-intelligence-v3-sessions/<session_id>/messages",
+    methods=["GET"],
+)
+def admin_cosmic_intelligence_v3_messages_route(session_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import get_v3_messages
+
+    after = (request.args.get("after") or "").strip() or None
+    result = get_v3_messages((session_id or "").strip(), after_ts=after)
+    if not result.get("ok"):
+        return jsonify(result), 404
+    return jsonify(result)
+
+
+@app.route(
+    "/api/admin/cosmic-intelligence-v3-sessions/<session_id>/message",
+    methods=["POST"],
+)
+def admin_cosmic_intelligence_v3_message_post_route(session_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import append_v3_message, save_v3_image_data_url
+
+    data = request.get_json(silent=True) or {}
+    image_url = str(data.get("image_url") or "").strip()
+    data_url = str(data.get("data_url") or data.get("image_data_url") or "").strip()
+    if data_url and not image_url:
+        saved = save_v3_image_data_url(data_url)
+        if not saved:
+            return jsonify({"error": "image_invalid"}), 400
+        image_url = saved
+    result = append_v3_message(
+        (session_id or "").strip(),
+        sender="admin",
+        text=str(data.get("text") or ""),
+        image_url=image_url,
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route(
+    "/api/admin/cosmic-intelligence-v3-sessions/<session_id>/typing",
+    methods=["POST"],
+)
+def admin_cosmic_intelligence_v3_typing_route(session_id: str):
+    """Admin is composing — user app shows Cosmic Intelligence calculating…"""
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import set_v3_admin_typing
+
+    data = request.get_json(silent=True) or {}
+    typing = bool(data.get("typing", True))
+    result = set_v3_admin_typing((session_id or "").strip(), typing=typing)
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route(
+    "/api/admin/cosmic-intelligence-v3-sessions/<session_id>/polish-send",
+    methods=["POST"],
+)
+def admin_cosmic_intelligence_v3_polish_send_route(session_id: str):
+    """Light 30–40% engine polish, then send to user (no raw direct send)."""
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import append_v3_message, set_v3_admin_typing
+    from v3_engine_polish import polish_v3_engine_reply
+
+    data = request.get_json(silent=True) or {}
+    raw = str(data.get("text") or "").strip()
+    if not raw:
+        return jsonify({"ok": False, "error": "empty_text"}), 400
+
+    polish = polish_v3_engine_reply(raw)
+    polished = str(polish.get("polished") or raw).strip()
+    if not polished:
+        return jsonify({"ok": False, "error": "polish_empty"}), 400
+
+    # Keep typing indicator on while polishing so user still sees calculating…
+    try:
+        set_v3_admin_typing((session_id or "").strip(), typing=True)
+    except Exception:
+        pass
+
+    result = append_v3_message(
+        (session_id or "").strip(),
+        sender="admin",
+        text=polished,
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(
+        {
+            "ok": True,
+            "original": polish.get("original") or raw,
+            "polished": polished,
+            "fallback": bool(polish.get("fallback")),
+            "message": result.get("message"),
+            "session": result.get("session"),
+        }
+    )
+
+
+@app.route(
+    "/api/admin/cosmic-intelligence-v3-sessions/<session_id>/extend",
+    methods=["POST"],
+)
+def admin_cosmic_intelligence_v3_extend_route(session_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import DEFAULT_EXTEND_SECONDS, extend_v3_session
+
+    data = request.get_json(silent=True) or {}
+    try:
+        seconds = int(data.get("seconds") or DEFAULT_EXTEND_SECONDS)
+    except (TypeError, ValueError):
+        seconds = DEFAULT_EXTEND_SECONDS
+    result = extend_v3_session((session_id or "").strip(), seconds=seconds)
+    if not result.get("ok"):
+        code = 404 if result.get("error") == "not_found" else 400
+        return jsonify(result), code
+    return jsonify(result)
+
+
+@app.route(
+    "/api/admin/cosmic-intelligence-v3-sessions/<session_id>/end",
+    methods=["POST"],
+)
+def admin_cosmic_intelligence_v3_end_route(session_id: str):
+    """Admin permanently ends a live V3 session."""
+    err = require_admin()
+    if err:
+        return err
+    from cosmic_intelligence_v3_sessions import end_v3_session, get_v3_session
+
+    sid = (session_id or "").strip()
+    rec = get_v3_session(sid)
+    if not rec:
+        return jsonify({"error": "not_found"}), 404
+    st = str(rec.get("status") or "")
+    if st not in ("accepted", "awaiting_user"):
+        return jsonify({"error": "not_live", "status": st}), 400
+
+    ended = end_v3_session(sid, reason="ended_by_admin")
+    return jsonify({"ok": True, "session": ended})
+
+
+# ── Help & Support chat (persistent inbox — not V3 live consultations) ────────
+
+
+def _support_auth_user():
+    """Return (user, error_response). error_response is set on failure."""
+    from models import User
+
+    data = request.get_json(silent=True) if request.method in ("POST", "PUT", "PATCH") else {}
+    if not isinstance(data, dict):
+        data = {}
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    user_id = data.get("user_id") or request.args.get("user_id", type=int)
+    if not user_id or not api_key:
+        return None, (jsonify({"error": "auth_required"}), 401)
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return None, (jsonify({"error": "invalid_credentials"}), 401)
+    return user, None
+
+
+@app.route("/api/support/thread", methods=["GET", "POST", "OPTIONS"], strict_slashes=False)
+def support_thread_route():
+    """Get or create the user's open support thread."""
+    if request.method == "OPTIONS":
+        return "", 204
+    from support_chat import get_or_create_thread, _public_thread, find_open_thread_for_user
+
+    user, err = _support_auth_user()
+    if err:
+        return err
+    if request.method == "GET":
+        existing = find_open_thread_for_user(int(user.id))
+        if not existing:
+            return jsonify({"ok": True, "thread": None})
+        return jsonify({"ok": True, "thread": _public_thread(existing)})
+
+    rec = get_or_create_thread(
+        user_id=int(user.id),
+        user_name=str(getattr(user, "name", "") or ""),
+        user_email=str(getattr(user, "email", "") or ""),
+        user_phone=str(getattr(user, "phone", "") or ""),
+        cosmo_user_id=str(getattr(user, "cosmo_user_id", "") or ""),
+    )
+    return jsonify({"ok": True, "thread": _public_thread(rec)})
+
+
+@app.route(
+    "/api/support/thread/<thread_id>/messages",
+    methods=["GET", "OPTIONS"],
+    strict_slashes=False,
+)
+def support_messages_route(thread_id: str):
+    if request.method == "OPTIONS":
+        return "", 204
+    from support_chat import get_messages, get_thread
+
+    user, err = _support_auth_user()
+    if err:
+        return err
+    rec = get_thread((thread_id or "").strip())
+    if not rec or int(rec.get("user_id") or 0) != int(user.id):
+        return jsonify({"error": "not_found"}), 404
+    after = (request.args.get("after") or "").strip() or None
+    result = get_messages(
+        (thread_id or "").strip(), after_ts=after, mark_read_for="user"
+    )
+    return jsonify(result)
+
+
+@app.route(
+    "/api/support/thread/<thread_id>/message",
+    methods=["POST", "OPTIONS"],
+    strict_slashes=False,
+)
+def support_message_post_route(thread_id: str):
+    if request.method == "OPTIONS":
+        return "", 204
+    from support_chat import (
+        append_message,
+        get_thread,
+        notify_admin_new_support_message,
+        save_support_image_data_url,
+    )
+
+    user, err = _support_auth_user()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    image_url = str(data.get("image_url") or "").strip()
+    data_url = str(data.get("data_url") or data.get("image_data_url") or "").strip()
+    if data_url and not image_url:
+        saved = save_support_image_data_url(data_url)
+        if not saved:
+            return jsonify({"error": "image_invalid"}), 400
+        image_url = saved
+    result = append_message(
+        (thread_id or "").strip(),
+        sender="user",
+        text=str(data.get("text") or ""),
+        image_url=image_url,
+        user_id=int(user.id),
+    )
+    if not result.get("ok"):
+        code = 404 if result.get("error") == "not_found" else 400
+        if result.get("error") == "forbidden":
+            code = 403
+        return jsonify(result), code
+    try:
+        notify_admin_new_support_message(
+            get_thread((thread_id or "").strip()) or {},
+            result.get("message") or {},
+        )
+    except Exception:
+        pass
+    return jsonify(result)
+
+
+@app.route("/api/support/media/<filename>", methods=["GET"])
+def support_media_route(filename: str):
+    from flask import Response
+    from support_chat import read_support_media
+
+    got = read_support_media(filename)
+    if not got:
+        return jsonify({"error": "not_found"}), 404
+    data, mime = got
+    return Response(data, mimetype=mime)
+
+
+@app.route("/api/admin/support/threads", methods=["GET"])
+def admin_support_threads_route():
+    err = require_admin()
+    if err:
+        return err
+    from support_chat import list_threads
+
+    status = (request.args.get("status") or "").strip() or None
+    page = request.args.get("page", 1, type=int)
+    return jsonify({"ok": True, **list_threads(status=status, page=page)})
+
+
+@app.route(
+    "/api/admin/support/threads/<thread_id>/messages",
+    methods=["GET"],
+)
+def admin_support_messages_route(thread_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from support_chat import get_messages
+
+    after = (request.args.get("after") or "").strip() or None
+    result = get_messages(
+        (thread_id or "").strip(), after_ts=after, mark_read_for="admin"
+    )
+    if not result.get("ok"):
+        return jsonify(result), 404
+    return jsonify(result)
+
+
+@app.route(
+    "/api/admin/support/threads/<thread_id>/message",
+    methods=["POST"],
+)
+def admin_support_message_post_route(thread_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from support_chat import (
+        append_message,
+        get_thread,
+        notify_user_support_reply,
+        save_support_image_data_url,
+    )
+
+    data = request.get_json(silent=True) or {}
+    image_url = str(data.get("image_url") or "").strip()
+    data_url = str(data.get("data_url") or data.get("image_data_url") or "").strip()
+    if data_url and not image_url:
+        saved = save_support_image_data_url(data_url)
+        if not saved:
+            return jsonify({"error": "image_invalid"}), 400
+        image_url = saved
+    result = append_message(
+        (thread_id or "").strip(),
+        sender="admin",
+        text=str(data.get("text") or ""),
+        image_url=image_url,
+    )
+    if not result.get("ok"):
+        code = 404 if result.get("error") == "not_found" else 400
+        return jsonify(result), code
+    try:
+        notify_user_support_reply(get_thread((thread_id or "").strip()) or {})
+    except Exception:
+        pass
+    return jsonify(result)
+
+
+@app.route(
+    "/api/admin/support/threads/<thread_id>/typing",
+    methods=["POST"],
+)
+def admin_support_typing_route(thread_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from support_chat import set_admin_typing
+
+    data = request.get_json(silent=True) or {}
+    typing = bool(data.get("typing"))
+    result = set_admin_typing((thread_id or "").strip(), typing=typing)
+    if not result.get("ok"):
+        return jsonify(result), 404
+    return jsonify(result)
+
+
+@app.route(
+    "/api/admin/support/threads/<thread_id>/close",
+    methods=["POST"],
+)
+def admin_support_close_route(thread_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from support_chat import close_thread
+
+    result = close_thread((thread_id or "").strip())
+    if not result.get("ok"):
+        return jsonify(result), 404
+    return jsonify(result)
+
+
+@app.route(
+    "/api/admin/support/threads/<thread_id>/reopen",
+    methods=["POST"],
+)
+def admin_support_reopen_route(thread_id: str):
+    err = require_admin()
+    if err:
+        return err
+    from support_chat import reopen_thread
+
+    result = reopen_thread((thread_id or "").strip())
+    if not result.get("ok"):
+        return jsonify(result), 404
+    return jsonify(result)
+
+
+@app.route("/api/admin/login", methods=["POST", "OPTIONS"], strict_slashes=False)
+def admin_panel_login_route():
+    """Username/password gate for the admin panel — returns the admin API token."""
+    if request.method == "OPTIONS":
+        return "", 204
+    import hmac
+    import time as _time
+
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username") or "").strip()
+    password = str(data.get("password") or "")
+    expected_user = os.environ.get("ADMIN_LOGIN_USER", "IMFSR@58225")
+    expected_pass = os.environ.get("ADMIN_LOGIN_PASS", "Scorpio@2031")
+
+    user_ok = hmac.compare_digest(username.encode(), expected_user.encode())
+    pass_ok = hmac.compare_digest(password.encode(), expected_pass.encode())
+    if not (user_ok and pass_ok):
+        _time.sleep(1)  # slow down brute-force attempts
+        return jsonify({"error": "invalid_login"}), 401
+
+    admin_secret = os.environ.get("ADMIN_SECRET", "").strip() or ADMIN_SECRET
+    if not admin_secret:
+        return jsonify({"error": "admin_not_configured"}), 503
+    return jsonify({"ok": True, "token": admin_secret})
 
 
 @app.route("/api/admin/login-activity", methods=["GET"])
@@ -3464,19 +4982,23 @@ def admin_login_activity():
 
     login_user_ids = [int(r.user_id) for r in rows if r.user_id]
     profile_counts = batch_profile_counts(db.session, login_user_ids)
+    users_by_id: dict[int, User] = {}
+    if login_user_ids:
+        for u in User.query.filter(User.id.in_(list(set(login_user_ids)))).all():
+            users_by_id[int(u.id)] = u
 
     items = []
     for r in rows:
-        uname = ""
-        if r.user_id:
-            u = User.query.get(r.user_id)
-            uname = (u.name or "") if u else ""
         uid = int(r.user_id) if r.user_id else None
+        u = users_by_id.get(uid) if uid else None
         items.append(
             {
                 "id": r.id,
                 "user_id": r.user_id,
-                "user_name": uname,
+                "user_name": (u.name or "") if u else "",
+                "cosmo_user_id": (
+                    (getattr(u, "cosmo_user_id", None) or "").strip().upper() if u else ""
+                ),
                 "email": r.email,
                 "provider": r.provider,
                 "firebase_uid": r.firebase_uid,
@@ -3559,6 +5081,86 @@ def admin_user_detail(user_id):
     return jsonify(detail)
 
 
+@app.route("/api/admin/users/<int:user_id>/chart", methods=["GET"])
+def admin_user_chart(user_id: int):
+    """Full kundli JSON for admin V3 live chat (D1/D9/KP/dasha)."""
+    err = require_admin()
+    if err:
+        return err
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"ok": False, "error": "User not found"}), 404
+
+    chart, missing, name = _resolve_user_chart(user)
+    if not chart:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "chart_unavailable",
+                    "message": "No kundli/chart found for this user.",
+                    "missing_fields": missing or [],
+                    "name": name or getattr(user, "name", None) or "",
+                }
+            ),
+            404,
+        )
+
+    # Stored chart_data has currentDasha frozen at generation time.
+    # Recompute from dashas tree for "today" so admin matches the mobile app.
+    try:
+        chart = _refresh_current_dasha_from_tree(chart)
+    except Exception:
+        app.logger.exception(
+            "[admin-chart] currentDasha refresh failed user_id=%s", user_id
+        )
+
+    birth = {
+        "name": name or getattr(user, "name", None) or "",
+        "dob": chart.get("dob") or "",
+        "time": chart.get("time") or "",
+        "place": chart.get("place") or "",
+    }
+    # Prefer primary profile birth fields when chart JSON lacks them.
+    try:
+        from admin_dashboard import _parse_birth_data
+
+        prim = Profile.query.filter_by(
+            user_id=user.id, deleted_at=None, is_primary=True
+        ).first()
+        if not prim:
+            prim = (
+                Profile.query.filter_by(user_id=user.id, deleted_at=None)
+                .order_by(Profile.created_at.asc())
+                .first()
+            )
+        if prim and prim.birth_data:
+            parsed = _parse_birth_data(prim.birth_data)
+            if not birth["dob"] and parsed.get("dob"):
+                birth["dob"] = parsed["dob"]
+            if not birth["time"] and parsed.get("tob"):
+                birth["time"] = parsed["tob"]
+            if not birth["place"] and parsed.get("place"):
+                birth["place"] = parsed["place"]
+            if prim.name:
+                birth["name"] = prim.name
+            birth["gender"] = (prim.gender or parsed.get("gender") or "").strip()
+    except Exception:
+        app.logger.exception("[admin-chart] birth enrich failed user_id=%s", user_id)
+
+    return jsonify(
+        {
+            "ok": True,
+            "user_id": user.id,
+            "cosmo_user_id": getattr(user, "cosmo_user_id", None) or "",
+            "name": birth.get("name") or name or "",
+            "birth": birth,
+            "chart": chart,
+        }
+    )
+
+
 @app.route("/api/admin/users/<int:user_id>/ask-profile", methods=["GET"])
 def admin_user_ask_profile(user_id: int):
     """Question-derived user mindset profile (Ask signals only)."""
@@ -3632,11 +5234,26 @@ def admin_reset_kundli_quota(user_id):
 
 
 def _admin_purge_user_row(user: User) -> dict:
-    """Permanently remove user + kundli + profiles + purchases + login rows."""
+    """Permanently remove user + kundli + profiles + purchases + login rows.
+
+    Rotates api_key first so any open app session fails auth immediately,
+    then hard-deletes related rows and the user.
+    """
+    import secrets
+
     from models import AstroVastuPurchase, CoupleReportPurchase
 
     user_id = int(user.id)
     email_norm = (user.email or "").strip().lower()
+
+    # Force immediate logout on next (or in-flight) API call from the app.
+    try:
+        user.api_key = secrets.token_hex(32)
+        if hasattr(user, "expo_push_token"):
+            user.expo_push_token = None
+        db.session.flush()
+    except Exception:
+        pass
 
     Kundli.query.filter_by(user_id=user_id).delete(synchronize_session=False)
     Profile.query.filter_by(user_id=user_id).delete(synchronize_session=False)
@@ -3737,6 +5354,8 @@ def health():
         "db": "ok" if db_ok else "down",
         "db_error": detail,
         "firebase_admin_configured": fb_ok,
+        # Mobile Google login needs this route. false → VPS pe stale flask_app / restart missing.
+        "auth_firebase_verify": "firebase_verify_route" in app.view_functions,
     }), (200 if db_ok else 503)
 
 
@@ -5911,6 +7530,92 @@ def astrovastu_basic_route():
 # ─────────────────────────────────────────────────────────────────────────────
 # AstroVastu PRO  —  multi-room deep-scan endpoint  (Sprint 3)
 # ─────────────────────────────────────────────────────────────────────────────
+def _refresh_current_dasha_from_tree(chart):
+    """
+    Recompute currentDasha (MD / AD / PD) from chart['dashas'] for *today*.
+
+    Mobile app does the same via activeDashaIndex(Date.now()); stored
+    chart_data.currentDasha is frozen at kundli generation and goes stale.
+    """
+    if not isinstance(chart, dict):
+        return chart
+    dashas = chart.get("dashas")
+    if not isinstance(dashas, list) or not dashas:
+        return chart
+
+    from datetime import datetime
+
+    today = datetime.utcnow().date()
+
+    def _parse(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    current_maha = None
+    current_antar = None
+    for d in dashas:
+        if not isinstance(d, dict):
+            continue
+        ds, de = _parse(d.get("startDate")), _parse(d.get("endDate"))
+        if not (ds and de):
+            continue
+        # Match kundli_engine / mobile: start inclusive, end exclusive
+        if ds <= today < de:
+            current_maha = d
+            for s in d.get("subDashas") or []:
+                if not isinstance(s, dict):
+                    continue
+                ss, se = _parse(s.get("startDate")), _parse(s.get("endDate"))
+                if ss and se and ss <= today < se:
+                    current_antar = s
+                    break
+            break
+
+    if not current_maha and isinstance(dashas[0], dict):
+        current_maha = dashas[0]
+    if not current_maha:
+        return chart
+
+    subs = current_maha.get("subDashas") or []
+    if not current_antar and isinstance(subs, list) and subs and isinstance(subs[0], dict):
+        current_antar = subs[0]
+
+    antar = current_antar or {}
+    cd = {
+        "maha": current_maha.get("planet"),
+        "antar": antar.get("planet"),
+        "startDate": antar.get("startDate") or current_maha.get("startDate"),
+        "endDate": antar.get("endDate") or current_maha.get("endDate"),
+        "mahaStartDate": current_maha.get("startDate"),
+        "mahaEndDate": current_maha.get("endDate"),
+    }
+
+    try:
+        from pratyantar import compute_pratyantar
+
+        _pd = compute_pratyantar(cd) or {}
+        _cur = _pd.get("current_pd") or {}
+        if _cur.get("lord"):
+            cd["pratyantar"] = _cur["lord"]
+            cd["pratyantarStart"] = _cur.get("start")
+            cd["pratyantarEnd"] = _cur.get("end")
+    except Exception as exc:
+        print(f"[refresh-dasha] pratyantar bake failed (non-fatal): {exc}", flush=True)
+
+    out = dict(chart)
+    out["currentDasha"] = cd
+    out["currentPhase"] = {
+        "name": f"{cd.get('maha') or '?'} – {cd.get('antar') or '?'}",
+        "start": cd.get("startDate"),
+        "end": cd.get("endDate"),
+    }
+    return out
+
+
 def _resolve_user_chart(user):
     """
     Load the user's birth chart, preferring the multi-profile primary Profile,
@@ -7978,7 +9683,7 @@ def ask_route():
                 return jsonify({"error": "Unauthorized"}), 401
             from ask_kundli_resolver import resolve_kundli_for_user
 
-            kundli, k_err = resolve_kundli_for_user(rp_user, kundli, birth)
+            kundli, k_err, birth = resolve_kundli_for_user(rp_user, kundli, birth)
             if k_err:
                 return k_err
             rp_q = consume_question(rp_user)
@@ -8104,6 +9809,17 @@ def ask_route():
                 }
         out = _finalize_ask_out_after_llm(out, rp_user, quota_on_success=rp_quota)
         out["plan"] = rp_plan
+        try:
+            from ask_followup_chips import enrich_ask_result_followups
+
+            _admin_sync = None
+            if isinstance(out, dict):
+                _admin_sync = (out.get("admin_llm_context") or {}).get("llm_intent")
+                if not isinstance(_admin_sync, dict):
+                    _admin_sync = out.get("llm_intent") if isinstance(out.get("llm_intent"), dict) else None
+            enrich_ask_result_followups(out, lang=lang or "hn", admin=_admin_sync)
+        except Exception as _chip_exc:
+            print(f"[ask:RP] followup chips enrich skipped: {_chip_exc}", flush=True)
         try:
             from openai_helper import align_ask_reply_to_question_lang as _align_lang
 
@@ -8353,10 +10069,25 @@ def ask_route():
                 jsonify(
                     {
                         "error": "daily_limit_reached",
-                        "message": f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
-                        "quota": {"used": quota["used"], "limit": quota["limit"]},
-                        "plan": effective_plan(user),
+                        "message": (
+                            "Aapke Cosmic Intelligence V1 pack ke questions khatam ho gaye. "
+                            "Naya pack lein — Starter ₹49 · Popular ₹99 · Power ₹299."
+                            if quota.get("ask_v1_packs") or quota.get("via") == "ask_v1_pack"
+                            else f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. V1 pack lein for more."
+                        ),
+                        "quota": {
+                            "used": quota["used"],
+                            "limit": quota["limit"],
+                            "questions_left": quota.get("questions_left"),
+                            "via": quota.get("via"),
+                        },
+                        "plan": (
+                            "ask_v1_pack"
+                            if quota.get("ask_v1_packs") or quota.get("via") == "ask_v1_pack"
+                            else effective_plan(user)
+                        ),
                         "upgrade_required": True,
+                        "ask_v1_packs": True,
                     }
                 ),
                 402,
@@ -9067,7 +10798,7 @@ def ask_stream_route():
                 return jsonify({"error": "Unauthorized"}), 401
             from ask_kundli_resolver import resolve_kundli_for_user
 
-            kundli, k_err = resolve_kundli_for_user(rp_user_s, kundli, birth)
+            kundli, k_err, birth = resolve_kundli_for_user(rp_user_s, kundli, birth)
             if k_err:
                 return k_err
             rp_q_s = consume_question(rp_user_s)
@@ -9194,6 +10925,17 @@ def ask_stream_route():
                 }
         out_s = _finalize_ask_out_after_llm(out_s, rp_user_s, quota_on_success=rp_quota_s)
         out_s["plan"] = rp_plan_s
+        try:
+            from ask_followup_chips import enrich_ask_result_followups
+
+            _admin_s = None
+            if isinstance(out_s, dict):
+                _admin_s = (out_s.get("admin_llm_context") or {}).get("llm_intent")
+                if not isinstance(_admin_s, dict):
+                    _admin_s = out_s.get("llm_intent") if isinstance(out_s.get("llm_intent"), dict) else None
+            enrich_ask_result_followups(out_s, lang=lang or "hn", admin=_admin_s)
+        except Exception as _chip_exc_s:
+            print(f"[ask/stream:RP] followup chips enrich skipped: {_chip_exc_s}", flush=True)
         try:
             from openai_helper import align_ask_reply_to_question_lang as _align_lang_s
 
@@ -9328,10 +11070,25 @@ def ask_stream_route():
                 jsonify(
                     {
                         "error": "daily_limit_reached",
-                        "message": f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
-                        "quota": {"used": quota["used"], "limit": quota["limit"]},
-                        "plan": effective_plan(user),
+                        "message": (
+                            "Aapke Cosmic Intelligence V1 pack ke questions khatam ho gaye. "
+                            "Naya pack lein — Starter ₹49 · Popular ₹99 · Power ₹299."
+                            if quota.get("ask_v1_packs") or quota.get("via") == "ask_v1_pack"
+                            else f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. V1 pack lein for more."
+                        ),
+                        "quota": {
+                            "used": quota["used"],
+                            "limit": quota["limit"],
+                            "questions_left": quota.get("questions_left"),
+                            "via": quota.get("via"),
+                        },
+                        "plan": (
+                            "ask_v1_pack"
+                            if quota.get("ask_v1_packs") or quota.get("via") == "ask_v1_pack"
+                            else effective_plan(user)
+                        ),
                         "upgrade_required": True,
+                        "ask_v1_packs": True,
                     }
                 ),
                 402,
@@ -9776,6 +11533,10 @@ def ask_stream_route():
                         "done": True,
                         "text": evt.get("text", ""),
                         "topic": final_topic,
+                        "domain": evt.get("domain") or final_topic,
+                        "bucket": evt.get("bucket") or "",
+                        "archetype": evt.get("archetype") or "",
+                        "subject": evt.get("subject") or "",
                         "confidence": evt.get("confidence", 0.0),
                         "source": evt.get("source", "openai_stream"),
                         "follow_ups": evt.get("follow_ups", []),
@@ -9955,7 +11716,7 @@ def _parse_batch_ask_request(data: dict):
     user_id_int = int(user.id) if user is not None else None
     primary_kundli_id = _batch_primary_kundli_id(user)
 
-    kundli, k_err = resolve_kundli_for_user(user, kundli, birth)
+    kundli, k_err, birth = resolve_kundli_for_user(user, kundli, birth)
     if k_err:
         return None, k_err
 
@@ -11955,14 +13716,16 @@ def open_in_expo():
     return Response(html, mimetype="text/html")
 
 
-@app.route("/", defaults={"path": ""})
-@app.route("/<path:path>")
+@app.route("/", defaults={"path": ""}, methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+@app.route("/<path:path>", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 def serve_frontend(path):
     from flask import send_from_directory
 
-    # Never intercept /api/* — those are handled by explicit routes above
+    # Unmatched /api/* must 404 (not 405 from GET-only catch-all).
     if path.startswith("api/"):
-        return jsonify({"error": "Not found"}), 404
+        return jsonify({"error": "Not found", "message": f"No API route for /{path}"}), 404
+    if request.method not in ("GET", "HEAD"):
+        return jsonify({"error": "method_not_allowed"}), 405
     full = os.path.join(_DIST, path)
     if path and os.path.isfile(full):
         return send_from_directory(_DIST, path)
@@ -12946,12 +14709,32 @@ except Exception as _avho_exc:
         pass
 
 try:
+    from numerology_human_orders import register_numerology_human_order_routes
+
+    register_numerology_human_order_routes(app)
+except Exception as _nho_exc:
+    try:
+        print(f"[numerology_human_orders] route register failed: {_nho_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
     from business_vastu_human_orders import register_business_vastu_human_order_routes
 
     register_business_vastu_human_order_routes(app)
 except Exception as _bvho_exc:
     try:
         print(f"[business_vastu_human_orders] route register failed: {_bvho_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
+    from birth_time_rectification_orders import register_birth_time_rectification_routes
+
+    register_birth_time_rectification_routes(app)
+except Exception as _btr_exc:
+    try:
+        print(f"[birth_time_rectification] route register failed: {_btr_exc}", flush=True)
     except Exception:
         pass
 
@@ -13596,6 +15379,24 @@ def payment_webhook():
             app.logger.info("[RZ-CA] webhook granted career_unlock order=%s", order_id)
         else:
             app.logger.warning("[RZ-CA] webhook: no user for order=%s", order_id)
+        return jsonify({"status": "ok"}), 200
+
+    if tags.get("kind") == "ask_v1_pack" or (order_id and order_id.startswith("AQ")):
+        import ask_v1_billing as _av1b
+
+        if _av1b.grant_from_webhook(order_id, tags):
+            app.logger.info("[RZ-AQ] webhook granted ask_v1_pack order=%s", order_id)
+        else:
+            app.logger.warning("[RZ-AQ] webhook: no purchase for order=%s", order_id)
+        return jsonify({"status": "ok"}), 200
+
+    if tags.get("kind") == "ask_v3_live" or (order_id and order_id.startswith("V3")):
+        import ask_v3_billing as _av3b
+
+        if _av3b.grant_from_webhook(order_id, tags):
+            app.logger.info("[RZ-V3] webhook granted ask_v3_live order=%s", order_id)
+        else:
+            app.logger.warning("[RZ-V3] webhook: no purchase for order=%s", order_id)
         return jsonify({"status": "ok"}), 200
 
     if tags.get("kind") == "couple_report" or (order_id and order_id.startswith("CR")):
@@ -17608,6 +19409,36 @@ try:
 except Exception as _ca_reg_exc:
     try:
         print(f"[career_api] route register failed: {_ca_reg_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
+    from ask_v1_api import register_ask_v1_routes
+
+    register_ask_v1_routes(app)
+except Exception as _av1_reg_exc:
+    try:
+        print(f"[ask_v1_api] route register failed: {_av1_reg_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
+    from ask_v3_api import register_ask_v3_routes
+
+    register_ask_v3_routes(app)
+except Exception as _av3_reg_exc:
+    try:
+        print(f"[ask_v3_api] route register failed: {_av3_reg_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
+    from pack_referral_api import register_pack_referral_routes
+
+    register_pack_referral_routes(app)
+except Exception as _pref_reg_exc:
+    try:
+        print(f"[pack_referral_api] route register failed: {_pref_reg_exc}", flush=True)
     except Exception:
         pass
 

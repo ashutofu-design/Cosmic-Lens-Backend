@@ -278,10 +278,32 @@ class ExecutionGatekeeperTests(unittest.TestCase):
             reason="routing_error",
             rule="rule_1_routing_mismatch",
         )
+        # Chart placement Q → LLM OK even on routing_error.
         self.assertTrue(
             allow_llm_fallback_on_gate_fail(
                 bad,
                 "6th lord 3rd house me sun debilitated kya hota hai",
+            )
+        )
+        # Trusted DNA health engine + routing mismatch → do NOT fall to LLM.
+        health_admin = {
+            "dna_routing_applied": True,
+            "domain": "health",
+            "question_dna": {
+                "source": "llm",
+                "questions": [{
+                    "domain": "health",
+                    "bucket": "heart_blood_pressure",
+                    "confidence": 0.9,
+                    "bucket_match_confidence": "high",
+                }],
+            },
+        }
+        self.assertFalse(
+            allow_llm_fallback_on_gate_fail(
+                bad,
+                "mera BP high kyun rehta hai",
+                health_admin,
             )
         )
         hallu = GatekeeperResult(

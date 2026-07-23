@@ -107,6 +107,16 @@ def gatekeeper_enabled() -> bool:
     return (os.environ.get("ASK_EXECUTION_GATEKEEPER") or "0").strip() != "0"
 
 
+def dna_routing_enforce_enabled() -> bool:
+    """Routing-stage only: force executed engine to match trusted DNA domain.
+
+    Separate from the full gatekeeper (post-narrator gates stay OFF by
+    default). This fixes 'DNA says wealth_prediction but relationship engine
+    ran' class of mismatches. Set ASK_DNA_ROUTING_ENFORCE=0 to disable.
+    """
+    return (os.environ.get("ASK_DNA_ROUTING_ENFORCE") or "1").strip() != "0"
+
+
 def _primary_item(admin: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(admin, dict):
         return {}
@@ -211,32 +221,29 @@ def dna_expectation(admin: dict[str, Any] | None, *, question: str = "") -> DnaE
 def allow_llm_fallback_on_gate_fail(
     result: GatekeeperResult | None,
     question: str = "",
+    admin: dict[str, Any] | None = None,
 ) -> bool:
-    """Product policy: engine mismatch / incomplete engine → LLM answers (don't block).
+    """Product policy: wrong-engine answers must NOT become LLM answers when DNA requires an engine.
 
-    Hard blocks stay for hallucination_detected and empty answers.
+    - Hallucination / empty / verdict mismatch → never LLM soft-pass.
+    - Chart interpretive / open-chart / direct-llm bypass → LLM OK.
+    - routing_error when trusted DNA has an engine_key → NO LLM (retry/block instead).
+    - routing_error when no engine required → LLM OK.
     """
     if result is None or result.ok:
         return False
     reason = (result.reason or "").strip().lower()
     if reason in ("hallucination_detected", "empty_answer", "verdict_mismatch"):
         return False
-    # routing_error / missing narrator / insufficient evidence → chart+LLM
-    if reason in (
-        "routing_error",
-        "routing_archetype_mismatch",
-        "missing_narrator_json",
-        "insufficient_evidence",
-        "invalid_narrator_json",
-    ):
-        return True
+
     q = (question or "").strip()
-    if not q:
-        return reason.startswith("routing")
     try:
         from ask_routing_policy import should_bypass_static_engines_for_direct_llm
 
-        ok, _why = should_bypass_static_engines_for_direct_llm(q)
+        ok, _why = should_bypass_static_engines_for_direct_llm(
+            q,
+            admin if isinstance(admin, dict) else None,
+        )
         if ok:
             return True
     except Exception:
@@ -255,6 +262,20 @@ def allow_llm_fallback_on_gate_fail(
             return True
     except Exception:
         pass
+
+    if reason in (
+        "routing_error",
+        "routing_archetype_mismatch",
+        "missing_narrator_json",
+        "insufficient_evidence",
+        "invalid_narrator_json",
+    ):
+        # DNA requires a specialist engine → do not leak to free-form LLM.
+        if reason in ("routing_error", "routing_archetype_mismatch"):
+            exp = dna_expectation(admin, question=q)
+            if exp.trusted and exp.engine_key:
+                return False
+        return True
     return reason.startswith("routing")
 
 
@@ -266,7 +287,7 @@ def enforce_dna_routing_flags(
     question: str = "",
 ) -> tuple[dict[str, bool], str | None]:
     """When trusted DNA domain disagrees with resolver winner, force primary engine."""
-    if not gatekeeper_enabled():
+    if not (gatekeeper_enabled() or dna_routing_enforce_enabled()):
         return flags, None
     # Chart interpretation / no dedicated engine → do NOT force health/career DNA.
     try:
@@ -292,12 +313,15 @@ def enforce_dna_routing_flags(
         return flags, None
     primary = exp.engine_key
     out = {k: bool(v) for k, v in (flags or {}).items()}
+    if primary not in out:
+        return out, None
     active = [k for k, v in out.items() if v]
+    # DNA requires engine X — force one-hot even when resolver left all flags off
+    # (that used to skip force and fall through to chart_llm = wrong answers).
     if len(active) == 1 and active[0] == primary:
         return out, None
-    if out.get(primary):
+    if out.get(primary) and len(active) == 1:
         return out, None
-    # Force DNA domain engine — e.g. health over career
     for k in list(out.keys()):
         out[k] = k == primary
     note = f"dna_force_engine:{primary}"
@@ -367,7 +391,7 @@ def check_routing_gate(
     flags: dict[str, bool] | None = None,
     question: str = "",
 ) -> GatekeeperResult:
-    if not gatekeeper_enabled():
+    if not (gatekeeper_enabled() or dna_routing_enforce_enabled()):
         return GatekeeperResult(True, "routing", "disabled", "gate_off")
     # Placement / interpretive chart Qs → LLM path; don't hard-fail routing.
     try:

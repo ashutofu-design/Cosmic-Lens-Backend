@@ -46,7 +46,6 @@ export function FaceReadingProBuilding() {
         </LinearGradient>
 
         <Text style={[bp.title, { color: C.text }]}>{t.fr_wipTitle}</Text>
-        <Text style={[bp.body, { color: C.textMuted }]}>{t.fr_wipBody}</Text>
 
         <View style={[bp.hintBox, { borderColor: `${GOLD}44`, backgroundColor: `${GOLD}10` }]}>
           <Feather name="clock" size={14} color={GOLD} />
@@ -99,13 +98,6 @@ const bp = StyleSheet.create({
     letterSpacing: -0.3,
     lineHeight: 26,
     marginTop: 4,
-  },
-  body: {
-    fontSize: 14,
-    fontFamily: "Nunito_500Medium",
-    textAlign: "center",
-    lineHeight: 21,
-    paddingHorizontal: 4,
   },
   hintBox: {
     flexDirection: "row",

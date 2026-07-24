@@ -1,19 +1,19 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useC } from "@/context/ThemeContext";
-import { openFounderWhatsApp } from "@/lib/founderWhatsApp";
 
 type Props = {
-  /** e.g. close drawer before opening WhatsApp */
+  /** e.g. close drawer before navigating */
   onBeforeOpen?: () => void;
-  /** Override default wa.me open (e.g. close drawer then open after delay) */
+  /** Override default navigate (e.g. close drawer then push) */
   onPress?: () => void;
 };
 
-/** Talk to Founder — opens WhatsApp chat with founder number. */
+/** Talk to Founder — opens contact page (Instagram, YouTube, WhatsApp). */
 export function FounderWhatsAppCard({ onBeforeOpen, onPress }: Props) {
   const C = useC();
 
@@ -24,7 +24,7 @@ export function FounderWhatsAppCard({ onBeforeOpen, onPress }: Props) {
       return;
     }
     onBeforeOpen?.();
-    void openFounderWhatsApp();
+    router.push("/talk-to-founder" as any);
   }
 
   return (
@@ -48,11 +48,11 @@ export function FounderWhatsAppCard({ onBeforeOpen, onPress }: Props) {
           </View>
         </View>
         <Text style={[s.sub, { color: C.textMuted }]}>
-          Personally apni kundli dikhani hai? WhatsApp par chat karein
+          Instagram, YouTube ya WhatsApp par connect karein
         </Text>
       </View>
       <View style={[s.arrow, { backgroundColor: "#25D366" }]}>
-        <Feather name="message-circle" size={14} color="#fff" />
+        <Feather name="chevron-right" size={14} color="#fff" />
       </View>
     </Pressable>
   );

@@ -39,84 +39,38 @@ export function LifeMapCategoryCard({
   const arrowGlow = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.25,
-          duration: 2200,
-          delay: index * 300,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2200,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    const glow = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: cat.primary ? 0.65 : 0.45,
-          duration: 2800,
-          delay: index * 200,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: cat.primary ? 0.3 : 0.15,
-          duration: 2800,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    const arrow = Animated.loop(
-      Animated.sequence([
-        Animated.timing(arrowPulse, {
-          toValue: 1.15,
-          duration: 1200,
-          delay: index * 100,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(arrowPulse, {
-          toValue: 1,
-          duration: 1200,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    const aGlow = Animated.loop(
-      Animated.sequence([
-        Animated.timing(arrowGlow, {
-          toValue: 1,
-          duration: 1500,
-          delay: index * 120,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(arrowGlow, {
-          toValue: 0.4,
-          duration: 1500,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
+    // One soft glow on primary card only — 4 perpetual loops × 4 cards was laggy.
+    let glow: Animated.CompositeAnimation | null = null;
+    if (cat.primary) {
+      glow = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, {
+            toValue: 0.55,
+            duration: 3200,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowAnim, {
+            toValue: 0.28,
+            duration: 3200,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      glow.start();
+    } else {
+      glowAnim.setValue(0.22);
+    }
+    pulseAnim.setValue(1);
+    arrowPulse.setValue(1);
+    arrowGlow.setValue(0.7);
     const entrance = Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, delay: 120 + index * 120, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, delay: 120 + index * 120, useNativeDriver: true, speed: 14, bounciness: 4 }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 450, delay: 80 + index * 80, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, delay: 80 + index * 80, useNativeDriver: true, speed: 14, bounciness: 3 }),
     ]);
-    pulse.start();
-    glow.start();
-    arrow.start();
-    aGlow.start();
     entrance.start();
-    return () => { pulse.stop(); glow.stop(); arrow.stop(); aGlow.stop(); };
+    return () => { glow?.stop(); };
   }, []);
 
   const titles: Record<string, string> = {
@@ -179,7 +133,8 @@ export function LifeMapCategoryCard({
             elevation: isPrimary ? 14 : 8,
           },
         ]}>
-          {Platform.OS !== "web" ? (
+          {/* Blur is expensive on Android GPU — keep iOS only. */}
+          {Platform.OS === "ios" ? (
             <BlurView
               intensity={isDark ? 45 : 55}
               tint={isDark ? "dark" : "light"}

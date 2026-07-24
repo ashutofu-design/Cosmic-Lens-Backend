@@ -76,6 +76,7 @@ export async function gateNumerologyReportAfterLangPick(opts: {
     setPendingNumerologyCheckout({
       params: opts.params,
       lang: opts.lang,
+      purchaseId: order.purchase_id,
     });
 
     router.push({

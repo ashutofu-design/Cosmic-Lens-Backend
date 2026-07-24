@@ -21,6 +21,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT, type T } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
@@ -231,6 +232,7 @@ export default function FaceReadingUploadScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Intro */}
+        <FadeInView delay={staggerDelay(0)}>
         <View style={[s.introCard, { borderColor: C.border }]}>
           <LinearGradient
             colors={[`${ACCENT2}55`, `${ACCENT}22`, "transparent"]}
@@ -241,8 +243,10 @@ export default function FaceReadingUploadScreen() {
           <Text style={[s.introTitle, { color: C.text }]}>{t.fu_introTitle}</Text>
           <Text style={[s.introSub, { color: C.textMuted }]}>{t.fu_introSub}</Text>
         </View>
+        </FadeInView>
 
         {/* 3 photo slots */}
+        <FadeInView delay={staggerDelay(1)} style={{ gap: 12 }}>
         {SLOTS.map(slot => {
           const uri = photos[slot.key];
           const filled = !!uri;
@@ -277,8 +281,10 @@ export default function FaceReadingUploadScreen() {
             </Pressable>
           );
         })}
+        </FadeInView>
 
         {/* Optional details */}
+        <FadeInView delay={staggerDelay(2)}>
         <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fu_capOptional}</Text>
         <View style={[s.optCard, { borderColor: C.border, backgroundColor: C.bgCard }]}>
           <View style={s.optRow}>
@@ -346,9 +352,11 @@ export default function FaceReadingUploadScreen() {
             </View>
           </View>
         </View>
+        </FadeInView>
 
         {/* Progress / Error / Done */}
         {busy && (
+          <FadeInView delay={staggerDelay(3)}>
           <View style={[s.progressCard, { borderColor: C.border, backgroundColor: C.bgCard }]}>
             <ActivityIndicator color={ACCENT} />
             <View style={{ flex: 1 }}>
@@ -356,9 +364,11 @@ export default function FaceReadingUploadScreen() {
               <Text style={[s.progressSub,   { color: C.textDim }]}>{t.fu_progSub}</Text>
             </View>
           </View>
+          </FadeInView>
         )}
 
         {phase === "error" && (
+          <FadeInView delay={staggerDelay(3)}>
           <View style={[s.errorCard, { borderColor: "rgba(239,68,68,0.4)", backgroundColor: "rgba(239,68,68,0.08)" }]}>
             <Feather name="alert-octagon" size={16} color="#ef4444" />
             <View style={{ flex: 1 }}>
@@ -366,9 +376,11 @@ export default function FaceReadingUploadScreen() {
               <Text style={[s.errorBody,  { color: C.textMuted }]}>{errorMsg}</Text>
             </View>
           </View>
+          </FadeInView>
         )}
 
         {phase === "done" && pdfUri && (
+          <FadeInView delay={staggerDelay(3)}>
           <View style={[s.doneCard, { borderColor: "rgba(16,185,129,0.4)", backgroundColor: "rgba(16,185,129,0.08)" }]}>
             <Feather name="check-circle" size={20} color="#10b981" />
             <Text style={[s.doneTitle, { color: "#10b981" }]}>{t.fu_doneTitle}</Text>
@@ -381,9 +393,11 @@ export default function FaceReadingUploadScreen() {
               <Text style={[s.doneAgain, { color: C.textMuted }]}>{t.fu_btnAnother}</Text>
             </Pressable>
           </View>
+          </FadeInView>
         )}
 
         {/* Generate button */}
+        <FadeInView delay={staggerDelay(4)}>
         {phase !== "done" && (
           <Pressable
             disabled={!allReady || busy}
@@ -406,6 +420,7 @@ export default function FaceReadingUploadScreen() {
         )}
 
         <Text style={[s.legalLine, { color: C.textDim }]}>{t.fu_legalLine}</Text>
+        </FadeInView>
       </ScrollView>
     </CosmicBg>
   );

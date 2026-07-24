@@ -14,13 +14,18 @@ import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 
-import { attachTapHandler, configureForeground } from "@/lib/notifications";
+import {
+  attachPushReceivedHandler,
+  attachTapHandler,
+  configureForeground,
+} from "@/lib/notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import "@/lib/unhandledRejectionLogger";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { WelcomeBonusHost } from "@/components/WelcomeBonusHost";
 import { ZodiacBridge } from "@/components/ZodiacBridge";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { UserProvider, useUser } from "@/context/UserContext";
@@ -64,9 +69,14 @@ function RootLayoutNav() {
       <Stack.Screen name="astrovastu-basic"         options={{ headerShown: false }} />
       <Stack.Screen name="astrovastu-pro"           options={{ headerShown: false }} />
       <Stack.Screen name="business-vastu"           options={{ headerShown: false }} />
+      <Stack.Screen name="birth-time-rectification" options={{ headerShown: false }} />
       <Stack.Screen name="my-reports"                options={{ headerShown: false }} />
       <Stack.Screen name="personalization"           options={{ headerShown: false }} />
       <Stack.Screen name="panchang"                  options={{ headerShown: false }} />
+      <Stack.Screen name="talk-to-founder"           options={{ headerShown: false }} />
+      <Stack.Screen name="help-support"              options={{ headerShown: false }} />
+      <Stack.Screen name="refer-earn"                options={{ headerShown: false }} />
+      <Stack.Screen name="cosmic-packs"              options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -85,15 +95,23 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // Push notifications: foreground display + tap-to-navigate
+  // Push notifications: foreground display + tap-to-navigate (+ v3_ready dispatch)
   useEffect(() => {
     configureForeground();
     const sub = attachTapHandler((path) => router.push(path as any));
+    const recv = attachPushReceivedHandler(() => {
+      /* v3_ready dispatched inside notifications.ts */
+    });
     return () => {
       try {
         sub?.remove?.();
       } catch {
         /* push unsupported on web / Expo Go Android */
+      }
+      try {
+        recv?.remove?.();
+      } catch {
+        /* ignore */
       }
     };
   }, []);
@@ -110,6 +128,7 @@ export default function RootLayout() {
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
                   <RootLayoutNav />
+                  <WelcomeBonusHost />
                 </KeyboardProvider>
               </GestureHandlerRootView>
             </UserProvider>

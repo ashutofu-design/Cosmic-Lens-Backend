@@ -1,5 +1,6 @@
 import React from "react";
 import LegalScreen, { Bullet, P, Section } from "@/components/LegalScreen";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useUser } from "@/context/UserContext";
 import type { UILang } from "@/lib/i18n";
 
@@ -94,26 +95,34 @@ export default function TodayEnergyInfoScreen() {
 
   return (
     <LegalScreen title={L.title} subtitle={L.subtitle}>
+      <FadeInView delay={staggerDelay(0)}>
       <Section title={L.whatTitle}>
         <P>{L.whatP}</P>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(1)}>
       <Section title={L.howTitle}>
         <P>{L.howP}</P>
         <Bullet>{L.tara}</Bullet>
         <Bullet>{L.ashtaka}</Bullet>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(2)}>
       <Section title={L.scoreTitle}>
         <Bullet>{L.scoreStrong}</Bullet>
         <Bullet>{L.scoreModerate}</Bullet>
         <Bullet>{L.scoreUnstable}</Bullet>
         <Bullet>{L.scoreLow}</Bullet>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(3)}>
       <Section title={L.updateTitle}>
         <P>{L.updateP}</P>
       </Section>
+      </FadeInView>
     </LegalScreen>
   );
 }

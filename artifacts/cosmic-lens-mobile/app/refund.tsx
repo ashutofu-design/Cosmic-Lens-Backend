@@ -1,6 +1,7 @@
 import React from "react";
 import { LegalPolicyBody } from "@/components/LegalPolicyDoc";
 import LegalScreen from "@/components/LegalScreen";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { LEGAL_META, refundPolicyDoc } from "@/lib/legalPolicies";
 
 export default function RefundPolicyScreen() {
@@ -10,7 +11,9 @@ export default function RefundPolicyScreen() {
       subtitle={refundPolicyDoc.subtitle}
       lastUpdated={LEGAL_META.lastUpdated}
     >
-      <LegalPolicyBody doc={refundPolicyDoc} />
+      <FadeInView delay={staggerDelay(0)}>
+        <LegalPolicyBody doc={refundPolicyDoc} />
+      </FadeInView>
     </LegalScreen>
   );
 }

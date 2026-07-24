@@ -60,10 +60,11 @@ export const PUKHRAJ_BENEFITS = [
   "Strengthens Guru (Jupiter) in the chart",
 ];
 
-export function gemstoneWhatsAppMessage(ratti: number): string {
+export function gemstoneWhatsAppMessage(productLabel: string, ratti?: number): string {
+  const size = ratti ? ` ${ratti} Ratti` : "";
   return (
     `Namaste 🙏 Cosmic Lens app se hoon. ` +
-    `Ceylon Pukhraj ${ratti} Ratti ke real photos/videos aur certificate share karein. Dhanyavaad.`
+    `${productLabel}${size} ke real photos/videos aur certificate share karein. Dhanyavaad.`
   );
 }
 

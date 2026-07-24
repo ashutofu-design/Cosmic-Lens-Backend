@@ -33,6 +33,7 @@ import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { proResultCache } from "@/lib/proResultCache";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -178,19 +179,21 @@ export default function AstroVastuProResultScreen() {
       <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top, padding: 20 }}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Feather name="alert-circle" size={28} color={C.textMid} />
-          <Text style={{ color: C.text, fontSize: 16, fontWeight: "700", marginTop: 8 }}>
-            {t.avr_emptyTitle}
-          </Text>
-          <Text style={{ color: C.textMid, fontSize: 13, marginTop: 6, textAlign: "center" }}>
-            {t.avr_emptyBody}
-          </Text>
-          <Pressable
-            onPress={() => router.replace("/astrovastu-pro")}
-            style={[s.cta, { backgroundColor: C.accent, marginTop: 18 }]}
-          >
-            <Text style={s.ctaText}>{t.avr_btnOpenPro}</Text>
-          </Pressable>
+          <FadeInView delay={staggerDelay(0)} style={{ alignItems: "center" }}>
+            <Feather name="alert-circle" size={28} color={C.textMid} />
+            <Text style={{ color: C.text, fontSize: 16, fontWeight: "700", marginTop: 8 }}>
+              {t.avr_emptyTitle}
+            </Text>
+            <Text style={{ color: C.textMid, fontSize: 13, marginTop: 6, textAlign: "center" }}>
+              {t.avr_emptyBody}
+            </Text>
+            <Pressable
+              onPress={() => router.replace("/astrovastu-pro")}
+              style={[s.cta, { backgroundColor: C.accent, marginTop: 18 }]}
+            >
+              <Text style={s.ctaText}>{t.avr_btnOpenPro}</Text>
+            </Pressable>
+          </FadeInView>
         </View>
       </View>
     );
@@ -212,132 +215,142 @@ export default function AstroVastuProResultScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
         {/* ── Score gauge ──────────────────────────────────────── */}
-        <View style={[s.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <ScoreGauge score={overall.score || 0} grade={overall.grade || "C"} />
-          {summary.en ? (
-            <Text style={{ color: C.text, fontSize: 13, lineHeight: 19, marginTop: 12, textAlign: "center" }}>
-              {summary.en}
-            </Text>
-          ) : null}
-          {summary.hi ? (
-            <Text style={{ color: C.textMid, fontSize: 12, lineHeight: 18, marginTop: 4, textAlign: "center" }}>
-              {summary.hi}
-            </Text>
-          ) : null}
-          <ScanBasisBadge
-            visionRoomFindings={result.vision_room_findings}
-            visionUsed={(result as any).vision_used}
-            visionFindingsCount={(result as any).vision_findings_count}
-            perRoomBasis={rooms.map((r) => ({
-              room_type: r.room_type, direction_basis: r.direction_basis,
-            }))}
-          />
-        </View>
+        <FadeInView delay={staggerDelay(0)}>
+          <View style={[s.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <ScoreGauge score={overall.score || 0} grade={overall.grade || "C"} />
+            {summary.en ? (
+              <Text style={{ color: C.text, fontSize: 13, lineHeight: 19, marginTop: 12, textAlign: "center" }}>
+                {summary.en}
+              </Text>
+            ) : null}
+            {summary.hi ? (
+              <Text style={{ color: C.textMid, fontSize: 12, lineHeight: 18, marginTop: 4, textAlign: "center" }}>
+                {summary.hi}
+              </Text>
+            ) : null}
+            <ScanBasisBadge
+              visionRoomFindings={result.vision_room_findings}
+              visionUsed={(result as any).vision_used}
+              visionFindingsCount={(result as any).vision_findings_count}
+              perRoomBasis={rooms.map((r) => ({
+                room_type: r.room_type, direction_basis: r.direction_basis,
+              }))}
+            />
+          </View>
+        </FadeInView>
 
         {/* ── Action buttons row ───────────────────────────────── */}
-        <View style={s.actionsRow}>
-          {pdfFull && (
-            <Pressable onPress={openPdf} style={[s.actionBtn, { backgroundColor: C.accent }]}>
-              <Feather name="file-text" size={16} color="#fff" />
-              <Text style={s.actionText}>{t.avr_btnOpenPdf}</Text>
+        <FadeInView delay={staggerDelay(1)}>
+          <View style={s.actionsRow}>
+            {pdfFull && (
+              <Pressable onPress={openPdf} style={[s.actionBtn, { backgroundColor: C.accent }]}>
+                <Feather name="file-text" size={16} color="#fff" />
+                <Text style={s.actionText}>{t.avr_btnOpenPdf}</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={shareWhatsApp} style={[s.actionBtn, { backgroundColor: "#25D366" }]}>
+              <Feather name="share-2" size={16} color="#fff" />
+              <Text style={s.actionText}>{t.avr_btnWhatsApp}</Text>
             </Pressable>
-          )}
-          <Pressable onPress={shareWhatsApp} style={[s.actionBtn, { backgroundColor: "#25D366" }]}>
-            <Feather name="share-2" size={16} color="#fff" />
-            <Text style={s.actionText}>{t.avr_btnWhatsApp}</Text>
-          </Pressable>
-        </View>
+          </View>
+        </FadeInView>
 
         {/* ── Top-3 priority actions ───────────────────────────── */}
         {priors.length > 0 && (
-          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, marginTop: 16 }]}>
-            <Text style={[s.sectionLabel, { color: C.textMid, marginBottom: 10 }]}>
-              {t.avr_secPriorityHi}
-            </Text>
-            {priors.map((p, i) => {
-              const meta = VERDICT_COLOR[p.verdict] || VERDICT_COLOR.Acceptable;
-              const rag  = RAG_COLOR[meta.rag];
-              return (
-                <View
-                  key={`${p.room_type}-${p.direction}-${i}`}
-                  style={[s.priRow, { borderLeftColor: rag, backgroundColor: meta.bg }]}
-                >
-                  <View style={[s.priBadge, { backgroundColor: rag }]}>
-                    <Text style={{ color: "#fff", fontWeight: "900", fontSize: 14 }}>{i + 1}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: C.text, fontWeight: "800", fontSize: 14 }}>
-                      {p.room_type} · {p.direction}
-                    </Text>
-                    <Text style={{ color: meta.fg, fontSize: 11, fontWeight: "700", marginTop: 2 }}>
-                      {p.verdict.toUpperCase()}
-                    </Text>
-                    {p.why ? (
-                      <Text style={{ color: C.textMid, fontSize: 12, marginTop: 4, lineHeight: 17 }}>
-                        {p.why}
+          <FadeInView delay={staggerDelay(2)}>
+            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, marginTop: 16 }]}>
+              <Text style={[s.sectionLabel, { color: C.textMid, marginBottom: 10 }]}>
+                {t.avr_secPriorityHi}
+              </Text>
+              {priors.map((p, i) => {
+                const meta = VERDICT_COLOR[p.verdict] || VERDICT_COLOR.Acceptable;
+                const rag  = RAG_COLOR[meta.rag];
+                return (
+                  <View
+                    key={`${p.room_type}-${p.direction}-${i}`}
+                    style={[s.priRow, { borderLeftColor: rag, backgroundColor: meta.bg }]}
+                  >
+                    <View style={[s.priBadge, { backgroundColor: rag }]}>
+                      <Text style={{ color: "#fff", fontWeight: "900", fontSize: 14 }}>{i + 1}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: C.text, fontWeight: "800", fontSize: 14 }}>
+                        {p.room_type} · {p.direction}
                       </Text>
-                    ) : null}
-                    {(p.remedies || []).slice(0, 2).map((rem, j) => (
-                      <Text key={j} style={{ color: C.text, fontSize: 12, marginTop: 4 }}>
-                        • {rem.english || rem.action}
+                      <Text style={{ color: meta.fg, fontSize: 11, fontWeight: "700", marginTop: 2 }}>
+                        {p.verdict.toUpperCase()}
                       </Text>
-                    ))}
+                      {p.why ? (
+                        <Text style={{ color: C.textMid, fontSize: 12, marginTop: 4, lineHeight: 17 }}>
+                          {p.why}
+                        </Text>
+                      ) : null}
+                      {(p.remedies || []).slice(0, 2).map((rem, j) => (
+                        <Text key={j} style={{ color: C.text, fontSize: 12, marginTop: 4 }}>
+                          • {rem.english || rem.action}
+                        </Text>
+                      ))}
+                    </View>
                   </View>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          </FadeInView>
         )}
 
         {/* ── Per-room horizontal scroll ───────────────────────── */}
         {rooms.length > 0 && (
-          <View style={{ marginTop: 18 }}>
-            <Text style={[s.sectionLabel, { color: C.textMid, marginBottom: 10, marginLeft: 2 }]}>
-              {t.avr_secRoomByRoom}
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingRight: 8, gap: 10 }}
-            >
-              {rooms.map((r, idx) => {
-                const meta = VERDICT_COLOR[r.verdict] || VERDICT_COLOR.Acceptable;
-                return (
-                  <View
-                    key={idx}
-                    style={[s.roomCard, {
-                      backgroundColor: C.bgCard, borderColor: meta.border,
-                    }]}
-                  >
-                    <View style={[s.dot, { backgroundColor: meta.fg }]} />
-                    <Text style={{ color: C.text, fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
-                      {r.room_type}
-                    </Text>
-                    <Text style={{ color: C.textMid, fontSize: 11, marginTop: 2 }}>
-                      {r.direction}
-                    </Text>
-                    <Text style={{ color: meta.fg, fontSize: 22, fontWeight: "900", marginTop: 8 }}>
-                      {Math.round(r.score)}
-                    </Text>
-                    <Text style={{ color: meta.fg, fontSize: 10, fontWeight: "800" }}>
-                      {r.verdict.toUpperCase()}
-                    </Text>
-                    {r.zone?.planet ? (
-                      <Text style={{ color: C.textMid, fontSize: 10, marginTop: 6 }} numberOfLines={2}>
-                        {r.zone.planet} · {r.zone.deity || ""}
+          <FadeInView delay={staggerDelay(3)}>
+            <View style={{ marginTop: 18 }}>
+              <Text style={[s.sectionLabel, { color: C.textMid, marginBottom: 10, marginLeft: 2 }]}>
+                {t.avr_secRoomByRoom}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingRight: 8, gap: 10 }}
+              >
+                {rooms.map((r, idx) => {
+                  const meta = VERDICT_COLOR[r.verdict] || VERDICT_COLOR.Acceptable;
+                  return (
+                    <View
+                      key={idx}
+                      style={[s.roomCard, {
+                        backgroundColor: C.bgCard, borderColor: meta.border,
+                      }]}
+                    >
+                      <View style={[s.dot, { backgroundColor: meta.fg }]} />
+                      <Text style={{ color: C.text, fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
+                        {r.room_type}
                       </Text>
-                    ) : null}
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
+                      <Text style={{ color: C.textMid, fontSize: 11, marginTop: 2 }}>
+                        {r.direction}
+                      </Text>
+                      <Text style={{ color: meta.fg, fontSize: 22, fontWeight: "900", marginTop: 8 }}>
+                        {Math.round(r.score)}
+                      </Text>
+                      <Text style={{ color: meta.fg, fontSize: 10, fontWeight: "800" }}>
+                        {r.verdict.toUpperCase()}
+                      </Text>
+                      {r.zone?.planet ? (
+                        <Text style={{ color: C.textMid, fontSize: 10, marginTop: 6 }} numberOfLines={2}>
+                          {r.zone.planet} · {r.zone.deity || ""}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </FadeInView>
         )}
 
         {/* ── Branding footer ──────────────────────────────────── */}
-        <Text style={[s.brand, { color: C.textMid }]}>
-          {t.avr_brandFooter}
-        </Text>
+        <FadeInView delay={staggerDelay(4)}>
+          <Text style={[s.brand, { color: C.textMid }]}>
+            {t.avr_brandFooter}
+          </Text>
+        </FadeInView>
       </ScrollView>
     </View>
   );

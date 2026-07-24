@@ -15,6 +15,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
+import { NaamJaapTimer } from "@/components/NaamJaapTimer";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { uiDateLocale } from "@/lib/i18n";
@@ -52,7 +54,7 @@ const F = {
   medium: "Nunito_500Medium", regular: "Nunito_400Regular",
 };
 
-const TAB_IDS = ["Aaj", "Muhurat", "Vrat", "Vivah"] as const;
+const TAB_IDS = ["Aaj", "Muhurat", "Vrat", "Vivah", "Jaap"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
 type AuspiciousBandKey = "excellent" | "good" | "mixed" | "caution";
@@ -159,6 +161,7 @@ export default function PanchangScreen() {
       { id: "Muhurat" as TabId, label: t.pn_tabMuhurat },
       { id: "Vrat" as TabId, label: t.pn_tabVrat },
       { id: "Vivah" as TabId, label: t.pn_tabVivah },
+      { id: "Jaap" as TabId, label: t.pn_tabJaap },
     ],
     [t],
   );
@@ -400,7 +403,14 @@ export default function PanchangScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: L.ph, paddingBottom: L.padBottom, gap: L.gap, flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            paddingHorizontal: L.ph,
+            paddingBottom: L.padBottom,
+            gap: L.gap,
+            flexGrow: 1,
+            ...(tab === "Jaap" ? { justifyContent: "flex-start" as const } : null),
+          }}
         >
           {err && tab === "Aaj" ? (
             <Text style={[sty.hint, { color: "#f59e0b", textAlign: "center" }]}>{err}</Text>
@@ -409,6 +419,7 @@ export default function PanchangScreen() {
           {/* ── AAJ ── */}
           {tab === "Aaj" && (
             <>
+              <FadeInView delay={staggerDelay(0)} resetKey={tab}>
               <View style={[sty.auspCard, { backgroundColor: C.bgCard, borderColor: auspicious.color + "55" }]}>
                 <Text style={[sty.sectionLbl, { color: C.textMuted }]}>{t.pn_auspicious}</Text>
                 <View style={sty.auspHeader}>
@@ -424,8 +435,10 @@ export default function PanchangScreen() {
                   <View style={[sty.auspBarFg, { width: `${auspicious.score}%`, backgroundColor: auspicious.color }]} />
                 </View>
               </View>
+              </FadeInView>
 
               {strength && (
+                <FadeInView delay={staggerDelay(1)} resetKey={tab}>
                 <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border, paddingVertical: L.rs(12) }]}>
                   <Text style={[sty.sectionLbl, { color: C.textMuted, marginBottom: L.rs(8) }]}>{t.pn_tarabalaHdr}</Text>
                   <Text style={[sty.vivahDate, { color: strength.overall_ok ? "#22c55e" : "#f59e0b" }]}>
@@ -436,11 +449,15 @@ export default function PanchangScreen() {
                     {"  ·  "}Chandra: {strength.transit_moon_sign}
                   </Text>
                 </View>
+                </FadeInView>
               )}
               {!natalMoon && !natalNak && (
+                <FadeInView delay={staggerDelay(1)} resetKey={tab}>
                 <Text style={[sty.hint, { color: C.textMuted }]}>{t.pn_tarabalaHint}</Text>
+                </FadeInView>
               )}
 
+              <FadeInView delay={staggerDelay(2)} resetKey={tab}>
               <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <InfoRow label={t.panTithi} value={panchang.tithi} emoji="🌙" border={C.border3} />
                 <InfoRow label={t.panNakshatra} value={panchang.nakshatra} emoji="⭐" border={C.border3} />
@@ -459,8 +476,10 @@ export default function PanchangScreen() {
                   </View>
                 </View>
               </View>
+              </FadeInView>
 
               {todayEkadashi.length > 0 && (
+                <FadeInView delay={staggerDelay(3)} resetKey={tab}>
                 <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: "#a78bfa55", padding: L.rs(14) }]}>
                   <Text style={[sty.sectionLbl, { color: "#a78bfa", marginBottom: 8 }]}>{t.pn_ekadashiTodayHdr}</Text>
                   {todayEkadashi.map((f) => (
@@ -469,12 +488,14 @@ export default function PanchangScreen() {
                     </Text>
                   ))}
                 </View>
+                </FadeInView>
               )}
             </>
           )}
 
           {/* ── MUHURAT ── */}
           {tab === "Muhurat" && (
+            <FadeInView delay={staggerDelay(0)} resetKey={tab}>
             <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               {muhurat ? (
                 <>
@@ -499,10 +520,12 @@ export default function PanchangScreen() {
                 {t.pn_muhuratLoc} ({userLat.toFixed(1)}°, {userLng.toFixed(1)}°)
               </Text>
             </View>
+            </FadeInView>
           )}
 
           {/* ── VRAT ── */}
           {tab === "Vrat" && (
+            <FadeInView delay={staggerDelay(0)} resetKey={tab} style={{ gap: L.gap }}>
             <>
               <Text style={[sty.countLine, { color: C.textMuted }]}>
                 {t.pn_ekadashiCount.replace("{n}", String(ekadashi?.total ?? "—"))}
@@ -587,10 +610,19 @@ export default function PanchangScreen() {
                 </>
               )}
             </>
+            </FadeInView>
+          )}
+
+          {/* ── NAAM JAAP ── */}
+          {tab === "Jaap" && (
+            <FadeInView delay={staggerDelay(0)} resetKey={tab}>
+              <NaamJaapTimer />
+            </FadeInView>
           )}
 
           {/* ── VIVAH ── */}
           {tab === "Vivah" && (
+            <FadeInView delay={staggerDelay(0)} resetKey={tab} style={{ gap: L.gap }}>
             <>
               {vivahLoading ? (
                 <View style={sty.centerLoad}>
@@ -651,6 +683,7 @@ export default function PanchangScreen() {
                 </>
               )}
             </>
+            </FadeInView>
           )}
         </ScrollView>
       )}

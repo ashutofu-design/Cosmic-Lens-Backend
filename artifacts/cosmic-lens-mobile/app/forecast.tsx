@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import Svg, { Circle, Defs, G, Line, LinearGradient as SvgGrad, Path, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -469,6 +470,7 @@ export default function ForecastScreen() {
             with label + selected score, chart filling the body, insight pill
             at the bottom. Sized with a fixed minHeight so it has the same big
             immersive presence the home card gets from `flex: 1` on home. */}
+        <FadeInView delay={staggerDelay(0)}>
         <View style={[
           s.heroCard,
           {
@@ -528,10 +530,11 @@ export default function ForecastScreen() {
             </View>
           )}
         </View>
+        </FadeInView>
 
         {/* Selected day detail */}
         {sel && (
-          <>
+          <FadeInView delay={staggerDelay(1)} style={{ gap: 14 }}>
             {/* Day navigation row */}
             <View style={s.navRow}>
               <Pressable
@@ -684,11 +687,12 @@ export default function ForecastScreen() {
                 </>
               );
             })()}
-          </>
+          </FadeInView>
         )}
 
         {/* Demo unlock prompt */}
         {showDemo && (
+          <FadeInView delay={staggerDelay(2)}>
           <Pressable style={s.unlockBanner} onPress={() => router.push("/onboarding")}>
             <Feather name="lock" size={14} color="#fbbf24" />
             <View style={{ flex: 1 }}>
@@ -697,6 +701,7 @@ export default function ForecastScreen() {
             </View>
             <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={14} color="#fbbf24" />
           </Pressable>
+          </FadeInView>
         )}
       </ScrollView>
     </View>

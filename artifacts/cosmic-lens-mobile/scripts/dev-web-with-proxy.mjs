@@ -8,8 +8,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PROXY_PORT = process.env.DEV_API_PROXY_PORT || "18081";
-const UPSTREAM =
-  process.env.DEV_API_PROXY_UPSTREAM?.trim() || "http://admin.coosmic.icu";
+// HTTPS required — HTTP redirects break POSTs (login shows "Not found").
+let UPSTREAM =
+  process.env.DEV_API_PROXY_UPSTREAM?.trim() || "https://admin.coosmic.icu";
+if (/^http:\/\/admin\.coosmic\.icu/i.test(UPSTREAM)) {
+  UPSTREAM = UPSTREAM.replace(/^http:/i, "https:");
+}
 const useClear = process.argv.includes("--clear");
 const apiUrl = `http://127.0.0.1:${PROXY_PORT}`;
 
@@ -55,7 +59,7 @@ if (!proxyOk) {
       PROXY_PORT +
       "/api/healthz",
   );
-  console.error("[dev:web] Pehle yeh test karo: curl http://admin.coosmic.icu/api/healthz");
+  console.error("[dev:web] Pehle yeh test karo: curl -sS https://admin.coosmic.icu/api/healthz");
   proxy.kill("SIGTERM");
   process.exit(1);
 }

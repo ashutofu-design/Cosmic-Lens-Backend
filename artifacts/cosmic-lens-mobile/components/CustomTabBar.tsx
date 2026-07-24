@@ -137,16 +137,15 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const blurTint = C.isDark ? "dark" : "light";
   const useBlur = Platform.OS === "ios";
 
-  // Full-screen mode (e.g. Ask chat) — hide the bar entirely.
-  if (hidden) return null;
-
   return (
     <>
+      {/* Keep drawer mounted even when tab bar is hidden (Ask full-screen). */}
       <MoreDrawer
         ref={moreDrawerRef}
         visible={showMore}
         onClose={() => setStateShowMore(false)}
       />
+      {hidden ? null : (
       <View
         style={[
           styles.barOuter,
@@ -157,9 +156,9 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
             borderTopColor: C.isDark ? "rgba(255,255,255,0.08)" : C.navBorder,
             shadowColor: C.isDark ? "#000" : "rgba(15,23,42,0.18)",
             shadowOffset: { width: 0, height: C.isDark ? -2 : -4 },
-            shadowOpacity: C.isDark ? 0.3 : 0.28,
-            shadowRadius: C.isDark ? 8 : 12,
-            elevation: C.isDark ? 10 : 15,
+            shadowOpacity: C.isDark ? 0.18 : 0.12,
+            shadowRadius: C.isDark ? 4 : 6,
+            elevation: C.isDark ? 6 : 8,
           },
         ]}
       >
@@ -212,7 +211,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
           <MoreTabButton
             isOpen={showMore}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               if (showMore) {
                 moreDrawerRef.current?.close();
               } else {
@@ -222,6 +221,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
           />
         </View>
       </View>
+      )}
     </>
   );
 }

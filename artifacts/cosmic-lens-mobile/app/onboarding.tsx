@@ -25,6 +25,7 @@ import { vedicLang, type VLang } from "@/lib/i18nVedic";
 import { getMonthsFull } from "@/lib/i18nContent";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces, type PlaceSuggestion } from "@/lib/kundliAPI";
+import { attachPackReferralCode } from "@/lib/packReferral";
 
 
 function getOnboardingLabels(v: VLang) {
@@ -144,6 +145,7 @@ export default function OnboardingScreen() {
 
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
+  const [referralCode, setReferralCode] = useState("");
 
   const [dayPickerOpen,   setDayPickerOpen]   = useState(false);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
@@ -261,6 +263,15 @@ export default function OnboardingScreen() {
       });
       setPrimaryProfile(entry.id);
       await syncKundliToCloud(bd, kundli).catch(() => {});
+      // Optional referral — only chance to attach (skipped if empty / invalid).
+      const code = referralCode.trim();
+      if (code && user?.id && user?.api_key) {
+        try {
+          await attachPackReferralCode(user, code);
+        } catch {
+          /* non-blocking — continue with free questions */
+        }
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (e: unknown) {
@@ -535,9 +546,34 @@ export default function OnboardingScreen() {
             )}
           </FadeInView>
 
+          {/* ── Optional referral (only entry point — skip to continue) ─── */}
+          <FadeInView delay={staggerDelay(5)} style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <View style={s.cardHeader}>
+              <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(244,114,182,0.12)" : "#FCE7F3" }]}>
+                <Feather name="gift" size={14} color="#f472b6" />
+              </View>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>
+                REFERRAL CODE <Text style={{ color: C.textDim }}>(OPTIONAL)</Text>
+              </Text>
+            </View>
+            <Text style={{ color: C.textDim, fontSize: 11, lineHeight: 16 }}>
+              Have a friend's code? Enter it now. Skip to continue with 3 free questions — you
+              won't be able to add a code later.
+            </Text>
+            <TextInput
+              value={referralCode}
+              onChangeText={(v) => setReferralCode(v.toUpperCase())}
+              placeholder="CL123"
+              placeholderTextColor={C.textDim}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={[s.input, { backgroundColor: C.inputBg, borderColor: C.inputBorder, color: C.text }]}
+            />
+          </FadeInView>
+
           {/* ── Error ────────────────────────────────────────────────── */}
           {!!error && (
-            <FadeInView delay={staggerDelay(5)}>
+            <FadeInView delay={staggerDelay(6)}>
             <View style={s.errorBox}>
               <Feather name="alert-circle" size={14} color="#f87171" />
               <Text style={s.errorText}>{error}</Text>
@@ -546,7 +582,7 @@ export default function OnboardingScreen() {
           )}
 
           {/* ── Submit button ─────────────────────────────────────────── */}
-          <FadeInView delay={staggerDelay(6)}>
+          <FadeInView delay={staggerDelay(7)}>
           <Pressable
             onPress={handleSubmit}
             disabled={!canSubmit}
@@ -573,7 +609,7 @@ export default function OnboardingScreen() {
           </FadeInView>
 
           {/* ── Trust badge ───────────────────────────────────────────── */}
-          <FadeInView delay={staggerDelay(7)} style={s.trustRow}>
+          <FadeInView delay={staggerDelay(8)} style={s.trustRow}>
             <Feather name="lock" size={11} color={C.textDim} />
             <Text style={[s.trustText, { color: C.textDim }]}>
               {L.trustText}

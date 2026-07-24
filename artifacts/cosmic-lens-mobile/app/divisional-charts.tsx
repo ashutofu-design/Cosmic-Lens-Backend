@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { DivisionalChartsPanel } from "@/components/DivisionalChartsPanel";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 
@@ -36,7 +37,9 @@ export default function DivisionalChartsScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 40, gap: 14 }}
         showsVerticalScrollIndicator={false}
       >
-        <DivisionalChartsPanel />
+        <FadeInView delay={staggerDelay(0)}>
+          <DivisionalChartsPanel />
+        </FadeInView>
       </ScrollView>
     </CosmicBg>
   );

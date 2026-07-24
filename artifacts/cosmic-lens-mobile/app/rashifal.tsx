@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -202,7 +203,7 @@ export default function RashifalScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100, gap: 12 }}
       >
-        {RASHI_ORDER.map(key => {
+        {RASHI_ORDER.map((key, i) => {
           const meta = RASHIS_META[key];
           const rashi = RASHI[key];
           const phal = phalSet[key];
@@ -214,59 +215,60 @@ export default function RashifalScreen() {
           const lordName = pick(v, PLANET[rashi.lord as keyof typeof PLANET]);
 
           return (
-            <Pressable
-              key={key}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setExpanded(isOpen ? null : key);
-              }}
-              style={[
-                s.rashiCard,
-                {
-                  backgroundColor: C.bgCard,
-                  borderColor: isMe ? `${meta.color}60` : C.border,
-                  borderWidth: isMe ? 1.5 : 1,
-                },
-              ]}
-            >
-              <View style={s.rashiRow}>
-                <View style={[s.rashiEmoji, { backgroundColor: `${meta.color}18` }]}>
-                  <Text style={{ fontSize: 22 }}>{rashi.emoji}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <Text style={[s.rashiName, { color: C.text }]}>{displayName}</Text>
-                    {v !== "en" && (
-                      <Text style={[s.rashiEn, { color: C.textDim }]}>{englishName}</Text>
-                    )}
-                    {isMe && (
-                      <View style={[s.meBadge, { backgroundColor: `${meta.color}20`, borderColor: `${meta.color}40` }]}>
-                        <Text style={[s.meBadgeText, { color: meta.color }]}>{(t as any).yourSign ?? "Your Sign"}</Text>
-                      </View>
-                    )}
+            <FadeInView key={key} delay={staggerDelay(i)} resetKey={tabIdx}>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setExpanded(isOpen ? null : key);
+                }}
+                style={[
+                  s.rashiCard,
+                  {
+                    backgroundColor: C.bgCard,
+                    borderColor: isMe ? `${meta.color}60` : C.border,
+                    borderWidth: isMe ? 1.5 : 1,
+                  },
+                ]}
+              >
+                <View style={s.rashiRow}>
+                  <View style={[s.rashiEmoji, { backgroundColor: `${meta.color}18` }]}>
+                    <Text style={{ fontSize: 22 }}>{rashi.emoji}</Text>
                   </View>
-                  <Text style={[s.rashiLord, { color: C.textMuted }]}>{(t as any).lordLabel ?? "Lord"}: {lordName} · {meta.dates}</Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <Text style={[s.rashiName, { color: C.text }]}>{displayName}</Text>
+                      {v !== "en" && (
+                        <Text style={[s.rashiEn, { color: C.textDim }]}>{englishName}</Text>
+                      )}
+                      {isMe && (
+                        <View style={[s.meBadge, { backgroundColor: `${meta.color}20`, borderColor: `${meta.color}40` }]}>
+                          <Text style={[s.meBadgeText, { color: meta.color }]}>{(t as any).yourSign ?? "Your Sign"}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[s.rashiLord, { color: C.textMuted }]}>{(t as any).lordLabel ?? "Lord"}: {lordName} · {meta.dates}</Text>
+                  </View>
+                  <Feather name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={C.textDim} />
                 </View>
-                <Feather name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={C.textDim} />
-              </View>
 
-              {isOpen && (
-                <View style={{ marginTop: 12, gap: 10 }}>
-                  <View style={[s.divider, { backgroundColor: C.border3 }]} />
-                  <Text style={[s.phalText, { color: C.textMid }]}>{text}</Text>
-                  <View style={s.luckRow}>
-                    <View style={[s.luckChip, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-                      <Text style={{ fontSize: 12 }}>🍀</Text>
-                      <Text style={[s.luckText, { color: C.textMuted }]}>{phal.lucky}</Text>
+                {isOpen && (
+                  <View style={{ marginTop: 12, gap: 10 }}>
+                    <View style={[s.divider, { backgroundColor: C.border3 }]} />
+                    <Text style={[s.phalText, { color: C.textMid }]}>{text}</Text>
+                    <View style={s.luckRow}>
+                      <View style={[s.luckChip, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+                        <Text style={{ fontSize: 12 }}>🍀</Text>
+                        <Text style={[s.luckText, { color: C.textMuted }]}>{phal.lucky}</Text>
+                      </View>
+                    </View>
+                    <View style={[s.savdhanBox, { backgroundColor: C.isDark ? "rgba(239,68,68,0.06)" : "#FEE2E2", borderColor: "rgba(239,68,68,0.2)" }]}>
+                      <Feather name="alert-triangle" size={12} color="#ef4444" />
+                      <Text style={[s.savdhanText, { color: "#ef4444" }]}>{(t as any).warningLabel ?? "Caution"}: {phal.savdhan}</Text>
                     </View>
                   </View>
-                  <View style={[s.savdhanBox, { backgroundColor: C.isDark ? "rgba(239,68,68,0.06)" : "#FEE2E2", borderColor: "rgba(239,68,68,0.2)" }]}>
-                    <Feather name="alert-triangle" size={12} color="#ef4444" />
-                    <Text style={[s.savdhanText, { color: "#ef4444" }]}>{(t as any).warningLabel ?? "Caution"}: {phal.savdhan}</Text>
-                  </View>
-                </View>
-              )}
-            </Pressable>
+                )}
+              </Pressable>
+            </FadeInView>
           );
         })}
       </ScrollView>

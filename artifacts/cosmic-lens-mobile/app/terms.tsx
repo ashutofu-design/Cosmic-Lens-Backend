@@ -1,6 +1,7 @@
 import React from "react";
 import { LegalPolicyBody } from "@/components/LegalPolicyDoc";
 import LegalScreen from "@/components/LegalScreen";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { LEGAL_META, termsOfServiceDoc } from "@/lib/legalPolicies";
 
 export default function TermsOfServiceScreen() {
@@ -10,7 +11,9 @@ export default function TermsOfServiceScreen() {
       subtitle={termsOfServiceDoc.subtitle}
       lastUpdated={LEGAL_META.lastUpdated}
     >
-      <LegalPolicyBody doc={termsOfServiceDoc} />
+      <FadeInView delay={staggerDelay(0)}>
+        <LegalPolicyBody doc={termsOfServiceDoc} />
+      </FadeInView>
     </LegalScreen>
   );
 }

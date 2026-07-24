@@ -1,3 +1,4 @@
+import { useIsFocused } from "@react-navigation/native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, StyleSheet } from "react-native";
 import Svg, {
@@ -91,6 +92,7 @@ export default function EnergyChart({
   nowLabel = "Now", live = true,
 }: EnergyChartProps) {
   const C = useC();
+  const isFocused = useIsFocused();
 
   const journeyPts = useMemo(() => shapeJourney(targetPts), [targetPts]);
 
@@ -195,17 +197,22 @@ export default function EnergyChart({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- animPts read only for soft-morph snapshot
   }, [journeyPts, instant]);
 
-  // Perpetual live loop — pulse, wiggle, scan once chart is visible.
+  // Live pulse — throttled (~10 FPS) and paused when Home tab is unfocused.
+  // Full RAF + setState every frame was starving the JS thread / touch.
   useEffect(() => {
-    if (!live || loading || !animate || !areaVis) return;
+    if (!live || loading || !animate || !areaVis || !isFocused) return;
     let frame = 0;
+    let lastPaint = 0;
     const tick = (now: number) => {
-      setLivePhase(now / 1000);
+      if (now - lastPaint >= 100) {
+        lastPaint = now;
+        setLivePhase(now / 1000);
+      }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [live, loading, animate, areaVis]);
+  }, [live, loading, animate, areaVis, isFocused]);
 
   const wigglePts = useMemo(() => {
     if (!live || !animate) return animPts;

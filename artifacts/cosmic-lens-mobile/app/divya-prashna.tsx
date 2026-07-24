@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT, type T } from "@/hooks/useT";
@@ -200,14 +201,17 @@ export default function DivyaPrashnaScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Place + time strip */}
+          <FadeInView delay={staggerDelay(0)}>
           <View style={[styles.metaStrip, { backgroundColor: c.text + "10" }]}>
             <Feather name="map-pin" size={14} color={c.text + "99"} />
             <Text style={[styles.metaText, { color: c.text + "cc" }]}>
               {t.dp_metaCity}
             </Text>
           </View>
+          </FadeInView>
 
           {/* Quick category chips */}
+          <FadeInView delay={staggerDelay(1)}>
           <Text style={[styles.sectionLabel, { color: c.text }]}>{t.dp_quickQuestion}</Text>
           <View style={styles.chipsRow}>
             {QUICK_CATEGORIES.map((cat) => {
@@ -232,8 +236,10 @@ export default function DivyaPrashnaScreen() {
               );
             })}
           </View>
+          </FadeInView>
 
           {/* Question input */}
+          <FadeInView delay={staggerDelay(2)}>
           <Text style={[styles.sectionLabel, { color: c.text, marginTop: 18 }]}>
             {t.dp_orType}
           </Text>
@@ -252,8 +258,10 @@ export default function DivyaPrashnaScreen() {
               },
             ]}
           />
+          </FadeInView>
 
           {/* Submit */}
+          <FadeInView delay={staggerDelay(3)}>
           <Pressable
             onPress={ask}
             disabled={loading}
@@ -278,9 +286,11 @@ export default function DivyaPrashnaScreen() {
               )}
             </LinearGradient>
           </Pressable>
+          </FadeInView>
 
           {/* Error / quota message */}
           {errMsg && (
+            <FadeInView delay={staggerDelay(4)}>
             <View style={[styles.card, { backgroundColor: "#ef444418", borderColor: "#ef444455" }]}>
               <Text style={[styles.cardTitle, { color: "#ef4444" }]}>{t.dp_errNoticeTtl}</Text>
               <Text style={[styles.cardBody, { color: c.text }]}>{errMsg}</Text>
@@ -293,10 +303,12 @@ export default function DivyaPrashnaScreen() {
                 </Pressable>
               )}
             </View>
+            </FadeInView>
           )}
 
           {/* Result */}
           {result && !result.ok && result.validity && (
+            <FadeInView delay={staggerDelay(4)}>
             <View style={[styles.card, { backgroundColor: "#fbbf2418", borderColor: "#fbbf2455" }]}>
               <Text style={[styles.cardTitle, { color: "#f59e0b" }]}>
                 {t.dp_immatureTitle}
@@ -311,11 +323,13 @@ export default function DivyaPrashnaScreen() {
                 {t.dp_retryAfter}: ~{result.validity.retry_after_min} {t.dp_minutesLater}
               </Text>
             </View>
+            </FadeInView>
           )}
 
           {result?.ok && result.verdict && (
             <>
               {/* Verdict card */}
+              <FadeInView delay={staggerDelay(4)}>
               <View
                 style={[
                   styles.card,
@@ -340,8 +354,10 @@ export default function DivyaPrashnaScreen() {
                   </View>
                 )}
               </View>
+              </FadeInView>
 
               {/* Chart snapshot */}
+              <FadeInView delay={staggerDelay(5)}>
               <View style={[styles.card, { backgroundColor: c.text + "08", borderColor: c.text + "1a" }]}>
                 <Text style={[styles.cardTitle, { color: c.text }]}>{t.dp_chartTitle}</Text>
                 <View style={styles.chartRow}>
@@ -363,9 +379,11 @@ export default function DivyaPrashnaScreen() {
                   </Text>
                 </View>
               </View>
+              </FadeInView>
 
               {/* Cusp analysis */}
               {result.cusp_analysis && result.cusp_analysis.length > 0 && (
+                <FadeInView delay={staggerDelay(6)}>
                 <View style={[styles.card, { backgroundColor: c.text + "08", borderColor: c.text + "1a" }]}>
                   <Text style={[styles.cardTitle, { color: c.text }]}>
                     {t.dp_cuspTitle}
@@ -387,10 +405,12 @@ export default function DivyaPrashnaScreen() {
                     </View>
                   ))}
                 </View>
+                </FadeInView>
               )}
 
               {/* Classical refs */}
               {result.classical_refs && (
+                <FadeInView delay={staggerDelay(7)}>
                 <View style={[styles.card, { backgroundColor: c.text + "06", borderColor: c.text + "12" }]}>
                   <Text style={[styles.cardTitle, { color: c.text }]}>{t.dp_classicalTitle}</Text>
                   {result.classical_refs.map((r, i) => (
@@ -399,6 +419,7 @@ export default function DivyaPrashnaScreen() {
                     </Text>
                   ))}
                 </View>
+                </FadeInView>
               )}
             </>
           )}

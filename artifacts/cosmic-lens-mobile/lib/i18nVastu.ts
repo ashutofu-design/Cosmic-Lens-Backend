@@ -64,7 +64,6 @@ export interface VastuT {
   vt_tagProPremium:         string;
   vt_tagForHome:            string;
   vt_tagForBusiness:        string;
-  vt_tagComingSoon:         string;
   vt_tagNew:                string;
 
   // ── CTAs ─────────────────────────────────────────────────
@@ -270,7 +269,6 @@ const en: VastuT = {
   vt_tagProPremium:         "PRO PREMIUM",
   vt_tagForHome:            "FOR HOME / RESIDENCE",
   vt_tagForBusiness:        "FOR BUSINESS / COMMERCIAL",
-  vt_tagComingSoon:         "Coming Soon",
   vt_tagNew:                "NEW",
 
   vt_ctaOpenFreeVastu:      "Open Free Vastu",
@@ -545,7 +543,6 @@ const hi: VastuT = {
   vt_tagProPremium:         "प्रो प्रीमियम",
   vt_tagForHome:            "घर / निवास के लिए",
   vt_tagForBusiness:        "व्यवसाय / कमर्शियल के लिए",
-  vt_tagComingSoon:         "जल्द आ रहा है",
   vt_tagNew:                "नया",
 
   vt_ctaOpenFreeVastu:      "मुफ़्त वास्तु खोलें",

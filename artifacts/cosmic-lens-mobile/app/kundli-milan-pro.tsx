@@ -18,7 +18,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CosmicBg } from "@/components/CosmicBg";
 import { MarriageCompatProPurchase } from "@/components/kundliMilan/MarriageCompatProPurchase";
 import { MarriageCompatProStickyCta } from "@/components/kundliMilan/MarriageCompatProStickyCta";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { ProPdfLanguagePickerModal } from "@/components/ProPdfLanguagePickerModal";
+import { OrderSuccessModal } from "@/components/OrderSuccessModal";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -38,7 +40,7 @@ import {
   runMilanProUnlockCta,
 } from "@/lib/milanProOffer";
 import { packLovePerson } from "@/lib/loveRealityPack";
-import { coerceProPdfLang, proPdfLangDisplayName } from "@/lib/proPdfLang";
+import { coerceProPdfLang } from "@/lib/proPdfLang";
 
 export default function KundliMilanProScreen() {
   const C = useC();
@@ -73,6 +75,10 @@ export default function KundliMilanProScreen() {
   const proCopy = milanProScreenCopy(displayLang);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [preparingBanner, setPreparingBanner] = useState<{
+    priority: boolean;
+    etaHours: number;
+  } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -150,13 +156,10 @@ export default function KundliMilanProScreen() {
         apiKey: user.api_key,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const langLabel = proPdfLangDisplayName(lang);
-      const etaLabel = result.eta_hours <= 24 ? "12 hours" : "24–48 hours";
-      Alert.alert(
-        proCopy.orderPlacedTitle,
-        proCopy.orderPlacedBody(langLabel, etaLabel),
-        [{ text: "OK" }],
-      );
+      setPreparingBanner({
+        priority: urgent,
+        etaHours: Number(result.eta_hours) || (urgent ? 12 : 24),
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Order failed";
       Alert.alert("Could not place order", msg);
@@ -272,25 +275,29 @@ export default function KundliMilanProScreen() {
             showsVerticalScrollIndicator={false}
           >
             {!canPro && (
-              <Pressable
-                onPress={showKundliRequired}
-                style={[s.partnerHint, { borderColor: isDark ? "rgba(167,139,250,0.35)" : "rgba(124,58,237,0.25)" }]}
-              >
-                <Feather name="users" size={14} color="#a78bfa" />
-                <Text style={[s.partnerHintText, { color: isDark ? "#e9d5ff" : "#5b21b6" }]}>
-                  {!partnerProfile ? proCopy.partnerMissing : proCopy.kundliMissing}
-                </Text>
-                <Feather name="chevron-right" size={14} color="#a78bfa" />
-              </Pressable>
+              <FadeInView delay={staggerDelay(0)}>
+                <Pressable
+                  onPress={showKundliRequired}
+                  style={[s.partnerHint, { borderColor: isDark ? "rgba(167,139,250,0.35)" : "rgba(124,58,237,0.25)" }]}
+                >
+                  <Feather name="users" size={14} color="#a78bfa" />
+                  <Text style={[s.partnerHintText, { color: isDark ? "#e9d5ff" : "#5b21b6" }]}>
+                    {!partnerProfile ? proCopy.partnerMissing : proCopy.kundliMissing}
+                  </Text>
+                  <Feather name="chevron-right" size={14} color="#a78bfa" />
+                </Pressable>
+              </FadeInView>
             )}
-            <MarriageCompatProPurchase
-              isDark={isDark}
-              primaryName={primaryProfile?.name}
-              partnerName={partnerProfile?.name}
-              priorityDelivery={priorityDelivery}
-              onPriorityDeliveryChange={setPriorityDelivery}
-              lang={displayLang}
-            />
+            <FadeInView delay={staggerDelay(canPro ? 0 : 1)}>
+              <MarriageCompatProPurchase
+                isDark={isDark}
+                primaryName={primaryProfile?.name}
+                partnerName={partnerProfile?.name}
+                priorityDelivery={priorityDelivery}
+                onPriorityDeliveryChange={setPriorityDelivery}
+                lang={displayLang}
+              />
+            </FadeInView>
           </ScrollView>
 
           <MarriageCompatProStickyCta
@@ -315,6 +322,21 @@ export default function KundliMilanProScreen() {
           priorityDelivery,
           onPriorityDeliveryChange: setPriorityDelivery,
         }}
+      />
+      <OrderSuccessModal
+        visible={!!preparingBanner}
+        onClose={() => setPreparingBanner(null)}
+        onViewReports={() => {
+          setPreparingBanner(null);
+          router.push("/my-reports" as any);
+        }}
+        title="Order Confirmed!"
+        message="Your order has been received. Our expert is personally preparing your Marriage Compatibility Pro report — it's on its way."
+        etaLabel={
+          preparingBanner?.priority
+            ? "Report in My Reports within 12 hrs"
+            : "Report in My Reports within 24 hrs"
+        }
       />
     </CosmicBg>
   );

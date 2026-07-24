@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 
@@ -171,67 +172,75 @@ export default function MuhuratScreen() {
         ))}
       </ScrollView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100, gap: 16 }}>
-        {/* Header */}
-        <View style={[s.heroCard, { backgroundColor: `${cat.color}12`, borderColor: `${cat.color}30` }]}>
-          <Text style={{ fontSize: 36 }}>{cat.emoji}</Text>
-          <View>
-            <Text style={[s.heroTitle, { color: cat.color }]}>{cat.title}</Text>
-            <Text style={[s.heroSub, { color: C.textMuted }]}>{cat.subtitle}</Text>
-          </View>
-        </View>
-
-        {/* Muhurat list */}
-        {data.length === 0 ? (
-          <View style={[s.emptyBox, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <Text style={{ fontSize: 32 }}>🔭</Text>
-            <Text style={[s.emptyText, { color: C.textMuted }]}>{t.muhEmpty}</Text>
-          </View>
-        ) : (
-          data.map(monthData => (
-            <View key={monthData.month}>
-              <Text style={[s.monthLabel, { color: C.textMuted }]}>{monthData.month.toUpperCase()}</Text>
-              <View style={[s.monthCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                {monthData.dates.map((d, i) => (
-                  <View
-                    key={`${d.date}-${d.time}`}
-                    style={[
-                      s.dateRow,
-                      { borderBottomColor: C.border3 },
-                      i === monthData.dates.length - 1 && { borderBottomWidth: 0 },
-                    ]}
-                  >
-                    <View style={[s.dateBox, { backgroundColor: d.good ? (C.isDark ? `${cat.color}18` : `${cat.color}22`) : (C.isDark ? "rgba(239,68,68,0.08)" : "#FEE2E2"), borderColor: d.good ? `${cat.color}40` : "rgba(239,68,68,0.2)" }]}>
-                      <Text style={[s.dateNum, { color: d.good ? cat.color : "#ef4444" }]}>{d.date.split(" ")[1]}</Text>
-                      <Text style={[s.dateMon, { color: d.good ? cat.color : "#ef4444" }]}>{d.date.split(" ")[0]}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Text style={[s.dayName, { color: C.text }]}>{d.day}</Text>
-                        {!d.good && (
-                          <View style={s.avoidBadge}>
-                            <Text style={s.avoidText}>{t.muhAvoid}</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={[s.timeText, { color: d.good ? cat.color : C.textDim }]}>⏰ {d.time}</Text>
-                      <Text style={[s.nakshatraText, { color: C.textMuted }]}>⭐ {d.nakshatra} {t.muhNakshatra}</Text>
-                    </View>
-                    {d.good && <Feather name="check-circle" size={18} color={cat.color} />}
-                  </View>
-                ))}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100 }}>
+        <FadeInView key={selected} resetKey={selected} style={{ gap: 16 }}>
+          {/* Header */}
+          <FadeInView delay={staggerDelay(0)}>
+            <View style={[s.heroCard, { backgroundColor: `${cat.color}12`, borderColor: `${cat.color}30` }]}>
+              <Text style={{ fontSize: 36 }}>{cat.emoji}</Text>
+              <View>
+                <Text style={[s.heroTitle, { color: cat.color }]}>{cat.title}</Text>
+                <Text style={[s.heroSub, { color: C.textMuted }]}>{cat.subtitle}</Text>
               </View>
             </View>
-          ))
-        )}
+          </FadeInView>
 
-        {/* Note */}
-        <View style={[s.noteBox, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-          <Feather name="info" size={14} color={C.textDim} />
-          <Text style={[s.noteText, { color: C.textMuted }]}>
-            {t.muhNote}
-          </Text>
-        </View>
+          {/* Muhurat list */}
+          {data.length === 0 ? (
+            <FadeInView delay={staggerDelay(1)}>
+              <View style={[s.emptyBox, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                <Text style={{ fontSize: 32 }}>🔭</Text>
+                <Text style={[s.emptyText, { color: C.textMuted }]}>{t.muhEmpty}</Text>
+              </View>
+            </FadeInView>
+          ) : (
+            data.map((monthData, mi) => (
+              <FadeInView key={monthData.month} delay={staggerDelay(mi + 1)}>
+                <Text style={[s.monthLabel, { color: C.textMuted }]}>{monthData.month.toUpperCase()}</Text>
+                <View style={[s.monthCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                  {monthData.dates.map((d, i) => (
+                    <View
+                      key={`${d.date}-${d.time}`}
+                      style={[
+                        s.dateRow,
+                        { borderBottomColor: C.border3 },
+                        i === monthData.dates.length - 1 && { borderBottomWidth: 0 },
+                      ]}
+                    >
+                      <View style={[s.dateBox, { backgroundColor: d.good ? (C.isDark ? `${cat.color}18` : `${cat.color}22`) : (C.isDark ? "rgba(239,68,68,0.08)" : "#FEE2E2"), borderColor: d.good ? `${cat.color}40` : "rgba(239,68,68,0.2)" }]}>
+                        <Text style={[s.dateNum, { color: d.good ? cat.color : "#ef4444" }]}>{d.date.split(" ")[1]}</Text>
+                        <Text style={[s.dateMon, { color: d.good ? cat.color : "#ef4444" }]}>{d.date.split(" ")[0]}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={[s.dayName, { color: C.text }]}>{d.day}</Text>
+                          {!d.good && (
+                            <View style={s.avoidBadge}>
+                              <Text style={s.avoidText}>{t.muhAvoid}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[s.timeText, { color: d.good ? cat.color : C.textDim }]}>⏰ {d.time}</Text>
+                        <Text style={[s.nakshatraText, { color: C.textMuted }]}>⭐ {d.nakshatra} {t.muhNakshatra}</Text>
+                      </View>
+                      {d.good && <Feather name="check-circle" size={18} color={cat.color} />}
+                    </View>
+                  ))}
+                </View>
+              </FadeInView>
+            ))
+          )}
+
+          {/* Note */}
+          <FadeInView delay={staggerDelay(data.length + 1)}>
+            <View style={[s.noteBox, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+              <Feather name="info" size={14} color={C.textDim} />
+              <Text style={[s.noteText, { color: C.textMuted }]}>
+                {t.muhNote}
+              </Text>
+            </View>
+          </FadeInView>
+        </FadeInView>
       </ScrollView>
     </View>
   );

@@ -9,6 +9,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -62,7 +63,7 @@ const oa = (isDark: boolean, hexAlpha: string): string => {
 };
 
 // ── i18n labels (full 25-lang via i18n) ─────────────────────────────────────────
-function getKundliLabels(t: ReturnType<typeof useT>) {
+export function getKundliLabels(t: ReturnType<typeof useT>) {
   return {
     mahadasha:        t.ku_mahadasha,
     antardasha:       t.ku_antardasha,
@@ -129,7 +130,7 @@ function progress(s: Date | string, e: Date | string) {
   return Math.round(((n-sv)/(ev-sv))*100);
 }
 
-function activeDashaIndex(items: { startDate: Date | string; endDate: Date | string }[]): number {
+export function activeDashaIndex(items: { startDate: Date | string; endDate: Date | string }[]): number {
   const now = Date.now();
   const ai = items.findIndex((s) => tsOf(s.startDate) <= now && tsOf(s.endDate) > now);
   return ai >= 0 ? ai : 0;
@@ -424,7 +425,7 @@ function DashaInlinePanel({ tag, planet, startDate, endDate, active, color, onPr
   );
 }
 
-function DashaTab({ kundli, mahaIdx, setMahaIdx, antarIdx, setAntarIdx, pratIdx, setPratIdx }: {
+export function DashaTab({ kundli, mahaIdx, setMahaIdx, antarIdx, setAntarIdx, pratIdx, setPratIdx }: {
   kundli:KundliData; mahaIdx:number; setMahaIdx:(i:number)=>void;
   antarIdx:number; setAntarIdx:(i:number)=>void;
   pratIdx:number; setPratIdx:(i:number)=>void;
@@ -592,7 +593,7 @@ function computeBAV(kundli: KundliData) {
   return { BAVS, SAV };
 }
 
-function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
+export function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const t = useT();
   const { language } = useUser();
@@ -723,7 +724,7 @@ function computeNavatara(kundli: KundliData, lang: string) {
   });
 }
 
-function NavataraTab({ kundli }: { kundli: KundliData }) {
+export function NavataraTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
@@ -817,7 +818,7 @@ function computeChara(kundli: KundliData, lang: string) {
   return sorted.map((v, i) => ({ ...v, karaka: KARAKA_DEFS[i] }));
 }
 
-function JaiminiTab({ kundli }: { kundli: KundliData }) {
+export function JaiminiTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
@@ -938,7 +939,7 @@ const GOCHAR_REFRESH_MS = 5 * 60 * 1000;
 const TRANSIT_DEG_W = 74;
 const TRANSIT_HOUSE_W = 32;
 
-function TransitTab({ kundli, lat, lng, tz, active }: {
+export function TransitTab({ kundli, lat, lng, tz, active }: {
   kundli: KundliData;
   lat?: number;
   lng?: number;
@@ -1184,7 +1185,7 @@ function CuspsTable({ kundli }: { kundli: KundliData }) {
   );
 }
 
-function KPTab({ kundli }: { kundli: KundliData }) {
+export function KPTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
@@ -1571,6 +1572,7 @@ export default function KundliScreen() {
       contentContainerStyle={{ paddingHorizontal: 16, gap: 18, paddingTop: topPad + 8, paddingBottom: botPad + 100 }}
       showsVerticalScrollIndicator={false}>
 
+      <FadeInView delay={staggerDelay(0)}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
@@ -1599,6 +1601,7 @@ export default function KundliScreen() {
           {profiles.length > 1 && <Feather name="chevron-down" size={16} color={C.textMid} />}
         </Pressable>
       </View>
+      </FadeInView>
 
       <Modal visible={switcherOpen} transparent animationType="fade" onRequestClose={() => setSwitcherOpen(false)}>
         <Pressable
@@ -1664,6 +1667,7 @@ export default function KundliScreen() {
         </Pressable>
       </Modal>
 
+      <FadeInView delay={staggerDelay(1)}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom:2}}>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {CHART_BTNS.map(({ tab, icon }) => {
@@ -1687,7 +1691,9 @@ export default function KundliScreen() {
           })}
         </View>
       </ScrollView>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(2)} resetKey={activeTab} style={{ gap: 18 }}>
       {activeTab === "Kundli" && (<>
       <View style={{
         borderRadius: 18, borderWidth: 1, overflow: "hidden",
@@ -1766,6 +1772,7 @@ export default function KundliScreen() {
         />
       )}
       {activeTab === "KP"           && <KPTab kundli={kundli} />}
+      </FadeInView>
     </ScrollView>
     </CosmicBg>
   );

@@ -44,7 +44,7 @@ export interface Translations {
   logOut: string; deleteAccount: string;
   freePlan: string; upgradeNow: string;
   selectLanguage: string; langSubtitle: string;
-  langSearch: string; supported: string; comingSoon: string;
+  langSearch: string; supported: string;
   askTitle: string; askPlaceholder: string;
   askSend: string; askSuggestions: string;
   lifeMapTitle: string; lifeMapSubtitle: string;
@@ -52,6 +52,9 @@ export interface Translations {
   lifeMapHealthSub: string; lifeMapFinSub: string;
   lifeMapComing: string; lifeMapComingSub: string;
   futureTitle: string; futureSubtitle: string;
+  ftUntil: string; ftLifeAreas: string; ftSixMonthDetail: string; ftTechnical: string;
+  ftPeriodMeaning: string; ftAreaBreakdown: string; ftFocusNow: string; ftCurrentPd: string; ftSixMonthSub: string;
+  ftLiveNow: string; ftPdProgress: string;
   career: string; finance: string; relationship: string; health: string;
   noticeTitle: string; noNotices: string;
   errorGeneral: string; noInternet: string; tryAgain: string;
@@ -125,7 +128,7 @@ const T: Record<UILang, Translations> = {
     logOut: "Log Out", deleteAccount: "Delete Account",
     freePlan: "Free Plan", upgradeNow: "Upgrade Now",
     selectLanguage: "Select Language", langSubtitle: "App language will change instantly",
-    langSearch: "Search language...", supported: "Supported", comingSoon: "Coming Soon",
+    langSearch: "Search language...", supported: "Supported",
 
     askTitle: "Ask Jyotish", askPlaceholder: "Ask anything about your chart...",
     askSend: "Send", askSuggestions: "Try asking...",
@@ -135,7 +138,18 @@ const T: Record<UILang, Translations> = {
     lifeMapHealthSub: "Body, mind & vitality", lifeMapFinSub: "Wealth, stability & flow",
     lifeMapComing: "More dimensions coming", lifeMapComingSub: "Education, Travel, Spirituality & more",
 
-    futureTitle: "Future Timeline", futureSubtitle: "Your next 6 months decoded",
+    futureTitle: "Future Timeline", futureSubtitle: "Your current cosmic weather",
+    ftUntil: "Antardasha until",
+    ftLifeAreas: "Life areas now",
+    ftSixMonthDetail: "6-month detailed outlook",
+    ftTechnical: "Technical details",
+    ftPeriodMeaning: "What this period means",
+    ftAreaBreakdown: "Area-wise outlook",
+    ftFocusNow: "Focus right now",
+    ftCurrentPd: "Running now — Pratyantar Dasha",
+    ftSixMonthSub: "Month-by-month MD/AD/PD breakdown with scores",
+    ftLiveNow: "Live · Dasha running",
+    ftPdProgress: "Pratyantar progress",
     career: "Career", finance: "Finance", relationship: "Relationship", health: "Health",
 
     noticeTitle: "Notices", noNotices: "No notices yet",
@@ -238,7 +252,7 @@ const T: Record<UILang, Translations> = {
     logOut: "Log Out", deleteAccount: "Account delete karein",
     freePlan: "Free Plan", upgradeNow: "Abhi Upgrade karein",
     selectLanguage: "Bhasha chunein", langSubtitle: "App ki bhasha turant badal jaayegi",
-    langSearch: "Bhasha search karein...", supported: "Supported", comingSoon: "Jald aa raha hai",
+    langSearch: "Bhasha search karein...", supported: "Supported",
 
     askTitle: "Jyotish se poochein", askPlaceholder: "Apni kundli ke baare mein kuch bhi poochein...",
     askSend: "Bhejein", askSuggestions: "Yeh poochein...",
@@ -248,7 +262,18 @@ const T: Record<UILang, Translations> = {
     lifeMapHealthSub: "Sharir, mann aur energy", lifeMapFinSub: "Dhan, stability aur flow",
     lifeMapComing: "Aur dimensions aa rahe hain", lifeMapComingSub: "Education, Travel, Spirituality aur bahut kuch",
 
-    futureTitle: "Future Timeline", futureSubtitle: "Agle 6 mahine decoded",
+    futureTitle: "Future Timeline", futureSubtitle: "Abhi aapka cosmic weather",
+    ftUntil: "Antardasha tak",
+    ftLifeAreas: "Ab kis area mein",
+    ftSixMonthDetail: "6 mahine ka detail outlook",
+    ftTechnical: "Technical details",
+    ftPeriodMeaning: "Is period ka matlab",
+    ftAreaBreakdown: "Har area mein kya hai",
+    ftFocusNow: "Ab kya karein",
+    ftCurrentPd: "Ab chal raha hai — Pratyantar Dasha",
+    ftSixMonthSub: "Har mahine ka MD/AD/PD outlook scores ke saath",
+    ftLiveNow: "Live · Dasha chal rahi hai",
+    ftPdProgress: "Pratyantar progress",
     career: "Career", finance: "Paisa", relationship: "Rishta", health: "Swasthya",
 
     noticeTitle: "Notices", noNotices: "Abhi koi notice nahi",
@@ -351,7 +376,7 @@ const T: Record<UILang, Translations> = {
     logOut: "लॉग आउट", deleteAccount: "खाता हटाएं",
     freePlan: "मुफ़्त योजना", upgradeNow: "अभी अपग्रेड करें",
     selectLanguage: "भाषा चुनें", langSubtitle: "ऐप की भाषा तुरंत बदल जाएगी",
-    langSearch: "भाषा खोजें...", supported: "समर्थित", comingSoon: "जल्द आ रहा है",
+    langSearch: "भाषा खोजें...", supported: "समर्थित",
 
     askTitle: "ज्योतिष से पूछें", askPlaceholder: "अपनी कुंडली के बारे में कुछ भी पूछें...",
     askSend: "भेजें", askSuggestions: "ये पूछें...",
@@ -360,8 +385,19 @@ const T: Record<UILang, Translations> = {
     lifeMapRelSub: "प्रेम, अनुकूलता और बंधन", lifeMapCarSub: "विकास, सफलता और उद्देश्य",
     lifeMapHealthSub: "शरीर, मन और ऊर्जा", lifeMapFinSub: "धन, स्थिरता और प्रवाह",
     lifeMapComing: "और आयाम आ रहे हैं", lifeMapComingSub: "शिक्षा, यात्रा, अध्यात्म और अधिक",
-    futureTitle: "भविष्य टाइमलाइन", futureSubtitle: "अगले 6 महीने डिकोड", career: "करियर",
-    finance: "वित्त", relationship: "संबंध", health: "स्वास्थ्य",
+    futureTitle: "भविष्य टाइमलाइन", futureSubtitle: "अभी आपका cosmic weather",
+    ftUntil: "अंतर्दशा तक",
+    ftLifeAreas: "अभी किन क्षेत्रों में",
+    ftSixMonthDetail: "6 महीने का विस्तृत outlook",
+    ftTechnical: "Technical details",
+    ftPeriodMeaning: "इस अवधि का मतलब",
+    ftAreaBreakdown: "क्षेत्रवार outlook",
+    ftFocusNow: "अभी क्या करें",
+    ftCurrentPd: "अभी चल रहा — प्रत्यंतर दशा",
+    ftSixMonthSub: "हर महीने का MD/AD/PD outlook स्कोर के साथ",
+    ftLiveNow: "Live · दशा चल रही है",
+    ftPdProgress: "प्रत्यंतर प्रगति",
+    career: "करियर", finance: "वित्त", relationship: "संबंध", health: "स्वास्थ्य",
 
     noticeTitle: "सूचनाएं", noNotices: "अभी कोई सूचना नहीं",
 

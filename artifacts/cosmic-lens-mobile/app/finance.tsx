@@ -822,60 +822,6 @@ export default function FinanceScreen() {
               </SectionCard>
             )}
 
-            {/* HOOK */}
-            {!isProUser && (
-              <FadeInView delay={staggerDelay(5)}>
-              <View style={[s.hookCard, { borderColor: `${accent}55` }]}>
-                <LinearGradient
-                  colors={["rgba(59,130,246,0.18)", "rgba(59,130,246,0.05)"]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={s.hookRow}>
-                  <View style={[s.hookIcon, { borderColor: `${accent}66` }]}>
-                    <Feather name="zap" size={14} color={accent} />
-                  </View>
-                  <Text style={[s.hookHeading, { color: accent }]}>{t.fn_hidden}</Text>
-                </View>
-
-                <View style={{ position: "relative", marginTop: 8, minHeight: 56 }}>
-                  <Text style={s.hookText}>{data.basic.hook}</Text>
-                  {Platform.OS !== "web" ? (
-                    <BlurView intensity={28} tint="dark"
-                      style={[StyleSheet.absoluteFill, { borderRadius: 8 }]} />
-                  ) : (
-                    <View style={[StyleSheet.absoluteFill,
-                      { backgroundColor: "rgba(8,16,30,0.55)", borderRadius: 8 }]} />
-                  )}
-                  <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
-                    <Feather name="lock" size={18} color={accent} />
-                  </View>
-                </View>
-
-                <Text style={s.hookCta}>
-                  Unlock full financial analysis with exact gain periods and money insights.
-                </Text>
-
-                <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    router.push("/subscription");
-                  }}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, marginTop: 12 })}
-                >
-                  <LinearGradient
-                    colors={["#1d4ed8", "#3b82f6"]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                    style={s.upgradeBtn}
-                  >
-                    <Feather name="zap" size={14} color="#fff" />
-                    <Text style={s.upgradeBtnText}>{t.cr_upgradeBtn}</Text>
-                  </LinearGradient>
-                </Pressable>
-              </View>
-              </FadeInView>
-            )}
-
             {isProUser && data.pro && (
               <>
                 <SectionCard icon="home" title={t.fn_houses} accent={accent} delay={staggerDelay(6)}>

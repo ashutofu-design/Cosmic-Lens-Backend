@@ -29,6 +29,7 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Static option lists — bilingual labels (24-language migration: drop in i18n keys)
@@ -165,7 +166,13 @@ export default function AstroVastuBasicScreen() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/astrovastu" as any);
+          }}
+          hitSlop={12}
+        >
           <Feather name={I18nManager.isRTL ? "chevron-right" : "chevron-left"} size={26} color={C.text} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: C.text }]}>{t.vt_titleQuickCheck}</Text>
@@ -177,9 +184,12 @@ export default function AstroVastuBasicScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── AstroVastu Wallet (Phase 2: credits + buy CTAs) ─────── */}
+        <FadeInView delay={staggerDelay(0)}>
         <AstroVastuWallet variant="basic" refreshKey={walletKey} />
+        </FadeInView>
 
         {/* ── Intro card ─────────────────────────────────────────────── */}
+        <FadeInView delay={staggerDelay(1)}>
         <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Text style={[styles.cardTitle, { color: C.text }]}>
             {t.vt_introKundliPersonalized}
@@ -188,8 +198,10 @@ export default function AstroVastuBasicScreen() {
             {t.vt_introQuickCheckBody}
           </Text>
         </View>
+        </FadeInView>
 
         {/* ── Room picker ──────────────────────────────────────────── */}
+        <FadeInView delay={staggerDelay(2)}>
         <Text style={[styles.sectionTitle, { color: C.text }]}>{t.vt_sectionPickKamra}</Text>
         <View style={styles.grid}>
           {ROOMS.map(r => {
@@ -220,8 +232,10 @@ export default function AstroVastuBasicScreen() {
             );
           })}
         </View>
+        </FadeInView>
 
         {/* ── Direction wheel ──────────────────────────────────────── */}
+        <FadeInView delay={staggerDelay(3)}>
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 18 }]}>
           {t.vt_sectionPickDisha}
         </Text>
@@ -263,9 +277,11 @@ export default function AstroVastuBasicScreen() {
             ? <ActivityIndicator color="#fff" />
             : <Text style={styles.submitText}>{t.vt_ctaCheckKarein}</Text>}
         </Pressable>
+        </FadeInView>
 
         {/* ── Error / upsell banner ─────────────────────────────── */}
         {errInfo && (
+          <FadeInView delay={staggerDelay(4)}>
           <View style={[styles.errCard, {
             backgroundColor: errInfo.upgrade_required
               ? "rgba(245,158,11,0.15)"
@@ -304,10 +320,12 @@ export default function AstroVastuBasicScreen() {
               )}
             </View>
           </View>
+          </FadeInView>
         )}
 
         {/* ── Result card ─────────────────────────────────────── */}
         {result && (
+          <FadeInView delay={staggerDelay(4)}>
           <View style={[styles.resultCard, { backgroundColor: C.bgCard, borderColor: tone.border }]}>
             {/* Verdict pill */}
             <View style={[styles.verdictPill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
@@ -383,15 +401,18 @@ export default function AstroVastuBasicScreen() {
               </Text>
             </View>
           </View>
+          </FadeInView>
         )}
 
         {/* ── Branding footer (NEVER reveal AI/LLM) ──────────────── */}
+        <FadeInView delay={staggerDelay(5)}>
         <Text style={[styles.brandingFooter, { color: C.textMid }]}>
           ✨  {t.vt_appBranding}
         </Text>
         <Text style={[styles.brandingFooterSmall, { color: C.textMid }]}>
           Cosmic AstroVastu Drishti Engine v1.0
         </Text>
+        </FadeInView>
       </ScrollView>
     </View>
   );

@@ -5,7 +5,8 @@
 export type PendingNumerologyCheckout = {
   params: Record<string, unknown>;
   lang: string;
-  /** Set true after Cashfree success — parent screen resumes PDF flow */
+  purchaseId?: number;
+  /** Set true after Cashfree success — parent screen resumes founder-order flow */
   paidReady?: boolean;
 };
 

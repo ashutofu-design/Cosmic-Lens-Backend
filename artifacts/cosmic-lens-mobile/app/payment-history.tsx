@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -171,7 +172,8 @@ export default function PaymentHistoryScreen() {
                 ) : null}
               </View>
             }
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
+              <FadeInView delay={staggerDelay(index)}>
               <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <View style={[s.iconWrap, { backgroundColor: `${ac}18` }]}>
                   <Feather name={kindIcon(item.kind)} size={18} color={ac} />
@@ -194,10 +196,14 @@ export default function PaymentHistoryScreen() {
                     </Text>
                   ) : null}
                 </View>
-                <Text style={[s.amount, { color: ac }]}>
-                  {item.amount_inr > 0 ? `₹${item.amount_inr.toLocaleString("en-IN")}` : "—"}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <MaterialCommunityIcons name="circle-multiple" size={16} color="#f59e0b" />
+                  <Text style={[s.amount, { color: "#f59e0b" }]}>
+                    {item.amount_inr > 0 ? item.amount_inr.toLocaleString("en-IN") : "—"}
+                  </Text>
+                </View>
               </View>
+              </FadeInView>
             )}
           />
         )}

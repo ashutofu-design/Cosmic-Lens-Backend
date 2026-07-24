@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import {
   useAudioPlayer, useAudioPlayerStatus, useAudioRecorder,
@@ -1685,46 +1684,6 @@ export default function AskScreen() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [copiedUserMsgId, setCopiedUserMsgId] = useState<string | null>(null);
-  const copiedUserMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [copiedAssistantMsgId, setCopiedAssistantMsgId] = useState<string | null>(null);
-  const copiedAssistantMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const stripMarkdownForCopy = useCallback((text: string) => {
-    return (text || "")
-      .replace(/[*_`#>~]/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/\n{2,}/g, "\n\n")
-      .trim();
-  }, []);
-
-  const copyAssistantAnswer = useCallback((msgId: string, text: string) => {
-    const value = stripMarkdownForCopy(text);
-    if (!value) return;
-    void (async () => {
-      try {
-        await Clipboard.setStringAsync(value);
-        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-      } catch {}
-      setCopiedAssistantMsgId(msgId);
-      if (copiedAssistantMsgTimerRef.current) clearTimeout(copiedAssistantMsgTimerRef.current);
-      copiedAssistantMsgTimerRef.current = setTimeout(() => setCopiedAssistantMsgId(null), 1500);
-    })();
-  }, [stripMarkdownForCopy]);
-
-  const copyUserQuestion = useCallback((msgId: string, text: string) => {
-    const value = (text || "").trim();
-    if (!value) return;
-    void (async () => {
-      try {
-        await Clipboard.setStringAsync(value);
-        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-      } catch {}
-      setCopiedUserMsgId(msgId);
-      if (copiedUserMsgTimerRef.current) clearTimeout(copiedUserMsgTimerRef.current);
-      copiedUserMsgTimerRef.current = setTimeout(() => setCopiedUserMsgId(null), 1500);
-    })();
-  }, []);
 
   // ── Recent Questions (history) — read-only surface populated by /api/ask
   // and /api/ask/stream's server-side logger. Pure storage layer; clicking
@@ -2573,68 +2532,6 @@ export default function AskScreen() {
             </LinearGradient>
           )}
         </View>
-
-        {!isUser
-          && !item.loading
-          && !item.streaming
-          && item.id !== "thinking"
-          && !!item.text?.trim() && (
-          <View style={s.assistantMsgActionsWrap}>
-          <View style={s.assistantMsgActions}>
-            <Pressable
-              onPress={() => copyAssistantAnswer(item.id, item.text)}
-              style={({ pressed }) => [
-                s.userMsgActionBtn,
-                { borderColor: `${C.accent}40`, backgroundColor: C.bgCard },
-                pressed && { opacity: 0.7 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Copy answer"
-            >
-              <Feather name="copy" size={12} color={C.accent} />
-              <Text style={[s.userMsgActionText, { color: C.accent }]}>
-                {copiedAssistantMsgId === item.id ? "Copied" : "Copy answer"}
-              </Text>
-            </Pressable>
-          </View>
-          </View>
-        )}
-
-        {isUser && !item.loading && !!item.text?.trim() && (
-          <View style={s.userMsgActions}>
-            <Pressable
-              onPress={() => copyUserQuestion(item.id, item.text)}
-              style={({ pressed }) => [
-                s.userMsgActionBtn,
-                { borderColor: `${C.accent}40`, backgroundColor: C.bgCard },
-                pressed && { opacity: 0.7 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Copy question"
-            >
-              <Feather name="copy" size={12} color={C.accent} />
-              <Text style={[s.userMsgActionText, { color: C.accent }]}>
-                {copiedUserMsgId === item.id ? "Copied" : "Copy question"}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                try { Haptics.selectionAsync(); } catch {}
-                setInput(item.text.trim());
-              }}
-              style={({ pressed }) => [
-                s.userMsgActionBtn,
-                { borderColor: C.border, backgroundColor: C.bgCard },
-                pressed && { opacity: 0.7 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Use question again"
-            >
-              <Feather name="edit-3" size={12} color={C.textMid} />
-              <Text style={[s.userMsgActionText, { color: C.textMid }]}>Ask again</Text>
-            </Pressable>
-          </View>
-        )}
 
         {/* Phase 7.5 — Clarifier UX: refinement chips shown when the
             classifier confidence was low. Server attaches `clarification`
@@ -4565,39 +4462,6 @@ const s = StyleSheet.create({
   bubbleText:       { fontSize: 14, lineHeight: 21 },
   bubbleTextUser:   { color: "#FFFFFF", fontWeight: "600" },
   bubbleTextAssist: { color: "#94a3b8" },
-
-  assistantMsgActionsWrap: {
-    marginLeft: 38,
-    marginTop: -4,
-    marginBottom: 8,
-    paddingHorizontal: 2,
-    gap: 4,
-  },
-  assistantMsgActions: {
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  userMsgActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: -4,
-    marginBottom: 8,
-    paddingHorizontal: 2,
-  },
-  userMsgActionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  userMsgActionText: { fontSize: 11, fontWeight: "600" },
 
   followUpsRow: {
     flexDirection: "row",

@@ -20,11 +20,11 @@
     "check:planet-strength": "node scripts/check-planet-strength-rule.mjs",
     "postinstall": "node -e \"const fs=require('fs');if(process.platform!=='win32'||!fs.existsSync('scripts/fix-lightningcss-native.mjs'))process.exit(0)\" && node scripts/fix-lightningcss-native.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "eas": "pnpm exec eas",
-    "eas:login": "pnpm exec eas login",
-    "eas:build:dev": "pnpm exec eas build --profile development --platform android",
-    "eas:build:preview": "pnpm exec eas build --profile preview --platform android",
-    "eas:build:prod": "pnpm exec eas build --profile production --platform android"
+    "eas": "eas",
+    "eas:login": "eas login",
+    "eas:build:dev": "eas build --profile development --platform android",
+    "eas:build:preview": "eas build --profile preview --platform android",
+    "eas:build:prod": "eas build --profile production --platform android"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

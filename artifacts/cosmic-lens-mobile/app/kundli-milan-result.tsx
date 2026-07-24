@@ -6,6 +6,7 @@ import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } fr
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KundliMilanBasicResult } from "@/components/kundliMilan/KundliMilanBasicResult";
 import { kootsToGunScores } from "@/components/kundliMilan/MilanGunBreakdown";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import type { MarriageBasicsPayload } from "@/lib/milanMarriageBasics";
@@ -78,17 +79,19 @@ export default function KundliMilanResultScreen() {
         contentContainerStyle={[st.scroll, { paddingTop: topPad + 64, paddingBottom: botPad + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        <KundliMilanBasicResult
-          data={marriageBasics}
-          isDark={isDark}
-          gunScores={gunScores}
-          gunTotal={gunTotal}
-          lang={t.lang}
-          onOpenPro={() => {
-            MilanResultStore.requestProOnReturn();
-            router.replace("/kundli-milan?openPro=1" as never);
-          }}
-        />
+        <FadeInView delay={staggerDelay(0)}>
+          <KundliMilanBasicResult
+            data={marriageBasics}
+            isDark={isDark}
+            gunScores={gunScores}
+            gunTotal={gunTotal}
+            lang={t.lang}
+            onOpenPro={() => {
+              MilanResultStore.requestProOnReturn();
+              router.replace("/kundli-milan?openPro=1" as never);
+            }}
+          />
+        </FadeInView>
       </ScrollView>
       {LockOverlay}
     </View>

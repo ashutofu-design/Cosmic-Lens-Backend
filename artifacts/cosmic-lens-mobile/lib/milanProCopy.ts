@@ -72,7 +72,7 @@ export const MILAN_DELIVERY_OPTIONS = [
   {
     emoji: "📦",
     title: "Standard Delivery",
-    eta: "Within 24–48 hours",
+    eta: "Within 24 hours",
     surchargeInr: 0,
   },
   {

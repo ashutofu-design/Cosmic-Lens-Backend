@@ -37,6 +37,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
+import { OrderSuccessModal } from "@/components/OrderSuccessModal";
 
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
@@ -271,6 +272,7 @@ export default function BusinessVastuScreen() {
   const [planUpload, setPlanUpload] = useState<SmartScanUploadValue | null>(null);
   const [planPicking, setPlanPicking] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [uploadSuccessVisible, setUploadSuccessVisible] = useState(false);
 
   const roomOpts = ROOM_BY_BIZ[bizType];
   const photosFull = roomPhotos.length >= MAX_ROOM_PHOTOS;
@@ -415,17 +417,14 @@ export default function BusinessVastuScreen() {
         setPlanUpload(null);
         setPhotoRoom(null);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          t.bv_submitSuccessTitle || "Submitted",
-          body?.message || t.bv_submitSuccessBody || "Our Vastu expert will review and prepare your report within 24–48 hours.",
-        );
+        setUploadSuccessVisible(true);
       }
     } catch (e: any) {
       setError({ error: "network", message: String(e?.message || e) });
     } finally {
       setLoading(false);
     }
-  }, [loading, user, bizType, propertyName, planUpload, roomPhotos, t.bv_errAuthRequired, t.bv_errValidationName, t.bv_errValidationRooms, t.bv_submitSuccessTitle, t.bv_submitSuccessBody]);
+  }, [loading, user, bizType, propertyName, planUpload, roomPhotos, t.bv_errAuthRequired, t.bv_errValidationName, t.bv_errValidationRooms]);
 
   const hasUploads = roomPhotos.length > 0 || !!planUpload;
 
@@ -486,7 +485,10 @@ export default function BusinessVastuScreen() {
         style={[styles.header, { paddingTop: 4 }]}
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/astrovastu" as any);
+          }}
           hitSlop={10}
           style={({ pressed }) => [ui.glassBtn, { opacity: pressed ? 0.75 : 1 }]}
         >
@@ -808,20 +810,6 @@ export default function BusinessVastuScreen() {
           </Pressable>
         </FadeInView>
 
-        {submitted ? (
-          <FadeInView delay={staggerDelay(5)}>
-          <View style={[ui.successCard, { backgroundColor: `${accent}14`, borderColor: accent }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <Feather name="check-circle" size={18} color={accent} />
-              <Text style={[styles.cardTitle, { color: C.text }]}>{t.bv_submitSuccessTitle || "Submitted"}</Text>
-            </View>
-            <Text style={{ color: C.text, fontSize: 13 }}>
-              {t.bv_submitSuccessBody || "Our Vastu expert will review your photos and prepare your report within 24–48 hours."}
-            </Text>
-          </View>
-          </FadeInView>
-        ) : null}
-
         {/* ── Error / 402 paywall card ───────────────────────────────── */}
         {error && (
           <FadeInView delay={staggerDelay(5)}>
@@ -1121,6 +1109,17 @@ export default function BusinessVastuScreen() {
           );
         })()}
       </ScrollView>
+      <OrderSuccessModal
+        visible={uploadSuccessVisible}
+        onClose={() => setUploadSuccessVisible(false)}
+        onViewReports={() => {
+          setUploadSuccessVisible(false);
+          router.push("/my-reports" as any);
+        }}
+        title="Order Confirmed!"
+        message="Your business photos have been received. Our Vastu expert is personally reviewing them — your personalised report is on its way."
+        etaLabel="Report in My Reports within 24–48 hrs"
+      />
     </View>
   );
 }

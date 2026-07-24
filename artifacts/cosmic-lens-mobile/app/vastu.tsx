@@ -2962,7 +2962,14 @@ export default function VastuScreen() {
         />
       )}
       <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
-        <Pressable onPress={() => router.back()} style={s.back}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/astrovastu" as any);
+          }}
+          hitSlop={12}
+          style={s.back}
+        >
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex:1 }}>

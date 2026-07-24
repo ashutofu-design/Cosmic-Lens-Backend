@@ -19,6 +19,7 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { finalizeCoupleReportPayment } from "@/lib/coupleReportCheckoutFlow";
+import { finalizeNumerologyReportPayment } from "@/lib/numerologyReportCheckoutFlow";
 import { buildRazorpayCheckoutHtml, openRazorpayCheckoutWeb } from "@/lib/razorpayCheckout";
 import {
   getPendingAstrovastuRoomUpload,
@@ -45,6 +46,8 @@ const PLAN_LABELS: Record<string, string> = {
   pro:        "Pro",
   elite:      "Pro",
   astrovastu: "AstroVastu",
+  ask_v1:     "V1 Question Pack",
+  ask_v3:     "V3 Live Session",
 };
 const PLAN_ICONS: Record<string, string> = {
   trial:      "🎁",
@@ -52,6 +55,8 @@ const PLAN_ICONS: Record<string, string> = {
   pro:        "⚡",
   elite:      "⚡",
   astrovastu: "🏠",
+  ask_v1:     "💬",
+  ask_v3:     "⚡",
 };
 const CYCLE_LABELS: Record<string, string> = {
   weekly:  "7 Days",
@@ -96,13 +101,17 @@ export default function PaymentWebviewScreen() {
   const isAstroVastu  = (params.kind === "astrovastu") || plan === "astrovastu";
   const isCoupleReport = params.kind === "couple_report" || plan === "couple_report";
   const isGemstone = params.kind === "gemstone" || plan === "gemstone";
+  const isNumerologyReport =
+    params.kind === "numerology_report" || plan === "numerology_report";
+  const isAskV1Pack = params.kind === "ask_v1_pack" || plan === "ask_v1";
+  const isAskV3Live = params.kind === "ask_v3_live" || plan === "ask_v3";
   const avPurchaseId  = params.purchaseId ? Number(params.purchaseId) : 0;
-  const avLabel       = params.label || (isGemstone ? "Gemstone" : isCoupleReport ? "Love Reality Pro" : "AstroVastu Unlock");
+  const avLabel       = params.label || (isAskV1Pack ? "V1 Question Pack" : isGemstone ? "Gemstone" : isCoupleReport ? "Love Reality Pro" : "AstroVastu Unlock");
   const avPropName    = params.propertyName || "";
   const avAmount      = params.amount ? Number(params.amount) : 0;
   const isRoomUploadPay = params.sku === "room_expert_199";
   const isFloorPlanPay = isAstroVastu && String(params.sku || "").includes("_floor_");
-  const price = (isAstroVastu || isCoupleReport || isGemstone)
+  const price = (isAstroVastu || isCoupleReport || isGemstone || isAskV1Pack || isAskV3Live || isNumerologyReport)
     ? avAmount
     : (PLAN_PRICES[`${plan}_${cycle}`] ?? 0);
 
@@ -116,6 +125,9 @@ export default function PaymentWebviewScreen() {
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const handledRef = useRef(false);
   const rzKeyId = params.razorpayKeyId || process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "";
+  // Razorpay is the active gateway whenever a key is available; otherwise
+  // fall back to the legacy Cashfree link/session flow.
+  const isRazorpay = !!rzKeyId;
   const rzAmountPaise = params.amountPaise
     ? Number(params.amountPaise)
     : Math.round(price * 100);
@@ -369,12 +381,100 @@ export default function PaymentWebviewScreen() {
   }
 
   async function _verifyPayment(oid: string) {
-    if (!oid && !isAstroVastu && !isGemstone && !isCoupleReport) {
+    if (!oid && !isAstroVastu && !isGemstone && !isCoupleReport && !isNumerologyReport && !isAskV1Pack && !isAskV3Live) {
       setPhase("cancelled");
       return;
     }
     // Small grace so backend webhook can settle
     await new Promise(r => setTimeout(r, 1200));
+
+    // ── Cosmic Intelligence V3 live packs ────────────────────────────
+    if (isAskV3Live) {
+      if (!avPurchaseId) { setPhase("cancelled"); return; }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      if (user?.id) headers["X-User-Id"] = String(user.id);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const ctrl  = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp  = await fetch(
+            `${API_BASE}/api/ask-v3/purchase-status/${avPurchaseId}`,
+            { signal: ctrl.signal, headers },
+          );
+          clearTimeout(timer);
+          const data = await resp.json();
+          if (data?.status === "paid" && (data?.granted || data?.entitled || data?.session_id)) {
+            await refreshUser().catch(() => {});
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPhase("success");
+            return;
+          }
+        } catch { /* retry */ }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      setPhase("pending_verify");
+      return;
+    }
+
+    // ── Cosmic Intelligence V1 question packs ────────────────────────
+    if (isAskV1Pack) {
+      if (!avPurchaseId) { setPhase("cancelled"); return; }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      if (user?.id) headers["X-User-Id"] = String(user.id);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const ctrl  = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp  = await fetch(
+            `${API_BASE}/api/ask-v1/purchase-status/${avPurchaseId}`,
+            { signal: ctrl.signal, headers },
+          );
+          clearTimeout(timer);
+          const data = await resp.json();
+          if (data?.status === "paid" && (data?.granted || data?.entitled || data?.active)) {
+            await refreshUser().catch(() => {});
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPhase("success");
+            return;
+          }
+        } catch { /* retry */ }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      setPhase("pending_verify");
+      return;
+    }
+
+    // ── Numerology Pro / Life Mastery: poll purchase-status ──────────
+    if (isNumerologyReport) {
+      if (!avPurchaseId) { setPhase("cancelled"); return; }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      if (user?.id) headers["X-User-Id"] = String(user.id);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const ctrl  = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp  = await fetch(
+            `${API_BASE}/api/numerology-report/purchase-status/${avPurchaseId}`,
+            { signal: ctrl.signal, headers },
+          );
+          clearTimeout(timer);
+          const data = await resp.json();
+          if (data?.status === "paid" && data?.entitled) {
+            finalizeNumerologyReportPayment();
+            await refreshUser().catch(() => {});
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPhase("success");
+            return;
+          }
+        } catch { /* retry */ }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      setPhase("pending_verify");
+      return;
+    }
 
     // ── Couple report: poll purchase-status ──────────────────────────
     if (isCoupleReport) {
@@ -668,6 +768,10 @@ export default function PaymentWebviewScreen() {
                 Haptics.selectionAsync();
                 if (isGemstone && params.returnTo) {
                   router.replace(params.returnTo as any);
+                } else if (isAskV3Live || params.returnTo === "ask_v3") {
+                  router.replace("/(tabs)/ask?resumeV3=1" as any);
+                } else if (isAskV1Pack || params.returnTo === "ask") {
+                  router.replace("/(tabs)/ask" as any);
                 } else if (isCoupleReport || isRoomUploadPay || params.returnTo === "astrovastu-pro") {
                   router.back();
                 } else {
@@ -679,6 +783,10 @@ export default function PaymentWebviewScreen() {
               <Text style={s.primaryBtnText}>
                 {isGemstone
                   ? "Back to Gemstones →"
+                  : isAskV3Live
+                  ? "Open live queue →"
+                  : isAskV1Pack
+                  ? "Start asking →"
                   : isCoupleReport
                   ? "Continue to PDF →"
                   : isRoomUploadPay

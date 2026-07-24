@@ -259,6 +259,7 @@ export interface CategoryInsight {
 export interface ProInsight {
   mdPlanet: string; adPlanet: string; pdPlanet: string;
   pdStart: Date | null; pdEnd: Date | null;
+  adStart: Date | null; adEnd: Date | null;
   career: CategoryInsight;
   relationship: CategoryInsight;
   finance: CategoryInsight;
@@ -369,6 +370,8 @@ export function computeProInsight(kundli: any, moonLon: number): ProInsight | nu
     mdPlanet: md.planet, adPlanet, pdPlanet,
     pdStart:  pd ? toDate(pd.startDate) : null,
     pdEnd:    pd ? toDate(pd.endDate)   : null,
+    adStart:  toDate(ad.startDate),
+    adEnd:    toDate(ad.endDate),
     career:       makeCategory("career"),
     relationship: makeCategory("relationship"),
     finance:      makeCategory("finance"),

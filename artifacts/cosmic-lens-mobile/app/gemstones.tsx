@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
@@ -32,6 +32,8 @@ import {
   GEMSTONE_PRODUCT_LINES,
   lowestSelfPriceForProduct,
 } from "@/lib/gemstonePricing";
+import { gemstoneWhatsAppMessage } from "@/lib/gemstoneProductContent";
+import { openFounderWhatsApp } from "@/lib/founderWhatsApp";
 import { DAY, GEMSTONE, PLANET, pick } from "@/lib/i18nVedic";
 
 const F = {
@@ -164,7 +166,6 @@ export default function GemstonesScreen() {
   const insets = useSafeAreaInsets();
   const t = useT();
   const { kundli } = useUser();
-  const params = useLocalSearchParams<{ ref?: string }>();
   const vlang = t.vlang;
 
   const recommendedKey = useMemo(
@@ -242,13 +243,7 @@ export default function GemstonesScreen() {
               key={line.id}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push({
-                  pathname: "/gemstone-buy",
-                  params: {
-                    product: line.id,
-                    ...(params.ref ? { ref: String(params.ref) } : {}),
-                  },
-                } as any);
+                void openFounderWhatsApp(gemstoneWhatsAppMessage(line.label));
               }}
               style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, marginBottom: idx < GEMSTONE_PRODUCT_LINES.length - 1 ? 10 : 0 })}
             >
@@ -277,8 +272,8 @@ export default function GemstonesScreen() {
                     </Text>
                   </View>
                   <View style={[s.shopCta, { borderColor: `${line.accent}66`, backgroundColor: `${line.accent}2e` }]}>
-                    <Text style={s.shopCtaText}>{t.gs_buyCta}</Text>
-                    <Feather name="chevron-right" size={14} color="#fff" />
+                    <Text style={s.shopCtaText}>{t.gs_whatsappCta}</Text>
+                    <Feather name="message-circle" size={14} color="#fff" />
                   </View>
                 </View>
               </View>

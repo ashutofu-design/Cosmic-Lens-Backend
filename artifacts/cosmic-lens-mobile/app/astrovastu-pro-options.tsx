@@ -19,6 +19,8 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
+import { ReportsCountBadge } from "@/components/ReportsCountBadge";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 
@@ -57,7 +59,14 @@ export default function AstroVastuProOptions() {
 
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
-        <Pressable onPress={() => router.back()} style={s.back}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/" as any);
+          }}
+          hitSlop={12}
+          style={s.back}
+        >
           <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -77,6 +86,7 @@ export default function AstroVastuProOptions() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── HOME VASTU ADVANCED ── */}
+        <FadeInView delay={staggerDelay(0)}>
         <Pressable onPress={goHome} style={[s.card, { borderColor: "#a78bfa", backgroundColor: C.isDark ? "#0d0a1a" : C.bgCard }]}>
           <LinearGradient
             colors={["#a78bfa18", "#7c3aed10", "transparent"]}
@@ -112,8 +122,10 @@ export default function AstroVastuProOptions() {
             <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color="#a78bfa" />
           </View>
         </Pressable>
+        </FadeInView>
 
         {/* ── BUSINESS VASTU ── */}
+        <FadeInView delay={staggerDelay(1)}>
         <Pressable onPress={goBusiness} style={[s.card, { borderColor: "#06b6d4", backgroundColor: C.isDark ? "#04141a" : C.bgCard }]}>
           <LinearGradient
             colors={["#06b6d422", "#0891b218", "transparent"]}
@@ -148,8 +160,10 @@ export default function AstroVastuProOptions() {
             <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color="#06b6d4" />
           </View>
         </Pressable>
+        </FadeInView>
 
         {/* My Reports — history of paid scans */}
+        <FadeInView delay={staggerDelay(2)}>
         <Pressable
           onPress={goReports}
           style={({ pressed }) => [
@@ -165,15 +179,20 @@ export default function AstroVastuProOptions() {
             <Feather name="folder" size={18} color="#f6c453" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[s.reportsTitle, { color: C.text }]}>{t.vt_titleMyReports}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={[s.reportsTitle, { color: C.text }]}>{t.vt_titleMyReports}</Text>
+              <ReportsCountBadge />
+            </View>
             <Text style={[s.reportsSub, { color: C.textMuted }]}>
               {t.vt_reportsSub}
             </Text>
           </View>
           <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color={C.textMuted} />
         </Pressable>
+        </FadeInView>
 
         {/* Pro discount note */}
+        <FadeInView delay={staggerDelay(3)}>
         <View style={[s.noteCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Feather name="zap" size={14} color="#f59e0b" />
           <Text style={[s.noteText, { color: C.textMuted }]}>
@@ -185,6 +204,7 @@ export default function AstroVastuProOptions() {
         <Text style={[s.branding, { color: C.textDim }]}>
           {t.vt_appBranding}
         </Text>
+        </FadeInView>
       </ScrollView>
     </View>
   );

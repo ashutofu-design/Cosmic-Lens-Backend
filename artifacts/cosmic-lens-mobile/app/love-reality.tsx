@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { LoveRealityUnifiedBasic } from "@/components/loveReality/LoveRealityUnifiedBasic";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -50,76 +51,84 @@ export default function LoveRealityScreen() {
   return (
     <CosmicBg>
       <View style={[s.shell, { paddingTop: topPad + 6 }]}>
-        <View style={s.headerRow}>
-          <Pressable
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
-            hitSlop={8}
-          >
-            <View style={[s.backCircle, {
-              backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
-              borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
-            }]}>
-              <Feather name="chevron-left" size={22} color={isDark ? "#fff" : "#0F172A"} />
-            </View>
-          </Pressable>
-          <View style={{ flex: 1, alignItems: "center", paddingHorizontal: 4 }}>
-            <Text style={[s.headerTitle, { color: isDark ? "#fff" : "#0F172A" }]} numberOfLines={1}>
-              {t.rl_loveTitle}
-            </Text>
-            <Text style={[s.headerSub, { color: isDark ? "rgba(203,213,225,0.5)" : "#64748B" }]} numberOfLines={2}>
-              {t.rl_loveSub}
-            </Text>
-          </View>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <View style={s.segRow}>
-          <View style={[s.segWrap, { backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)" }]}>
+        <FadeInView delay={staggerDelay(0)}>
+          <View style={s.headerRow}>
             <Pressable
-              style={[s.segBtn, { backgroundColor: isDark ? "#1e2744" : "#ec4899" }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
+              hitSlop={8}
             >
-              <Text style={[s.segTxt, { color: "#fff" }]}>{t.km_basic}</Text>
+              <View style={[s.backCircle, {
+                backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+                borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
+              }]}>
+                <Feather name="chevron-left" size={22} color={isDark ? "#fff" : "#0F172A"} />
+              </View>
             </Pressable>
-            <Pressable onPress={openProScreen} style={[s.segBtn, { overflow: "hidden" }]}>
-              <LinearGradient
-                colors={["#5b21b6", "#9d174d"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-              />
-              <Text style={[s.segTxt, { color: "#fff" }]}>✨ Pro</Text>
-            </Pressable>
+            <View style={{ flex: 1, alignItems: "center", paddingHorizontal: 4 }}>
+              <Text style={[s.headerTitle, { color: isDark ? "#fff" : "#0F172A" }]} numberOfLines={1}>
+                {t.rl_loveTitle}
+              </Text>
+              <Text style={[s.headerSub, { color: isDark ? "rgba(203,213,225,0.5)" : "#64748B" }]} numberOfLines={2}>
+                {t.rl_loveSub}
+              </Text>
+            </View>
+            <View style={{ width: 40 }} />
           </View>
-        </View>
+        </FadeInView>
+
+        <FadeInView delay={staggerDelay(1)}>
+          <View style={s.segRow}>
+            <View style={[s.segWrap, { backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)" }]}>
+              <Pressable
+                style={[s.segBtn, { backgroundColor: isDark ? "#1e2744" : "#ec4899" }]}
+              >
+                <Text style={[s.segTxt, { color: "#fff" }]}>{t.km_basic}</Text>
+              </Pressable>
+              <Pressable onPress={openProScreen} style={[s.segBtn, { overflow: "hidden" }]}>
+                <LinearGradient
+                  colors={["#5b21b6", "#9d174d"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+                />
+                <Text style={[s.segTxt, { color: "#fff" }]}>✨ Pro</Text>
+              </Pressable>
+            </View>
+          </View>
+        </FadeInView>
 
         {partnerProfile && (
-          <View style={[s.partnerPill, {
-            borderColor: isDark ? "rgba(236,72,153,0.35)" : "rgba(236,72,153,0.25)",
-          }]}>
-            <LinearGradient
-              colors={isDark ? ["rgba(236,72,153,0.14)", "rgba(168,85,247,0.08)"] : ["rgba(236,72,153,0.08)", "rgba(168,85,247,0.05)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <Feather name="heart" size={12} color="#f472b6" />
-            <Text style={[s.partnerPillTxt, { color: isDark ? "#fbcfe8" : "#9d174d" }]} numberOfLines={1}>
-              Checking with {partnerProfile.name}
-            </Text>
-            <Pressable onPress={() => router.push("/relationship" as never)} hitSlop={8}>
-              <Feather name="edit-2" size={12} color={isDark ? "#f472b6" : "#db2777"} />
-            </Pressable>
-          </View>
+          <FadeInView delay={staggerDelay(2)}>
+            <View style={[s.partnerPill, {
+              borderColor: isDark ? "rgba(236,72,153,0.35)" : "rgba(236,72,153,0.25)",
+            }]}>
+              <LinearGradient
+                colors={isDark ? ["rgba(236,72,153,0.14)", "rgba(168,85,247,0.08)"] : ["rgba(236,72,153,0.08)", "rgba(168,85,247,0.05)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <Feather name="heart" size={12} color="#f472b6" />
+              <Text style={[s.partnerPillTxt, { color: isDark ? "#fbcfe8" : "#9d174d" }]} numberOfLines={1}>
+                Checking with {partnerProfile.name}
+              </Text>
+              <Pressable onPress={() => router.push("/relationship" as never)} hitSlop={8}>
+                <Feather name="edit-2" size={12} color={isDark ? "#f472b6" : "#db2777"} />
+              </Pressable>
+            </View>
+          </FadeInView>
         )}
 
-        <LoveRealityUnifiedBasic
-          isDark={isDark}
-          bottomPad={botPad}
-          primaryProfile={primaryProfile?.birthData ? { name: primaryProfile.name, birthData: primaryProfile.birthData } : null}
-          partnerProfile={partnerProfile?.birthData ? { name: partnerProfile.name, birthData: partnerProfile.birthData } : null}
-          initialToolKey={initialToolKey}
-          onOpenPro={openProScreen}
-        />
+        <FadeInView delay={staggerDelay(partnerProfile ? 3 : 2)} style={{ flex: 1 }}>
+          <LoveRealityUnifiedBasic
+            isDark={isDark}
+            bottomPad={botPad}
+            primaryProfile={primaryProfile?.birthData ? { name: primaryProfile.name, birthData: primaryProfile.birthData } : null}
+            partnerProfile={partnerProfile?.birthData ? { name: partnerProfile.name, birthData: partnerProfile.birthData } : null}
+            initialToolKey={initialToolKey}
+            onOpenPro={openProScreen}
+          />
+        </FadeInView>
       </View>
     </CosmicBg>
   );

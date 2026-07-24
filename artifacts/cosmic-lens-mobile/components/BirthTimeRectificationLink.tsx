@@ -1,26 +1,26 @@
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
-import { openBirthTimeRectificationWhatsApp } from "@/lib/founderWhatsApp";
 import { vedicLang } from "@/lib/i18nVedic";
 
 function labels(lang: ReturnType<typeof vedicLang>) {
   if (lang === "hi") {
     return {
       question: "सही जन्म समय नहीं पता?",
-      click: "यहाँ क्लिक करें",
+      click: "यहाँ फॉर्म भरें",
     };
   }
   if (lang === "hn") {
     return {
       question: "Sahi birth time nahi pata?",
-      click: "Yahan click karein",
+      click: "Yahan form bharein",
     };
   }
   return {
     question: "Don't know actual birth time?",
-    click: "Click here",
+    click: "Fill rectification form",
   };
 }
 
@@ -35,7 +35,7 @@ export function BirthTimeRectificationLink() {
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-          void openBirthTimeRectificationWhatsApp();
+          router.push("/birth-time-rectification");
         }}
         hitSlop={8}
       >

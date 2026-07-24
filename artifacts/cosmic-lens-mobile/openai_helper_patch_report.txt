@@ -1,0 +1,8 @@
+lines_removed_total=1188
+orig_lines=30559
+final_lines=29371
+mode=contiguous_delete_after_human_presenter
+kept=human_presenter block (try_human_presenter_mr_answer + human_narrator_enabled)
+removed=duplicate MR archetype template blocks from first commitment if through partner_nature
+partner_nature=attach_narrator_json_to_result + to_narrator_payload
+commitment_narrator_imports=none remaining

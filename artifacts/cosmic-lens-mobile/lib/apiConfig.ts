@@ -18,9 +18,11 @@ import { Platform } from "react-native";
 /** VPS public IP — nginx on :80 (preferred; mobile networks often block :8080). */
 const VPS_PUBLIC_IP = "187.127.174.55";
 const VPS_API_NGINX = `http://${VPS_PUBLIC_IP}`;
-/** Direct gunicorn — default dev / preview API. */
+/** Direct gunicorn — last-resort fallback only (carriers often block :8080). */
 const DEFAULT_DEV_VPS_API = `http://${VPS_PUBLIC_IP}:8080`;
-const PRODUCTION_API_URL = DEFAULT_DEV_VPS_API;
+/** Stable HTTPS API domain — mobile app (admin.coosmic.icu is admin UI only). */
+const PRODUCTION_HTTPS_API = "https://api.coosmic.icu";
+const PRODUCTION_API_URL = PRODUCTION_HTTPS_API;
 
 const DEV_REPLIT_DOMAIN =
   "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
@@ -85,7 +87,11 @@ function rewriteLocalDevHost(base: string): string {
 
 function normalizeApiUrl(raw?: string): string | null {
   if (!raw || !/^https?:\/\//.test(raw)) return null;
-  const normalized = raw.replace(/\/$/, "");
+  let normalized = raw.replace(/\/$/, "");
+  // certbot forces HTTPS; HTTP POSTs 301→GET and login returns "Not found".
+  if (/^http:\/\/admin\.coosmic\.icu/i.test(normalized)) {
+    normalized = normalized.replace(/^http:/i, "https:");
+  }
   const allowHttpRelease =
     (process.env.EXPO_PUBLIC_ALLOW_HTTP_API || "").trim() === "1";
   if (!__DEV__ && !normalized.startsWith("https://") && !allowHttpRelease) {
@@ -240,9 +246,13 @@ export function demoLoginApiBases(): string[] {
 
   add(API_BASE);
   if (configuredNorm) add(configuredNorm);
+  // Prefer HTTPS domains first — raw :8080 IP is flaky on mobile data.
+  add(PRODUCTION_HTTPS_API);
+  add("https://admin.coosmic.icu"); // same Flask API behind nginx — fallback only
   if (!__DEV__ || !isWeb()) {
     add(VPS_API_NGINX);
-    add(PRODUCTION_API_URL);
+    // :8080 last — often times out on cellular (makes app feel randomly slow).
+    add(DEFAULT_DEV_VPS_API);
   }
   if (__DEV__ && !isWeb()) {
     add(DEFAULT_DEV_VPS_API);
@@ -279,12 +289,13 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
     if (e instanceof Error && e.name === "AbortError") throw e;
     const msg = String(e instanceof Error ? e.message : e);
     if (!/Network request failed|TypeError|fetch/i.test(msg)) throw e;
-    await new Promise((r) => setTimeout(r, 600));
+    // Short pause — long delay stacked with multi-host retries felt "randomly slow".
+    await new Promise((r) => setTimeout(r, 200));
     return fetch(url, merged);
   }
 }
 
-const DEFAULT_FETCH_TIMEOUT_MS = 12000;
+const DEFAULT_FETCH_TIMEOUT_MS = 8000;
 
 /** Same as apiFetch but aborts after `ms` — avoids infinite spinner on dead API hosts. */
 export async function apiFetchWithTimeout(
@@ -301,7 +312,7 @@ export async function apiFetchWithTimeout(
   }
 }
 
-const HEALTH_PROBE_TIMEOUT_MS = 6000;
+const HEALTH_PROBE_TIMEOUT_MS = 4000;
 
 export type ApiHealthProbe = {
   ok: boolean;

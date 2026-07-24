@@ -18,7 +18,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CosmicBg } from "@/components/CosmicBg";
 import { LoveRealityProPurchase } from "@/components/loveReality/LoveRealityProPurchase";
 import { LoveRealityProStickyCta } from "@/components/loveReality/LoveRealityProStickyCta";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { ProPdfLanguagePickerModal } from "@/components/ProPdfLanguagePickerModal";
+import { OrderSuccessModal } from "@/components/OrderSuccessModal";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -35,7 +37,7 @@ import {
   runLoveRealityProUnlockCta,
 } from "@/lib/loveRealityProOffer";
 import { packLovePerson } from "@/lib/loveRealityProPdfDownload";
-import { coerceProPdfLang, proPdfLangDisplayName } from "@/lib/proPdfLang";
+import { coerceProPdfLang } from "@/lib/proPdfLang";
 import { loveRealityProScreenCopy } from "@/lib/loveRealityProCopyI18n";
 
 export default function LoveRealityProScreen() {
@@ -64,6 +66,10 @@ export default function LoveRealityProScreen() {
   const proCopy = loveRealityProScreenCopy(displayLang);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [preparingBanner, setPreparingBanner] = useState<{
+    priority: boolean;
+    etaHours: number;
+  } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -124,13 +130,10 @@ export default function LoveRealityProScreen() {
         apiKey: user.api_key,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const langLabel = proPdfLangDisplayName(lang);
-      const etaLabel = result.eta_hours <= 24 ? "12 hours" : "24–48 hours";
-      Alert.alert(
-        proCopy.orderPlacedTitle,
-        proCopy.orderPlacedBody(langLabel, etaLabel),
-        [{ text: "OK" }],
-      );
+      setPreparingBanner({
+        priority: urgent,
+        etaHours: Number(result.eta_hours) || (urgent ? 12 : 24),
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Order failed";
       Alert.alert("Could not place order", msg);
@@ -239,27 +242,31 @@ export default function LoveRealityProScreen() {
             showsVerticalScrollIndicator={false}
           >
             {!canPro && (
-              <Pressable
-                onPress={showKundliRequired}
-                style={[s.partnerHint, { borderColor: isDark ? "rgba(244,114,182,0.35)" : "rgba(236,72,153,0.25)" }]}
-              >
-                <Feather name="users" size={14} color="#f472b6" />
-                <Text style={[s.partnerHintText, { color: isDark ? "#fbcfe8" : "#9d174d" }]}>
-                  {!partnerProfile
-                    ? proCopy.partnerMissing
-                    : proCopy.kundliMissing}
-                </Text>
-                <Feather name="chevron-right" size={14} color="#f472b6" />
-              </Pressable>
+              <FadeInView delay={staggerDelay(0)}>
+                <Pressable
+                  onPress={showKundliRequired}
+                  style={[s.partnerHint, { borderColor: isDark ? "rgba(244,114,182,0.35)" : "rgba(236,72,153,0.25)" }]}
+                >
+                  <Feather name="users" size={14} color="#f472b6" />
+                  <Text style={[s.partnerHintText, { color: isDark ? "#fbcfe8" : "#9d174d" }]}>
+                    {!partnerProfile
+                      ? proCopy.partnerMissing
+                      : proCopy.kundliMissing}
+                  </Text>
+                  <Feather name="chevron-right" size={14} color="#f472b6" />
+                </Pressable>
+              </FadeInView>
             )}
-            <LoveRealityProPurchase
-              isDark={isDark}
-              primaryName={primaryProfile?.name}
-              partnerName={partnerProfile?.name}
-              priorityDelivery={priorityDelivery}
-              onPriorityDeliveryChange={setPriorityDelivery}
-              lang={displayLang}
-            />
+            <FadeInView delay={staggerDelay(canPro ? 0 : 1)}>
+              <LoveRealityProPurchase
+                isDark={isDark}
+                primaryName={primaryProfile?.name}
+                partnerName={partnerProfile?.name}
+                priorityDelivery={priorityDelivery}
+                onPriorityDeliveryChange={setPriorityDelivery}
+                lang={displayLang}
+              />
+            </FadeInView>
           </ScrollView>
 
           <LoveRealityProStickyCta
@@ -284,6 +291,21 @@ export default function LoveRealityProScreen() {
           priorityDelivery,
           onPriorityDeliveryChange: setPriorityDelivery,
         }}
+      />
+      <OrderSuccessModal
+        visible={!!preparingBanner}
+        onClose={() => setPreparingBanner(null)}
+        onViewReports={() => {
+          setPreparingBanner(null);
+          router.push("/my-reports" as any);
+        }}
+        title="Order Confirmed!"
+        message="Your order has been received. Our expert is personally preparing your Love Reality Pro report — it's on its way."
+        etaLabel={
+          preparingBanner?.priority
+            ? "Report in My Reports within 12 hrs"
+            : "Report in My Reports within 24 hrs"
+        }
       />
     </CosmicBg>
   );

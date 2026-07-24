@@ -49,8 +49,11 @@ const STARS: [number, number, number, number][] = [
   [0.87, 0.58, 4, 0.72], [0.11, 0.88, 4, 0.76],
 ];
 
-const STAR_STEP = Platform.OS === "web" ? 1 : 2;
+// Native: keep a light starfield — dense absolute Views hurt overdraw/touch.
+const STAR_STEP = Platform.OS === "web" ? 1 : Platform.OS === "android" ? 8 : 4;
 const VISIBLE_STARS = STARS.filter((_, i) => i % STAR_STEP === 0);
+const SHOW_MILKY = Platform.OS !== "android";
+const SHOW_SPARKLES = Platform.OS !== "android";
 
 const MILKY: [number, number, number][] = [
   [0.20, 0.15, 0.03], [0.28, 0.22, 0.04], [0.35, 0.29, 0.03],
@@ -66,7 +69,7 @@ export const CosmicBg = memo(function CosmicBg({ children, style, contentStyle }
 
       {C.isDark ? (
         <>
-          {MILKY.map(([x, y, o], i) => (
+          {SHOW_MILKY && MILKY.map(([x, y, o], i) => (
             <View
               key={`mw${i}`}
               style={{
@@ -92,6 +95,7 @@ export const CosmicBg = memo(function CosmicBg({ children, style, contentStyle }
             style={[s.wash, { bottom: 0, height: H * 0.40 }]}
             start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
           />
+          {SHOW_MILKY && (
           <View style={{
             position: "absolute",
             width: W * 0.30,
@@ -101,6 +105,7 @@ export const CosmicBg = memo(function CosmicBg({ children, style, contentStyle }
             top: H * 0.55,
             right: W * 0.05,
           }} />
+          )}
         </>
       ) : (
         <>
@@ -168,7 +173,7 @@ export const CosmicBg = memo(function CosmicBg({ children, style, contentStyle }
         />
       ))}
 
-      {C.isDark && (
+      {C.isDark && SHOW_SPARKLES && (
         <>
           {[[0.26, 0.08], [0.74, 0.13], [0.42, 0.60], [0.87, 0.58], [0.11, 0.88]].map(([x, y], i) => (
             <React.Fragment key={`sp${i}`}>

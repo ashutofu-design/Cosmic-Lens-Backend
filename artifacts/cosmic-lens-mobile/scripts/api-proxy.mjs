@@ -8,10 +8,15 @@ import http from "node:http";
 dns.setDefaultResultOrder("ipv6first");
 
 const LOCAL_PORT = Number(process.env.DEV_API_PROXY_PORT || "18081");
-const UPSTREAM = (process.env.DEV_API_PROXY_UPSTREAM || "http://admin.coosmic.icu").replace(
+// Must be HTTPS — HTTP 301→HTTPS turns POST into GET and Flask returns {"error":"Not found"}.
+let UPSTREAM = (process.env.DEV_API_PROXY_UPSTREAM || "https://admin.coosmic.icu").replace(
   /\/$/,
   "",
 );
+if (/^http:\/\/admin\.coosmic\.icu/i.test(UPSTREAM)) {
+  UPSTREAM = UPSTREAM.replace(/^http:/i, "https:");
+  console.warn("[api-proxy] Upgraded upstream to HTTPS (HTTP breaks POSTs)");
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

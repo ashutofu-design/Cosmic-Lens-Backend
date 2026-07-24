@@ -41,6 +41,7 @@ import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
+import { OrderSuccessModal } from "@/components/OrderSuccessModal";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanCamera, SmartScanResult } from "@/components/SmartScanCamera";
 import { SmartScanUploadValue, NorthAt } from "@/components/SmartScanUpload";
@@ -217,6 +218,7 @@ export default function AstroVastuProScreen() {
   const [mode, setMode] = useState<"camera" | "business">("camera");
   const [cameraRoom, setCameraRoom] = useState<string | null>(null);
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
+  const [uploadSuccessVisible, setUploadSuccessVisible] = useState(false);
   const [planPicking, setPlanPicking] = useState(false);
 
   const paySubmitLabel = String(t.avp_uploadPaySubmit || "Pay ₹{amount}")
@@ -240,40 +242,7 @@ export default function AstroVastuProScreen() {
   }, [loading, wholePlan, payPulse]);
   const payGlow = payPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.85] });
 
-  useFocusEffect(
-    useCallback(() => {
-      // 1) Paid room upload → submit to founder queue
-      if (consumeAstrovastuRoomPaidReady()) {
-        const pending = getPendingAstrovastuRoomUpload();
-        if (pending?.purchase_id && user?.id && user?.api_key) {
-          setUploadSubmitting(true);
-          void submitAstrovastuRoomHumanOrder({
-            user: { id: user.id, api_key: user.api_key },
-            purchaseId: pending.purchase_id,
-          }).finally(() => setUploadSubmitting(false));
-        }
-      }
-
-      // 2) Paid full home plan → auto-run scan on return
-      if (consumeAstrovastuFloorPaidReady()) {
-        const pending = getPendingAstrovastuFloorPlan();
-        const fp = pending?.floor_plan_upload;
-        if (fp && user?.id && user?.api_key) {
-          clearPendingAstrovastuFloorPlan();
-          void runScan({
-            floor_plan_upload: {
-              type: fp.type,
-              ...(fp.data_url ? { data_url: fp.data_url } : {}),
-              ...(fp.base64 ? { base64: fp.base64 } : {}),
-              north_at: fp.north_at || "top",
-            },
-          });
-        }
-      }
-    }, [runScan, user?.api_key, user?.id]),
-  );
-
-  // ── Shared submit helper ──────────────────────────────────────────────
+  // ── Shared submit helper (must be above useFocusEffect — TDZ) ──────────
   const runScan = useCallback(async (payload: Record<string, unknown>) => {
     if (loading) return;
     if (!user?.id || !user?.api_key) {
@@ -303,6 +272,43 @@ export default function AstroVastuProScreen() {
     }
   }, [loading, user]);
 
+  useFocusEffect(
+    useCallback(() => {
+      // 1) Paid room upload → submit to founder queue
+      if (consumeAstrovastuRoomPaidReady()) {
+        const pending = getPendingAstrovastuRoomUpload();
+        if (pending?.purchase_id && user?.id && user?.api_key) {
+          setUploadSubmitting(true);
+          void submitAstrovastuRoomHumanOrder({
+            user: { id: user.id, api_key: user.api_key },
+            purchaseId: pending.purchase_id,
+          })
+            .then((ok) => {
+              if (ok) setUploadSuccessVisible(true);
+            })
+            .finally(() => setUploadSubmitting(false));
+        }
+      }
+
+      // 2) Paid full home plan → auto-run scan on return
+      if (consumeAstrovastuFloorPaidReady()) {
+        const pending = getPendingAstrovastuFloorPlan();
+        const fp = pending?.floor_plan_upload;
+        if (fp && user?.id && user?.api_key) {
+          clearPendingAstrovastuFloorPlan();
+          void runScan({
+            floor_plan_upload: {
+              type: fp.type,
+              ...(fp.data_url ? { data_url: fp.data_url } : {}),
+              ...(fp.base64 ? { base64: fp.base64 } : {}),
+              north_at: fp.north_at || "top",
+            },
+          });
+        }
+      }
+    }, [runScan, user?.api_key, user?.id]),
+  );
+
   // ── Camera capture: user-picked room + compass-derived direction ──
   const onCapture = useCallback((capture: SmartScanResult) => {
     if (!cameraRoom) return;
@@ -327,6 +333,7 @@ export default function AstroVastuProScreen() {
       setError({ error: "auth_required", message: t.avp_errAuthRequired });
       return;
     }
+    setUploadSubmitting(true);
     void startAstrovastuRoomUploadCheckout({
       user: { id: user.id, api_key: user.api_key },
       payload: {
@@ -335,7 +342,11 @@ export default function AstroVastuProScreen() {
         data_url: g.data_url,
         base64: g.base64,
       },
-    });
+    })
+      .then((result) => {
+        if (result === "submitted") setUploadSuccessVisible(true);
+      })
+      .finally(() => setUploadSubmitting(false));
   }, [t.avp_errAuthRequired, user]);
 
   // ── Full home plan: pay ₹999 → return here → auto-run scan ───────────────
@@ -405,7 +416,10 @@ export default function AstroVastuProScreen() {
         style={[styles.header, { paddingTop: 4 }]}
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/astrovastu" as any);
+          }}
           hitSlop={10}
           style={({ pressed }) => [ui.glassBtn, { opacity: pressed ? 0.75 : 1 }]}
         >
@@ -976,6 +990,18 @@ export default function AstroVastuProScreen() {
           {t.avp_brandFooterSub}
         </Text>
       </ScrollView>
+
+      <OrderSuccessModal
+        visible={uploadSuccessVisible}
+        onClose={() => setUploadSuccessVisible(false)}
+        onViewReports={() => {
+          setUploadSuccessVisible(false);
+          router.push("/my-reports" as any);
+        }}
+        title="Order Confirmed!"
+        message="Your room photo has been received. Our Vastu expert is personally reviewing it — your personalised report is on its way."
+        etaLabel="Report in My Reports within 24–48 hrs"
+      />
     </View>
   );
 }

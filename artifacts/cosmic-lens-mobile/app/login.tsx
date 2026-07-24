@@ -20,16 +20,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GalaxyStarfield } from "@/components/GalaxyStarfield";
 import { FadeInView } from "@/components/motion/FadeInView";
-import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import {
-  demoLogin,
-  isDemoLoginEnabled,
-  verifyFirebaseIdToken,
-} from "@/lib/authBackend";
+import { verifyFirebaseIdToken } from "@/lib/authBackend";
 import { signInWithGoogle } from "@/lib/firebaseAuth";
 import { isFirebaseConfigured } from "@/lib/firebaseConfig";
+import { markWelcomeBonusPending } from "@/lib/welcomeBonus";
 
 const WEB_GLASS = Platform.OS === "web"
   ? ({
@@ -50,14 +46,16 @@ function FrostedLoginCard({
 }) {
   return (
     <View style={[s.cardShell, compact && s.cardShellCompact, { width }]}>
-      {Platform.OS !== "web" ? (
+      {Platform.OS === "ios" ? (
         <BlurView
-          intensity={Platform.OS === "ios" ? 28 : 48}
+          intensity={28}
           tint="dark"
           style={StyleSheet.absoluteFill}
         />
-      ) : (
+      ) : Platform.OS === "web" ? (
         <View style={[StyleSheet.absoluteFill, WEB_GLASS]} />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(12,8,28,0.88)" }]} />
       )}
       <View style={s.cardGlassTint} />
       <LinearGradient
@@ -93,9 +91,7 @@ export default function LoginScreen() {
   const brandGap = compact ? 7 : 9;
 
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState("");
-  const showDemo = isDemoLoginEnabled();
 
   const titleGlow = useRef(new Animated.Value(0.4)).current;
 
@@ -125,24 +121,6 @@ export default function LoginScreen() {
     router.replace("/welcome-reveal");
   }
 
-  async function handleDemoLogin() {
-    setError("");
-    setDemoLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-
-    try {
-      const u = await demoLogin();
-      await setUser(u);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      router.replace("/");
-    } catch (e: unknown) {
-      const msg = String((e as Error)?.message || e || "");
-      setError(msg || (isHindi ? "Demo login fail." : "Demo login failed."));
-    } finally {
-      setDemoLoading(false);
-    }
-  }
-
   async function handleGoogleLogin() {
     if (!isFirebaseConfigured()) {
       setError(t.authNotConfigured);
@@ -154,9 +132,12 @@ export default function LoginScreen() {
 
     try {
       const idToken = await signInWithGoogle();
-      const u = await verifyFirebaseIdToken(idToken);
+      const { user: u, isNewUser } = await verifyFirebaseIdToken(idToken);
+      if (isNewUser) {
+        await markWelcomeBonusPending(String(u.id));
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      finishLogin(u);
+      await finishLogin(u);
     } catch (e: unknown) {
       const msg = String((e as Error)?.message || e || "");
       if (msg.includes("popup-closed-by-user") || msg.includes("cancelled")) {
@@ -226,10 +207,10 @@ export default function LoginScreen() {
 
               <Pressable
                 onPress={handleGoogleLogin}
-                disabled={loading || demoLoading}
+                disabled={loading}
                 style={({ pressed }) => [
                   s.googleBtnWrap,
-                  { opacity: loading || demoLoading ? 0.65 : pressed ? 0.9 : 1 },
+                  { opacity: loading ? 0.65 : pressed ? 0.9 : 1 },
                 ]}
               >
                 <LinearGradient
@@ -250,38 +231,6 @@ export default function LoginScreen() {
                   )}
                 </LinearGradient>
               </Pressable>
-
-              {showDemo && (
-                <>
-                  <View style={s.orRow}>
-                    <View style={s.orLine} />
-                    <Text style={s.orText}>{isHindi ? "ya" : "or"}</Text>
-                    <View style={s.orLine} />
-                  </View>
-
-                  <Pressable
-                    onPress={handleDemoLogin}
-                    disabled={loading || demoLoading}
-                    style={({ pressed }) => [
-                      s.demoBtn,
-                      { opacity: loading || demoLoading ? 0.65 : pressed ? 0.88 : 1 },
-                    ]}
-                  >
-                    {demoLoading ? (
-                      <ActivityIndicator size="small" color="#fbbf24" />
-                    ) : (
-                      <>
-                        <Feather name="zap" size={18} color="#fbbf24" />
-                        <View style={{ flex: 1, alignItems: "center" }}>
-                          <Text style={s.demoBtnTitle}>{t.demoLogin}</Text>
-                          <Text style={s.demoBtnSub}>{t.demoLoginSub}</Text>
-                        </View>
-                        <Feather name="chevron-right" size={16} color="rgba(251,191,36,0.7)" />
-                      </>
-                    )}
-                  </Pressable>
-                </>
-              )}
             </FrostedLoginCard>
           </FadeInView>
 
@@ -293,11 +242,6 @@ export default function LoginScreen() {
               {" & "}
               <Text style={s.footerLink}>{t.privacyLink}</Text>
             </Text>
-            {__DEV__ && Platform.OS !== "web" && (
-              <Text style={s.devBundleHint}>
-                Live bundle · login-v2 · Demo {showDemo ? "on" : "off"}
-              </Text>
-            )}
           </FadeInView>
         </View>
       </View>
@@ -490,51 +434,6 @@ const s = StyleSheet.create({
     color: "#0f172a",
     letterSpacing: 0.2,
   },
-  orRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    width: "100%",
-    paddingVertical: 0,
-    marginVertical: -2,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.1)",
-  },
-  orText: {
-    fontSize: 11,
-    fontFamily: "Nunito_600SemiBold",
-    color: "rgba(203,213,225,0.88)",
-    textTransform: "lowercase",
-  },
-  demoBtn: {
-    width: "100%",
-    maxWidth: 328,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minHeight: 48,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "rgba(251,191,36,0.45)",
-    backgroundColor: "rgba(251,191,36,0.1)",
-  },
-  demoBtnTitle: {
-    fontSize: 15,
-    fontFamily: "Nunito_700Bold",
-    color: "#fde68a",
-    letterSpacing: 0.3,
-  },
-  demoBtnSub: {
-    fontSize: 11,
-    fontFamily: "Nunito_500Medium",
-    color: "rgba(251,191,36,0.75)",
-    marginTop: 2,
-  },
   footerBlock: {
     alignItems: "center",
     gap: 11,
@@ -564,12 +463,5 @@ const s = StyleSheet.create({
   footerLink: {
     color: "#fcd34d",
     fontFamily: "Nunito_700Bold",
-  },
-  devBundleHint: {
-    marginTop: 8,
-    fontSize: 9,
-    fontFamily: "Nunito_400Regular",
-    color: "rgba(100,116,139,0.75)",
-    textAlign: "center",
   },
 });

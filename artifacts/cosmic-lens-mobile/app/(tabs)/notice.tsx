@@ -3,6 +3,7 @@ import React from "react";
 import { Platform, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -83,43 +84,49 @@ export default function NoticeScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <View style={s.headerRow}>
-        <Text style={[s.heading,{ color: C.text }]}>{t.noticeTitle}</Text>
-        {unread > 0 && (
-          <View style={s.badge}>
-            <Text style={s.badgeText}>{unread} new</Text>
-          </View>
-        )}
-      </View>
+      <FadeInView delay={staggerDelay(0)}>
+        <View style={s.headerRow}>
+          <Text style={[s.heading,{ color: C.text }]}>{t.noticeTitle}</Text>
+          {unread > 0 && (
+            <View style={s.badge}>
+              <Text style={s.badgeText}>{unread} new</Text>
+            </View>
+          )}
+        </View>
+      </FadeInView>
 
       {/* List */}
       <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any]}>
         {notices.map((n, i) => (
-          <View key={i} style={[s.row, i < notices.length - 1 && [s.rowBorder, { borderBottomColor: C.border }]]}>
-            <View style={[s.dotWrap, { backgroundColor: `${n.dot}15` }]}>
-              <Feather name={n.icon} size={14} color={n.dot} />
-            </View>
-            <View style={s.body}>
-              <View style={s.titleRow}>
-                <Text style={[s.title, { color: C.text }]}>{n.title}</Text>
-                {i < unread && <View style={s.newDot} />}
+          <FadeInView key={i} delay={staggerDelay(i + 1)}>
+            <View style={[s.row, i < notices.length - 1 && [s.rowBorder, { borderBottomColor: C.border }]]}>
+              <View style={[s.dotWrap, { backgroundColor: `${n.dot}15` }]}>
+                <Feather name={n.icon} size={14} color={n.dot} />
               </View>
-              <Text style={[s.desc, { color: C.textMuted }]}>{n.desc}</Text>
-              <Text style={[s.time, { color: C.textMuted }]}>{n.time}</Text>
+              <View style={s.body}>
+                <View style={s.titleRow}>
+                  <Text style={[s.title, { color: C.text }]}>{n.title}</Text>
+                  {i < unread && <View style={s.newDot} />}
+                </View>
+                <Text style={[s.desc, { color: C.textMuted }]}>{n.desc}</Text>
+                <Text style={[s.time, { color: C.textMuted }]}>{n.time}</Text>
+              </View>
             </View>
-          </View>
+          </FadeInView>
         ))}
       </View>
 
       {/* Footer */}
-      <View style={s.footer}>
-        <Feather name="bell-off" size={12} color={C.textDim} />
-        <Text style={[s.footerText,{ color: C.textDim }]}>
-          {kundli
-            ? "Aur notifications kundli update hone par aayenge"
-            : "Kundli banao — personalized alerts milenge"}
-        </Text>
-      </View>
+      <FadeInView delay={staggerDelay(notices.length + 1)}>
+        <View style={s.footer}>
+          <Feather name="bell-off" size={12} color={C.textDim} />
+          <Text style={[s.footerText,{ color: C.textDim }]}>
+            {kundli
+              ? "Aur notifications kundli update hone par aayenge"
+              : "Kundli banao — personalized alerts milenge"}
+          </Text>
+        </View>
+      </FadeInView>
     </ScrollView>
     </CosmicBg>
   );

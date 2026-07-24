@@ -223,8 +223,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return { ...base, accent: finalAccent.accent, accentBg: finalAccent.accentBg };
   }, [mode, zodiacAccent]);
 
+  const themeValue = useMemo(
+    () => ({ mode, C, setMode, toggle, zodiacSign, zodiacAccent, setZodiacAccent }),
+    [mode, C, setMode, toggle, zodiacSign, zodiacAccent, setZodiacAccent],
+  );
+
   return (
-    <ThemeContext.Provider value={{ mode, C, setMode, toggle, zodiacSign, zodiacAccent, setZodiacAccent }}>
+    <ThemeContext.Provider value={themeValue}>
       {children}
     </ThemeContext.Provider>
   );

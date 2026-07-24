@@ -18,6 +18,8 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
+import { ReportsCountBadge } from "@/components/ReportsCountBadge";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 
@@ -56,7 +58,14 @@ export default function AstroVastuChooser() {
 
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
-        <Pressable onPress={() => router.back()} style={s.back}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/" as any);
+          }}
+          hitSlop={12}
+          style={s.back}
+        >
           <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -70,12 +79,15 @@ export default function AstroVastuChooser() {
         showsVerticalScrollIndicator={false}
       >
         {/* Intro */}
+        <FadeInView delay={staggerDelay(0)}>
         <Text style={[s.heading, { color: C.text }]}>{t.vt_subAskWhich}</Text>
         <Text style={[s.subHeading, { color: C.textMuted }]}>
           {t.vt_subKundliPersonalized}
         </Text>
+        </FadeInView>
 
         {/* ── LEFT: AstroVastu (FREE) ── */}
+        <FadeInView delay={staggerDelay(1)}>
         <Pressable
           onPress={goFree}
           style={[s.card, { borderColor: C.accent, backgroundColor: C.isDark ? "#0c1722" : C.bgCard }]}
@@ -104,8 +116,10 @@ export default function AstroVastuChooser() {
             <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color={C.accent} />
           </View>
         </Pressable>
+        </FadeInView>
 
         {/* ── RIGHT: AstroVastu Pro Premium ── */}
+        <FadeInView delay={staggerDelay(2)}>
         <Pressable onPress={goPro} style={[s.card, s.proCard]}>
           {/* Premium gold glow */}
           <LinearGradient
@@ -143,8 +157,10 @@ export default function AstroVastuChooser() {
             <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color="#f9d76b" />
           </View>
         </Pressable>
+        </FadeInView>
 
         {/* ── My Reports — saari saved PDFs ek jagah ── */}
+        <FadeInView delay={staggerDelay(3)}>
         <Pressable
           onPress={goReports}
           style={[s.reportsCard, { backgroundColor: C.bgCard, borderColor: C.border }]}
@@ -153,18 +169,24 @@ export default function AstroVastuChooser() {
             <Feather name="folder" size={20} color="#f6c453" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[s.reportsTitle, { color: C.text }]}>My Reports</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={[s.reportsTitle, { color: C.text }]}>My Reports</Text>
+              <ReportsCountBadge />
+            </View>
             <Text style={[s.reportsSub, { color: C.textMuted }]}>
               Saari saved PDFs — Milan, Numerology, AstroVastu Pro, Business Vastu
             </Text>
           </View>
           <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color={C.textMuted} />
         </Pressable>
+        </FadeInView>
 
         {/* Branding */}
+        <FadeInView delay={staggerDelay(4)}>
         <Text style={[s.branding, { color: C.textDim }]}>
           {t.vt_appBranding}
         </Text>
+        </FadeInView>
       </ScrollView>
     </View>
   );

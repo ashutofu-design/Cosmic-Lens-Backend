@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import LegalScreen, { Section, P, Bullet, Callout } from "@/components/LegalScreen";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 
@@ -36,6 +37,7 @@ export default function LegalAndPoliciesScreen() {
       lastUpdated={t.lg_lastUpdated}
     >
       {/* ═══════════════════════ PRIVACY POLICY ═══════════════════════ */}
+      <FadeInView delay={staggerDelay(0)}>
       <DocHeading icon="shield" title={t.lg_h_privacy} />
 
       <P>{t.lg_p_privacyIntro}</P>
@@ -113,8 +115,10 @@ export default function LegalAndPoliciesScreen() {
         <Bullet>{t.lg_s11_b1}</Bullet>
         <Bullet>{t.lg_s11_b2}</Bullet>
       </Section>
+      </FadeInView>
 
       {/* ═══════════════════════ TERMS OF SERVICE ═══════════════════════ */}
+      <FadeInView delay={staggerDelay(1)}>
       <DocHeading icon="file-text" title={t.lg_h_terms} />
 
       <P>{t.lg_p_termsIntro}</P>
@@ -197,8 +201,10 @@ export default function LegalAndPoliciesScreen() {
       <Section title={t.lg_t16_title}>
         <P>{t.lg_t16_p}</P>
       </Section>
+      </FadeInView>
 
       {/* ═══════════════════════ REFUND & CANCELLATION ═══════════════════════ */}
+      <FadeInView delay={staggerDelay(2)}>
       <DocHeading icon="rotate-ccw" title={t.lg_h_refund} />
 
       <P>{t.lg_p_refundIntro}</P>
@@ -254,8 +260,10 @@ export default function LegalAndPoliciesScreen() {
         <Bullet>{t.lg_r8_b2}</Bullet>
         <Bullet>{t.lg_r8_b3}</Bullet>
       </Section>
+      </FadeInView>
 
       {/* ═══════════════════════ ASTROLOGY DISCLAIMER ═══════════════════════ */}
+      <FadeInView delay={staggerDelay(3)}>
       <DocHeading icon="alert-triangle" title={t.lg_h_disclaimer} />
 
       <Callout tone="warn">{t.lg_callout_disc}</Callout>
@@ -300,6 +308,7 @@ export default function LegalAndPoliciesScreen() {
       <Section title={t.lg_d9_title}>
         <P>{t.lg_d9_p}</P>
       </Section>
+      </FadeInView>
     </LegalScreen>
   );
 }

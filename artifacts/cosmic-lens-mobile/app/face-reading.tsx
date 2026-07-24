@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { FaceReadingProBuilding } from "@/components/faceReading/FaceReadingProBuilding";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { FACE_READING_PRO_LIVE } from "@/lib/faceReadingProConfig";
@@ -146,7 +147,9 @@ export default function FaceReadingScreen() {
           <Text style={[s.headerTitle, { color: C.text }]}>{t.fr_headerTitle}</Text>
           <View style={{ width: 26 }} />
         </View>
+        <FadeInView delay={staggerDelay(0)}>
         <FaceReadingProBuilding />
+        </FadeInView>
       </CosmicBg>
     );
   }
@@ -167,6 +170,7 @@ export default function FaceReadingScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ───── HERO ───── */}
+        <FadeInView delay={staggerDelay(0)}>
         <View style={[s.heroWrap, { borderColor: C.border }]}>
           <LinearGradient
             colors={[`${ACCENT_2}55`, `${ACCENT}22`, "transparent"]}
@@ -188,16 +192,20 @@ export default function FaceReadingScreen() {
             </LinearGradient>
           </View>
         </View>
+        </FadeInView>
 
         {/* ───── STAT STRIP ───── */}
+        <FadeInView delay={staggerDelay(1)}>
         <View style={s.statsRow}>
           <StatPill value="40"  label={t.fr_statPages}     C={C} />
           <StatPill value="22"  label={t.fr_statSections}  C={C} />
           <StatPill value="19"  label={t.fr_statEngines}   C={C} />
           <StatPill value="468" label={t.fr_statLandmarks} C={C} />
         </View>
+        </FadeInView>
 
         {/* ───── INSIDE YOUR REPORT ───── */}
+        <FadeInView delay={staggerDelay(2)}>
         <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fr_capInside}</Text>
         <View style={s.previewGrid}>
           <PreviewCard icon="📔" title={t.fr_pv1Title} sub={t.fr_pv1Sub} color={ACCENT_2} C={C} />
@@ -205,14 +213,18 @@ export default function FaceReadingScreen() {
           <PreviewCard icon="📊" title={t.fr_pv3Title} sub={t.fr_pv3Sub} color="#10b981" C={C} />
           <PreviewCard icon="⭐" title={t.fr_pv4Title} sub={t.fr_pv4Sub} color={GOLD}    C={C} />
         </View>
+        </FadeInView>
 
         {/* ───── 19 ENGINES ───── */}
+        <FadeInView delay={staggerDelay(3)} style={{ gap: 12 }}>
         <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fr_capEngines}</Text>
         <EngineCard icon="🕉️" count="8" group={t.fr_eng1Group} body={t.fr_eng1Body} color={ACCENT_2} C={C} />
         <EngineCard icon="🧬" count="8" group={t.fr_eng2Group} body={t.fr_eng2Body} color="#7c6ed4"  C={C} />
         <EngineCard icon="🔗" count="3" group={t.fr_eng3Group} body={t.fr_eng3Body} color="#10b981"  C={C} />
+        </FadeInView>
 
         {/* ───── HOW IT WORKS ───── */}
+        <FadeInView delay={staggerDelay(4)}>
         <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fr_capHow}</Text>
         <View style={[s.stepsCard, { borderColor: C.border, backgroundColor: C.bgCard }]}>
           <StepRow n="1" title={t.fr_step1Title} body={t.fr_step1Body} color={ACCENT}    C={C} />
@@ -220,8 +232,10 @@ export default function FaceReadingScreen() {
           <StepRow n="3" title={t.fr_step3Title} body={t.fr_step3Body} color="#10b981"   C={C} />
           <StepRow n="4" title={t.fr_step4Title} body={t.fr_step4Body} color={GOLD} last C={C} />
         </View>
+        </FadeInView>
 
         {/* ───── AUTHORITY STRIP ───── */}
+        <FadeInView delay={staggerDelay(5)}>
         <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fr_capBuilt}</Text>
         <View style={s.authRow}>
           <AuthorityChip label="MediaPipe" C={C} />
@@ -231,8 +245,10 @@ export default function FaceReadingScreen() {
           <AuthorityChip label="Golden Ratio φ" C={C} />
           <AuthorityChip label="Mian Xiang 面相" C={C} />
         </View>
+        </FadeInView>
 
         {/* ───── DATA HONESTY ───── */}
+        <FadeInView delay={staggerDelay(6)}>
         <View style={[s.honestCard, { borderColor: C.border, backgroundColor: C.bgCard }]}>
           <View style={s.honestHead}>
             <Feather name="shield" size={14} color="#10b981" />
@@ -258,8 +274,10 @@ export default function FaceReadingScreen() {
           </View>
           <Text style={[s.honestFootnote, { color: C.textDim }]}>{t.fr_honestFoot}</Text>
         </View>
+        </FadeInView>
 
         {/* ───── CTA ───── */}
+        <FadeInView delay={staggerDelay(7)}>
         <Pressable style={s.ctaWrap} onPress={() => router.push("/face-reading-upload")}>
           <LinearGradient
             colors={[ACCENT, "#a21caf"]}
@@ -271,6 +289,7 @@ export default function FaceReadingScreen() {
           </LinearGradient>
         </Pressable>
         <Text style={[s.ctaSub, { color: C.textDim }]}>{t.fr_ctaSub}</Text>
+        </FadeInView>
       </ScrollView>
     </CosmicBg>
   );

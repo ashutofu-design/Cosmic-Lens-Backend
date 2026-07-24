@@ -22,7 +22,15 @@
           }
         },
         {
-          "client_id": "887649003708-eu2mr5vafg2mvaerbk9j9d67iomrku9r.apps.googleusercontent.com",
+          "client_id": "887649003708-pq3ruvt9oub38ngctpr0kgfcfban85n1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cosmiclens.app",
+            "certificate_hash": "9472f7e0373c0deba1aba0a648f6f8a8ca1a73e3"
+          }
+        },
+        {
+          "client_id": "887649003708-u1cd95e2efl9hvi81j2gut5jnp65ghhp.apps.googleusercontent.com",
           "client_type": 3
         }
       ],

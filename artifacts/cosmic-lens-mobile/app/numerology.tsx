@@ -10,6 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiConfig";
 import {
+  Alert,
   Animated,
   Easing,
   Modal,
@@ -18,6 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
+import { OrderSuccessModal } from "@/components/OrderSuccessModal";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -29,6 +31,11 @@ import {
   LIFE_MASTERY_PRIORITY_SURCHARGE_INR,
 } from "@/lib/numerologyProOffer";
 import { consumeNumerologyPaidReady, gateNumerologyReportAfterLangPick } from "@/lib/numerologyReportCheckoutFlow";
+import { submitNumerologyHumanOrder } from "@/lib/numerologyHumanOrder";
+import {
+  clearPendingNumerologyCheckout,
+  getPendingNumerologyCheckout,
+} from "@/lib/pendingNumerologyCheckout";
 import { FOUNDER_PROFILE } from "@/lib/founderProfile";
 
 const F = {
@@ -38,6 +45,46 @@ const F = {
   bold:    "Nunito_700Bold",
   extra:   "Nunito_800ExtraBold",
 } as const;
+
+// Pro + Basic shared typography (Nunito — same on both tabs)
+const np = StyleSheet.create({
+  card: { borderRadius: 18, borderWidth: 1, padding: 16 },
+  founderHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  founderPhoto: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  founderInitials: { color: "#fff", fontSize: 13, fontFamily: "Nunito_800ExtraBold" },
+  founderName: { fontSize: 13.5, fontFamily: "Nunito_800ExtraBold" },
+  founderRole: { fontSize: 11, fontFamily: "Nunito_500Medium", lineHeight: 15 },
+  founderChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  founderBulletChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, maxWidth: "48%", flexGrow: 1 },
+  founderBulletTxt: { fontSize: 10, fontFamily: "Nunito_700Bold", flexShrink: 1 },
+  heroCard: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  heroEmoji: { fontSize: 22 },
+  heroTitle: { fontSize: 14.5, fontFamily: "Nunito_800ExtraBold", lineHeight: 19 },
+  heroLine: { fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 16 },
+  sectionTitle: { fontSize: 15, fontFamily: "Nunito_800ExtraBold", letterSpacing: -0.2 },
+  sectionLabel: { fontSize: 9, fontFamily: "Nunito_800ExtraBold", letterSpacing: 1.1, textTransform: "uppercase" },
+  bodySemi: { fontSize: 12, fontFamily: "Nunito_600SemiBold", lineHeight: 17 },
+  bodyBold: { fontSize: 12, fontFamily: "Nunito_700Bold", lineHeight: 18 },
+  coreQChipRow: { gap: 6, marginTop: 10 },
+  coreQChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1 },
+  coreQChipNum: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", width: 14 },
+  coreQChipTxt: { flex: 1, fontSize: 12, fontFamily: "Nunito_700Bold" },
+  reportSummary: { fontSize: 11, fontFamily: "Nunito_500Medium", marginTop: 2 },
+  reportChipRow: { gap: 6, marginTop: 10 },
+  reportChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, width: "100%" },
+  reportChipEmoji: { fontSize: 12 },
+  reportChipTxt: { flex: 1, fontSize: 11, fontFamily: "Nunito_700Bold", lineHeight: 15 },
+  deliveryStandardLine: { fontSize: 11.5, fontFamily: "Nunito_500Medium", marginTop: 6 },
+  deliveryPriorityRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 6, paddingVertical: 7, paddingHorizontal: 9, borderRadius: 9, borderWidth: 1 },
+  deliveryPriorityTxt: { flex: 1, fontSize: 11, fontFamily: "Nunito_700Bold" },
+  priorityCheck: { width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  priceDivider: { height: 1, marginTop: 10, marginBottom: 8 },
+  priceInline: { fontSize: 12, lineHeight: 17 },
+  priceStrikeTiny: { fontSize: 12, fontFamily: "Nunito_600SemiBold", textDecorationLine: "line-through" },
+  priceArrow: { fontSize: 12, fontFamily: "Nunito_500Medium", color: "rgba(148,163,184,0.9)" },
+  priceTotalTiny: { fontSize: 14, fontFamily: "Nunito_800ExtraBold" },
+  trustBar: { fontSize: 11, fontFamily: "Nunito_600SemiBold", textAlign: "center", lineHeight: 16, paddingHorizontal: 4 },
+});
 
 // ── Calculation helpers ───────────────────────────────────────────────────────
 const PYTH: Record<string, number> = {
@@ -329,6 +376,181 @@ function pickCareer(info: NumInfo, vlang: string): string {
   return info.career;
 }
 
+function pickDesc(info: NumInfo, vlang: string): string {
+  if (vlang === "hi") return info.descHi || info.desc;
+  if (vlang === "hn") return info.descHn || info.desc;
+  return info.desc;
+}
+
+function pickLove(info: NumInfo, vlang: string): string {
+  if (vlang === "hi") return info.loveHi || info.love;
+  if (vlang === "hn") return info.loveHn || info.love;
+  return info.love;
+}
+
+function pickTitle(info: NumInfo, vlang: string): string {
+  if (vlang === "hi") return info.titleHindi || info.title;
+  return info.title;
+}
+
+function isMasterNum(n: number): boolean {
+  return n === 11 || n === 22 || n === 33;
+}
+
+type BasicNums = {
+  lp: number; bdNum: number; dest: number; soul: number; py: number; pm: number;
+};
+
+function buildBasicInsight(name: string, nums: BasicNums, vlang: string) {
+  const first = (name || "").trim().split(/\s+/)[0] || (vlang === "hi" ? "आप" : "You");
+  const lpI = getInfo(nums.lp);
+  const destI = getInfo(nums.dest);
+  const soulI = getInfo(nums.soul);
+  const pyI = getInfo(nums.py);
+  const lpT = pickTitle(lpI, vlang);
+  const destT = pickTitle(destI, vlang);
+  const soulT = pickTitle(soulI, vlang);
+  const lpDesc = pickDesc(lpI, vlang).replace(/\.\s*$/, "");
+
+  let headline: string;
+  let sub: string;
+  if (vlang === "hi") {
+    headline = `${first} — आपका जीवन पथ ${nums.lp} (${lpT}) है।`;
+    sub = `${lpDesc}. भाग्य ${nums.dest} और आत्मा ${nums.soul} ${
+      nums.dest === nums.soul ? "— दोनों एक दिशा में हैं, स्पष्टता मजबूत है।" : `— ${destT} और ${soulT} अलग-अलग परतें दिखाते हैं।`
+    }`;
+    if (isMasterNum(nums.bdNum)) {
+      sub += ` जन्म दिन ${nums.bdNum} आपको गहन अंतर्ज्ञान देता है।`;
+    }
+  } else if (vlang === "hn") {
+    headline = `${first}, aap Life Path ${nums.lp} par hain — ${lpT}.`;
+    sub = `${lpDesc}. Destiny ${nums.dest} aur Soul Urge ${nums.soul} ${
+      nums.dest === nums.soul
+        ? "dono aligned hain — andar-bahar same direction, clarity strong hai."
+        : `alag layers dikhate hain — bahar ${destT}, andar ${soulT}.`
+    }`;
+    if (isMasterNum(nums.bdNum)) {
+      sub += ` Birth Day ${nums.bdNum} aapko master intuition aur spiritual edge deti hai.`;
+    }
+  } else {
+    headline = `${first}, your Life Path is ${nums.lp} — ${lpT}.`;
+    sub = `${lpDesc}. Destiny ${nums.dest} and Soul Urge ${nums.soul} ${
+      nums.dest === nums.soul
+        ? "both align — inner drive and outer expression point the same way."
+        : `show different layers — outer ${destT}, inner ${soulT}.`
+    }`;
+    if (isMasterNum(nums.bdNum)) {
+      sub += ` Birth Day ${nums.bdNum} adds master intuition and spiritual depth.`;
+    }
+  }
+
+  const patternParts: string[] = [];
+  if (nums.lp === 4 && (nums.dest === 1 || nums.soul === 1)) {
+    patternParts.push(
+      vlang === "hi"
+        ? "4 + 1 = मेहनत से नींव, अंदर से नेतृत्व — structure banate ho, phir lead karte ho."
+        : vlang === "hn"
+          ? "4 + 1 = Mehnat se neev, andar se leadership — pehle structure, phir aage badhna."
+          : "4 + 1 = You build the foundation first, then lead from the front.",
+    );
+  } else if (nums.dest === nums.soul) {
+    patternParts.push(
+      vlang === "hi"
+        ? "भाग्य और आत्मा मेल खाते हैं — जो chahte ho aur jo dikhte ho, wahi direction hai."
+        : vlang === "hn"
+          ? "Destiny aur Soul same hain — jo chahte ho aur jo project karte ho, aligned hai."
+          : "Destiny and Soul match — what you want and what you show face the same way.",
+    );
+  }
+  if (isMasterNum(nums.py)) {
+    patternParts.push(
+      vlang === "hi"
+        ? `${nums.py} व्यक्तिगत वर्ष — ${pickTitle(pyI, vlang)}. इस साल बड़ा सोचें।`
+        : vlang === "hn"
+          ? `Personal Year ${nums.py} master cycle hai — ${pickTitle(pyI, vlang)}. Is saal bada socho.`
+          : `Personal Year ${nums.py} is a master cycle — ${pickTitle(pyI, vlang)}. Think bigger this year.`,
+    );
+  }
+  if (!patternParts.length) {
+    patternParts.push(
+      vlang === "hi"
+        ? "नीचे हर कार्ड एक layer samjhata hai — Life Path aapka main route, baaki numbers uske support karte hain."
+        : vlang === "hn"
+          ? "Neeche har card ek layer samjhata hai — Life Path main route hai, baaki numbers usko support karte hain."
+          : "Each card below explains one layer — Life Path is your main route; the other numbers support it.",
+    );
+  }
+
+  return { headline, sub, pattern: patternParts.join(" ") };
+}
+
+function BasicHeroCard({ name, nums }: { name: string; nums: BasicNums }) {
+  const C = useC();
+  const t = useT();
+  const lpI = getInfo(nums.lp);
+  const insight = buildBasicInsight(name, nums, t.vlang);
+
+  return (
+    <FadeInView delay={staggerDelay(2)}>
+      <View style={[bh.card, { backgroundColor: C.bgCard, borderColor: `${lpI.color}40`, overflow: "hidden" }]}>
+        <LinearGradient colors={[`${lpI.color}14`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+        <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numBlueprintTitle}</Text>
+        <Text style={[np.heroTitle, { color: C.text, fontSize: 16, lineHeight: 22 }]}>{insight.headline}</Text>
+        <Text style={[np.heroLine, { color: C.textMuted, fontSize: 13, lineHeight: 20 }]}>{insight.sub}</Text>
+      </View>
+    </FadeInView>
+  );
+}
+const bh = StyleSheet.create({
+  card: { borderRadius: 18, borderWidth: 1, padding: 16, gap: 8 },
+});
+
+function BasicPatternCard({ nums }: { nums: BasicNums }) {
+  const C = useC();
+  const t = useT();
+  const insight = buildBasicInsight("", nums, t.vlang);
+
+  return (
+    <FadeInView delay={staggerDelay(4)}>
+      <View style={[bp2.card, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}35` }]}>
+        <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numPatternTitle}</Text>
+        <Text style={[np.heroLine, { color: C.textMid, fontSize: 13, lineHeight: 20 }]}>{insight.pattern}</Text>
+      </View>
+    </FadeInView>
+  );
+}
+const bp2 = StyleSheet.create({
+  card: { borderRadius: 18, borderWidth: 1, padding: 14, gap: 8 },
+});
+
+function BasicLuckyRow({ lifePathNum }: { lifePathNum: number }) {
+  const C = useC();
+  const t = useT();
+  const info = getInfo(lifePathNum);
+
+  return (
+    <FadeInView delay={staggerDelay(3)}>
+      <View style={[lk.row, { backgroundColor: C.bgCard, borderColor: `${info.color}35` }]}>
+        <View style={[lk.pill, { borderColor: `${info.color}30`, backgroundColor: `${info.color}08` }]}>
+          <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numLuckyNumbers}</Text>
+          <Text style={[np.bodySemi, { color: info.color }]}>{info.luckyNums}</Text>
+        </View>
+        <View style={[lk.pill, { borderColor: `${info.color}30`, backgroundColor: `${info.color}08` }]}>
+          <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numLuckyColor}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: info.luckyColorHex }} />
+            <Text style={[np.bodySemi, { color: info.color }]} numberOfLines={1}>{info.luckyColor}</Text>
+          </View>
+        </View>
+      </View>
+    </FadeInView>
+  );
+}
+const lk = StyleSheet.create({
+  row:  { flexDirection: "row", gap: 8 },
+  pill: { flex: 1, borderRadius: 14, borderWidth: 1, padding: 12, gap: 4 },
+});
+
 const BASIC_ACCENT = "#8b5cf6";
 const PRO_ACCENT = "#f59e0b";
 
@@ -365,7 +587,7 @@ function NumberBadge({ num, color, size = 68 }: { num: number; color: string; si
 }
 const nb = StyleSheet.create({
   wrap: { alignItems:"center", justifyContent:"center", flexShrink:0 },
-  num:  { fontFamily: F.extra },
+  num:  { fontFamily: "Nunito_800ExtraBold" },
 });
 
 // ── Free numerology card ───────────────────────────────────────────────────────
@@ -398,28 +620,36 @@ function NumCard({
       <View style={nc.topRow}>
         <NumberBadge num={num} color={info.color} />
         <View style={{ flex:1 }}>
-          <Text style={[nc.tag, { color: C.textDim }]}>{label}</Text>
+          <Text style={[np.sectionLabel, { color: C.textDim }]}>{label}</Text>
           {labelHindi && labelHindi !== label && (
-            <Text style={[nc.tagHindi, { color: C.textMuted }]}>{labelHindi}</Text>
+            <Text style={[np.reportSummary, { color: C.textMuted }]}>{labelHindi}</Text>
           )}
-          <Text style={[nc.titleTxt, { color: info.color }]}>{t.vlang === "hi" ? info.titleHindi : info.title}</Text>
+          <Text style={[np.heroTitle, { color: info.color, fontSize: 14 }]}>{t.vlang === "hi" ? info.titleHindi : info.title}</Text>
           <View style={nc.planetRow}>
             <Text style={{ fontSize:12 }}>{info.planetEmoji}</Text>
-            <Text style={[nc.planetTxt, { color: C.textMuted }]}>{info.planet}</Text>
+            <Text style={[np.reportSummary, { color: C.textMuted }]}>{info.planet}</Text>
           </View>
         </View>
         <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={C.textMuted} />
       </View>
 
-      {/* Traits + details — expanded only */}
+      {/* Meaning — always visible */}
+      <Text
+        style={[np.heroLine, { color: C.textMuted, fontSize: 12.5, lineHeight: 19, marginTop: 2 }]}
+        numberOfLines={expanded ? undefined : 3}
+      >
+        {pickDesc(info, t.vlang)}
+      </Text>
+
+      {/* Traits + details — expanded */}
       {expanded && (
         <>
           <View style={nc.traits}>
             {info.traits.map((tr, i) => (
               <View key={tr} style={[nc.chip, { backgroundColor:`${info.color}12`, borderColor:`${info.color}28` }]}>
-                <Text style={[nc.chipTxt, { color:info.color }]}>{t.vlang === "hi" ? (info.traitsHindi[i] || tr) : tr}</Text>
+                <Text style={[np.coreQChipTxt, { color:info.color, fontSize: 10.5 }]}>{t.vlang === "hi" ? (info.traitsHindi[i] || tr) : tr}</Text>
                 {t.vlang !== "hi" && t.vlang !== "en" && info.traitsHindi[i] && (
-                  <Text style={[nc.chipHindi, { color:info.color }]}> · {info.traitsHindi[i]}</Text>
+                  <Text style={[np.reportSummary, { color:info.color }]}> · {info.traitsHindi[i]}</Text>
                 )}
               </View>
             ))}
@@ -427,17 +657,22 @@ function NumCard({
 
           <View style={nc.quickRow}>
             <View style={[nc.quickPill, { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.25)" }]}>
-              <Text style={[nc.quickLabel, { color: C.textDim }]}>{t.numStrength}</Text>
-              <Text style={[nc.quickVal, { color: "#22c55e" }]}>
+              <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numStrength}</Text>
+              <Text style={[np.bodySemi, { color: "#22c55e" }]}>
                 {t.vlang === "hi" ? (info.strengthHi || info.strength) : t.vlang === "hn" ? (info.strengthHn || info.strength) : info.strength}
               </Text>
             </View>
             <View style={[nc.quickPill, { backgroundColor: "rgba(248,113,113,0.08)", borderColor: "rgba(248,113,113,0.22)" }]}>
-              <Text style={[nc.quickLabel, { color: C.textDim }]}>{t.numWeakness}</Text>
-              <Text style={[nc.quickVal, { color: "#f87171" }]}>
+              <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numWeakness}</Text>
+              <Text style={[np.bodySemi, { color: "#f87171" }]}>
                 {t.vlang === "hi" ? (info.weaknessHi || info.weakness) : t.vlang === "hn" ? (info.weaknessHn || info.weakness) : info.weakness}
               </Text>
             </View>
+          </View>
+
+          <View style={nc.loveBlock}>
+            <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numLove}</Text>
+            <Text style={[np.bodyBold, { color: C.textMid }]}>{pickLove(info, t.vlang)}</Text>
           </View>
 
           <LockedCareerRow career={pickCareer(info, t.vlang)} accent={info.color} />
@@ -450,22 +685,13 @@ function NumCard({
 const nc = StyleSheet.create({
   card:       { borderRadius:18, borderWidth:1.5, padding:16, gap:10, overflow:"hidden" },
   topRow:     { flexDirection:"row", alignItems:"flex-start", gap:12 },
-  tag:        { fontSize:9, fontFamily:F.bold, letterSpacing:0.8, textTransform:"uppercase", marginBottom:1 },
-  tagHindi:   { fontSize:9, fontFamily:F.medium, marginBottom:3 },
-  titleTxt:   { fontSize:14, fontFamily:F.extra, letterSpacing:-0.2, marginBottom:2 },
   planetRow:  { flexDirection:"row", alignItems:"center", gap:4 },
-  planetTxt:  { fontSize:11, fontFamily:F.medium },
   traits:     { flexDirection:"row", flexWrap:"wrap", gap:6 },
+  loveBlock:  { borderRadius:12, borderWidth:1, borderColor:"rgba(244,63,94,0.18)", backgroundColor:"rgba(244,63,94,0.06)", padding:12, gap:4 },
   chip:       { flexDirection:"row", paddingHorizontal:8, paddingVertical:4, borderRadius:8, borderWidth:1 },
-  chipTxt:    { fontSize:10.5, fontFamily:F.bold },
-  chipHindi:  { fontSize:10, fontFamily:F.medium },
   quickRow:   { flexDirection:"row", gap:10 },
   quickPill:  { flex:1, borderRadius:12, borderWidth:1, padding:12, gap:4 },
-  quickLabel: { fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase" },
-  quickVal:   { fontSize:12, lineHeight:18, fontFamily:F.semi },
   lockWrap:   { marginTop:2, borderRadius:12, borderWidth:1, overflow:"hidden", minHeight:52 },
-  lockLabel:  { fontSize:9, fontFamily:F.extra, letterSpacing:1, textTransform:"uppercase", marginBottom:6 },
-  lockText:   { fontSize:12, lineHeight:18, fontFamily:F.medium },
   lockOverlay:{ ...StyleSheet.absoluteFillObject, alignItems:"center", justifyContent:"center" },
 });
 
@@ -475,8 +701,8 @@ function LockedCareerRow({ career, accent }: { career: string; accent: string })
   return (
     <View style={[nc.lockWrap, { borderColor: `${accent}30`, backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }]}>
       <View style={{ padding:12 }}>
-        <Text style={[nc.lockLabel, { color: C.textDim }]}>{t.numCareer}</Text>
-        <Text style={[nc.lockText, { color: C.textMuted }]} numberOfLines={2}>{career}</Text>
+        <Text style={[np.sectionLabel, { color: C.textDim, marginBottom: 6 }]}>{t.numCareer}</Text>
+        <Text style={[np.heroLine, { color: C.textMuted, fontSize: 12 }]} numberOfLines={2}>{career}</Text>
       </View>
       {Platform.OS !== "web" ? (
         <BlurView intensity={28} tint={C.isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
@@ -503,17 +729,17 @@ function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
     <FadeInView delay={staggerDelay(4)}>
     <View style={[pyc.card, { backgroundColor: C.bgCard, borderColor: `${info.color}40`, overflow: "hidden" }]}>
       <LinearGradient colors={[`${info.color}10`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <Text style={[pyc.title, { color: C.textDim }]}>{t.numPersonalYM}</Text>
+      <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numPersonalYM}</Text>
       <View style={pyc.row}>
         <View style={[pyc.box, { borderColor:`${info.color}30`, backgroundColor:`${info.color}08` }]}>
-          <Text style={[pyc.bigNum, { color: info.color }]}>{py}</Text>
-          <Text style={[pyc.label, { color: C.textMuted }]}>{t.numYearPrefix} {year}</Text>
-          <Text style={[pyc.theme, { color: C.textMuted }]}>{getPYTheme(t.lang, py)}</Text>
+          <Text style={[np.heroTitle, { color: info.color, fontSize: 36, lineHeight: 40 }]}>{py}</Text>
+          <Text style={[np.bodyBold, { color: C.textMuted, fontSize: 10 }]}>{t.numYearPrefix} {year}</Text>
+          <Text style={[np.heroLine, { color: C.textMuted, textAlign: "center" }]}>{getPYTheme(t.lang, py)}</Text>
         </View>
         <View style={[pyc.box, { borderColor:`${pmInfo.color}30`, backgroundColor:`${pmInfo.color}08` }]}>
-          <Text style={[pyc.bigNum, { color: pmInfo.color }]}>{pm}</Text>
-          <Text style={[pyc.label, { color: C.textMuted }]}>{month}</Text>
-          <Text style={[pyc.theme, { color: C.textMuted }]}>{getPYTheme(t.lang, pm)}</Text>
+          <Text style={[np.heroTitle, { color: pmInfo.color, fontSize: 36, lineHeight: 40 }]}>{pm}</Text>
+          <Text style={[np.bodyBold, { color: C.textMuted, fontSize: 10 }]}>{month}</Text>
+          <Text style={[np.heroLine, { color: C.textMuted, textAlign: "center" }]}>{getPYTheme(t.lang, pm)}</Text>
         </View>
       </View>
     </View>
@@ -522,12 +748,8 @@ function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
 }
 const pyc = StyleSheet.create({
   card:   { borderRadius:18, borderWidth:1, padding:16, gap:10 },
-  title:  { fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase" },
   row:    { flexDirection:"row", gap:10 },
   box:    { flex:1, borderRadius:12, borderWidth:1, padding:12, gap:4, alignItems:"center" },
-  bigNum: { fontSize:36, fontFamily:F.extra },
-  label:  { fontSize:10, fontFamily:F.bold },
-  theme:  { fontSize:11, lineHeight:16, textAlign:"center", fontFamily:F.medium },
 });
 
 function CoreNumbersSummary({ items }: { items: { num: number; label: string }[] }) {
@@ -536,14 +758,17 @@ function CoreNumbersSummary({ items }: { items: { num: number; label: string }[]
   return (
     <View style={[cs.card, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}35`, overflow: "hidden" }]}>
       <LinearGradient colors={[`${BASIC_ACCENT}10`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <Text style={[cs.title, { color: C.textDim }]}>{t.numCoreSummary}</Text>
+      <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numCoreSummary}</Text>
       <View style={cs.row}>
         {items.map(item => {
           const info = getInfo(item.num);
           return (
             <View key={item.label} style={[cs.item, { borderColor: `${info.color}35`, backgroundColor: `${info.color}08` }]}>
-              <Text style={[cs.num, { color: info.color }]}>{item.num}</Text>
-              <Text style={[cs.lbl, { color: C.textMuted }]} numberOfLines={2}>{item.label}</Text>
+              <Text style={[np.heroTitle, { color: info.color, fontSize: 22, lineHeight: 26 }]}>{item.num}</Text>
+              <Text style={[np.sectionLabel, { color: C.textMuted, fontSize: 8.5, letterSpacing: 0.2 }]} numberOfLines={2}>{item.label}</Text>
+              <Text style={[np.bodyBold, { color: info.color, fontSize: 9, textAlign: "center" }]} numberOfLines={1}>
+                {pickTitle(info, t.vlang)}
+              </Text>
             </View>
           );
         })}
@@ -553,11 +778,8 @@ function CoreNumbersSummary({ items }: { items: { num: number; label: string }[]
 }
 const cs = StyleSheet.create({
   card:  { borderRadius:18, borderWidth:1, padding:14, gap:10 },
-  title: { fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase" },
   row:   { flexDirection:"row", gap:8 },
-  item:  { flex:1, borderRadius:12, borderWidth:1, paddingVertical:10, paddingHorizontal:6, alignItems:"center", gap:4 },
-  num:   { fontSize:22, fontFamily:F.extra },
-  lbl:   { fontSize:8.5, fontFamily:F.bold, textAlign:"center", letterSpacing:0.2, textTransform:"uppercase" },
+  item:  { flex:1, borderRadius:12, borderWidth:1, paddingVertical:10, paddingHorizontal:6, alignItems:"center", gap:3 },
 });
 
 function BasicProCompare() {
@@ -566,15 +788,15 @@ function BasicProCompare() {
   return (
     <View style={[bc.card, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}30`, overflow: "hidden" }]}>
       <LinearGradient colors={[`${PRO_ACCENT}08`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <Text style={[bc.title, { color: C.textDim }]}>{t.numBasicCompareTitle}</Text>
+      <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numBasicCompareTitle}</Text>
       <View style={bc.row}>
         <View style={[bc.col, { borderColor: C.border, backgroundColor: C.bgCard2 }]}>
-          <Text style={[bc.colHead, { color: C.text }]}>{t.km_basic}</Text>
-          <Text style={[bc.line, { color: C.textMuted }]}>{t.numBasicCompareBasicLine}</Text>
+          <Text style={[np.heroTitle, { color: C.text, fontSize: 13 }]}>{t.km_basic}</Text>
+          <Text style={[np.heroLine, { color: C.textMuted }]}>{t.numBasicCompareBasicLine}</Text>
         </View>
         <View style={[bc.col, { borderColor: "rgba(245,158,11,0.35)", backgroundColor: "rgba(245,158,11,0.08)" }]}>
-          <Text style={[bc.colHead, { color: "#f59e0b" }]}>{t.vu_tabPro}</Text>
-          <Text style={[bc.line, { color: C.textMuted }]}>{t.numBasicCompareProLine}</Text>
+          <Text style={[np.heroTitle, { color: "#f59e0b", fontSize: 13 }]}>{t.vu_tabPro}</Text>
+          <Text style={[np.heroLine, { color: C.textMuted }]}>{t.numBasicCompareProLine}</Text>
         </View>
       </View>
     </View>
@@ -582,11 +804,8 @@ function BasicProCompare() {
 }
 const bc = StyleSheet.create({
   card:    { borderRadius:18, borderWidth:1, padding:14, gap:10 },
-  title:   { fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase" },
   row:     { flexDirection:"row", gap:8 },
   col:     { flex:1, borderRadius:12, borderWidth:1, padding:12, gap:6 },
-  colHead: { fontSize:13, fontFamily:F.extra },
-  line:    { fontSize:11, lineHeight:16, fontFamily:F.medium },
 });
 
 function BasicProTease({ onOpenPro }: { onOpenPro: () => void }) {
@@ -595,7 +814,7 @@ function BasicProTease({ onOpenPro }: { onOpenPro: () => void }) {
   const price = LIFE_MASTERY_UI_PRICING.offerInr;
   return (
     <View style={{ gap:10 }}>
-      <Text style={[bp.hint, { color: C.isDark ? "rgba(203,213,225,0.55)" : "rgba(100,116,139,0.75)" }]}>
+      <Text style={[np.heroLine, { color: C.isDark ? "rgba(203,213,225,0.55)" : "rgba(100,116,139,0.75)", textAlign: "center", paddingHorizontal: 8 }]}>
         {t.numBasicLockedHint}
       </Text>
       <Pressable
@@ -604,19 +823,16 @@ function BasicProTease({ onOpenPro }: { onOpenPro: () => void }) {
       >
         <LinearGradient colors={["#d97706", "#f59e0b", "#fbbf24"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={bp.tease}>
           <Feather name="file-text" size={16} color="#fff" />
-          <Text style={bp.teaseTxt}>{t.numProTeaseBtn} — ₹{price}</Text>
+          <Text style={[np.bodyBold, { color: "#fff", flex: 1, flexShrink: 1, textAlign: "center", fontSize: 12.5, lineHeight: 17 }]}>{t.numProTeaseBtn} — ₹{price}</Text>
           <Feather name="chevron-right" size={16} color="#fff" />
         </LinearGradient>
       </Pressable>
-      <Text style={[bp.foot, { color: C.textDim }]}>{t.numFooterNote}</Text>
+      <Text style={[np.reportSummary, { color: C.textDim, textAlign: "center", paddingHorizontal: 4, fontSize: 11, lineHeight: 17 }]}>{t.numFooterNote}</Text>
     </View>
   );
 }
 const bp = StyleSheet.create({
-  hint:    { fontSize:11.5, fontFamily:F.medium, lineHeight:17, textAlign:"center", paddingHorizontal:8 },
-  tease:   { flexDirection:"row", alignItems:"center", justifyContent:"center", gap:8, paddingVertical:15, paddingHorizontal:14, borderRadius:16 },
-  teaseTxt:{ flex:1, flexShrink:1, color:"#fff", fontSize:12.5, fontFamily:F.bold, textAlign:"center", lineHeight:17 },
-  foot:    { fontSize:11, lineHeight:17, fontFamily:F.medium, textAlign:"center", paddingHorizontal:4 },
+  tease: { flexDirection:"row", alignItems:"center", justifyContent:"center", gap:8, paddingVertical:15, paddingHorizontal:14, borderRadius:16 },
 });
 
 // ── Profile selector ──────────────────────────────────────────────────────────
@@ -644,8 +860,8 @@ function ProfileSelector({
 }
 const ps = StyleSheet.create({
   chip: { paddingHorizontal:12, paddingVertical:7, borderRadius:12, borderWidth:1.5, gap:1 },
-  name: { fontSize:12, fontWeight:"700" },
-  rel:  { fontSize:9 },
+  name: { fontSize:12, fontFamily: F.bold },
+  rel:  { fontSize:9, fontFamily: F.medium },
 });
 
 // ── PRO Report Panel ──────────────────────────────────────────────────────────
@@ -659,6 +875,10 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   const [founderExpanded, setFounderExpanded] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [priorityDelivery, setPriorityDelivery] = useState(false);
+  const [preparingBanner, setPreparingBanner] = useState<{
+    priority: boolean;
+    etaHours: number;
+  } | null>(null);
   const [pdfLang, setPdfLang] = useState<"en" | "hn" | "hi">(
     (t.lang || "en").toLowerCase() === "hi"
       ? "hi"
@@ -745,37 +965,65 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     }
   };
 
-  const openTools = async (langCode: "en" | "hn" | "hi") => {
+  const buildEntitlementParams = (): Record<string, unknown> => ({
+    name: bd?.name,
+    dob: dobStr,
+    tob: tobStr || "12:00",
+    mobile: mobile.replace(/\D/g, "").slice(0, 10),
+    ...(typeof bd?.lat === "number" ? { lat: bd.lat } : {}),
+    ...(typeof bd?.lon === "number" ? { lon: bd.lon } : {}),
+    ...(typeof bd?.tz  === "number" ? { tz:  bd.tz } : {}),
+    ...(bd?.place ? { place: bd.place } : {}),
+  });
+
+  /** Book founder-reviewed Numerology PDF → appears in LifeMap admin + My Reports. */
+  const placeFounderOrder = async (langCode: "en" | "hn" | "hi") => {
     setErr(null);
     if (!bd) {
       setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
       return;
     }
-    if (!mobile.trim()) {
-      setErr("Apna mobile number dijiye — PDF generate karne ke liye zaroori hai.");
+    const mobileDigits = mobile.replace(/\D/g, "").slice(0, 10);
+    if (mobileDigits.length !== 10) {
+      setErr("Please enter a valid 10-digit mobile number.");
       return;
     }
-    const params = new URLSearchParams({
-      name: bd.name, dob: dobStr,
-      lang: langCode,
-      ...(tobStr  ? { tob: tobStr } : {}),
-      mobile: mobile.trim(),
-      // ── Birth-place context for Tier 4 (doshas) + Tier 5 (compatibility) ──
-      ...(typeof bd.lat === "number" ? { lat: String(bd.lat) } : {}),
-      ...(typeof bd.lon === "number" ? { lon: String(bd.lon) } : {}),
-      ...(typeof bd.tz  === "number" ? { tz:  String(bd.tz)  } : {}),
-      ...(bd.place ? { place: bd.place } : {}),
-    });
-    const safeName = bd.name.replace(/[^a-zA-Z0-9]+/g, "_");
-    await downloadAndShare(
-      `${API_BASE}/api/numerology/pdf_pro?${params.toString()}`,
-      `Numerology_Tools_${safeName}.pdf`,
-    );
+    if (!user?.id) {
+      setErr("Please sign in to book your Numerology Pro report.");
+      return;
+    }
+    setOpening(true);
+    try {
+      const pending = getPendingNumerologyCheckout();
+      const result = await submitNumerologyHumanOrder({
+        userId: user.id,
+        apiKey: user.api_key,
+        cosmoUserId: user.cosmo_user_id,
+        lang: langCode,
+        urgent: priorityDelivery,
+        purchaseId: pending?.purchaseId,
+        params: {
+          ...buildEntitlementParams(),
+          mobile: mobileDigits,
+          lang: langCode,
+          ...(pending?.params || {}),
+        },
+      });
+      clearPendingNumerologyCheckout();
+      setPreparingBanner({
+        priority: priorityDelivery,
+        etaHours: Number(result.eta_hours) || (priorityDelivery ? 12 : 24),
+      });
+    } catch (e: any) {
+      setErr(e?.message || "Order place nahi ho paya. Dobara try karein.");
+    } finally {
+      setOpening(false);
+    }
   };
 
   useEffect(() => {
     if (consumeNumerologyPaidReady()) {
-      void openTools(pdfLang);
+      void placeFounderOrder(pdfLang);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -786,8 +1034,8 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
       return;
     }
-    if (!mobile.trim()) {
-      setErr("Apna mobile number dijiye — PDF generate karne ke liye zaroori hai.");
+    if (mobile.replace(/\D/g, "").length !== 10) {
+      setErr("Please enter a valid 10-digit mobile number.");
       return;
     }
     setLangOpen(true);
@@ -795,19 +1043,10 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
 
   const confirmUnlock = async () => {
     setLangOpen(false);
-    const entitlementParams: Record<string, unknown> = {
-      name: bd?.name,
-      dob: dobStr,
-      tob: tobStr || "12:00",
-      mobile: mobile.trim(),
-      ...(typeof bd?.lat === "number" ? { lat: bd.lat } : {}),
-      ...(typeof bd?.lon === "number" ? { lon: bd.lon } : {}),
-      ...(typeof bd?.tz  === "number" ? { tz:  bd.tz } : {}),
-      ...(bd?.place ? { place: bd.place } : {}),
-    };
+    const entitlementParams = buildEntitlementParams();
 
     if (LIFE_MASTERY_CHECKOUT_CONFIG.bypassCheckoutForTesting) {
-      await openTools(pdfLang);
+      await placeFounderOrder(pdfLang);
       return;
     }
 
@@ -819,7 +1058,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       amountInr: lifeMasteryOrderTotalInr(priorityDelivery),
       bypassCheckout: false,
       onEntitled: () => {
-        void openTools(pdfLang);
+        void placeFounderOrder(pdfLang);
       },
     });
   };
@@ -964,11 +1203,11 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
             <Text style={[pp.inputLabel, { color: C.textDim }]}>📱 Mobile Number</Text>
             <TextInput
               value={mobile}
-              onChangeText={setMobile}
+              onChangeText={(t) => setMobile(t.replace(/\D/g, "").slice(0, 10))}
               placeholder="9876543210"
               placeholderTextColor={C.textMuted}
-              keyboardType="phone-pad"
-              maxLength={15}
+              keyboardType="number-pad"
+              maxLength={10}
               style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
             />
           </View>
@@ -1019,7 +1258,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                 padding: 14,
                 gap: 10,
               }}>
-                <Text style={{ color: C.text, fontWeight: "900", fontSize: 16 }}>
+                <Text style={{ color: C.text, fontFamily: F.extra, fontSize: 16 }}>
                   Choose PDF Language
                 </Text>
                 <View style={{ flexDirection: "row", gap: 10 }}>
@@ -1043,7 +1282,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                           alignItems: "center",
                         }}
                       >
-                        <Text style={{ color: active ? "#7c3aed" : C.textMuted, fontWeight: "800", fontSize: 12 }}>
+                        <Text style={{ color: active ? "#7c3aed" : C.textMuted, fontFamily: F.extra, fontSize: 12 }}>
                           {opt.label}
                         </Text>
                       </Pressable>
@@ -1063,7 +1302,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: C.textMid, fontWeight: "800" }}>Cancel</Text>
+                    <Text style={{ color: C.textMid, fontFamily: F.extra }}>Cancel</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => { void confirmUnlock(); }}
@@ -1075,15 +1314,27 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: "#fff", fontWeight: "900" }}>Continue</Text>
+                    <Text style={{ color: "#fff", fontFamily: F.extra }}>Continue</Text>
                   </Pressable>
                 </View>
-                <Text style={{ color: C.textMuted, fontSize: 11, lineHeight: 16 }}>
-                  Payment ke baad isi screen pe wapas aake download ho jayega.
-                </Text>
               </View>
             </View>
           </Modal>
+      <OrderSuccessModal
+        visible={!!preparingBanner}
+        onClose={() => setPreparingBanner(null)}
+        onViewReports={() => {
+          setPreparingBanner(null);
+          router.push("/my-reports" as any);
+        }}
+        title="Order Confirmed!"
+        message="Your order has been received. Our expert is personally preparing your Numerology Pro report — it's on its way."
+        etaLabel={
+          preparingBanner?.priority
+            ? "Report in My Reports within 12 hrs"
+            : "Report in My Reports within 24 hrs"
+        }
+      />
     </View>
   );
 }
@@ -1093,13 +1344,13 @@ const pp = StyleSheet.create({
   heroIcon:    { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   tagRow:      { flexDirection: "row", gap: 6, marginBottom: 4 },
   tag:         { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  tagTxt:      { fontSize: 9, fontWeight: "900", color: "#fff", letterSpacing: 1 },
-  heroTitle:   { fontSize: 16, fontWeight: "800" },
-  heroSub:     { fontSize: 11, marginTop: 2 },
-  sectionLabel:{ fontSize: 9, fontWeight: "800", letterSpacing: 2, marginTop: 4, marginBottom: -4 },
+  tagTxt:      { fontSize: 9, fontFamily: F.extra, color: "#fff", letterSpacing: 1 },
+  heroTitle:   { fontSize: 16, fontFamily: F.extra },
+  heroSub:     { fontSize: 11, fontFamily: F.medium, marginTop: 2 },
+  sectionLabel:{ fontSize: 9, fontFamily: F.extra, letterSpacing: 2, marginTop: 4, marginBottom: -4 },
   row:         { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
-  rowTitle:    { fontSize: 13, fontWeight: "800" },
-  rowSub:      { fontSize: 11, marginTop: 1, lineHeight: 15 },
+  rowTitle:    { fontSize: 13, fontFamily: F.extra },
+  rowSub:      { fontSize: 11, fontFamily: F.medium, marginTop: 1, lineHeight: 15 },
   cta:         {
                  borderRadius: 16, overflow: "hidden", backgroundColor: "#f59e0b",
                  shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 6 },
@@ -1107,78 +1358,41 @@ const pp = StyleSheet.create({
                  alignItems: "center",
                },
   ctaInner:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingTop: 16, paddingHorizontal: 16, paddingBottom: 4 },
-  ctaTxt:      { color: "#fff", fontSize: 15, fontWeight: "900" },
-  ctaPrice:    { color: "rgba(255,255,255,0.92)", fontSize: 13, fontWeight: "800", paddingBottom: 14 },
+  ctaTxt:      { color: "#fff", fontSize: 15, fontFamily: F.extra },
+  ctaPrice:    { color: "rgba(255,255,255,0.92)", fontSize: 13, fontFamily: F.extra, paddingBottom: 14 },
   note:        { borderRadius: 12, borderWidth: 1, padding: 12, flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  noteTxt:     { fontSize: 11, lineHeight: 16, flex: 1 },
+  noteTxt:     { fontSize: 11, fontFamily: F.medium, lineHeight: 16, flex: 1 },
   subTabBar:   { flexDirection: "row", padding: 4, borderRadius: 14, borderWidth: 1, gap: 4 },
   subTabBtn:   { flex: 1, flexDirection: "row", alignItems: "center", gap: 8,
                  paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10 },
-  subTabTitle: { fontSize: 12, fontWeight: "900" },
-  subTabSub:   { fontSize: 10, marginTop: 1, fontWeight: "700" },
+  subTabTitle: { fontSize: 12, fontFamily: F.extra },
+  subTabSub:   { fontSize: 10, marginTop: 1, fontFamily: F.bold },
   inputBlock:  { gap: 6 },
-  inputLabel:  { fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
+  inputLabel:  { fontSize: 10, fontFamily: F.extra, letterSpacing: 1.2 },
   input:       { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14,
-                 paddingVertical: 12, fontSize: 15, fontWeight: "700",
+                 paddingVertical: 12, fontSize: 15, fontFamily: F.bold,
                  letterSpacing: 0.5 },
   errBox:      { flexDirection: "row", alignItems: "center", gap: 6,
                  backgroundColor: "rgba(220,38,38,0.1)", borderRadius: 10,
                  padding: 10, borderWidth: 1, borderColor: "rgba(220,38,38,0.3)" },
-  errTxt:      { fontSize: 12, color: "#dc2626", fontWeight: "700", flex: 1 },
+  errTxt:      { fontSize: 12, color: "#dc2626", fontFamily: F.bold, flex: 1 },
   founderAvatarWrap: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: "center", justifyContent: "center", overflow: "hidden", marginTop: 2 },
   founderAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  founderAvatarTxt: { color: "#fff", fontSize: 12, fontWeight: "900" },
+  founderAvatarTxt: { color: "#fff", fontSize: 12, fontFamily: F.extra },
   expandBtn: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 2 },
   chip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, maxWidth: "90%" },
-  chipTxt: { fontSize: 10, fontWeight: "800", flexShrink: 1 },
+  chipTxt: { fontSize: 10, fontFamily: F.extra, flexShrink: 1 },
   answerRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1 },
-  answerNum: { width: 18, textAlign: "center", fontWeight: "900" },
-  answerTxt: { flex: 1, fontSize: 12, fontWeight: "800" },
+  answerNum: { width: 18, textAlign: "center", fontFamily: F.extra },
+  answerTxt: { flex: 1, fontSize: 12, fontFamily: F.extra },
   priorityRow: { width: "100%", flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1 },
   priorityCheck: { width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  priorityTxt: { flex: 1, fontSize: 12, fontWeight: "800" },
+  priorityTxt: { flex: 1, fontSize: 12, fontFamily: F.extra },
   priceDivider: { width: "100%", height: 1, marginTop: 12, marginBottom: 8 },
-  priceInline: { fontSize: 12, lineHeight: 17 },
-  priceStrikeTiny: { fontSize: 12, fontWeight: "700", textDecorationLine: "line-through" },
-  priceArrow: { fontSize: 12, fontWeight: "600", color: "rgba(148,163,184,0.9)" },
-  priceTotalTiny: { fontSize: 14, fontWeight: "900" },
-});
-
-// Numerology Pro purchase styles (copied from MarriageCompatProPurchase layout)
-const np = StyleSheet.create({
-  card: { borderRadius: 18, borderWidth: 1, padding: 16 },
-  founderHead: { flexDirection: "row", alignItems: "center", gap: 10 },
-  founderPhoto: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  founderInitials: { color: "#fff", fontSize: 13, fontFamily: "Nunito_800ExtraBold" },
-  founderName: { fontSize: 13.5, fontFamily: "Nunito_800ExtraBold" },
-  founderRole: { fontSize: 11, fontFamily: "Nunito_500Medium", lineHeight: 15 },
-  founderChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
-  founderBulletChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, maxWidth: "48%", flexGrow: 1 },
-  founderBulletTxt: { fontSize: 10, fontFamily: "Nunito_700Bold", flexShrink: 1 },
-  heroCard: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, overflow: "hidden" },
-  heroEmoji: { fontSize: 22 },
-  heroTitle: { fontSize: 14.5, fontFamily: "Nunito_800ExtraBold", lineHeight: 19 },
-  heroLine: { fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 16 },
-  sectionTitle: { fontSize: 15, fontFamily: "Nunito_800ExtraBold", letterSpacing: -0.2 },
-  coreQChipRow: { gap: 6, marginTop: 10 },
-  coreQChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1 },
-  coreQChipNum: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", width: 14 },
-  coreQChipTxt: { flex: 1, fontSize: 12, fontFamily: "Nunito_700Bold" },
-  reportSummary: { fontSize: 11, fontFamily: "Nunito_500Medium", marginTop: 2 },
-  reportChipRow: { gap: 6, marginTop: 10 },
-  reportChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, width: "100%" },
-  reportChipEmoji: { fontSize: 12 },
-  reportChipTxt: { flex: 1, fontSize: 11, fontFamily: "Nunito_700Bold", lineHeight: 15 },
-  deliveryStandardLine: { fontSize: 11.5, fontFamily: "Nunito_500Medium", marginTop: 6 },
-  deliveryPriorityRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 6, paddingVertical: 7, paddingHorizontal: 9, borderRadius: 9, borderWidth: 1 },
-  deliveryPriorityTxt: { flex: 1, fontSize: 11, fontFamily: "Nunito_700Bold" },
-  priorityCheck: { width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  priceDivider: { height: 1, marginTop: 10, marginBottom: 8 },
-  priceInline: { fontSize: 12, lineHeight: 17 },
-  priceStrikeTiny: { fontSize: 12, fontFamily: "Nunito_600SemiBold", textDecorationLine: "line-through" },
-  priceArrow: { fontSize: 12, fontFamily: "Nunito_500Medium", color: "rgba(148,163,184,0.9)" },
-  priceTotalTiny: { fontSize: 14, fontFamily: "Nunito_800ExtraBold" },
-  trustBar: { fontSize: 11, fontFamily: "Nunito_600SemiBold", textAlign: "center", lineHeight: 16, paddingHorizontal: 4 },
+  priceInline: { fontSize: 12, fontFamily: F.medium, lineHeight: 17 },
+  priceStrikeTiny: { fontSize: 12, fontFamily: F.bold, textDecorationLine: "line-through" },
+  priceArrow: { fontSize: 12, fontFamily: F.semi, color: "rgba(148,163,184,0.9)" },
+  priceTotalTiny: { fontSize: 14, fontFamily: F.extra },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -1198,7 +1412,7 @@ export default function NumerologyScreen() {
   const bd      = profile?.birthData ?? null;
 
   // Expanded cards (compact basic: keep collapsed by default)
-  const [expLP,   setExpLP]   = useState(false);
+  const [expLP,   setExpLP]   = useState(true);
   const [expBD,   setExpBD]   = useState(false);
   const [expDest, setExpDest] = useState(false);
   const [expSoul, setExpSoul] = useState(false);
@@ -1329,15 +1543,19 @@ export default function NumerologyScreen() {
               <View style={[ui.priceRibbon, { borderColor: `${BASIC_ACCENT}44`, backgroundColor: `${BASIC_ACCENT}12`, marginBottom: 4 }]}>
                 <Feather name="hash" size={14} color={BASIC_ACCENT} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[ui.priceRibbonText, { color: C.text }]}>{t.numFreeSection}</Text>
+                  <Text style={[np.bodyBold, { color: C.text, fontSize: 12 }]}>{t.numFreeSection}</Text>
                   {profile?.name ? (
-                    <Text style={{ color: C.textMuted, fontSize: 10, marginTop: 2 }}>
+                    <Text style={[np.reportSummary, { color: C.textMuted, marginTop: 2 }]}>
                       {t.numProfileFor.replace("{name}", profile.name)}
                     </Text>
                   ) : null}
                 </View>
               </View>
             </FadeInView>
+
+            {profile?.name && nums ? (
+              <BasicHeroCard name={profile.name} nums={nums} />
+            ) : null}
 
             <FadeInView delay={staggerDelay(3)}>
             <CoreNumbersSummary
@@ -1350,7 +1568,12 @@ export default function NumerologyScreen() {
             />
             </FadeInView>
 
+            <BasicLuckyRow lifePathNum={nums.lp} />
+            <BasicPatternCard nums={nums} />
+
             <PersonalYearCard py={nums.py} pm={nums.pm} />
+
+            <Text style={[np.reportSummary, { color: C.textMuted, marginTop: 2 }]}>{t.numTapHint}</Text>
 
             <NumCard
               label={t.numLifePathLbl} labelHindi={t.numLifePathHi}
@@ -1410,20 +1633,20 @@ const s = StyleSheet.create({
   profileCard: { borderRadius:14, borderWidth:1, padding:14 },
   profileRow:  { flexDirection:"row", alignItems:"center", gap:12 },
   avatar:      { width:48, height:48, borderRadius:16, borderWidth:1.5, alignItems:"center", justifyContent:"center", flexShrink:0 },
-  profileName: { fontSize:15, fontWeight:"800" },
-  profileDob:  { fontSize:12, marginTop:2 },
-  profilePlace:{ fontSize:11, marginTop:1 },
+  profileName: { fontSize:15, fontFamily:F.extra },
+  profileDob:  { fontSize:12, fontFamily:F.medium, marginTop:2 },
+  profilePlace:{ fontSize:11, fontFamily:F.medium, marginTop:1 },
   syncBadge:   { flexDirection:"row", alignItems:"center", gap:4, paddingHorizontal:7, paddingVertical:3, borderRadius:8 },
-  syncTxt:     { fontSize:9, fontWeight:"700" },
+  syncTxt:     { fontSize:9, fontFamily:F.bold },
 
   divider:     { flexDirection:"row", alignItems:"center", gap:10, borderTopWidth:0 },
   divLine:     { flex:1, height:1 },
   divBadge:    { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:10, paddingVertical:4, borderRadius:12, borderWidth:1 },
-  divTxt:      { fontSize:9, fontWeight:"800", letterSpacing:1 },
+  divTxt:      { fontSize:9, fontFamily:F.extra, letterSpacing:1 },
 
   teaserCard:  { borderRadius:16, borderWidth:1, padding:16, flexDirection:"row", alignItems:"flex-start", gap:12 },
-  teaserTitle: { fontSize:14, fontWeight:"800" },
-  teaserBody:  { fontSize:12, lineHeight:18 },
+  teaserTitle: { fontSize:14, fontFamily:F.extra },
+  teaserBody:  { fontSize:12, fontFamily:F.medium, lineHeight:18 },
 
   ctaBtn: {
     borderRadius:18, overflow:"hidden",
@@ -1432,11 +1655,11 @@ const s = StyleSheet.create({
     shadowOpacity:0.4, shadowRadius:12, elevation:10,
   },
   ctaInner:  { flexDirection:"row", alignItems:"center", gap:12, padding:18 },
-  ctaTitle:  { color:"#fff", fontSize:15, fontWeight:"900" },
-  ctaSub:    { color:"rgba(255,255,255,0.8)", fontSize:11, marginTop:2 },
+  ctaTitle:  { color:"#fff", fontSize:15, fontFamily:F.extra },
+  ctaSub:    { color:"rgba(255,255,255,0.8)", fontSize:11, fontFamily:F.medium, marginTop:2 },
 
   footer:    { borderRadius:12, borderWidth:1, padding:12, flexDirection:"row", alignItems:"flex-start", gap:8 },
-  footerTxt: { fontSize:11, lineHeight:17, flex:1 },
+  footerTxt: { fontSize:11, fontFamily:F.medium, lineHeight:17, flex:1 },
 
   tabBar:    { flexDirection:"row", padding:4, borderRadius:14, borderWidth:1, gap:4 },
   tabBtn:    { flex:1, flexDirection:"row", alignItems:"center", justifyContent:"center",
@@ -1465,7 +1688,7 @@ const ui = StyleSheet.create({
   },
   headerBadge: {
     fontSize: 10,
-    fontFamily: F.extra,
+    fontFamily: "Nunito_800ExtraBold",
     letterSpacing: 2,
     marginBottom: 2,
   },
@@ -1521,5 +1744,5 @@ const ui = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
-  priceRibbonText: { fontSize: 12, fontFamily: F.bold },
+  priceRibbonText: { fontSize: 12, fontFamily: "Nunito_700Bold" },
 });

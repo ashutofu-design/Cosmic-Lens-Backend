@@ -1,4 +1,4 @@
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 
 import { API_BASE } from "@/lib/apiConfig";
 import {
@@ -6,13 +6,26 @@ import {
   getPendingAstrovastuRoomUpload,
 } from "@/lib/pendingAstrovastuRoomUpload";
 
+/** Alert.alert is a silent no-op on web — use window.alert there instead. */
+function notify(title: string, message: string): void {
+  if (Platform.OS === "web") {
+    try {
+      window.alert(`${title}\n\n${message}`);
+    } catch {
+      console.warn(`[astrovastu] ${title}: ${message}`);
+    }
+    return;
+  }
+  Alert.alert(title, message);
+}
+
 export async function submitAstrovastuRoomHumanOrder(opts: {
   user: { id: number; api_key: string };
   purchaseId: number;
 }): Promise<boolean> {
   const pending = getPendingAstrovastuRoomUpload();
   if (!pending) {
-    Alert.alert("Upload missing", "Please pick your room photo again.");
+    notify("Upload missing", "Please pick your room photo again.");
     return false;
   }
 
@@ -23,29 +36,44 @@ export async function submitAstrovastuRoomHumanOrder(opts: {
         "Content-Type": "application/json",
         "X-API-Key": opts.user.api_key,
       },
+      // Send the base64 photo once only — duplicating it doubled the request
+      // size and pushed uploads past the server body limit.
+      // Omit purchase_id when 0 (payment-bypass mode) so old servers don't
+      // treat it as a failed paid submit.
       body: JSON.stringify({
         user_id: opts.user.id,
-        purchase_id: opts.purchaseId,
+        ...(opts.purchaseId > 0 ? { purchase_id: opts.purchaseId } : {}),
         room_type: pending.room_type,
         direction: pending.direction,
         data_url: pending.data_url,
-        image_data_url: pending.data_url,
+        payment_bypassed: opts.purchaseId <= 0,
       }),
     });
-    const body = await resp.json();
+    if (resp.status === 413) {
+      notify(
+        "Photo too large",
+        "Yeh photo bahut badi hai. Thodi chhoti/compressed photo choose karke dobara try karein.",
+      );
+      return false;
+    }
+    const body = await resp.json().catch(() => ({} as Record<string, unknown>));
     if (!resp.ok) {
-      Alert.alert(
+      notify(
         "Could not submit",
-        body?.message || body?.error || "Please try again or contact support.",
+        String(
+          (body as { message?: string })?.message ||
+            (body as { error?: string })?.error ||
+            "Please try again or contact support.",
+        ) + ` (HTTP ${resp.status})`,
       );
       return false;
     }
 
     clearPendingAstrovastuRoomUpload();
-    Alert.alert("Done", "Your report will appear in My Reports soon.");
+    // Success UI is the caller's job (animated OrderSuccessModal) — no alert here.
     return true;
   } catch (e: unknown) {
-    Alert.alert("Network error", e instanceof Error ? e.message : "Try again.");
+    notify("Network error", e instanceof Error ? e.message : "Try again.");
     return false;
   }
 }

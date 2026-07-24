@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useUser } from "@/context/UserContext";
 import { useColors } from "@/hooks/useColors";
 import { buildPersonalSnapshot, formatCategoryScore } from "@/lib/personalizationSnapshot";
@@ -49,12 +50,15 @@ export default function KundliCategoryDetailScreen() {
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: topPad + 64, paddingBottom: insets.bottom + 80 }}>
         {!selected ? (
+          <FadeInView delay={staggerDelay(0)}>
           <View style={[s.emptyCard, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
             <Text style={[s.emptyTitle, { color: C.text }]}>No category found</Text>
             <Text style={[s.emptyBody, { color: C.textMuted }]}>Create your kundli to see your Kundli category meaning.</Text>
           </View>
+          </FadeInView>
         ) : (
           <>
+            <FadeInView delay={staggerDelay(0)}>
             <LinearGradient colors={[`${color}33`, "rgba(15,23,42,0.92)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.hero, { borderColor: `${color}66` }]}>
               <View style={s.heroTop}>
                 <View style={[s.iconBubble, { backgroundColor: `${color}22`, borderColor: `${color}66` }]}>
@@ -71,7 +75,9 @@ export default function KundliCategoryDetailScreen() {
                 <Text style={[s.selectedPill, { color, borderColor: `${color}66`, backgroundColor: `${color}16` }]}>SELECTED CATEGORY</Text>
               )}
             </LinearGradient>
+            </FadeInView>
 
+            <FadeInView delay={staggerDelay(1)}>
             <View style={[s.section, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
               <View style={s.sectionHeader}>
                 <Feather name="heart" size={15} color={color} />
@@ -86,13 +92,16 @@ export default function KundliCategoryDetailScreen() {
                 ))}
               </View>
             </View>
+            </FadeInView>
 
+            <FadeInView delay={staggerDelay(2)}>
             <View style={[s.noteCard, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
               <Feather name="info" size={15} color={color} />
               <Text style={[s.noteText, { color: C.textMuted }]}>
                 This meaning comes from your saved kundli. It stays the same unless your birth chart details change.
               </Text>
             </View>
+            </FadeInView>
           </>
         )}
       </ScrollView>

@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import LegalScreen, { Section, P, Bullet, Strong, Callout } from "@/components/LegalScreen";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -82,10 +83,13 @@ export default function DeleteAccountScreen() {
       title={t.da_title}
       subtitle={t.da_subtitle}
     >
+      <FadeInView delay={staggerDelay(0)}>
       <Callout tone="danger">
         <Strong>{t.da_calloutDanger}</Strong>
       </Callout>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(1)}>
       <Section title={t.da_secWhatHappens}>
         <Bullet>{t.da_wb1}</Bullet>
         <Bullet>{t.da_wb2}</Bullet>
@@ -93,7 +97,9 @@ export default function DeleteAccountScreen() {
         <Bullet>{t.da_wb4}</Bullet>
         <Bullet>{t.da_wb5}</Bullet>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(2)}>
       <Section title={t.da_secBefore}>
         <P>{t.da_pBefore}</P>
         <Bullet>{t.da_bb1}</Bullet>
@@ -101,7 +107,9 @@ export default function DeleteAccountScreen() {
         <Bullet>{t.da_bb3}</Bullet>
         <Bullet>{t.da_bb4}</Bullet>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(3)}>
       <Section title={t.da_secConfirm}>
         <P>{t.da_pConfirm}</P>
 
@@ -148,10 +156,13 @@ export default function DeleteAccountScreen() {
           <Text style={[da.cancelText, { color: C.textMid }]}>{t.da_btnCancelBack}</Text>
         </Pressable>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(4)}>
       <Section title={t.da_secNeedHelp}>
         <P>{t.da_pNeedHelp}</P>
       </Section>
+      </FadeInView>
     </LegalScreen>
   );
 }

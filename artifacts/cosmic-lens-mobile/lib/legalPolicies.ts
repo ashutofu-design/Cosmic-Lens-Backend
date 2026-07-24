@@ -4,11 +4,11 @@
  */
 
 export const LEGAL_META = {
-  lastUpdated: "23 May 2026",
+  lastUpdated: "20 July 2026",
   appName: "Cosmic Lens",
   operator: "Cosmic Lens",
   country: "India",
-  supportEmail: "support@cosmiclens.app",
+  supportEmail: "supportcosmiclens@gmail.com",
   website: "https://cosmiclens.app",
   paymentProcessor: "Razorpay Software Private Limited",
   grievanceOfficer: "Grievance Officer — Cosmic Lens",
@@ -77,7 +77,7 @@ export const privacyPolicyDoc: LegalDoc = {
       blocks: [
         { type: "bullet", text: "Create and maintain your account and saved profiles." },
         { type: "bullet", text: "Compute and display astrological, numerological, Vastu, Panchang, Muhurat, and related reports you request." },
-        { type: "bullet", text: "Process one-time purchases and subscription payments through Razorpay." },
+        { type: "bullet", text: "Process one-time purchases, Cosmic Packs, and other payments through Razorpay." },
         { type: "bullet", text: "Deliver digital reports (including PDF downloads) and restore entitlements after payment." },
         { type: "bullet", text: "Enforce fair-use limits (e.g. daily Jyotish question quotas by plan)." },
         { type: "bullet", text: "Send optional reminders (horoscope, Panchang, Muhurat) if you opt in — you can disable notifications in device or app settings." },
@@ -227,11 +227,11 @@ export const termsOfServiceDoc: LegalDoc = {
         { type: "bullet", text: "Face Reading PRO (photo-based reports)" },
         { type: "bullet", text: "Free Vastu compass & guides; AstroVastu PRO (room photo and floor-plan scans); Business Vastu" },
         { type: "bullet", text: "Panchang, Muhurat, health/wealth/career insights, six-month timelines, Cosmic Portrait" },
-        { type: "bullet", text: "“Ask” / Jyotish Q&A powered by our structured astrology engine (rule-based chart analysis, not AI)" },
-        { type: "bullet", text: "Subscription plans and one-time digital report purchases" },
+        { type: "bullet", text: "“Ask” / Cosmic Advance Intelligence — V1 chart Q&A via question packs, and V3 live timed consultation with a Cosmic Guide when available" },
+        { type: "bullet", text: "Cosmic Packs and one-time digital report / LifeMap Pro purchases (via Razorpay)" },
         {
           type: "p",
-          text: "Calculations are performed using rule-based astronomical and astrological computation methods. Some astronomical data, timezone data, or calculation libraries may be provided by third-party open-source or licensed components.",
+          text: "Chart calculations use astronomical and classical Jyotish computation methods. Ask answers and many narratives are produced by Cosmic Advance Intelligence; V3 sessions may include a live Cosmic Guide. Some astronomical data, timezone data, or calculation libraries may be provided by third-party open-source or licensed components.",
         },
         {
           type: "callout",
@@ -250,16 +250,14 @@ export const termsOfServiceDoc: LegalDoc = {
       ],
     },
     {
-      title: "4. Subscription Plans (Recurring)",
+      title: "4. Cosmic Packs & Paid Products",
       blocks: [
-        { type: "p", text: "Optional auto-renewing subscriptions may include:" },
-        { type: "bullet", text: "7-day trial (introductory, one-time per user where offered) — from ₹1" },
-        { type: "bullet", text: "Basic — ₹199/month or ₹1,799/year (features as shown in-app)" },
-        { type: "bullet", text: "Pro — ₹499/month (features as shown in-app; monthly billing)" },
-        {
-          type: "p",
-          text: "Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current billing period. Manage or cancel via Profile → Subscription or by emailing support. After cancellation, access continues until the period ends; no further charges apply.",
-        },
+        { type: "p", text: "Optional products and packs may include:" },
+        { type: "bullet", text: "Cosmic Intelligence V1 question packs (one-time) — e.g. Starter / Popular / Power, with a stated question count and expiry window" },
+        { type: "bullet", text: "Cosmic Intelligence V3 live session packs (timed live consultation) — priced by duration" },
+        { type: "bullet", text: "One-time LifeMap / report products (e.g. Love Reality Pro, Kundli Milan Pro, Numerology, AstroVastu, Business Vastu) and other unlocks shown in-app" },
+        { type: "bullet", text: "Where still offered: introductory trial or limited free signup questions — details shown before you pay" },
+        { type: "p", text: "Prices are shown in INR at checkout. Secure payments are processed by Razorpay. Pack balances, expiry, and report delivery timelines are shown in-app (Ask wallet / My Reports)." },
       ],
     },
     {
@@ -373,23 +371,23 @@ export const termsOfServiceDoc: LegalDoc = {
 
 export const refundPolicyDoc: LegalDoc = {
   title: "Refund & Cancellation Policy",
-  subtitle: "Subscriptions, one-time purchases & how to get help",
+  subtitle: "Cosmic Packs, one-time purchases & how to get help",
   intro:
-    `This policy explains how to cancel subscriptions, when refunds are available for purchases made in ${LEGAL_META.appName}, and how to contact us. It applies to all payments processed via ${LEGAL_META.paymentProcessor}.`,
+    `This policy explains when refunds are available for purchases made in ${LEGAL_META.appName}, and how to contact us. It applies to all payments processed via ${LEGAL_META.paymentProcessor}.`,
   topCallout: {
     tone: "info",
-    text: "Please use the free trial (where offered) and review the product description before paying. One-time digital reports are delivered immediately after payment.",
+    text: "Please review the pack or product description (questions, live minutes, expiry, report ETA) before paying. Digital packs and reports are fulfilled as described in-app after successful payment.",
   },
   sections: [
     {
-      title: "1. Subscription Cancellation",
+      title: "1. Cosmic Packs (No Auto-Renewal)",
       blocks: [
-        { type: "p", text: "Monthly and yearly subscriptions renew automatically until cancelled." },
-        { type: "bullet", text: "Cancel in-app: Profile → Subscription → Cancel (or equivalent control)." },
-        { type: "bullet", text: `Or email ${LEGAL_META.supportEmail} from your registered email with your account mobile/email.` },
+        { type: "p", text: "Cosmic Intelligence V1 question packs and V3 live session packs are one-time purchases. They do not auto-renew." },
+        { type: "bullet", text: "Unused questions or live time expire as shown on the pack and in Ask / Cosmic Packs." },
+        { type: "bullet", text: `Account or delivery issues: email ${LEGAL_META.supportEmail} from your registered email with your account mobile/email.` },
         {
           type: "p",
-          text: "After cancellation, premium access continues until the end of the current paid period. No further renewals will be charged. Cancelling does not automatically refund the current period unless a refund exception below applies.",
+          text: "Buying a pack does not create a recurring subscription. Where a legacy subscription product is still active on an account, cancel via Profile (or email support); access continues until the paid period ends.",
         },
       ],
     },
@@ -397,12 +395,12 @@ export const refundPolicyDoc: LegalDoc = {
       title: "2. One-Time Purchases (No Auto-Renewal)",
       blocks: [
         { type: "p", text: "The following are charged once only — they do not renew:" },
-        { type: "bullet", text: "Face Reading PRO (₹299), Numerology / Life Mastery reports, Couple reports" },
-        { type: "bullet", text: "AstroVastu room credits (₹99 / ₹249 / ₹399) and floor-plan unlocks (₹799–₹4,999)" },
-        { type: "bullet", text: "Other one-time unlocks shown at checkout" },
+        { type: "bullet", text: "Cosmic Packs (V1 question packs, V3 live packs)" },
+        { type: "bullet", text: "LifeMap / Pro reports (e.g. Love Reality Pro, Kundli Milan Pro), Numerology, Couple reports" },
+        { type: "bullet", text: "AstroVastu / Business Vastu unlocks and other one-time products shown at checkout" },
         {
           type: "p",
-          text: "Once the digital report is generated, downloaded, or marked as delivered in your account, the purchase is considered fulfilled. Refunds for change of mind are generally not provided for fulfilled digital goods, consistent with applicable consumer and RBI guidelines for digital products.",
+          text: "Once questions/live time are credited, or a digital report is generated, downloaded, or marked as delivered in My Reports, the purchase is considered fulfilled. Refunds for change of mind are generally not provided for fulfilled digital goods, consistent with applicable consumer and RBI guidelines for digital products.",
         },
       ],
     },
@@ -411,22 +409,22 @@ export const refundPolicyDoc: LegalDoc = {
       blocks: [
         { type: "p", text: "We will approve a full or partial refund (to the original payment method via Razorpay) when:" },
         { type: "bullet", text: "Duplicate charge — you were billed twice for the same order (we refund the duplicate)." },
-        { type: "bullet", text: "Payment succeeded but the product was not activated and we cannot fix it within 72 hours." },
-        { type: "bullet", text: "Technical failure — you could not access a paid report despite successful payment, and our support confirms the failure on our side." },
+        { type: "bullet", text: "Payment succeeded but the pack or product was not activated and we cannot fix it within 72 hours." },
+        { type: "bullet", text: "Technical failure — you could not access a paid report or credited pack balance despite successful payment, and our support confirms the failure on our side." },
         { type: "bullet", text: "Unauthorized transaction — reported promptly with evidence; account may be secured pending review." },
         {
           type: "bullet",
-          text: "First-time subscription refund — within 7 days of first paid subscription charge, if you used fewer than 5 premium features and contact us in good faith (one-time courtesy per user, at our discretion).",
+          text: "Courtesy cases — unused pack with clear payment/activation failure, or (where a legacy subscription still exists) first-time subscription refund within 7 days if you used fewer than 5 premium features and contact us in good faith (one-time courtesy per user, at our discretion).",
         },
       ],
     },
     {
       title: "4. When Refunds Are Not Granted",
       blocks: [
-        { type: "bullet", text: "You changed your mind after a report was successfully generated or downloaded." },
+        { type: "bullet", text: "You changed your mind after a report was successfully generated or downloaded, or after pack questions / live time were credited." },
         { type: "bullet", text: "You disagree with astrological interpretation or prediction outcome (see Disclaimer)." },
         { type: "bullet", text: "Incorrect birth data entered by you (reports are based on data you provide)." },
-        { type: "bullet", text: "You forgot to cancel before subscription renewal — we will cancel future renewals but typically do not refund the current period." },
+        { type: "bullet", text: "Pack questions or live minutes were partly or fully used, or the pack expired unused." },
         { type: "bullet", text: "Request made more than 30 days after payment (except where law requires otherwise)." },
         { type: "bullet", text: "Abuse of refund policy, repeated false claims, or chargeback fraud." },
       ],
@@ -436,8 +434,8 @@ export const refundPolicyDoc: LegalDoc = {
       blocks: [
         { type: "p", text: `Email ${LEGAL_META.supportEmail} with:` },
         { type: "bullet", text: "Registered email or mobile number" },
-        { type: "bullet", text: "Razorpay order ID / payment reference (from payment confirmation or Profile → payment history)" },
-        { type: "bullet", text: "Product name (e.g. Face Reading PRO, Pro monthly, AstroVastu floor plan)" },
+        { type: "bullet", text: "Razorpay order ID / payment reference (from payment confirmation or Help & Support → transactions)" },
+        { type: "bullet", text: "Product name (e.g. V1 Starter pack, V3 live, Love Reality Pro)" },
         { type: "bullet", text: "Brief reason and screenshots if applicable" },
         {
           type: "p",
@@ -492,7 +490,7 @@ export const disclaimerDoc: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "Vedic astrology (Jyotish), numerology, Vastu Shastra, Panchang, and Muhurat are traditional systems. Results depend on classical rules, astronomical calculations (including Lahiri ayanamsa where stated), and interpretation produced by Cosmic Lens's structured astrology engine (rule-based software coding — not artificial intelligence). Some astronomical data or calculation libraries may be provided by third-party open-source or licensed components. Results are not scientifically proven to predict specific future events.",
+          text: "Vedic astrology (Jyotish), numerology, Vastu Shastra, Panchang, and Muhurat are traditional systems. Results depend on classical rules, astronomical calculations (including Lahiri ayanamsa where stated), and interpretation produced by Cosmic Lens's Cosmic Advance Intelligence systems and chart engines. Some outputs may use computational or language models; Cosmic Intelligence V3 live sessions involve a Cosmic Guide when available. Some astronomical data or calculation libraries may be provided by third-party open-source or licensed components. Results are not scientifically proven to predict specific future events.",
         },
       ],
     },
@@ -517,11 +515,11 @@ export const disclaimerDoc: LegalDoc = {
       ],
     },
     {
-      title: "4. Rule-Based Engine Output",
+      title: "4. Cosmic Intelligence & Report Output",
       blocks: [
         {
           type: "p",
-          text: "“Ask” answers, report narratives, Vastu scans, Face Reading analysis, and other summaries are produced by Cosmic Lens's structured astrology engine — deterministic and rule-based software built on classical Jyotish principles, not artificial intelligence or chatbots. Output may contain errors, omissions, or culturally sensitive phrasing. It is not reviewed by a named human astrologer unless explicitly stated.",
+          text: "“Ask” V1 answers and many report narratives are produced by Cosmic Lens's Cosmic Advance Intelligence systems built on classical Jyotish principles and chart computation. Output may contain errors, omissions, or culturally sensitive phrasing. Cosmic Intelligence V3 live sessions are timed consultations with a Cosmic Guide when available. Founder- or expert-reviewed Pro PDF reports (LifeMap) are delivered to My Reports within the ETA shown after purchase — they are guidance, not guaranteed outcomes.",
         },
       ],
     },

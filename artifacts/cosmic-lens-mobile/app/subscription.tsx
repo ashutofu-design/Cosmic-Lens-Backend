@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -252,76 +253,83 @@ export default function SubscriptionScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Hero ── */}
-        <LinearGradient
-          colors={isDark ? ["#1a1330", "#0c0818"] : ["#EEF2FF", "#F5F7FB"]}
-          style={s.heroBanner}
-        >
-          <View style={s.heroIconRow}>
-            <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(245,158,11,0.12)" : "rgba(245,158,11,0.10)" }]}>
-              <Text style={{ fontSize: 22 }}>⭐</Text>
+        <FadeInView delay={staggerDelay(0)}>
+          <LinearGradient
+            colors={isDark ? ["#1a1330", "#0c0818"] : ["#EEF2FF", "#F5F7FB"]}
+            style={s.heroBanner}
+          >
+            <View style={s.heroIconRow}>
+              <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(245,158,11,0.12)" : "rgba(245,158,11,0.10)" }]}>
+                <Text style={{ fontSize: 22 }}>⭐</Text>
+              </View>
+              <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.09)" }]}>
+                <Text style={{ fontSize: 22 }}>🔭</Text>
+              </View>
+              <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(245,158,11,0.12)" : "rgba(245,158,11,0.10)" }]}>
+                <Text style={{ fontSize: 22 }}>✨</Text>
+              </View>
             </View>
-            <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.09)" }]}>
-              <Text style={{ fontSize: 22 }}>🔭</Text>
-            </View>
-            <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(245,158,11,0.12)" : "rgba(245,158,11,0.10)" }]}>
-              <Text style={{ fontSize: 22 }}>✨</Text>
-            </View>
-          </View>
-          <Text style={[s.heroTitle, { color: C.text }]}>
-            {t.unlockVedicTitle}
-          </Text>
-          <Text style={[s.heroSub, { color: C.textMuted }]}>
-            Kundli · Dasha · Jyotish Chat · Forecast
-          </Text>
-
-          <View style={[s.currentChip, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <View style={[s.chipDot, { backgroundColor: planDot(plan) }]} />
-            <Text style={[s.currentChipText, { color: C.textMid }]}>
-              {planLabel(plan)}
-              {expiryLabel ? `  ·  till ${expiryLabel}` : ""}
+            <Text style={[s.heroTitle, { color: C.text }]}>
+              {t.unlockVedicTitle}
             </Text>
-          </View>
-        </LinearGradient>
+            <Text style={[s.heroSub, { color: C.textMuted }]}>
+              Kundli · Dasha · Jyotish Chat · Forecast
+            </Text>
+
+            <View style={[s.currentChip, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <View style={[s.chipDot, { backgroundColor: planDot(plan) }]} />
+              <Text style={[s.currentChipText, { color: C.textMid }]}>
+                {planLabel(plan)}
+                {expiryLabel ? `  ·  till ${expiryLabel}` : ""}
+              </Text>
+            </View>
+          </LinearGradient>
+        </FadeInView>
 
         {/* Trial banner removed per user request — trial is now offered as a regular plan card */}
 
         {/* ── Plan cards ── */}
-        <View style={s.plansWrap}>
-          {PLANS.map(p => (
-            <PlanCard
-              key={p.key}
-              plan={p}
-              isCurrent={p.key === plan}
-              onPress={() => handlePlanPress(p.key)}
-            />
-          ))}
-        </View>
+        <FadeInView delay={staggerDelay(1)}>
+          <View style={s.plansWrap}>
+            {PLANS.map(p => (
+              <PlanCard
+                key={p.key}
+                plan={p}
+                isCurrent={p.key === plan}
+                onPress={() => handlePlanPress(p.key)}
+              />
+            ))}
+          </View>
+        </FadeInView>
 
         {/* ── AstroVastu Pricing Card (one-time purchases — separate from subscription) ── */}
-        <AstroVastuPricingCard C={C} />
-
+        <FadeInView delay={staggerDelay(2)}>
+          <AstroVastuPricingCard C={C} />
+        </FadeInView>
 
         {/* ── Comparison Table ── */}
-        <View style={[s.compareCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.compareTitle, { color: C.text }]}>Basic vs Pro — Quick Compare</Text>
-          {[
-            { label: t.sub_cmpJyotishQ, basic: "10/day",         pro: "Unlimited" },
-            { label: t.sub_cmpMarriage, basic: "Score + summary", pro: "Full breakdown" },
-            { label: t.sub_cmpTimeline, basic: "1 month",     pro: "6 months" },
-            { label: t.sub_cmpDasha,    basic: "Overview",    pro: "MD + AD + PD" },
-            { label: t.sub_cmpKarmic,   basic: "—",            pro: "✓ Included" },
-            { label: t.sub_cmpPdf,      basic: "—",            pro: "✓ Download" },
-            { label: t.sub_cmpProfiles, basic: "5",            pro: "Unlimited" },
-          ].map((row, i) => (
-            <View key={row.label} style={[s.compareRow, i > 0 && { borderTopWidth: 1, borderTopColor: C.border }]}>
-              <Text style={[s.compareLabel, { color: C.textMid }]}>{row.label}</Text>
-              <View style={s.compareCells}>
-                <Text style={[s.compareCell, { color: C.textMid }]}>{row.basic}</Text>
-                <Text style={[s.compareCell, { color: "#f59e0b", fontFamily: F.bold }]}>{row.pro}</Text>
+        <FadeInView delay={staggerDelay(3)}>
+          <View style={[s.compareCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <Text style={[s.compareTitle, { color: C.text }]}>Basic vs Pro — Quick Compare</Text>
+            {[
+              { label: t.sub_cmpJyotishQ, basic: "10/day",         pro: "Unlimited" },
+              { label: t.sub_cmpMarriage, basic: "Score + summary", pro: "Full breakdown" },
+              { label: t.sub_cmpTimeline, basic: "1 month",     pro: "6 months" },
+              { label: t.sub_cmpDasha,    basic: "Overview",    pro: "MD + AD + PD" },
+              { label: t.sub_cmpKarmic,   basic: "—",            pro: "✓ Included" },
+              { label: t.sub_cmpPdf,      basic: "—",            pro: "✓ Download" },
+              { label: t.sub_cmpProfiles, basic: "5",            pro: "Unlimited" },
+            ].map((row, i) => (
+              <View key={row.label} style={[s.compareRow, i > 0 && { borderTopWidth: 1, borderTopColor: C.border }]}>
+                <Text style={[s.compareLabel, { color: C.textMid }]}>{row.label}</Text>
+                <View style={s.compareCells}>
+                  <Text style={[s.compareCell, { color: C.textMid }]}>{row.basic}</Text>
+                  <Text style={[s.compareCell, { color: "#f59e0b", fontFamily: F.bold }]}>{row.pro}</Text>
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        </FadeInView>
 
         {/* ── Cashfree badge ── */}
         <View style={[s.payBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>

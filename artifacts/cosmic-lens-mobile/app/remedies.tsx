@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { PLANET, DAY, GEMSTONE, DEITY, pick, type PlanetKey, type DayKey } from "@/lib/i18nVedic";
@@ -468,78 +469,91 @@ export default function RemediesScreen() {
         })}
       </ScrollView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100, gap: 14 }}>
-
-        {/* Hero */}
-        <View style={[s.hero, { backgroundColor: `${planet.color}10`, borderColor: `${planet.color}30` }]}>
-          <Text style={{ fontSize: 40 }}>{planet.emoji}</Text>
-          <View>
-            <Text style={[s.heroTitle, { color: planet.color }]}>{planetName}</Text>
-            <Text style={[s.heroDev, { color: C.text }]}>{planet.deity_emoji} {deityName}</Text>
-            <Text style={[s.heroDay, { color: C.textMuted }]}>{t.remPujaDay}: {dayName}</Text>
-          </View>
-        </View>
-
-        {/* Gemstone */}
-        <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remGemstoneLbl}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={[s.gemCircle, { backgroundColor: `${planet.gemstoneColor}20`, borderColor: `${planet.gemstoneColor}50` }]}>
-              <Text style={{ fontSize: 24 }}>💎</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100 }}>
+        <FadeInView key={selected} resetKey={selected} style={{ gap: 14 }}>
+          {/* Hero */}
+          <FadeInView delay={staggerDelay(0)}>
+            <View style={[s.hero, { backgroundColor: `${planet.color}10`, borderColor: `${planet.color}30` }]}>
+              <Text style={{ fontSize: 40 }}>{planet.emoji}</Text>
+              <View>
+                <Text style={[s.heroTitle, { color: planet.color }]}>{planetName}</Text>
+                <Text style={[s.heroDev, { color: C.text }]}>{planet.deity_emoji} {deityName}</Text>
+                <Text style={[s.heroDay, { color: C.textMuted }]}>{t.remPujaDay}: {dayName}</Text>
+              </View>
             </View>
-            <View>
-              <Text style={[s.gemName, { color: C.text }]}>{gemstoneName}</Text>
-              {v !== "en" && (
-                <Text style={[s.gemEn, { color: C.textMuted }]}>{GEMSTONE[planet.gemstone].en}</Text>
-              )}
-              <Text style={[s.gemTip, { color: C.textMuted }]}>{t.remGemstoneTip}</Text>
+          </FadeInView>
+
+          {/* Gemstone */}
+          <FadeInView delay={staggerDelay(1)}>
+            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remGemstoneLbl}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={[s.gemCircle, { backgroundColor: `${planet.gemstoneColor}20`, borderColor: `${planet.gemstoneColor}50` }]}>
+                  <Text style={{ fontSize: 24 }}>💎</Text>
+                </View>
+                <View>
+                  <Text style={[s.gemName, { color: C.text }]}>{gemstoneName}</Text>
+                  {v !== "en" && (
+                    <Text style={[s.gemEn, { color: C.textMuted }]}>{GEMSTONE[planet.gemstone].en}</Text>
+                  )}
+                  <Text style={[s.gemTip, { color: C.textMuted }]}>{t.remGemstoneTip}</Text>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
+          </FadeInView>
 
-        {/* Mantra */}
-        <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remMantraLbl}</Text>
-          <View style={[s.mantraBox, { backgroundColor: `${planet.color}08`, borderColor: `${planet.color}25` }]}>
-            <Text style={[s.mantraText, { color: planet.color }]}>{planet.mantra}</Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Feather name="repeat" size={12} color={C.textDim} />
-            <Text style={[s.mantraCount, { color: C.textMuted }]}>{content.mantraCount}</Text>
-          </View>
-        </View>
-
-        {/* Daan */}
-        <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remDaanLbl}</Text>
-          <Text style={[s.daanText, { color: C.textMid }]}>{content.daan}</Text>
-          <View style={[s.tipBox, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-            <Feather name="info" size={12} color={C.textDim} />
-            <Text style={[s.tipText, { color: C.textMuted }]}>{t.remDaanTip}</Text>
-          </View>
-        </View>
-
-        {/* Upay */}
-        <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remUpayLbl}</Text>
-          {content.upay.map((u, i) => (
-            <View key={i} style={s.upayRow}>
-              <View style={[s.upayDot, { backgroundColor: planet.color }]} />
-              <Text style={[s.upayText, { color: C.textMid }]}>{u}</Text>
+          {/* Mantra */}
+          <FadeInView delay={staggerDelay(2)}>
+            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remMantraLbl}</Text>
+              <View style={[s.mantraBox, { backgroundColor: `${planet.color}08`, borderColor: `${planet.color}25` }]}>
+                <Text style={[s.mantraText, { color: planet.color }]}>{planet.mantra}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Feather name="repeat" size={12} color={C.textDim} />
+                <Text style={[s.mantraCount, { color: C.textMuted }]}>{content.mantraCount}</Text>
+              </View>
             </View>
-          ))}
-        </View>
+          </FadeInView>
 
-        {/* Weak sign symptoms */}
-        <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remWeakSignsLbl.replace("{planet}", planetName.toUpperCase())}</Text>
-          {content.weak_signs.map((w, i) => (
-            <View key={i} style={[s.signRow, { borderBottomColor: C.border3 }, i === content.weak_signs.length - 1 && { borderBottomWidth: 0 }]}>
-              <Text style={{ fontSize: 16 }}>🔴</Text>
-              <Text style={[s.signText, { color: C.textMid }]}>{w}</Text>
+          {/* Daan */}
+          <FadeInView delay={staggerDelay(3)}>
+            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remDaanLbl}</Text>
+              <Text style={[s.daanText, { color: C.textMid }]}>{content.daan}</Text>
+              <View style={[s.tipBox, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+                <Feather name="info" size={12} color={C.textDim} />
+                <Text style={[s.tipText, { color: C.textMuted }]}>{t.remDaanTip}</Text>
+              </View>
             </View>
-          ))}
-        </View>
+          </FadeInView>
+
+          {/* Upay */}
+          <FadeInView delay={staggerDelay(4)}>
+            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remUpayLbl}</Text>
+              {content.upay.map((u, i) => (
+                <View key={i} style={s.upayRow}>
+                  <View style={[s.upayDot, { backgroundColor: planet.color }]} />
+                  <Text style={[s.upayText, { color: C.textMid }]}>{u}</Text>
+                </View>
+              ))}
+            </View>
+          </FadeInView>
+
+          {/* Weak sign symptoms */}
+          <FadeInView delay={staggerDelay(5)}>
+            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remWeakSignsLbl.replace("{planet}", planetName.toUpperCase())}</Text>
+              {content.weak_signs.map((w, i) => (
+                <View key={i} style={[s.signRow, { borderBottomColor: C.border3 }, i === content.weak_signs.length - 1 && { borderBottomWidth: 0 }]}>
+                  <Text style={{ fontSize: 16 }}>🔴</Text>
+                  <Text style={[s.signText, { color: C.textMid }]}>{w}</Text>
+                </View>
+              ))}
+            </View>
+          </FadeInView>
+        </FadeInView>
       </ScrollView>
     </View>
   );

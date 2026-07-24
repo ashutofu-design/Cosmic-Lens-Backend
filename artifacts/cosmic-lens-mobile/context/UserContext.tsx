@@ -1,14 +1,23 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signOutFromFirebase } from "@/lib/firebaseAuth";
 import { router } from "expo-router";
-import { AppState, type AppStateStatus } from "react-native";
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Alert, AppState, type AppStateStatus } from "react-native";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
 import { coerceUILang, type UILang } from "@/lib/i18n";
 import { API_BASE, apiFetchWithTimeout } from "@/lib/apiConfig";
 import { clearAllLocalReports } from "@/lib/localReports";
-import { attachPushReceivedHandler, setupPushForUser } from "@/lib/notifications";
-import { startReportAutoSync, stopReportAutoSync } from "@/lib/reportAutoSync";
+import {
+  attachPushReceivedHandler,
+  presentReportReadyNotification,
+  setupPushForUser,
+} from "@/lib/notifications";
+import {
+  startReportAutoSync,
+  stopReportAutoSync,
+  subscribeNewReports,
+} from "@/lib/reportAutoSync";
+import { installUnreadReportsBridge } from "@/lib/unreadReportsBadge";
 import { clearServerSyncCache, syncServerReportsForUser } from "@/lib/serverMyReports";
 
 // ── ProfileEntry ────────────────────────────────────────────────────────────
@@ -651,6 +660,89 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
   }, [pullProfilesFromCloud]);
 
+  // While app is open: poll session so admin hard-delete forces logout quickly.
+  useEffect(() => {
+    if (!user?.id || !user?.api_key) return;
+    let cancelled = false;
+    const check = async () => {
+      const u = userRef.current;
+      if (!u?.id || !u?.api_key || cancelled) return;
+      try {
+        const r = await apiFetchWithTimeout(
+          `${API_BASE}/api/user/${u.id}/profiles`,
+          { headers: { "X-API-Key": u.api_key } },
+          8000,
+        );
+        if (cancelled) return;
+        if (r.status === 401 || r.status === 404) {
+          await invalidateDeletedAccount();
+        }
+      } catch {
+        /* network blips — ignore */
+      }
+    };
+    const id = setInterval(() => {
+      void check();
+    }, 20000);
+    void check();
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [user?.id, user?.api_key, invalidateDeletedAccount]);
+
+  // Coarse foreground-time analytics for the admin user inspector.
+  useEffect(() => {
+    if (!user?.id || !user?.api_key) return;
+
+    let state: AppStateStatus = AppState.currentState || "active";
+    let lastTickAt = Date.now();
+
+    const sendUsage = (sessionStart = false) => {
+      const u = userRef.current;
+      if (!u?.id || !u?.api_key) return;
+      const now = Date.now();
+      const elapsedSeconds =
+        state === "active" ? Math.max(0, Math.round((now - lastTickAt) / 1000)) : 0;
+      lastTickAt = now;
+      if (!sessionStart && elapsedSeconds < 1) return;
+      void apiFetchWithTimeout(
+        `${API_BASE}/api/user/${u.id}/app-usage`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": u.api_key,
+          },
+          body: JSON.stringify({
+            elapsed_seconds: elapsedSeconds,
+            session_start: sessionStart,
+          }),
+        },
+        8000,
+      ).catch(() => {
+        /* Analytics must never interrupt the user experience. */
+      });
+    };
+
+    if (state === "active") sendUsage(true);
+    const timer = setInterval(() => {
+      if (state === "active") sendUsage(false);
+    }, 60_000);
+    const sub = AppState.addEventListener?.("change", (nextState) => {
+      if (state === "active" && nextState !== "active") sendUsage(false);
+      state = nextState;
+      lastTickAt = Date.now();
+      if (nextState === "active") sendUsage(true);
+    });
+
+    return () => {
+      if (state === "active") sendUsage(false);
+      clearInterval(timer);
+      sub?.remove?.();
+    };
+  }, [user?.id, user?.api_key]);
+
   // Push token + auto-sync founder-delivered reports (no manual Fetch needed).
   useEffect(() => {
     if (!user?.id || !user?.api_key) {
@@ -658,7 +750,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     void setupPushForUser(user.id, user.api_key);
+    installUnreadReportsBridge();
     startReportAutoSync(user.id, user.api_key);
+    const unsubscribeReports = subscribeNewReports((added) => {
+      void presentReportReadyNotification(added).then((shown) => {
+        // Android Expo Go cannot show push/local notification banners.
+        // Keep a visible in-app fallback so report delivery is never silent.
+        if (!shown && AppState.currentState === "active") {
+          Alert.alert(
+            "📄 Your report is ready",
+            added === 1
+              ? "Aapki report My Reports mein aa gayi hai."
+              : `${added} reports My Reports mein aa gayi hain.`,
+            [
+              { text: "Later", style: "cancel" },
+              { text: "Open My Reports", onPress: () => router.push("/my-reports" as any) },
+            ],
+          );
+        }
+      });
+    });
     const pushSub = attachPushReceivedHandler((data) => {
       const screen = typeof data.screen === "string" ? data.screen : "";
       const kind = typeof data.kind === "string" ? data.kind : "";
@@ -671,6 +782,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     });
     return () => {
       stopReportAutoSync();
+      unsubscribeReports();
       try {
         pushSub?.remove?.();
       } catch {
@@ -679,8 +791,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user?.id, user?.api_key]);
 
-  return (
-    <UserContext.Provider value={{
+  const value = useMemo(() => ({
       user, birthData, kundli, setBirthData, setKundli,
       profiles, primaryProfileId: primaryId,
       addProfile, updateProfile, deleteProfile, setPrimaryProfile,
@@ -690,7 +801,20 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       todayEnergy, moonData, isLoading,
       setUser, setTodayEnergy, setMoonData, logout,
       refreshUser,
-    }}>
+    }), [
+      user, birthData, kundli, setBirthData, setKundli,
+      profiles, primaryId,
+      addProfile, updateProfile, deleteProfile, setPrimaryProfile,
+      language, setLanguage, isIndia,
+      syncKundliToCloud,
+      doshData, doshLoading,
+      todayEnergy, moonData, isLoading,
+      setUser, setTodayEnergy, setMoonData, logout,
+      refreshUser,
+    ]);
+
+  return (
+    <UserContext.Provider value={value}>
       {children}
     </UserContext.Provider>
   );

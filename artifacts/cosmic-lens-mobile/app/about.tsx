@@ -9,9 +9,11 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import LegalScreen, { Section, P, Strong } from "@/components/LegalScreen";
+import LegalScreen, { Section, P } from "@/components/LegalScreen";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
+import { LEGAL_META } from "@/lib/legalPolicies";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -20,8 +22,8 @@ const F = {
 } as const;
 
 const APP_VERSION = "1.0.0";
-const SUPPORT_EMAIL = "support@cosmiclens.app";
-const WEB_URL = "https://cosmiclens.app";
+const SUPPORT_EMAIL = LEGAL_META.supportEmail;
+const WEB_URL = LEGAL_META.website;
 
 function LinkRow({
   icon, label, value, onPress,
@@ -57,17 +59,29 @@ export default function AboutScreen() {
     { label: t.ab_linkDisclaimer, path: "/disclaimer",     icon: "alert-triangle" },
     { label: t.ab_linkDelete,     path: "/delete-account", icon: "trash-2" },
   ];
+
   return (
     <LegalScreen title={t.ab_title} subtitle={t.ab_subtitle}>
+      <FadeInView delay={staggerDelay(0)}>
       <Section title={t.ab_secMission}>
         <P>{t.ab_pMission1}</P>
         <P>{t.ab_pMission2}</P>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(1)}>
+      <Section title={t.ab_secInside}>
+        <P>{t.ab_pInside}</P>
+      </Section>
+      </FadeInView>
+
+      <FadeInView delay={staggerDelay(2)}>
       <Section title={t.ab_secDifferent}>
         <P>{t.ab_pDifferent}</P>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(3)}>
       <Section title={t.ab_secConnect}>
         <View style={{ gap: 10, marginTop: 4 }}>
           <LinkRow
@@ -84,7 +98,9 @@ export default function AboutScreen() {
           />
         </View>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(4)}>
       <Section title={t.ab_secLegal}>
         <View style={{ gap: 10, marginTop: 4 }}>
           {legalLinks.map(item => (
@@ -105,7 +121,9 @@ export default function AboutScreen() {
           ))}
         </View>
       </Section>
+      </FadeInView>
 
+      <FadeInView delay={staggerDelay(5)}>
       <View style={[ar.versionCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Text style={[ar.versionLabel, { color: C.textMuted }]}>{t.ab_lblAppVersion}</Text>
         <Text style={[ar.versionValue, { color: C.text }]}>v{APP_VERSION}</Text>
@@ -113,6 +131,7 @@ export default function AboutScreen() {
           {t.ab_versionFoot}
         </Text>
       </View>
+      </FadeInView>
     </LegalScreen>
   );
 }

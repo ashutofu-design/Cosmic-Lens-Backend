@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useUser } from "@/context/UserContext";
 import { useColors } from "@/hooks/useColors";
 import { buildPersonalSnapshot, formatCategoryScore } from "@/lib/personalizationSnapshot";
@@ -53,80 +54,84 @@ export default function PersonalizationScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: topPad + 64, paddingBottom: insets.bottom + 96 }}>
-        <LinearGradient colors={snapshot.darkGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroCard}>
-          <View style={s.heroHeader}>
-            <Text style={s.heroKicker}>YOUR KUNDLI UNDERSTANDS YOU</Text>
-          </View>
-          <View style={s.powerBox}>
-            <Text style={s.powerLabel}>KUNDLI CATEGORY</Text>
-            <View style={s.powerTypeRow}>
-              <Text style={s.powerType}>{snapshot.powerType}</Text>
-              <Pressable onPress={() => openCategoryDetail(snapshot.powerType)} style={s.powerTypeViewPill}>
-                <Text style={s.powerTypeViewText}>VIEW</Text>
-                <Feather name="arrow-right" size={10} color="#f9a8d4" />
-              </Pressable>
+        <FadeInView delay={staggerDelay(0)}>
+          <LinearGradient colors={snapshot.darkGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroCard}>
+            <View style={s.heroHeader}>
+              <Text style={s.heroKicker}>YOUR KUNDLI UNDERSTANDS YOU</Text>
             </View>
-          </View>
-          <View style={s.highlightRow}>
-            <View style={s.highlightBox}>
-              <Text style={s.highlightLabel}>STRONGEST TRAIT</Text>
-              <Text style={s.highlightValue}>{snapshot.strongestTrait}</Text>
+            <View style={s.powerBox}>
+              <Text style={s.powerLabel}>KUNDLI CATEGORY</Text>
+              <View style={s.powerTypeRow}>
+                <Text style={s.powerType}>{snapshot.powerType}</Text>
+                <Pressable onPress={() => openCategoryDetail(snapshot.powerType)} style={s.powerTypeViewPill}>
+                  <Text style={s.powerTypeViewText}>VIEW</Text>
+                  <Feather name="arrow-right" size={10} color="#f9a8d4" />
+                </Pressable>
+              </View>
             </View>
-            <View style={s.highlightBox}>
-              <Text style={s.highlightLabel}>PRESSURE POINT</Text>
-              <Text style={s.highlightValue}>{snapshot.pressurePoint}</Text>
+            <View style={s.highlightRow}>
+              <View style={s.highlightBox}>
+                <Text style={s.highlightLabel}>STRONGEST TRAIT</Text>
+                <Text style={s.highlightValue}>{snapshot.strongestTrait}</Text>
+              </View>
+              <View style={s.highlightBox}>
+                <Text style={s.highlightLabel}>PRESSURE POINT</Text>
+                <Text style={s.highlightValue}>{snapshot.pressurePoint}</Text>
+              </View>
             </View>
-          </View>
-        </LinearGradient>
+          </LinearGradient>
+        </FadeInView>
 
         {!!snapshot.categoryScores.length && (
-          <View style={[s.categoryCard, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-            <View style={s.categoryHeader}>
-              <View>
-                <Text style={[s.noteTitle, { color: C.text }]}>All Kundli Categories</Text>
-                <Text style={[s.noteBody, { color: C.textMuted }]}>
-                  Your strongest category is highlighted.
-                </Text>
+          <FadeInView delay={staggerDelay(1)}>
+            <View style={[s.categoryCard, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+              <View style={s.categoryHeader}>
+                <View>
+                  <Text style={[s.noteTitle, { color: C.text }]}>All Kundli Categories</Text>
+                  <Text style={[s.noteBody, { color: C.textMuted }]}>
+                    Your strongest category is highlighted.
+                  </Text>
+                </View>
+                <Feather name="layers" size={16} color={snapshot.color} />
               </View>
-              <Feather name="layers" size={16} color={snapshot.color} />
-            </View>
-            <View style={s.categoryList}>
-              {snapshot.categoryScores.map(cat => {
-                const color = cat.selected ? snapshot.color : pctColor(cat.score, "category");
-                return (
-                  <Pressable
-                    key={cat.type}
-                    onPress={() => openCategoryDetail(cat.type)}
-                    style={[
-                      s.categoryRow,
-                      {
-                        borderColor: cat.selected ? `${snapshot.color}77` : C.border,
-                        backgroundColor: cat.selected ? `${snapshot.color}18` : "transparent",
-                      },
-                    ]}
-                  >
-                    <View style={s.categoryText}>
-                      <View style={s.categoryTitleRow}>
-                        <Text style={[s.categoryName, { color: C.text }]}>{cat.type}</Text>
-                        {cat.selected && (
-                          <Text style={[s.selectedPill, { color: snapshot.color, borderColor: `${snapshot.color}66` }]}>
-                            SELECTED
-                          </Text>
-                        )}
+              <View style={s.categoryList}>
+                {snapshot.categoryScores.map(cat => {
+                  const color = cat.selected ? snapshot.color : pctColor(cat.score, "category");
+                  return (
+                    <Pressable
+                      key={cat.type}
+                      onPress={() => openCategoryDetail(cat.type)}
+                      style={[
+                        s.categoryRow,
+                        {
+                          borderColor: cat.selected ? `${snapshot.color}77` : C.border,
+                          backgroundColor: cat.selected ? `${snapshot.color}18` : "transparent",
+                        },
+                      ]}
+                    >
+                      <View style={s.categoryText}>
+                        <View style={s.categoryTitleRow}>
+                          <Text style={[s.categoryName, { color: C.text }]}>{cat.type}</Text>
+                          {cat.selected && (
+                            <Text style={[s.selectedPill, { color: snapshot.color, borderColor: `${snapshot.color}66` }]}>
+                              SELECTED
+                            </Text>
+                          )}
+                        </View>
                       </View>
-                    </View>
-                    <View style={s.categoryAction}>
-                      <Text style={[s.categoryScore, { color }]}>{formatCategoryScore(cat.score)}%</Text>
-                      <View style={[s.categoryViewPill, { borderColor: `${color}66`, backgroundColor: `${color}14` }]}>
-                        <Text style={[s.categoryViewText, { color }]}>VIEW</Text>
-                        <Feather name="chevron-right" size={10} color={color} />
+                      <View style={s.categoryAction}>
+                        <Text style={[s.categoryScore, { color }]}>{formatCategoryScore(cat.score)}%</Text>
+                        <View style={[s.categoryViewPill, { borderColor: `${color}66`, backgroundColor: `${color}14` }]}>
+                          <Text style={[s.categoryViewText, { color }]}>VIEW</Text>
+                          <Feather name="chevron-right" size={10} color={color} />
+                        </View>
                       </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          </FadeInView>
         )}
       </ScrollView>
     </CosmicBg>

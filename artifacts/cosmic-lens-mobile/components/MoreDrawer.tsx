@@ -4,7 +4,6 @@ import { router } from "expo-router";
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import {
   I18nManager,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -23,9 +22,13 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ScalePressable } from "@/components/motion/ScalePressable";
+import { ReportsCountBadge } from "@/components/ReportsCountBadge";
+import { useUnreadReportsCount } from "@/lib/unreadReportsBadge";
 import { useC } from "@/context/ThemeContext";
 
 import { useT } from "@/hooks/useT";
+import { openFounderWhatsApp } from "@/lib/founderWhatsApp";
+import { gemstoneWhatsAppMessage } from "@/lib/gemstoneProductContent";
 import { buildMoreDrawerCategories } from "@/lib/moreMenuData";
 
 const DRAWER_W = 320;
@@ -34,8 +37,6 @@ const OPEN_MS = 480;
 const CLOSE_MS = 340;
 const EASE_OPEN  = Easing.bezier(0.22, 1, 0.36, 1);
 const EASE_CLOSE = Easing.bezier(0.4, 0, 1, 1);
-const FOUNDER_WHATSAPP = "919040524394";
-const FOUNDER_MSG = "Namaste 🙏 Main Cosmic Lens app se aa raha hu. Mujhe apni kundli / rashifal ke baare mein aapse personally baat karni hai.";
 
 type FeatureItem = {
   id: string;
@@ -57,6 +58,7 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
 }, ref) {
   const C = useC();
   const t = useT();
+  const unreadReports = useUnreadReportsCount();
 
   const CATEGORIES = useMemo(
     () => buildMoreDrawerCategories(t) as { title: string; items: FeatureItem[] }[],
@@ -65,11 +67,18 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
   const insets = useSafeAreaInsets();
   const progress = useSharedValue(0);
   const closingRef = useRef(false);
+  /** Run only after Modal `visible` flips false — avoids Android blank screens. */
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const finishClose = useCallback((onDone?: () => void) => {
     onClose();
     onDone?.();
   }, [onClose]);
+
+  const resetClosing = useCallback(() => {
+    closingRef.current = false;
+  }, []);
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
@@ -82,11 +91,20 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
   useEffect(() => {
     if (visible) {
       closingRef.current = false;
+      // Always restart open from 0 so drawer can't stick off-screen.
+      progress.value = 0;
       progress.value = withTiming(1, { duration: OPEN_MS, easing: EASE_OPEN });
     } else if (!closingRef.current) {
       progress.value = withTiming(0, { duration: CLOSE_MS, easing: EASE_CLOSE });
     }
   }, [visible, progress]);
+
+  // Clear any pending post-close action if the drawer unmounts.
+  useEffect(() => {
+    return () => {
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    };
+  }, []);
 
   const closeDrawer = useCallback((onDone?: () => void) => {
     if (closingRef.current) return;
@@ -96,54 +114,90 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
       { duration: CLOSE_MS, easing: EASE_CLOSE },
       (finished) => {
         if (finished) runOnJS(finishClose)(onDone);
+        else runOnJS(resetClosing)();
       },
     );
-  }, [progress, finishClose]);
+  }, [progress, finishClose, resetClosing]);
 
   useImperativeHandle(ref, () => ({ close: closeDrawer }), [closeDrawer]);
 
+  /**
+   * Close Modal first, then run action.
+   * Schedule via setTimeout (not InteractionManager / effect cleanup) so
+   * Strict Mode remounts and lingering animations cannot drop navigation.
+   */
+  function afterDrawerClosed(action: () => void) {
+    if (closingRef.current && pendingActionRef.current) return;
+    closingRef.current = true;
+    pendingActionRef.current = action;
+    progress.value = 0;
+    onClose();
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    const delay = Platform.OS === "android" ? 280 : 50;
+    pendingTimerRef.current = setTimeout(() => {
+      const next = pendingActionRef.current;
+      pendingActionRef.current = null;
+      closingRef.current = false;
+      pendingTimerRef.current = null;
+      if (!next) return;
+      try {
+        next();
+      } catch (e) {
+        console.warn("[MoreDrawer] post-close action failed", e);
+      }
+    }, delay);
+  }
+
   function navigate(route: string) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    closeDrawer(() => {
-      const q = route.indexOf("?");
-      if (q >= 0) {
-        const pathname = route.slice(0, q);
-        const params = Object.fromEntries(new URLSearchParams(route.slice(q + 1)));
-        router.push({ pathname: pathname as any, params } as any);
-      } else {
-        router.push(route as any);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {}
+    afterDrawerClosed(() => {
+      try {
+        const q = route.indexOf("?");
+        if (q >= 0) {
+          const pathname = route.slice(0, q);
+          const params = Object.fromEntries(new URLSearchParams(route.slice(q + 1)));
+          router.navigate({ pathname: pathname as any, params } as any);
+        } else if (route.includes("(tabs)")) {
+          // Tab routes: navigate (not push) avoids blank stack frames on Android.
+          router.navigate(route as any);
+        } else {
+          router.push(route as any);
+        }
+      } catch (e) {
+        console.warn("[MoreDrawer] navigate failed", route, e);
       }
     });
   }
 
-  async function openFounderWhatsApp() {
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-    const msg = encodeURIComponent(FOUNDER_MSG);
-    const webUrl = `https://wa.me/${FOUNDER_WHATSAPP}?text=${msg}`;
-    const appUrl = `whatsapp://send?phone=${FOUNDER_WHATSAPP}&text=${msg}`;
-
-    if (Platform.OS === "web") {
-      if (typeof window !== "undefined") {
-        window.open(webUrl, "_blank");
-      }
+  function onItemPress(item: FeatureItem) {
+    if (item.id === "gemstones") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      afterDrawerClosed(() => {
+        void openFounderWhatsApp(
+          gemstoneWhatsAppMessage("Certified Vedic Gemstone"),
+        );
+      });
       return;
     }
-
-    try {
-      const canOpen = await Linking.canOpenURL(appUrl);
-      if (canOpen) {
-        await Linking.openURL(appUrl);
-        return;
-      }
-    } catch {}
-    try { await Linking.openURL(webUrl); } catch {}
+    navigate(item.route);
   }
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={() => closeDrawer()}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
+      hardwareAccelerated
+      onRequestClose={() => closeDrawer()}
+    >
       <View style={s.root}>
-        <Animated.View style={[s.overlay, overlayStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => closeDrawer()} />
+        {/* Dimmed area only — must not cover the drawer or Android steals item taps. */}
+        <Animated.View style={[s.overlay, overlayStyle]} pointerEvents="box-none">
+          <Pressable style={s.overlayHit} onPress={() => closeDrawer()} />
         </Animated.View>
 
         <Animated.View
@@ -176,13 +230,13 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 22 }}
           >
-            {/* ── Talk to Founder (WhatsApp) ───────────────────────────── */}
+            {/* ── Talk to Founder → contact page ──────────────────────── */}
             <ScalePressable
               haptic="medium"
-              onPress={openFounderWhatsApp}
+              onPress={() => navigate("/talk-to-founder")}
               style={[s.founderCard, { borderColor: "#25D36640", backgroundColor: C.bgCard }]}
             >
-              <View style={[s.founderGlow, { backgroundColor: "#25D36612" }]} />
+              <View pointerEvents="none" style={[s.founderGlow, { backgroundColor: "#25D36612" }]} />
               <View style={[s.founderIconWrap, { backgroundColor: "#25D36620", borderColor: "#25D36655" }]}>
                 <Text style={{ fontSize: 24 }}>💬</Text>
               </View>
@@ -194,11 +248,11 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                   </View>
                 </View>
                 <Text style={[s.founderSub, { color: C.textMuted }]}>
-                  Personally apni kundli dikhani hai? WhatsApp par chat karein
+                  Instagram, YouTube ya WhatsApp par connect karein
                 </Text>
               </View>
               <View style={[s.founderArrow, { backgroundColor: "#25D366" }]}>
-                <Feather name="message-circle" size={14} color="#fff" />
+                <Feather name="chevron-right" size={14} color="#fff" />
               </View>
             </ScalePressable>
 
@@ -228,7 +282,7 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                       <ScalePressable
                         key={item.id}
                         haptic="none"
-                        onPress={() => navigate(item.route)}
+                        onPress={() => onItemPress(item)}
                         style={[
                           s.item,
                           idx < cat.items.length - 1 && [
@@ -243,6 +297,9 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                         <View style={s.itemText}>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                             <Text style={[s.itemTitle, { color: "#f5f6ff" }]}>{item.title}</Text>
+                            {item.id === "my-reports" && unreadReports > 0 ? (
+                              <ReportsCountBadge count={unreadReports} />
+                            ) : null}
                             {item.badge && (
                               <View style={[s.badge, { backgroundColor: `${item.accent}25`, borderColor: `${item.accent}55` }]}>
                                 <Text style={[s.badgeText, { color: item.accent }]}>{item.badge}</Text>
@@ -266,14 +323,24 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
 });
 
 const s = StyleSheet.create({
-  root: { flex: 1, flexDirection: "row", justifyContent: "flex-end" },
+  root: { flex: 1 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.52)",
   },
+  /** Leave the right drawer strip free so menu presses hit the drawer, not the backdrop. */
+  overlayHit: {
+    ...StyleSheet.absoluteFillObject,
+    right: DRAWER_W,
+  },
   drawer: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: 0,
     width: DRAWER_W,
-    height: "100%",
+    zIndex: 10,
+    elevation: 24,
     borderLeftWidth: 1,
     borderLeftColor: "rgba(255,255,255,0.06)",
     overflow: "hidden",

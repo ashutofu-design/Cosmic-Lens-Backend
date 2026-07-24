@@ -21,6 +21,7 @@ import {
   fmtDate,
   RiskRadarCard,
 } from "@/components/RiskRadarCard";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -219,6 +220,7 @@ export default function DashaRiskScreen() {
         ) : (
           <>
             {/* Day picker — horizontal scroll of 7 day chips */}
+            <FadeInView delay={staggerDelay(0)}>
             <View>
               <Text style={[s.pickerLabel, { color: C.textMuted }]}>
                 {t.radarPickerLabel}
@@ -257,11 +259,15 @@ export default function DashaRiskScreen() {
                 })}
               </ScrollView>
             </View>
+            </FadeInView>
 
             {/* Sci-fi cosmic radar visualization (separate section, above the card) */}
+            <FadeInView delay={staggerDelay(1)}>
             <CosmicRadarView risks={radarRisks} />
+            </FadeInView>
 
             {/* Total risks banner — clear count of active threat signals for the day */}
+            <FadeInView delay={staggerDelay(2)}>
             {(() => {
               const total = radarRisks.length;
               const tone =
@@ -298,19 +304,24 @@ export default function DashaRiskScreen() {
                 </View>
               );
             })()}
+            </FadeInView>
 
             {/* The consolidated 8-section card */}
+            <FadeInView delay={staggerDelay(3)}>
             <RiskRadarCard
               days={days}
               selected={selected}
               onSelect={setSelected}
               fullAccess={!showDemo}
             />
+            </FadeInView>
 
             {/* Footer */}
+            <FadeInView delay={staggerDelay(4)}>
             <Text style={[s.noteFooter, { color: C.textDim }]}>
               {t.rrLuckyPoweredBy}
             </Text>
+            </FadeInView>
           </>
         )}
       </ScrollView>

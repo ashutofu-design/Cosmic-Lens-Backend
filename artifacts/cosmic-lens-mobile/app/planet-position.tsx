@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Platform,
   ScrollView,
@@ -11,6 +11,16 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import {
+  AshtakavargaTab,
+  DashaTab,
+  JaiminiTab,
+  KPTab,
+  NavataraTab,
+  TransitTab,
+  activeDashaIndex,
+  getKundliLabels,
+} from "./(tabs)/kundli";
 import { DivisionalChartsPanel } from "@/components/DivisionalChartsPanel";
 import { PlanetPositionCard } from "@/components/PlanetPositionCard";
 import { FadeInView } from "@/components/motion/FadeInView";
@@ -21,7 +31,21 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { SIGNS_EN, SIGNS_SHORT, signEnFromShort } from "@/lib/planetPositionUtils";
 
-type PlanetView = "positions" | "divisional";
+type PlanetView =
+  | "positions"
+  | "divisional"
+  | "kundli"
+  | "kp"
+  | "ashtakavarga"
+  | "navatara"
+  | "jaimini"
+  | "transit";
+
+const F = {
+  medium: "Nunito_500Medium",
+  semibold: "Nunito_600SemiBold",
+  bold: "Nunito_700Bold",
+};
 
 const DEMO_KUNDLI = {
   planets: [
@@ -39,28 +63,100 @@ const DEMO_KUNDLI = {
   rashi: "Tula",
 };
 
+const TABS: { id: PlanetView; label: string; icon: keyof typeof Feather.glyphMap; accent: string }[] = [
+  { id: "positions", label: "D1", icon: "target", accent: "#06b6d4" },
+  { id: "divisional", label: "Divisional", icon: "grid", accent: "#7c3aed" },
+  { id: "kundli", label: "Kundli", icon: "star", accent: "#f59e0b" },
+  { id: "kp", label: "KP", icon: "crosshair", accent: "#0891b2" },
+  { id: "ashtakavarga", label: "Ashtakavarga", icon: "grid", accent: "#22c55e" },
+  { id: "navatara", label: "Navatara", icon: "compass", accent: "#a78bfa" },
+  { id: "jaimini", label: "Jaimini", icon: "award", accent: "#ec4899" },
+  { id: "transit", label: "Transit", icon: "navigation", accent: "#3b82f6" },
+];
+
 export default function PlanetPositionScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
   const t = useT();
-  const { kundli } = useUser();
+  const L = getKundliLabels(t);
+  const { kundli, profiles, primaryProfileId } = useUser();
+  const primaryProfile = profiles.find((p) => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const [view, setView] = useState<PlanetView>("positions");
+  const [mahaIdx, setMahaIdx] = useState(0);
+  const [antarIdx, setAntarIdx] = useState(0);
+  const [pratIdx, setPratIdx] = useState(0);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
 
   const data = showDemo ? DEMO_KUNDLI : kundli;
   const rawPlanets = data?.planets ?? [];
-  const planets = rawPlanets.map(p => ({
+  const planets = rawPlanets.map((p) => ({
     ...p,
     sign: p.sign ?? SIGNS_SHORT[Math.floor((p.longitude ?? 0) / 30) % 12],
-    degrees: p.degrees ?? `${Math.floor((p.longitude ?? 0) % 30)}°${Math.floor(((p.longitude ?? 0) % 1) * 60)}'`,
+    degrees:
+      p.degrees ??
+      `${Math.floor((p.longitude ?? 0) % 30)}°${Math.floor(((p.longitude ?? 0) % 1) * 60)}'`,
   }));
   const lagnaIdx = Math.floor(((data as { ascendantDeg?: number })?.ascendantDeg ?? 0) / 30) % 12;
   const lagnaSign = SIGNS_EN[lagnaIdx] ?? signEnFromShort(SIGNS_SHORT[lagnaIdx] ?? "");
-  const sunLon = planets.find(p => p.name === "Sun")?.longitude ?? 0;
-
+  const sunLon = planets.find((p) => p.name === "Sun")?.longitude ?? 0;
   const canViewD1Chart = !showDemo && !!kundli;
+
+  useEffect(() => {
+    if (!kundli?.dashas?.length) return;
+    const mi = activeDashaIndex(kundli.dashas);
+    setMahaIdx(mi);
+    const subs = kundli.dashas[mi]?.subDashas ?? [];
+    const ai = activeDashaIndex(subs);
+    setAntarIdx(ai);
+  }, [kundli]);
+
+  const snapshotRows = kundli
+    ? [
+        { label: L.snapAscendant, value: kundli.ascendant, icon: "sunrise" as const },
+        { label: L.snapMoonSign, value: kundli.moonSign, icon: "moon" as const },
+        ...(kundli.nakshatra
+          ? [
+              {
+                label: L.snapNakshatra,
+                value: `${kundli.nakshatra} (${L.padaLabel} ${kundli.nakshatraPada ?? "?"})`,
+                icon: "star" as const,
+              },
+            ]
+          : []),
+        ...(kundli.nakshatraRuler
+          ? [
+              {
+                label: L.snapNakshatraLord,
+                value: kundli.nakshatraRuler,
+                icon: "shield" as const,
+              },
+            ]
+          : []),
+      ]
+    : [];
+
+  const headerSub =
+    view === "positions"
+      ? `Lagna: ${lagnaSign}`
+      : view === "divisional"
+        ? t.mdDivisionalSub
+        : view === "kundli"
+          ? L.birthChartSnap
+          : view === "kp"
+            ? L.secKpPaddhati
+            : view === "ashtakavarga"
+              ? L.secAshtakavarga
+              : view === "navatara"
+                ? L.secNavatara9Tara
+                : view === "jaimini"
+                  ? L.secJaiminiKarakas
+                  : L.secGrahaTransit;
+
+  const needsRealKundli =
+    view !== "positions" && view !== "divisional" && showDemo;
 
   return (
     <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
@@ -70,8 +166,8 @@ export default function PlanetPositionScreen() {
         </ScalePressable>
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: C.text }]}>{t.planetTitle}</Text>
-          <Text style={[s.headerSub, { color: C.textMuted }]}>
-            {view === "positions" ? `Lagna: ${lagnaSign}` : t.mdDivisionalSub}
+          <Text style={[s.headerSub, { color: C.textMuted }]} numberOfLines={1}>
+            {headerSub}
           </Text>
         </View>
         {showDemo && (
@@ -82,44 +178,63 @@ export default function PlanetPositionScreen() {
       </View>
 
       <FadeInView delay={40}>
-        <View style={[s.tabRow, { borderBottomColor: C.border }]}>
-          {([
-            { id: "positions" as const, label: "D1", icon: "target" as const, accent: "#06b6d4" },
-            { id: "divisional" as const, label: "Divisional", icon: "grid" as const, accent: "#7c3aed" },
-          ]).map(tab => {
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ borderBottomWidth: 1, borderBottomColor: C.border }}
+          contentContainerStyle={s.tabRow}
+        >
+          {TABS.map((tab) => {
             const active = view === tab.id;
             const accent = tab.accent;
             return (
-              <View key={tab.id} style={s.tabWrap}>
-                <ScalePressable
-                  onPress={() => { setView(tab.id); Haptics.selectionAsync(); }}
-                  haptic="none"
-                  style={[
-                    s.tab,
-                    {
-                      borderColor: active ? accent : C.border,
-                      backgroundColor: active ? `${accent}1f` : C.bgCard,
-                    },
-                  ]}
+              <ScalePressable
+                key={tab.id}
+                onPress={() => {
+                  setView(tab.id);
+                  Haptics.selectionAsync();
+                }}
+                haptic="none"
+                style={[
+                  s.tab,
+                  {
+                    borderColor: active ? accent : C.border,
+                    backgroundColor: active ? `${accent}1f` : C.bgCard,
+                  },
+                ]}
+              >
+                <Feather name={tab.icon} size={12} color={active ? accent : C.textMuted} />
+                <Text
+                  style={[s.tabLabel, { color: active ? accent : C.textMuted }]}
+                  numberOfLines={1}
                 >
-                  <Feather name={tab.icon} size={12} color={active ? accent : C.textMuted} />
-                  <Text
-                    style={[s.tabLabel, { color: active ? accent : C.textMuted }]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.85}
-                  >
-                    {tab.label}
-                  </Text>
-                </ScalePressable>
-              </View>
+                  {tab.label}
+                </Text>
+              </ScalePressable>
             );
           })}
-        </View>
+        </ScrollView>
       </FadeInView>
 
-      <ScrollView contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]}
+        showsVerticalScrollIndicator={false}
+      >
         <FadeInView key={view} delay={80} slide={10}>
+          {needsRealKundli ? (
+            <ScalePressable
+              style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]}
+              onPress={() => router.push("/onboarding")}
+              haptic="medium"
+            >
+              <Feather name="lock" size={12} color={C.warningText} />
+              <Text style={[s.demoText, { color: C.warningText }]}>
+                Apni kundli banao — yeh details real chart se aati hain
+              </Text>
+              <Feather name="chevron-right" size={12} color={C.warningText} />
+            </ScalePressable>
+          ) : null}
+
           {view === "positions" ? (
             <>
               {showDemo && (
@@ -129,7 +244,9 @@ export default function PlanetPositionScreen() {
                   haptic="medium"
                 >
                   <Feather name="lock" size={12} color={C.warningText} />
-                  <Text style={[s.demoText, { color: C.warningText }]}>Sample data — Apni kundli banao exact positions ke liye</Text>
+                  <Text style={[s.demoText, { color: C.warningText }]}>
+                    Sample data — Apni kundli banao exact positions ke liye
+                  </Text>
                   <Feather name="chevron-right" size={12} color={C.warningText} />
                 </ScalePressable>
               )}
@@ -155,7 +272,7 @@ export default function PlanetPositionScreen() {
                 )}
               </View>
 
-              {planets.map(p => (
+              {planets.map((p) => (
                 <PlanetPositionCard key={p.name} planet={p} sunLon={sunLon} mode="d1" />
               ))}
 
@@ -165,7 +282,7 @@ export default function PlanetPositionScreen() {
                   { label: "Trikona", color: "#f59e0b", desc: "Houses 5,9" },
                   { label: "Dusthana", color: "#ef4444", desc: "Houses 6,8,12" },
                   { label: "Madhyam", color: "#fbbf24", desc: "Others" },
-                ].map(l => (
+                ].map((l) => (
                   <View key={l.label} style={s.legendItem}>
                     <View style={[s.legendDot, { backgroundColor: l.color }]} />
                     <Text style={[s.legendLabel, { color: C.textMuted }]}>{l.label}</Text>
@@ -174,9 +291,111 @@ export default function PlanetPositionScreen() {
                 ))}
               </View>
             </>
-          ) : (
-            <DivisionalChartsPanel showKundliLink={false} />
-          )}
+          ) : null}
+
+          {view === "divisional" ? <DivisionalChartsPanel showKundliLink={false} /> : null}
+
+          {view === "kundli" && kundli ? (
+            <View style={{ gap: 16 }}>
+              <View
+                style={{
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  overflow: "hidden",
+                  backgroundColor: C.bgCard,
+                  borderColor: C.border,
+                }}
+              >
+                <View
+                  style={{
+                    backgroundColor: C.isDark ? "rgba(245,158,11,0.12)" : "rgba(124,58,237,0.12)",
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: C.border,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Feather name="book-open" size={13} color={ac} />
+                  <Text style={{ color: ac, fontSize: 11, fontFamily: F.bold, letterSpacing: 1 }}>
+                    {L.birthChartSnap}
+                  </Text>
+                </View>
+                {snapshotRows.map(({ label, value, icon }, idx) => (
+                  <View
+                    key={label}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      gap: 10,
+                      backgroundColor:
+                        idx % 2 === 0
+                          ? "transparent"
+                          : C.isDark
+                            ? "rgba(245,158,11,0.05)"
+                            : "rgba(124,58,237,0.05)",
+                      borderBottomWidth: idx < snapshotRows.length - 1 ? 1 : 0,
+                      borderBottomColor: C.border,
+                    }}
+                  >
+                    <Feather name={icon} size={12} color={C.textMid} />
+                    <Text
+                      style={{
+                        color: C.textMid,
+                        fontSize: 10,
+                        fontFamily: F.bold,
+                        letterSpacing: 0.5,
+                        flex: 1,
+                      }}
+                    >
+                      {label}
+                    </Text>
+                    <Text style={{ color: C.text, fontSize: 13, fontFamily: F.semibold }} numberOfLines={1}>
+                      {value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text
+                style={{
+                  color: ac,
+                  fontSize: 12,
+                  fontFamily: F.bold,
+                  letterSpacing: 2,
+                }}
+              >
+                {L.secDashaTimeline}
+              </Text>
+              <DashaTab
+                kundli={kundli}
+                mahaIdx={mahaIdx}
+                setMahaIdx={setMahaIdx}
+                antarIdx={antarIdx}
+                setAntarIdx={setAntarIdx}
+                pratIdx={pratIdx}
+                setPratIdx={setPratIdx}
+              />
+            </View>
+          ) : null}
+
+          {view === "kp" && kundli ? <KPTab kundli={kundli} /> : null}
+          {view === "ashtakavarga" && kundli ? <AshtakavargaTab kundli={kundli} /> : null}
+          {view === "navatara" && kundli ? <NavataraTab kundli={kundli} /> : null}
+          {view === "jaimini" && kundli ? <JaiminiTab kundli={kundli} /> : null}
+          {view === "transit" && kundli ? (
+            <TransitTab
+              kundli={kundli}
+              lat={primaryProfile?.birthData?.lat}
+              lng={primaryProfile?.birthData?.lon}
+              tz={primaryProfile?.birthData?.tz}
+              active={view === "transit"}
+            />
+          ) : null}
         </FadeInView>
       </ScrollView>
     </View>
@@ -186,53 +405,84 @@ export default function PlanetPositionScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#020d1a" },
   header: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingBottom: 12, paddingTop: 12, gap: 10,
-    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    paddingTop: 12,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
   },
   back: { padding: 4 },
   headerTitle: { color: "#dde8f4", fontSize: 18, fontWeight: "700" },
   headerSub: { color: "#3d5a7a", fontSize: 11 },
   demoPill: {
-    backgroundColor: "rgba(251,191,36,0.15)", borderRadius: 10,
-    paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(251,191,36,0.3)",
+    backgroundColor: "rgba(251,191,36,0.15)",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.3)",
   },
   demoPillText: { color: "#fbbf24", fontSize: 10, fontWeight: "600" },
   tabRow: {
-    flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 12, paddingTop: 4,
-    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  tabWrap: { flex: 1, minWidth: 0 },
   tab: {
-    width: "100%",
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-    paddingVertical: 10, borderRadius: 12, borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
   },
-  tabLabel: { fontSize: 11, fontWeight: "700" },
-  content: { padding: 16, gap: 12 },
-  d1Bar: { borderRadius: 14, borderWidth: 1, padding: 12, flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  d1Label: { fontSize: 11, fontFamily: "Nunito_700Bold", letterSpacing: 0.8 },
-  d1Hint: { fontSize: 12, fontFamily: "Nunito_600SemiBold" },
-  d1Lagna: { fontSize: 13, fontFamily: "Nunito_600SemiBold", marginTop: 2 },
-  viewChartBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, marginTop: 2,
-  },
-  viewChartTxt: { fontSize: 11, fontFamily: "Nunito_700Bold" },
+  tabLabel: { fontSize: 12, fontFamily: "Nunito_700Bold" },
+  content: { paddingHorizontal: 16, paddingTop: 14, gap: 12 },
   demoBanner: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "rgba(251,191,36,0.07)", borderRadius: 12,
-    borderWidth: 1, borderColor: "rgba(251,191,36,0.2)",
-    paddingHorizontal: 14, paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 4,
   },
-  demoText: { color: "#fbbf24", fontSize: 11, flex: 1 },
+  demoText: { flex: 1, fontSize: 12, fontFamily: "Nunito_600SemiBold" },
+  d1Bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  d1Label: { fontSize: 11, fontFamily: "Nunito_700Bold", letterSpacing: 0.5 },
+  d1Hint: { fontSize: 12, fontFamily: "Nunito_600SemiBold" },
+  d1Lagna: { fontSize: 14, fontFamily: "Nunito_700Bold", marginTop: 2 },
+  viewChartBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  viewChartTxt: { fontSize: 12, fontFamily: "Nunito_700Bold" },
   legend: {
-    backgroundColor: "#040e1f", borderRadius: 14,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.04)",
-    padding: 14, gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    gap: 8,
+    marginTop: 4,
   },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 8 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendLabel: { color: "#94a3b8", fontSize: 12, width: 70, fontWeight: "600" },
-  legendDesc: { color: "#3d5a7a", fontSize: 11 },
+  legendLabel: { fontSize: 11, fontFamily: "Nunito_700Bold", width: 64 },
+  legendDesc: { fontSize: 11, fontFamily: "Nunito_500Medium", flex: 1 },
 });

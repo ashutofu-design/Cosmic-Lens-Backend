@@ -12,9 +12,9 @@ export const ASK_REPLY_LANG_OPTIONS: {
   label: string;
   sublabel: string;
 }[] = [
+  { id: "hi", label: "हिंदी", sublabel: "देवनागरी में jawab" },
   { id: "en", label: "English", sublabel: "Reply in English" },
   { id: "hn", label: "Hinglish", sublabel: "Roman Hindi reply" },
-  { id: "hi", label: "हिंदी", sublabel: "देवनागरी में jawab" },
 ];
 
 /** Single display label for the currently selected reply language. */

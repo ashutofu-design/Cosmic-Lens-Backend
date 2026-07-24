@@ -167,7 +167,7 @@ export function milanProPurchaseCopy(lang: ProPdfLangCode) {
       {
         emoji: "📦",
         title: p(lang, "Standard Delivery", "Standard Delivery", "स्टैंडर्ड डिलीवरी"),
-        eta: p(lang, "Within 24–48 hours", "24–48 ghante mein", "२४–४८ घंटे में"),
+        eta: p(lang, "Within 24 hours", "24 ghante mein", "२४ घंटे में"),
         surchargeInr: 0,
       },
       {

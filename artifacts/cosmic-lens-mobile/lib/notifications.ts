@@ -193,12 +193,34 @@ export async function sendTestNotification(userId: number, apiKey: string): Prom
   }
 }
 
+type V3ReadyHandler = (sessionId: string, data?: Record<string, unknown>) => void;
+let _v3ReadyHandler: V3ReadyHandler | null = null;
+
+/** Ask screen registers this so v3_ready push (tap or foreground) opens the Ready modal. */
+export function setV3ReadyHandler(handler: V3ReadyHandler | null) {
+  _v3ReadyHandler = handler;
+}
+
+function dispatchV3Ready(data: Record<string, unknown> | null | undefined) {
+  const kind = String(data?.kind || "");
+  if (!data || (kind !== "v3_ready" && kind !== "v3_ready_local")) return;
+  const sid = String(data.session_id || "").trim();
+  if (!sid) return;
+  try {
+    _v3ReadyHandler?.(sid, data);
+  } catch (e) {
+    console.warn("[push] v3_ready handler failed", e);
+  }
+}
+
 /** Listen for taps and navigate to data.screen if provided. Returns null on unsupported platforms. */
 export function attachTapHandler(navigate: (path: string) => void) {
   if (!loadModules()) return null;
   try {
     return _Notifications.addNotificationResponseReceivedListener((resp: any) => {
-      const screen = (resp.notification.request.content.data as any)?.screen;
+      const data = (resp.notification.request.content.data || {}) as Record<string, unknown>;
+      dispatchV3Ready(data);
+      const screen = data?.screen;
       if (typeof screen === "string" && screen.startsWith("/")) {
         try { navigate(screen); } catch (e) { console.warn("[push] nav failed", e); }
       }
@@ -209,7 +231,7 @@ export function attachTapHandler(navigate: (path: string) => void) {
   }
 }
 
-/** Foreground/background push received — e.g. trigger report sync. */
+/** Foreground/background push received — e.g. trigger report sync / V3 ready modal. */
 export function attachPushReceivedHandler(
   handler: (data: Record<string, unknown>) => void,
 ) {
@@ -217,6 +239,7 @@ export function attachPushReceivedHandler(
   try {
     return _Notifications.addNotificationReceivedListener((notification: any) => {
       const data = (notification.request?.content?.data || {}) as Record<string, unknown>;
+      dispatchV3Ready(data);
       handler(data);
     });
   } catch (e: any) {
@@ -225,9 +248,41 @@ export function attachPushReceivedHandler(
   }
 }
 
+/**
+ * Local "ring" when the V3 Ready modal opens via polling (server push missed
+ * or app was foregrounded). Plays sound + vibrates via the default channel.
+ */
+const _v3ReadyNotified = new Set<string>();
+export async function presentV3ReadyNotification(
+  sessionId: string,
+  label?: string,
+): Promise<boolean> {
+  const sid = (sessionId || "").trim();
+  if (!loadModules() || !sid || _v3ReadyNotified.has(sid)) return false;
+  _v3ReadyNotified.add(sid);
+  try {
+    await ensureAndroidChannel();
+    await _Notifications.scheduleNotificationAsync({
+      content: {
+        title: "🔔 Cosmic Intelligence is ready",
+        body: `Your ${label || "live"} consultation is ready — tap Accept & Start within 2 minutes.`,
+        data: { screen: "/(tabs)/ask", kind: "v3_ready_local", session_id: sid },
+        sound: "default",
+        priority: "high",
+        vibrate: [0, 250, 250, 250],
+      },
+      trigger: null,
+    });
+    return true;
+  } catch (e: any) {
+    console.warn("[push] presentV3ReadyNotification failed:", e?.message || e);
+    return false;
+  }
+}
+
 /** In-app / system banner when auto-sync finds a new report (no server push needed). */
-export async function presentReportReadyNotification(count: number): Promise<void> {
-  if (!loadModules() || count <= 0) return;
+export async function presentReportReadyNotification(count: number): Promise<boolean> {
+  if (!loadModules() || count <= 0) return false;
   try {
     const body =
       count === 1
@@ -242,7 +297,9 @@ export async function presentReportReadyNotification(count: number): Promise<voi
       },
       trigger: null,
     });
+    return true;
   } catch (e: any) {
     console.warn("[push] presentReportReadyNotification failed:", e?.message || e);
+    return false;
   }
 }

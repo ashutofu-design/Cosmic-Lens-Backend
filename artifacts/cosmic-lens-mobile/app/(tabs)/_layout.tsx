@@ -53,6 +53,8 @@ function ClassicTabLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        // Pause inactive tab trees so Home/Ask/LifeMap loops don't stack.
+        freezeOnBlur: true,
       }}
     >
       <Tabs.Screen name="index"    options={{ title: t.tabHome }} />

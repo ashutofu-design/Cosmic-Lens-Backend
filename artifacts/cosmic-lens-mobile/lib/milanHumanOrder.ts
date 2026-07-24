@@ -55,7 +55,7 @@ export async function submitMilanHumanOrder(opts: {
   }
   return {
     order_id: String(json.order_id),
-    eta_hours: Number(json.eta_hours) || 48,
+    eta_hours: Number(json.eta_hours) || 24,
     message: String(json.message || "Order received."),
   };
 }

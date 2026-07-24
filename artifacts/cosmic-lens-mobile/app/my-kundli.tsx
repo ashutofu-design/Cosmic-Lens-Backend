@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
@@ -86,6 +87,7 @@ export default function MyKundliScreen() {
         showsVerticalScrollIndicator={false}
       >
         {kundliProfiles.length === 0 && (
+          <FadeInView delay={staggerDelay(0)}>
           <View style={[s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <Text style={{ fontSize: 36 }}>📜</Text>
             <Text style={{ color: C.text, fontSize: 15, fontFamily: F.semibold, textAlign: "center" }}>{t.mk_emptyTitle}</Text>
@@ -100,16 +102,17 @@ export default function MyKundliScreen() {
               <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 13, fontFamily: F.semibold }}>{t.mk_addNew}</Text>
             </Pressable>
           </View>
+          </FadeInView>
         )}
 
-        {kundliProfiles.map((profile) => {
+        {kundliProfiles.map((profile, index) => {
           const k = profile.kundli!;
           const isPrimary = profile.id === primaryProfileId;
           const ac = C.isDark ? "#f59e0b" : "#7C3AED";
           const astroLine = [k.moonSign, k.nakshatra, k.ascendant].filter(Boolean).join(" \u2022 ") || "—";
           return (
+            <FadeInView key={profile.id} delay={staggerDelay(index)}>
             <Pressable
-              key={profile.id}
               onPress={() => handleView(profile.id)}
               style={({ pressed }) => [s.card, {
                 backgroundColor: C.bgCard,
@@ -161,10 +164,12 @@ export default function MyKundliScreen() {
                 </View>
               </View>
             </Pressable>
+            </FadeInView>
           );
         })}
 
         {kundliProfiles.length > 0 && (
+          <FadeInView delay={staggerDelay(kundliProfiles.length)}>
           <Pressable
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/profile-edit"); }}
             style={({ pressed }) => [s.addBtn, { borderColor: C.isDark ? "rgba(245,158,11,0.2)" : "rgba(124,58,237,0.15)", opacity: pressed ? 0.8 : 1 }]}
@@ -174,6 +179,7 @@ export default function MyKundliScreen() {
             </View>
             <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 13, fontFamily: F.semibold }}>{t.mk_addNew}</Text>
           </Pressable>
+          </FadeInView>
         )}
       </ScrollView>
 

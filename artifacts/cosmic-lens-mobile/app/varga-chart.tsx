@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NorthIndianChart } from "@/components/NorthIndianChart";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -88,42 +89,44 @@ export default function VargaChartScreen() {
         contentContainerStyle={[s.content, { paddingBottom: botPad + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        {!kundli ? (
-          <View style={[s.empty, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <Text style={[s.emptyTitle, { color: C.text }]}>{t.kundliRequired}</Text>
-            <Pressable
-              onPress={() => router.push("/onboarding")}
-              style={[s.emptyBtn, { borderColor: C.border }]}
-            >
-              <Text style={{ color: C.text, fontFamily: "Nunito_600SemiBold" }}>{t.kundliRequired}</Text>
-            </Pressable>
-          </View>
-        ) : (isD1 ? !d1Data : !vargaData) ? (
-          <View style={[s.empty, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <Text style={{ color: C.textMuted, textAlign: "center", fontFamily: "Nunito_500Medium" }}>
-              Chart data unavailable — refresh kundli from profile.
-            </Text>
-          </View>
-        ) : (
-          <NorthIndianChart
-            variant="full"
-            showHeader
-            title={meta.label}
-            subtitle={`${chartSubtitle} · ${meta.hint}`}
-            lagnaSignIndex={lagnaSignIdx}
-            ascendantDeg={isD1 ? d1Data?.ascendantDeg : undefined}
-            planets={
-              isD1
-                ? (d1Data?.planets ?? [])
-                : vargaData!.planets.map(p => ({
-                    name: p.name,
-                    house: p.house,
-                    retrograde: p.retrograde,
-                    longitude: p.longitude,
-                  }))
-            }
-          />
-        )}
+        <FadeInView delay={staggerDelay(0)}>
+          {!kundli ? (
+            <View style={[s.empty, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.emptyTitle, { color: C.text }]}>{t.kundliRequired}</Text>
+              <Pressable
+                onPress={() => router.push("/onboarding")}
+                style={[s.emptyBtn, { borderColor: C.border }]}
+              >
+                <Text style={{ color: C.text, fontFamily: "Nunito_600SemiBold" }}>{t.kundliRequired}</Text>
+              </Pressable>
+            </View>
+          ) : (isD1 ? !d1Data : !vargaData) ? (
+            <View style={[s.empty, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={{ color: C.textMuted, textAlign: "center", fontFamily: "Nunito_500Medium" }}>
+                Chart data unavailable — refresh kundli from profile.
+              </Text>
+            </View>
+          ) : (
+            <NorthIndianChart
+              variant="full"
+              showHeader
+              title={meta.label}
+              subtitle={`${chartSubtitle} · ${meta.hint}`}
+              lagnaSignIndex={lagnaSignIdx}
+              ascendantDeg={isD1 ? d1Data?.ascendantDeg : undefined}
+              planets={
+                isD1
+                  ? (d1Data?.planets ?? [])
+                  : vargaData!.planets.map(p => ({
+                      name: p.name,
+                      house: p.house,
+                      retrograde: p.retrograde,
+                      longitude: p.longitude,
+                    }))
+              }
+            />
+          )}
+        </FadeInView>
       </ScrollView>
     </View>
   );

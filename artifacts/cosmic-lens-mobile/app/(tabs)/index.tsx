@@ -176,29 +176,44 @@ function energyInsight(energy: number, L: ReturnType<typeof getHomeLabels>): { i
 }
 
 // ── Animation hooks ───────────────────────────────────────────────────────────
+/** Android: skip decorative loops — they fight the compositor with CosmicBg + chart. */
+const ANDROID_LIGHT_MOTION = Platform.OS === "android";
+
 function usePulseScale(amplitude = 0.022, dur = 950) {
   const anim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    Animated.loop(
+    if (ANDROID_LIGHT_MOTION) return;
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(anim, { toValue: 1 + amplitude, duration: dur, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 1,             duration: dur, useNativeDriver: true }),
       ])
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      anim.stopAnimation();
+    };
+  }, [amplitude, anim, dur]);
   return anim;
 }
 
 function useOpacityPulse(min = 0.4, max = 1.0, dur = 1100) {
-  const anim = useRef(new Animated.Value(min)).current;
+  const anim = useRef(new Animated.Value(ANDROID_LIGHT_MOTION ? max : min)).current;
   useEffect(() => {
-    Animated.loop(
+    if (ANDROID_LIGHT_MOTION) return;
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(anim, { toValue: max, duration: dur, useNativeDriver: true }),
         Animated.timing(anim, { toValue: min, duration: dur, useNativeDriver: true }),
       ])
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      anim.stopAnimation();
+    };
+  }, [anim, dur, max, min]);
   return anim;
 }
 
@@ -206,15 +221,20 @@ function useOpacityPulse(min = 0.4, max = 1.0, dur = 1100) {
 function useShimmer(cardWidth: number) {
   const anim = useRef(new Animated.Value(-cardWidth)).current;
   useEffect(() => {
-    Animated.loop(
+    if (ANDROID_LIGHT_MOTION) return;
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.delay(1800),
         Animated.timing(anim, { toValue: cardWidth * 2, duration: 800, useNativeDriver: true }),
         Animated.delay(300),
       ])
-    ).start();
-    return () => anim.stopAnimation();
-  }, [cardWidth]);
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      anim.stopAnimation();
+    };
+  }, [anim, cardWidth]);
   return anim;
 }
 
@@ -222,14 +242,19 @@ function useShimmer(cardWidth: number) {
 function useBlink(onMs = 450, offMs = 450, pauseMs = 1100) {
   const anim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(anim, { toValue: 0.1, duration: offMs, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 1,   duration: onMs,  useNativeDriver: true }),
         Animated.delay(pauseMs),
       ])
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      anim.stopAnimation();
+    };
+  }, [anim, offMs, onMs, pauseMs]);
   return anim;
 }
 
@@ -520,7 +545,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
           loading={loading}
           instant={showDemo}
           nowLabel={L.now}
-          live={!showDemo}
+          live={!showDemo && Platform.OS !== "android"}
         />
       </View>
 

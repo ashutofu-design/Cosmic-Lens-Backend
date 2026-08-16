@@ -1,10 +1,10 @@
-/** Placeholder until the Support AI on the server answers. */
+/** Do not invent Help answers on the phone. The Support AI on the server replies. */
 
 export function localSupportAnswer(
   _text: string,
   _opts?: { priorUserTexts?: string[]; cosmoId?: string },
 ): string {
-  return "Cosmic Help is reading your question…";
+  return "";
 }
 
 export function ensureBotReply(
@@ -17,7 +17,7 @@ export function ensureBotReply(
   }>,
   userText: string,
   serverReply?: string,
-  cosmoId?: string,
+  _cosmoId?: string,
 ): typeof msgs {
   const out: typeof msgs = [];
   for (let i = 0; i < msgs.length; i += 1) {
@@ -27,10 +27,10 @@ export function ensureBotReply(
     const next = msgs[i + 1];
     if (next && (next.sender === "bot" || next.sender === "admin")) continue;
     const isLatestUser = !msgs.slice(i + 1).some((x) => x.sender === "user");
-    const text =
-      (isLatestUser && (serverReply || "").trim()) ||
-      localSupportAnswer(m.text || userText, { cosmoId });
-    if (!text.trim()) continue;
+    const text = isLatestUser
+      ? (serverReply || "").trim()
+      : "";
+    if (!text) continue;
     out.push({
       id: `local-bot-${m.id}`,
       sender: "bot",

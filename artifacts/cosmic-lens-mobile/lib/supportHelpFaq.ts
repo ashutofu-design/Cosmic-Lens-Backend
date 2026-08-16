@@ -29,9 +29,9 @@ type FaqRule = { test: RegExp; hn: string; en: string };
 
 const FAQ_RULES: FaqRule[] = [
   {
-    test: /love realit|relationship|couple (pdf|report)|breakup|loyalty|will return|future outcome|love compat/i,
-    hn: "Love Reality Pro PDF expert khud likhte hain pay ke baad — instant AI PDF nahi. Life Map → Relationship. Partner kundli Profile → edit pe add karo. Basic free. Pro ₹499 (priority +₹300), My Reports 24h/12h.",
-    en: "Love Reality Pro PDF is written by our expert after you pay — not an instant AI PDF. Life Map → Relationship. Add a partner in Profile → edit. Basic is free. Pro is ₹499 (priority +₹300) in My Reports (24h / 12h).",
+    test: /(report|pdf).{0,80}\bai\b|\bai\b.{0,80}(report|pdf)|r[ea]+lationship|relatonship|love realit|couple (pdf|report)|breakup|loyalty|will return|future outcome|love compat/i,
+    hn: "Love Reality / Milan / Numerology Pro PDF expert khud likhte hain pay ke baad — instant AI PDF nahi. Love Reality: Life Map → Relationship. Basic free. Pro ₹499, My Reports 24h/12h.",
+    en: "Love Reality, Kundli Milan, and Numerology Pro PDFs are written by our expert after you pay — not instant AI PDFs. Love Reality: Life Map → Relationship. Basic is free. Pro is ₹499 in My Reports (24h / 12h).",
   },
   {
     test: /numerolog|numerlog|numarolog|life mastery|life path/i,

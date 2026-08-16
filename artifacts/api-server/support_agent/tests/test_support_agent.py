@@ -105,6 +105,12 @@ class SupportAgentTests(unittest.TestCase):
         self.assertIn("Transactions", r["reply"])
         self.assertTrue(r["reply"].startswith("Happy to help."))
 
+    def test_relationship_report_typo_still_expert(self) -> None:
+        r = run("tell me is the realationship report a ai report", lang="en")
+        self.assertFalse(r["escalate"])
+        self.assertIn("expert", r["reply"].lower())
+        self.assertNotRegex(r["reply"], re.compile(r"which screen or payment", re.I))
+
     def test_relationship_report_is_expert_not_ai(self) -> None:
         r = run("tell me is the relationship report a ai report", lang="en")
         self.assertFalse(r["escalate"])

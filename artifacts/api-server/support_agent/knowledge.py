@@ -122,9 +122,9 @@ _ANSWERS: list[tuple[re.Pattern[str], dict[str, str]]] = [
     ),
     (
         re.compile(
-            r"(relationship|love\s*realit|couple\s*(pdf|report)|breakup|loyalty).{0,80}"
+            r"(r[ea]+lationship|relatonship|relationship|love\s*realit|couple\s*(pdf|report)|breakup|loyalty).{0,80}"
             r"(\bai\b|admin|human|expert|generat|who\s*(write|make)|kaun)|"
-            r"(relationship|love\s*realit|couple).{0,40}(ai\s*report|ai\s*pdf)",
+            r"(r[ea]+lationship|relationship|love\s*realit|couple).{0,40}(ai\s*report|ai\s*pdf)",
             re.I,
         ),
         {
@@ -143,6 +143,17 @@ _ANSWERS: list[tuple[re.Pattern[str], dict[str, str]]] = [
             "en": "Kundli Milan Pro PDF is written by our expert after you pay — not an instant AI PDF. Basic 36-guna is free on screen. Pro is ₹699 (priority +₹300), in My Reports (24h / 12h).",
             "hn": "Kundli Milan Pro PDF expert likhte hain — instant AI PDF nahi. Basic 36-guna free. Pro ₹699, My Reports mein (24h / 12h).",
             "hi": "कुंडली मिलान प्रो PDF विशेषज्ञ लिखते हैं — तुरंत AI PDF नहीं।",
+        },
+    ),
+    (
+        re.compile(
+            r"(report|pdf).{0,80}\bai\b|\bai\b.{0,80}(report|pdf)|ai\s*generated",
+            re.I,
+        ),
+        {
+            "en": "Paid Pro PDFs (Love Reality, Kundli Milan, Numerology) are written by our expert after you pay — they are not instant AI PDFs. Basic tools stay free on screen. PDFs arrive in My Reports (usually 24h, priority 12h).",
+            "hn": "Paid Pro PDF (Love Reality, Milan, Numerology) expert likhte hain pay ke baad — instant AI PDF nahi. Basic screen pe free. PDF My Reports mein (24h / 12h).",
+            "hi": "पेड प्रो PDF विशेषज्ञ लिखते हैं — तुरंत AI PDF नहीं। माई रिपोर्ट्स में आती है।",
         },
     ),
     (
@@ -186,7 +197,7 @@ _ANSWERS: list[tuple[re.Pattern[str], dict[str, str]]] = [
     ),
     (
         re.compile(
-            r"love\s*realit|relationship|couple\s*(pdf|report)|breakup|loyalty|"
+            r"love\s*realit|r[ea]+lationship|relatonship|relationship|couple\s*(pdf|report)|breakup|loyalty|"
             r"will\s*return|future\s*outcome|love\s*compat",
             re.I,
         ),

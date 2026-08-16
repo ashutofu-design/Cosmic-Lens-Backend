@@ -45,8 +45,20 @@ class SupportAiTests(unittest.TestCase):
     def test_no_ai_handoff(self) -> None:
         sag._llm = lambda *_a, **_k: None  # type: ignore[method-assign]
         r = sai.answer_support("qwerty asdf zxcvb plugh", lang="hn")
-        self.assertTrue(r["escalate"])
+        self.assertFalse(r["escalate"])
+        self.assertRegex(r["reply"], r"wallet|Transactions|Cosmic Packs", re.I)
         self.assertNotRegex(r["reply"], r"telegram|api_key", re.I)
+
+    def test_wallet_question_does_not_escalate(self) -> None:
+        self._fake(
+            "Cosmic Lens has no wallet. Paid orders show on Help → Transactions.",
+            escalate=False,
+        )
+        r = sai.answer_support(
+            "have done one transaction but its not showing in wallet", lang="en"
+        )
+        self.assertFalse(r["escalate"])
+        self.assertIn("wallet", r["reply"].lower())
 
     def test_internal_data_banned(self) -> None:
         out = sai.scrub_customer_reply(

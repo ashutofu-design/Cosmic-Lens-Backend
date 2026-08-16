@@ -5,11 +5,9 @@ import json
 import logging
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any
 
-from support_agent.escalation import handoff_reply
+from support_agent.escalation import fallback_help_reply
 from support_agent.knowledge import ALLOWED_KNOWLEDGE
 from support_agent.response_guard import guard
 from support_agent.system_prompt import SYSTEM_PROMPT
@@ -19,11 +17,16 @@ log = logging.getLogger("support_agent")
 
 
 def _model() -> str:
-    return (
-        (os.environ.get("SUPPORT_AI_MODEL") or "").strip()
-        or (os.environ.get("OPENAI_MODEL") or "").strip()
-        or "gpt-4.1-mini"
-    )
+    name = (os.environ.get("SUPPORT_AI_MODEL") or "").strip()
+    if name and name.lower() not in ("gpt-4.1-nano", "gpt-3.5-turbo-instruct"):
+        return name
+    return "gpt-4.1-mini"
+
+
+def _as_bool(val: Any) -> bool:
+    if isinstance(val, bool):
+        return val
+    return str(val or "").strip().lower() in ("1", "true", "yes")
 
 
 def _parse_llm_text(raw: str) -> dict[str, Any] | None:
@@ -44,7 +47,7 @@ def _parse_llm_text(raw: str) -> dict[str, Any] | None:
         reply = str(data.get("reply") or "").strip()[:1200]
         if reply:
             return {
-                "escalate": bool(data.get("escalate")),
+                "escalate": _as_bool(data.get("escalate")),
                 "reply": reply,
                 "source": "llm",
             }
@@ -64,9 +67,11 @@ def _llm(
     try:
         from openai_helper import _get_client
     except Exception:
+        log.warning("[support_agent] openai_helper import failed")
         return None
     client = _get_client()
     if client is None:
+        log.warning("[support_agent] OpenAI client missing")
         return None
     lang_name = {"en": "English", "hi": "Hindi (Devanagari)", "hn": "Hinglish"}.get(
         lang, "Hinglish"
@@ -85,16 +90,16 @@ def _llm(
     prompt = (
         f"{extra}"
         f"Reply language: {lang_name} (match the user).\n"
-        "JSON only: {\"escalate\": true|false, \"reply\": \"...\"}\n\n"
+        "JSON only: {\"escalate\": false, \"reply\": \"...\"}\n"
+        "escalate=true only for refund/legal/screenshot. Wallet/transaction how-to = escalate false.\n\n"
         f"ALLOWED KNOWLEDGE:\n{ALLOWED_KNOWLEDGE}\n\n"
         f"THIS CUSTOMER ACCOUNT:\n{(account_card or '').strip() or '(none)'}\n\n"
         f"RECENT CHAT:\n" + ("\n".join(hist_lines) or "(none)") + "\n\n"
         f"USER: {(text or '')[:1200]}"
     )
-    timeout_s = min(10.0, max(4.0, float(os.environ.get("SUPPORT_AI_TIMEOUT") or "8")))
+    timeout_s = min(12.0, max(6.0, float(os.environ.get("SUPPORT_AI_TIMEOUT") or "10")))
     model = _model()
-
-    def _call() -> dict[str, Any] | None:
+    try:
         resp = client.chat.completions.create(
             model=model,
             messages=[
@@ -106,20 +111,13 @@ def _llm(
             timeout=timeout_s,
         )
         raw = (resp.choices[0].message.content or "").strip()
-        return _parse_llm_text(raw)
-
-    pool = ThreadPoolExecutor(max_workers=1)
-    try:
-        fut = pool.submit(_call)
-        return fut.result(timeout=timeout_s + 1.0)
-    except FuturesTimeout:
-        log.warning("[support_agent] llm timed out model=%s", model)
-        return None
     except Exception as exc:
         log.warning("[support_agent] llm failed model=%s: %s", model, exc)
         return None
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+    parsed = _parse_llm_text(raw)
+    if not parsed:
+        log.warning("[support_agent] llm empty/unparsed model=%s raw=%s", model, raw[:180])
+    return parsed
 
 
 def run(
@@ -146,14 +144,18 @@ def run(
     llm = _llm(text, L, history, card, has_image=has_image)
     if llm:
         reply, leaked = guard(str(llm.get("reply") or ""), L)
+        escalate = bool(has_image) or (_as_bool(llm.get("escalate")) and not leaked)
+        if leaked:
+            reply, _ = guard(fallback_help_reply(L), L)
+            escalate = False
         return {
-            "escalate": bool(llm.get("escalate")) or leaked,
+            "escalate": escalate,
             "reply": reply,
             "source": "llm",
         }
 
-    reply, _ = guard(handoff_reply(L), L)
-    return {"escalate": True, "reply": reply, "source": "ai_unavailable"}
+    reply, _ = guard(fallback_help_reply(L), L)
+    return {"escalate": bool(has_image), "reply": reply, "source": "ai_unavailable"}
 
 
 def load_rules() -> str:

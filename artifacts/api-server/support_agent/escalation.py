@@ -3,6 +3,12 @@ from __future__ import annotations
 
 from support_agent.knowledge import pick
 
+FALLBACK = {
+    "en": "Happy to help. Cosmic Lens has no wallet — paid orders show on Help → Transactions. Ask credits are under Profile → Cosmic Packs. Pro PDFs (Love Reality, Milan, Numerology) are written by our expert after pay, not instant AI, and arrive in My Reports.",
+    "hn": "Ji, Cosmic Lens mein wallet nahi hota — paid orders Help → Transactions pe dikhte hain. Ask credits Profile → Cosmic Packs mein. Pro PDF (Love Reality, Milan, Numerology) expert likhte hain pay ke baad, instant AI nahi, My Reports mein aati hai.",
+    "hi": "जी, Cosmic Lens में वॉलेट नहीं होता — पेड ऑर्डर हेल्प → ट्रांजैक्शन्स में दिखते हैं। Ask क्रेडिट प्रोफ़ाइल → कॉस्मिक पैक्स में। प्रो PDF विशेषज्ञ लिखते हैं, तुरंत AI नहीं, माई रिपोर्ट्स में आती है।",
+}
+
 HANDOFF = {
     "en": "I can’t fully resolve this here. A team member will join this chat shortly — please wait, they’ll reply here.",
     "hn": "Yeh yahan poora solve nahi ho paaya. Team member abhi is chat mein aayenge — thoda wait kariye, yahin reply aayega.",
@@ -32,6 +38,10 @@ REDIRECT_ASK = {
     "hn": "Kundli reading Ask tab pe hai, is Help chat pe nahi. App how-to yahan: payments, My Reports, Profile.",
     "hi": "कुंडली रीडिंग Ask टैब पर है। यहाँ ऐप हाउ-टू: पेमेंट, माई रिपोर्ट्स, प्रोफ़ाइल।",
 }
+
+
+def fallback_help_reply(lang: str) -> str:
+    return pick(FALLBACK, lang)
 
 
 def handoff_reply(lang: str) -> str:

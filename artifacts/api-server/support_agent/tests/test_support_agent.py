@@ -53,8 +53,25 @@ class SupportAgentTests(unittest.TestCase):
         sag._llm = lambda *_a, **_k: None  # type: ignore[method-assign]
         try:
             r = run("qwerty asdf zxcvb plugh", lang="en")
-            self.assertTrue(r["escalate"])
+            self.assertFalse(r["escalate"])
             self.assertEqual(r["source"], "ai_unavailable")
+            self.assertIn("wallet", r["reply"].lower())
+        finally:
+            sag._llm = orig
+
+    def test_string_false_does_not_escalate(self) -> None:
+        import support_agent.agent as sag
+
+        orig = sag._llm
+        sag._llm = lambda *_a, **_k: {  # type: ignore[method-assign]
+            "escalate": "false",
+            "reply": "No wallet. Check Help → Transactions.",
+            "source": "llm",
+        }
+        try:
+            r = run("transaction not in wallet", lang="en")
+            self.assertFalse(r["escalate"])
+            self.assertIn("wallet", r["reply"].lower())
         finally:
             sag._llm = orig
 

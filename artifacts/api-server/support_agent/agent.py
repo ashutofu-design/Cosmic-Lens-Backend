@@ -28,6 +28,7 @@ from support_agent.knowledge import ALLOWED_KNOWLEDGE, lookup_knowledge
 from support_agent.response_guard import guard
 from support_agent.system_prompt import SYSTEM_PROMPT
 from support_agent.tools import customer_facts, format_transactions
+from support_agent.understand import normalize, topic
 
 log = logging.getLogger("support_agent")
 
@@ -45,6 +46,9 @@ def _llm(
     lang: str,
     history: list[dict[str, Any]],
     account_card: str,
+    *,
+    category: str,
+    normalized: str,
 ) -> dict[str, Any] | None:
     try:
         from openai_helper import _get_client
@@ -66,11 +70,14 @@ def _llm(
             hist_lines.append(f"{who}: {body[:240]}")
     prompt = (
         f"User language: {lang_name}. Reply in that language only.\n"
-        "JSON only: {\"escalate\": true|false, \"reply\": \"...\"}\n\n"
+        "JSON only: {\"escalate\": true|false, \"reply\": \"...\"}\n"
+        f"CATEGORY: {category}\n"
+        "Understand the question first (typos ok), then answer that category from knowledge.\n\n"
         f"ALLOWED KNOWLEDGE:\n{ALLOWED_KNOWLEDGE}\n\n"
         f"THIS CUSTOMER ACCOUNT:\n{(account_card or '').strip() or '(none)'}\n\n"
         f"RECENT CHAT:\n" + ("\n".join(hist_lines) or "(none)") + "\n\n"
-        f"USER: {(text or '')[:1200]}"
+        f"USER (original): {(text or '')[:1200]}\n"
+        f"USER (normalized): {(normalized or text or '')[:1200]}"
     )
     model = (os.environ.get("SUPPORT_AI_MODEL") or "gpt-4.1-nano").strip()
     timeout_s = min(10.0, max(4.0, float(os.environ.get("SUPPORT_AI_TIMEOUT") or "8")))
@@ -118,10 +125,12 @@ def run(
     account_card: str = "",
     cosmo_user_id: str = "",
 ) -> dict[str, Any]:
-    """Scope → knowledge/tools → guard. Escalate only when policy says so."""
+    """Understand → category → allowed knowledge/tools → guard."""
     history = history if isinstance(history, list) else []
-    L = detect_lang(text, lang)
-    kind = classify(text, has_image=has_image, history=history)
+    cleaned = normalize(text)
+    L = detect_lang(cleaned or text, lang)
+    kind = classify(cleaned or text, has_image=has_image, history=history)
+    category = topic(cleaned or text)
 
     if kind == OUT_OF_SCOPE:
         reply, _ = guard(out_of_scope_reply(L), L)
@@ -148,7 +157,7 @@ def run(
     if facts.get("cosmo") and not card:
         card = f"User ID: {facts.get('cosmo')}"
 
-    if _ACCOUNT_Q.search(text or ""):
+    if category == "payment" and _ACCOUNT_Q.search(cleaned or text or ""):
         body = format_transactions(facts, L)
         reply, leaked = guard(body, L)
         return {
@@ -158,11 +167,23 @@ def run(
             "intent": kind,
         }
 
-    hit = lookup_knowledge(text, L)
+    llm = _llm(text, L, history, card, category=category, normalized=cleaned)
+    if llm:
+        reply, leaked = guard(str(llm.get("reply") or ""), L)
+        esc = bool(llm.get("escalate")) or leaked
+        return {
+            "escalate": esc,
+            "reply": reply,
+            "source": "llm",
+            "intent": kind,
+            "category": category,
+        }
+
+    hit = lookup_knowledge(cleaned or text, L)
     if hit:
         body = str(hit["reply"])
         cid = str(facts.get("cosmo") or cosmo_user_id or "").strip()
-        if cid and re.search(r"cosmo|user\s*id", text or "", re.I):
+        if cid and category == "identity":
             if L == "en":
                 body = f"Your User ID on Profile is {cid}. It is assigned at signup and cannot be changed."
             else:
@@ -173,23 +194,17 @@ def run(
             "reply": reply,
             "source": hit.get("source") or "knowledge",
             "intent": kind,
-        }
-
-    llm = _llm(text, L, history, card)
-    if llm:
-        reply, leaked = guard(str(llm.get("reply") or ""), L)
-        esc = bool(llm.get("escalate")) or leaked
-        if leaked:
-            esc = True
-        return {
-            "escalate": esc,
-            "reply": reply,
-            "source": "llm",
-            "intent": kind,
+            "category": category,
         }
 
     reply, _ = guard(handoff_reply(L), L)
-    return {"escalate": True, "reply": reply, "source": "unsolved", "intent": kind}
+    return {
+        "escalate": True,
+        "reply": reply,
+        "source": "unsolved",
+        "intent": kind,
+        "category": category,
+    }
 
 
 # Back-compat for older imports

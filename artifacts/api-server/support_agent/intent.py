@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from support_agent.understand import normalize
+
 # Help how-to / product / this-account status.
 IN_SCOPE = "in_scope"
 # Needs a human after policy (refund, legal, screenshot, missing payment).
@@ -149,7 +151,7 @@ def classify(
     has_image: bool = False,
     history: list[dict[str, Any]] | None = None,
 ) -> str:
-    blob = (text or "").strip()
+    blob = normalize((text or "").strip())
     prior = prior_user_texts(history)
     if has_image:
         return MUST_HANDOFF

@@ -106,7 +106,11 @@ class SupportAgentTests(unittest.TestCase):
         self.assertTrue(r["reply"].startswith("Happy to help."))
 
     def test_relationship_report_typo_still_expert(self) -> None:
-        r = run("tell me is the realationship report a ai report", lang="en")
+        from support_agent.understand import topic
+
+        q = "tell me is the realationship report a ai report"
+        self.assertEqual(topic(q), "love_reality")
+        r = run(q, lang="en")
         self.assertFalse(r["escalate"])
         self.assertIn("expert", r["reply"].lower())
         self.assertNotRegex(r["reply"], re.compile(r"which screen or payment", re.I))

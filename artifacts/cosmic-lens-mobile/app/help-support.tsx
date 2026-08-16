@@ -32,10 +32,11 @@ import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
+import { ensureBotReply } from "@/lib/supportHelpFaq";
 
 type SupportMessage = {
   id: string;
-  sender: "user" | "admin" | "system";
+  sender: "user" | "admin" | "system" | "bot";
   text?: string;
   image_url?: string;
   ts: string;
@@ -63,11 +64,13 @@ const TEAM_AVATARS = [
 ];
 
 const QUICK_TOPICS = [
-  { icon: "credit-card" as const, label: "Payment issue" },
-  { icon: "file-text" as const, label: "Report / PDF problem" },
-  { icon: "star" as const, label: "Consultation query" },
-  { icon: "smartphone" as const, label: "App not working" },
-  { icon: "user" as const, label: "Account & login" },
+  { icon: "hash" as const, label: "COSMO ID", send: "COSMO ID kya hai?" },
+  { icon: "file-text" as const, label: "Meri PDF kahan?", send: "Meri PDF / report kahan milegi?" },
+  { icon: "star" as const, label: "Pro prices", send: "Numerology, Love Reality, Milan Pro ke prices kya hain?" },
+  { icon: "compass" as const, label: "AstroVastu", send: "AstroVastu kaise use karun aur price kya hai?" },
+  { icon: "credit-card" as const, label: "Payment / Transactions", send: "Payment kahan dikhegi? Transactions kaise check karun?" },
+  { icon: "user" as const, label: "Birth details", send: "Birth details kaise change karun?" },
+  { icon: "headphones" as const, label: "Team se baat", send: "Mujhe team se baat karni hai." },
 ];
 
 function mediaSrc(url?: string): string {
@@ -188,18 +191,45 @@ export default function HelpSupportScreen() {
   }, [user?.id, user?.api_key, authHeaders]);
 
   const refresh = useCallback(
-    async (sid: string) => {
-      if (!user?.id || !user?.api_key) return;
+    async (sid: string): Promise<SupportMessage[] | null> => {
+      if (!user?.id || !user?.api_key) return null;
       const res = await fetch(
         `${API_BASE}/api/support/thread/${encodeURIComponent(sid)}/messages?user_id=${user.id}`,
         { headers: authHeaders() },
       );
       const json = await res.json().catch(() => ({}) as any);
-      if (!res.ok) return;
-      setMessages(Array.isArray(json.messages) ? json.messages : []);
+      if (res.status === 404 || json?.error === "not_found") {
+        try {
+          const next = await ensureThread();
+          if (next && next !== sid) {
+            setThreadId(next);
+            const res2 = await fetch(
+              `${API_BASE}/api/support/thread/${encodeURIComponent(next)}/messages?user_id=${user.id}`,
+              { headers: authHeaders() },
+            );
+            const json2 = await res2.json().catch(() => ({}) as any);
+            if (!res2.ok) {
+              setMessages([]);
+              return [];
+            }
+            const msgs2: SupportMessage[] = Array.isArray(json2.messages) ? json2.messages : [];
+            setMessages(ensureBotReply(msgs2, "", "", user?.cosmo_user_id || "") as SupportMessage[]);
+            setAdminTyping(Boolean(json2.admin_typing));
+            return msgs2;
+          }
+        } catch {
+          /* fall through */
+        }
+        setMessages([]);
+        return [];
+      }
+      if (!res.ok) return null;
+      const msgs: SupportMessage[] = Array.isArray(json.messages) ? json.messages : [];
+      setMessages(ensureBotReply(msgs, "", "", user?.cosmo_user_id || "") as SupportMessage[]);
       setAdminTyping(Boolean(json.admin_typing));
+      return msgs;
     },
-    [user?.id, user?.api_key, authHeaders],
+    [user?.id, user?.api_key, authHeaders, ensureThread],
   );
 
   const fetchTransactions = useCallback(async () => {
@@ -258,16 +288,31 @@ export default function HelpSupportScreen() {
     };
   }, [user?.id, user?.api_key, ensureThread, refresh]);
 
+  const lastMsg = messages.length ? messages[messages.length - 1] : null;
+  const waitingHelp = sending || (!!lastMsg && lastMsg.sender === "user");
+
   useEffect(() => {
     if (!threadId) return;
-    const poll = setInterval(() => void refresh(threadId), 2500);
+    const poll = setInterval(() => void refresh(threadId), waitingHelp ? 800 : 2500);
     return () => clearInterval(poll);
-  }, [threadId, refresh]);
+  }, [threadId, refresh, waitingHelp]);
 
   const sendText = async (forcedText?: string) => {
     const text = (forcedText ?? draft).trim();
     if (!text || !threadId || sending || !user?.id) return;
     setSending(true);
+    setDraft("");
+    const localUser: SupportMessage = {
+      id: `local-user-${Date.now()}`,
+      sender: "user",
+      text,
+      ts: new Date().toISOString(),
+    };
+    setMessages(
+      (prev) =>
+        ensureBotReply([...prev, localUser], text, "", user?.cosmo_user_id || "") as SupportMessage[],
+    );
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     try {
       const res = await fetch(
         `${API_BASE}/api/support/thread/${encodeURIComponent(threadId)}/message`,
@@ -278,15 +323,67 @@ export default function HelpSupportScreen() {
         },
       );
       const json = await res.json().catch(() => ({}) as any);
-      if (!res.ok) {
-        Alert.alert("Send failed", String(json.error || `HTTP ${res.status}`));
+      if (res.status === 404 || json?.error === "not_found") {
+        const sid = await ensureThread();
+        if (!sid) {
+          Alert.alert("Send failed", "Chat was closed. Please try again.");
+          setDraft(text);
+          return;
+        }
+        setThreadId(sid);
+        const retry = await fetch(
+          `${API_BASE}/api/support/thread/${encodeURIComponent(sid)}/message`,
+          {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({ user_id: user.id, text }),
+          },
+        );
+        const retryJson = await retry.json().catch(() => ({}) as any);
+        if (!retry.ok) {
+          Alert.alert("Send failed", String(retryJson.error || `HTTP ${retry.status}`));
+          setDraft(text);
+          return;
+        }
+        let retryMsgs: SupportMessage[] = Array.isArray(retryJson.messages)
+          ? retryJson.messages
+          : [];
+        if (!retryMsgs.length) {
+          retryMsgs = (await refresh(sid)) || [];
+        }
+        setMessages(
+          ensureBotReply(
+            retryMsgs,
+            text,
+            typeof retryJson.ai?.reply === "string" ? retryJson.ai.reply : "",
+            user?.cosmo_user_id || "",
+          ) as SupportMessage[],
+        );
+        requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
         return;
       }
-      setDraft("");
-      await refresh(threadId);
+      if (!res.ok) {
+        Alert.alert("Send failed", String(json.error || `HTTP ${res.status}`));
+        setDraft(text);
+        return;
+      }
+      let msgs: SupportMessage[] = Array.isArray(json.messages)
+        ? json.messages
+        : [];
+      if (!msgs.length) {
+        msgs = (await refresh(threadId)) || [];
+      }
+      const withBot = ensureBotReply(
+        msgs,
+        text,
+        typeof json.ai?.reply === "string" ? json.ai.reply : "",
+        user?.cosmo_user_id || "",
+      ) as SupportMessage[];
+      setMessages(withBot);
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     } catch (e) {
       Alert.alert("Send failed", e instanceof Error ? e.message : "Network error");
+      setDraft(text);
     } finally {
       setSending(false);
     }
@@ -320,6 +417,30 @@ export default function HelpSupportScreen() {
         },
       );
       const json = await res.json().catch(() => ({}) as any);
+      if (res.status === 404 || json?.error === "not_found") {
+        const sid = await ensureThread();
+        if (!sid) {
+          Alert.alert("Image failed", "Chat was closed. Please try again.");
+          return;
+        }
+        setThreadId(sid);
+        const retry = await fetch(
+          `${API_BASE}/api/support/thread/${encodeURIComponent(sid)}/message`,
+          {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({ user_id: user.id, data_url: dataUrl, text: "" }),
+          },
+        );
+        const retryJson = await retry.json().catch(() => ({}) as any);
+        if (!retry.ok) {
+          Alert.alert("Image failed", String(retryJson.error || `HTTP ${retry.status}`));
+          return;
+        }
+        await refresh(sid);
+        requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+        return;
+      }
       if (!res.ok) {
         Alert.alert("Image failed", String(json.error || `HTTP ${res.status}`));
         return;
@@ -333,10 +454,9 @@ export default function HelpSupportScreen() {
     }
   };
 
-  const pickTopic = (label: string) => {
+  const pickTopic = (topic: (typeof QUICK_TOPICS)[number]) => {
     Haptics.selectionAsync().catch(() => {});
-    setDraft(`${label}: `);
-    requestAnimationFrame(() => inputRef.current?.focus());
+    void sendText(topic.send);
   };
 
   const firstName = (user?.name || "").trim().split(/\s+/)[0] || "";
@@ -360,10 +480,10 @@ export default function HelpSupportScreen() {
             />
           </Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={s.heroTitle}>Cosmic Care Team</Text>
+            <Text style={s.heroTitle}>Cosmic Help</Text>
             <View style={s.onlineRow}>
               <View style={s.onlineDot} />
-              <Text style={s.heroSub}>Online · 24×7 priority support</Text>
+              <Text style={s.heroSub}>AI answers · team if needed</Text>
             </View>
           </View>
           <TeamAvatarCluster />
@@ -372,7 +492,7 @@ export default function HelpSupportScreen() {
           <MaterialCommunityIcons name="face-agent" size={48} color={C.accent} />
           <Text style={[s.emptyTitle, { color: C.text }]}>Login required</Text>
           <Text style={[s.emptyBody, { color: C.textMuted }]}>
-            Sign in to chat with our support team and send screenshots.
+            Sign in to ask Cosmic Help — short answers on the app, team for extra issues.
           </Text>
           <Pressable
             style={[s.loginBtn, { backgroundColor: C.accent }]}
@@ -391,7 +511,7 @@ export default function HelpSupportScreen() {
     );
   }
 
-  const hasMessages = messages.length > 0;
+  const hasUserMessages = messages.some((m) => m.sender === "user");
 
   return (
     <KeyboardAvoidingView
@@ -416,10 +536,10 @@ export default function HelpSupportScreen() {
           />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={s.heroTitle}>Cosmic Care Team</Text>
+          <Text style={s.heroTitle}>Cosmic Help</Text>
           <View style={s.onlineRow}>
             <View style={s.onlineDot} />
-            <Text style={s.heroSub}>Online · replies in minutes</Text>
+            <Text style={s.heroSub}>Instant answers · team if needed</Text>
           </View>
         </View>
         <TeamAvatarCluster />
@@ -437,12 +557,12 @@ export default function HelpSupportScreen() {
       >
         <View style={s.trustItem}>
           <Feather name="clock" size={13} color={C.accent} />
-          <Text style={[s.trustTxt, { color: C.textMuted }]}>24×7 support</Text>
+          <Text style={[s.trustTxt, { color: C.textMuted }]}>AI first</Text>
         </View>
         <View style={[s.trustDivider, { backgroundColor: C.border }]} />
         <View style={s.trustItem}>
           <Feather name="zap" size={13} color={C.accent} />
-          <Text style={[s.trustTxt, { color: C.textMuted }]}>Priority replies</Text>
+          <Text style={[s.trustTxt, { color: C.textMuted }]}>Short answers</Text>
         </View>
         <View style={[s.trustDivider, { backgroundColor: C.border }]} />
         <View style={s.trustItem}>
@@ -476,7 +596,7 @@ export default function HelpSupportScreen() {
         >
           <Feather name="message-circle" size={14} color={tab === "chat" ? C.accent : C.textMuted} />
           <Text style={[s.tabTxt, { color: tab === "chat" ? C.accent : C.textMuted }]}>
-            Live chat
+            Help
           </Text>
         </Pressable>
         <Pressable
@@ -608,7 +728,7 @@ export default function HelpSupportScreen() {
         <View style={s.center}>
           <ActivityIndicator size="large" color={C.accent} />
           <Text style={{ color: C.textMuted, fontSize: 13, marginTop: 8 }}>
-            Connecting you to the team…
+            Connecting Cosmic Help…
           </Text>
         </View>
       ) : (
@@ -637,12 +757,12 @@ export default function HelpSupportScreen() {
                     {firstName ? `Namaste ${firstName} 🙏` : "Namaste 🙏"}
                   </Text>
                   <Text style={[s.welcomeBody, { color: C.textMuted }]}>
-                    You&apos;re connected to the Cosmic Care Team. Tell us your issue —
-                    a specialist will pick it up right away.
+                    App ke sawaal ka short jawab yahin. Extra baat — payment,
+                    refund, missing PDF — team join karegi.
                   </Text>
                 </View>
               </View>
-              {!hasMessages ? (
+              {!hasUserMessages ? (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -651,7 +771,7 @@ export default function HelpSupportScreen() {
                   {QUICK_TOPICS.map((topic) => (
                     <Pressable
                       key={topic.label}
-                      onPress={() => pickTopic(topic.label)}
+                      onPress={() => pickTopic(topic)}
                       style={[
                         s.topicChip,
                         {
@@ -669,10 +789,14 @@ export default function HelpSupportScreen() {
             </View>
           }
           ListFooterComponent={
-            adminTyping ? (
+            waitingHelp || adminTyping ? (
               <View style={s.supportRow}>
-                <View style={[s.msgAvatar, { backgroundColor: "#7c3aed" }]}>
-                  <MaterialCommunityIcons name="face-agent" size={15} color="#fff" />
+                <View style={[s.msgAvatar, { backgroundColor: waitingHelp ? "#0ea5e9" : "#7c3aed" }]}>
+                  <MaterialCommunityIcons
+                    name={waitingHelp ? "robot-outline" : "face-agent"}
+                    size={15}
+                    color="#fff"
+                  />
                 </View>
                 <View
                   style={[
@@ -684,8 +808,12 @@ export default function HelpSupportScreen() {
                     },
                   ]}
                 >
-                  <Text style={[s.who, { color: C.textMuted }]}>Cosmic Care Team</Text>
-                  <AcharyaTypingDots caption="Team is typing…" />
+                  <Text style={[s.who, { color: C.textMuted }]}>
+                    {waitingHelp ? "Cosmic Help" : "Support team"}
+                  </Text>
+                  <AcharyaTypingDots
+                    caption={waitingHelp ? "Cosmic Help is typing…" : "Team is typing…"}
+                  />
                 </View>
               </View>
             ) : null
@@ -724,10 +852,15 @@ export default function HelpSupportScreen() {
                 </View>
               );
             }
+            const bot = item.sender === "bot";
             return (
               <View style={s.supportRow}>
-                <View style={[s.msgAvatar, { backgroundColor: "#7c3aed" }]}>
-                  <MaterialCommunityIcons name="face-agent" size={15} color="#fff" />
+                <View style={[s.msgAvatar, { backgroundColor: bot ? "#0ea5e9" : "#7c3aed" }]}>
+                  <MaterialCommunityIcons
+                    name={bot ? "robot-outline" : "face-agent"}
+                    size={15}
+                    color="#fff"
+                  />
                 </View>
                 <View style={{ maxWidth: "78%" }}>
                   <View
@@ -739,7 +872,9 @@ export default function HelpSupportScreen() {
                       },
                     ]}
                   >
-                    <Text style={[s.who, { color: C.accent }]}>Cosmic Care Team</Text>
+                    <Text style={[s.who, { color: bot ? "#0ea5e9" : C.accent }]}>
+                      {bot ? "Cosmic Help" : "Support team"}
+                    </Text>
                     {item.text ? (
                       <Text style={[s.msg, { color: C.text }]}>{item.text}</Text>
                     ) : null}
@@ -782,7 +917,7 @@ export default function HelpSupportScreen() {
           ref={inputRef}
           value={draft}
           onChangeText={setDraft}
-          placeholder="Type your message…"
+          placeholder="App ke baare mein poochho…"
           placeholderTextColor={C.textMuted}
           editable={!sending && !!threadId}
           style={[

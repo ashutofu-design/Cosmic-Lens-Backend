@@ -16,6 +16,48 @@ from support_agent.tools import customer_facts
 log = logging.getLogger("support_agent")
 
 
+def _models() -> list[str]:
+    out: list[str] = []
+    for raw in (
+        os.environ.get("SUPPORT_AI_MODEL"),
+        os.environ.get("OPENAI_MODEL"),
+        "gpt-4.1-mini",
+        "gpt-4o-mini",
+    ):
+        name = (raw or "").strip()
+        if name and name not in out:
+            out.append(name)
+    return out or ["gpt-4.1-mini"]
+
+
+def _parse_llm_text(raw: str) -> dict[str, Any] | None:
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", (raw or "").strip(), flags=re.I).strip()
+    if not text:
+        return None
+    data: Any = None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", text, re.S)
+        if m:
+            try:
+                data = json.loads(m.group(0))
+            except json.JSONDecodeError:
+                data = None
+    if isinstance(data, dict):
+        reply = str(data.get("reply") or "").strip()[:1200]
+        if reply:
+            return {
+                "escalate": bool(data.get("escalate")),
+                "reply": reply,
+                "source": "llm",
+            }
+    # Model answered in plain text — still use it.
+    if len(text) >= 12:
+        return {"escalate": False, "reply": text[:1200], "source": "llm"}
+    return None
+
+
 def _llm(
     text: str,
     lang: str,
@@ -54,40 +96,38 @@ def _llm(
         f"RECENT CHAT:\n" + ("\n".join(hist_lines) or "(none)") + "\n\n"
         f"USER: {(text or '')[:1200]}"
     )
-    model = (os.environ.get("SUPPORT_AI_MODEL") or "gpt-4.1-nano").strip()
     timeout_s = min(12.0, max(4.0, float(os.environ.get("SUPPORT_AI_TIMEOUT") or "8")))
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
+    last_err: Exception | None = None
+    for model in _models():
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=280,
-            temperature=0.2,
-            timeout=timeout_s,
-        )
-        raw = (resp.choices[0].message.content or "").strip()
-    except Exception as exc:
-        log.warning("[support_agent] llm failed: %s", exc)
-        return None
-    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.I).strip()
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", raw, re.S)
-        if not m:
-            return None
+            "max_tokens": 280,
+            "temperature": 0.2,
+            "timeout": timeout_s,
+        }
         try:
-            data = json.loads(m.group(0))
-        except json.JSONDecodeError:
-            return None
-    if not isinstance(data, dict):
-        return None
-    reply = str(data.get("reply") or "").strip()[:1200]
-    if not reply:
-        return None
-    return {"escalate": bool(data.get("escalate")), "reply": reply, "source": "llm"}
+            resp = client.chat.completions.create(
+                **kwargs,
+                response_format={"type": "json_object"},
+            )
+        except Exception:
+            try:
+                resp = client.chat.completions.create(**kwargs)
+            except Exception as exc:
+                last_err = exc
+                log.warning("[support_agent] llm failed model=%s: %s", model, exc)
+                continue
+        raw = (resp.choices[0].message.content or "").strip()
+        parsed = _parse_llm_text(raw)
+        if parsed:
+            return parsed
+    if last_err:
+        log.warning("[support_agent] llm unavailable: %s", last_err)
+    return None
 
 
 def run(

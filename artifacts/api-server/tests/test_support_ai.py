@@ -55,6 +55,14 @@ class SupportAiTests(unittest.TestCase):
         self.assertNotRegex(out, r"api_key|telegram|flask_app", re.I)
         self.assertRegex(out, r"wait|support", re.I)
 
+    def test_ai_report_wording_not_scrubbed(self) -> None:
+        out = sai.scrub_customer_reply(
+            "Happy to help. Love Reality Pro is not an instant AI PDF. Our expert writes it.",
+            "en",
+        )
+        self.assertIn("expert", out.lower())
+        self.assertIn("AI", out)
+
     def test_account_card_customer_safe(self) -> None:
         from types import SimpleNamespace
 

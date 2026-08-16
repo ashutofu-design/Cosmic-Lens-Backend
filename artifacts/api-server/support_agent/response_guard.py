@@ -5,8 +5,9 @@ import re
 
 from support_agent.escalation import handoff_reply
 
+# Do not match the word "AI" / "OpenAI" — customers ask if a Pro PDF is AI-generated.
 _LEAK = re.compile(
-    r"(api[_-]?key|openai|gpt-4|gpt-3|SUPPORT_AI|OPENAI_|TELEGRAM_|FOUNDER_|"
+    r"(api[_-]?key|TELEGRAM_|FOUNDER_|"
     r"\bpm2\b|\bvps\b|flask_app|\.env\b|postgres|sqlalchemy|webhook|"
     r"admin\s*(panel|token|key)|thread_id|support_threads|razorpay.?secret|"
     r"cashfree.?secret|localhost:\d+|127\.0\.0\.1|"

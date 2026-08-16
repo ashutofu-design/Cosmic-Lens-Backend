@@ -4869,15 +4869,12 @@ def support_message_post_route(thread_id: str):
             pass
         auto = {}
 
-    if not auto.get("handled"):
+    if not auto.get("handled") and not auto.get("pending"):
         rec_now = get_thread((thread_id or "").strip()) or rec
         msgs_now = rec_now.get("messages") if isinstance(rec_now.get("messages"), list) else []
-        human_live = any(
-            isinstance(m, dict) and m.get("sender") == "admin" for m in msgs_now
-        )
-        if not human_live:
-            from support_ai import wait_for_support_reply
+        from support_ai import human_is_handling, wait_for_support_reply
 
+        if not human_is_handling(msgs_now):
             lang = str(getattr(user, "preferred_language", None) or "")
             fallback = wait_for_support_reply(lang)
             try:
@@ -4896,7 +4893,7 @@ def support_message_post_route(thread_id: str):
             except Exception:
                 auto = {"handled": False, "escalate": True}
 
-    if auto.get("escalate"):
+    if auto.get("escalate") and not auto.get("pending"):
         try:
             from support_chat import mark_escalated
 
@@ -4927,6 +4924,7 @@ def support_message_post_route(thread_id: str):
             "handled": bool(auto.get("handled")),
             "escalate": bool(auto.get("escalate")),
             "reply": auto.get("reply") or "",
+            "pending": bool(auto.get("pending")),
         }
     return jsonify(out)
 

@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from typing import Any
 
 from support_agent.escalation import handoff_reply
@@ -16,18 +18,12 @@ from support_agent.tools import customer_facts
 log = logging.getLogger("support_agent")
 
 
-def _models() -> list[str]:
-    out: list[str] = []
-    for raw in (
-        os.environ.get("SUPPORT_AI_MODEL"),
-        os.environ.get("OPENAI_MODEL"),
-        "gpt-4.1-mini",
-        "gpt-4o-mini",
-    ):
-        name = (raw or "").strip()
-        if name and name not in out:
-            out.append(name)
-    return out or ["gpt-4.1-mini"]
+def _model() -> str:
+    return (
+        (os.environ.get("SUPPORT_AI_MODEL") or "").strip()
+        or (os.environ.get("OPENAI_MODEL") or "").strip()
+        or "gpt-4.1-mini"
+    )
 
 
 def _parse_llm_text(raw: str) -> dict[str, Any] | None:
@@ -52,7 +48,6 @@ def _parse_llm_text(raw: str) -> dict[str, Any] | None:
                 "reply": reply,
                 "source": "llm",
             }
-    # Model answered in plain text — still use it.
     if len(text) >= 12:
         return {"escalate": False, "reply": text[:1200], "source": "llm"}
     return None
@@ -96,38 +91,35 @@ def _llm(
         f"RECENT CHAT:\n" + ("\n".join(hist_lines) or "(none)") + "\n\n"
         f"USER: {(text or '')[:1200]}"
     )
-    timeout_s = min(12.0, max(4.0, float(os.environ.get("SUPPORT_AI_TIMEOUT") or "8")))
-    last_err: Exception | None = None
-    for model in _models():
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "messages": [
+    timeout_s = min(10.0, max(4.0, float(os.environ.get("SUPPORT_AI_TIMEOUT") or "8")))
+    model = _model()
+
+    def _call() -> dict[str, Any] | None:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": 280,
-            "temperature": 0.2,
-            "timeout": timeout_s,
-        }
-        try:
-            resp = client.chat.completions.create(
-                **kwargs,
-                response_format={"type": "json_object"},
-            )
-        except Exception:
-            try:
-                resp = client.chat.completions.create(**kwargs)
-            except Exception as exc:
-                last_err = exc
-                log.warning("[support_agent] llm failed model=%s: %s", model, exc)
-                continue
+            max_tokens=280,
+            temperature=0.2,
+            timeout=timeout_s,
+        )
         raw = (resp.choices[0].message.content or "").strip()
-        parsed = _parse_llm_text(raw)
-        if parsed:
-            return parsed
-    if last_err:
-        log.warning("[support_agent] llm unavailable: %s", last_err)
-    return None
+        return _parse_llm_text(raw)
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        fut = pool.submit(_call)
+        return fut.result(timeout=timeout_s + 1.0)
+    except FuturesTimeout:
+        log.warning("[support_agent] llm timed out model=%s", model)
+        return None
+    except Exception as exc:
+        log.warning("[support_agent] llm failed model=%s: %s", model, exc)
+        return None
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def run(

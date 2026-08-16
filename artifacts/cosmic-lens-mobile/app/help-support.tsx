@@ -313,6 +313,8 @@ export default function HelpSupportScreen() {
         ensureBotReply([...prev, localUser], text, "", user?.cosmo_user_id || "") as SupportMessage[],
     );
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    const ac = new AbortController();
+    const kill = setTimeout(() => ac.abort(), 20000);
     try {
       const res = await fetch(
         `${API_BASE}/api/support/thread/${encodeURIComponent(threadId)}/message`,
@@ -320,6 +322,7 @@ export default function HelpSupportScreen() {
           method: "POST",
           headers: authHeaders(),
           body: JSON.stringify({ user_id: user.id, text }),
+          signal: ac.signal,
         },
       );
       const json = await res.json().catch(() => ({}) as any);
@@ -382,9 +385,17 @@ export default function HelpSupportScreen() {
       setMessages(withBot);
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     } catch (e) {
-      Alert.alert("Send failed", e instanceof Error ? e.message : "Network error");
-      setDraft(text);
+      const aborted =
+        (e instanceof Error && e.name === "AbortError") ||
+        String(e).toLowerCase().includes("abort");
+      if (aborted && threadId) {
+        await refresh(threadId);
+      } else {
+        Alert.alert("Send failed", e instanceof Error ? e.message : "Network error");
+        setDraft(text);
+      }
     } finally {
+      clearTimeout(kill);
       setSending(false);
     }
   };

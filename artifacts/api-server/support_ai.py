@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 from typing import Any
 
 log = logging.getLogger("support_ai")
@@ -97,25 +96,33 @@ def answer_support(
     }
 
 
-def _append_bot_reply(
-    tid: str,
-    text: str,
+def maybe_auto_reply(
+    rec: dict[str, Any],
+    user_msg: dict[str, Any],
     *,
-    lang: str | None,
-    has_image: bool,
-    history: list[dict[str, Any]],
-    cid: str,
-    account_card: str,
-    user: Any,
+    lang: str | None = None,
+    cosmo_user_id: str = "",
+    account_card: str = "",
+    min_think: float | None = None,
+    user: Any = None,
 ) -> dict[str, Any]:
+    """Always append a bot reply in this request so the phone is never left typing."""
+    msgs = rec.get("messages") if isinstance(rec.get("messages"), list) else []
+    if human_is_handling(msgs):
+        return {"handled": False, "escalate": True, "source": "human_live"}
+
     from support_chat import append_message, mark_escalated
 
+    tid = str(rec.get("thread_id") or "")
+    text = str(user_msg.get("text") or "")
+    has_image = bool(user_msg.get("image_url"))
+    cid = (cosmo_user_id or str(rec.get("cosmo_user_id") or "")).strip()
     try:
         decision = answer_support(
             text,
             lang=lang,
             has_image=has_image,
-            history=history,
+            history=msgs,
             cosmo_user_id=cid,
             account_card=account_card,
             user=user,
@@ -133,66 +140,14 @@ def _append_bot_reply(
         reply = wait_for_support_reply(detect_reply_lang(text, lang))
         decision["reply"] = reply
     bot = append_message(tid, sender="bot", text=reply)
-    if bot.get("ok") and decision.get("escalate"):
+    if not bot.get("ok"):
+        return {"handled": False, "escalate": True, "source": "append_failed", "reply": reply}
+    if decision.get("escalate"):
         mark_escalated(tid)
-    return decision
-
-
-def maybe_auto_reply(
-    rec: dict[str, Any],
-    user_msg: dict[str, Any],
-    *,
-    lang: str | None = None,
-    cosmo_user_id: str = "",
-    account_card: str = "",
-    min_think: float | None = None,
-    user: Any = None,
-) -> dict[str, Any]:
-    """Answer in-request if the AI is fast; otherwise finish in the background."""
-    msgs = rec.get("messages") if isinstance(rec.get("messages"), list) else []
-    if human_is_handling(msgs):
-        return {"handled": False, "escalate": True, "source": "human_live"}
-
-    tid = str(rec.get("thread_id") or "")
-    text = str(user_msg.get("text") or "")
-    has_image = bool(user_msg.get("image_url"))
-    history = msgs
-    cid = (cosmo_user_id or str(rec.get("cosmo_user_id") or "")).strip()
-    box: dict[str, Any] = {}
-    done = threading.Event()
-
-    def _job() -> None:
-        try:
-            box["decision"] = _append_bot_reply(
-                tid,
-                text,
-                lang=lang,
-                has_image=has_image,
-                history=history,
-                cid=cid,
-                account_card=account_card,
-                user=user,
-            )
-        finally:
-            done.set()
-
-    threading.Thread(target=_job, daemon=True, name="support-ai").start()
-    finished = done.wait(timeout=6.0)
-    if finished:
-        decision = box.get("decision") if isinstance(box.get("decision"), dict) else {}
-        reply = str(decision.get("reply") or "").strip()
-        if reply:
-            return {
-                "handled": True,
-                "pending": False,
-                "escalate": bool(decision.get("escalate")),
-                "reply": reply,
-                "source": str(decision.get("source") or "llm"),
-            }
     return {
         "handled": True,
-        "pending": True,
-        "escalate": False,
-        "reply": "",
-        "source": "pending",
+        "pending": False,
+        "escalate": bool(decision.get("escalate")),
+        "reply": reply,
+        "source": str(decision.get("source") or "llm"),
     }

@@ -1,7 +1,8 @@
-"""Help & Support Flask entry. The Support AI answers — no keyword/FAQ matching."""
+"""Help & Support Flask entry. Always save a bot reply before the HTTP response returns."""
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 log = logging.getLogger("support_ai")
@@ -54,8 +55,19 @@ def scrub_customer_reply(reply: str, lang: str) -> str:
 
     text, leaked = guard(reply or "", lang)
     if leaked or not (text or "").strip():
-        return wait_for_support_reply(lang)
+        from support_agent.escalation import fallback_help_reply
+
+        text, _ = guard(fallback_help_reply(lang), lang)
     return text
+
+
+def _quick_reply(text: str, lang: str | None) -> str:
+    from support_agent.escalation import fallback_help_reply
+    from support_agent.response_guard import guard
+
+    L = detect_reply_lang(text, lang)
+    reply, _ = guard(fallback_help_reply(L), L)
+    return reply
 
 
 def answer_support(
@@ -71,25 +83,29 @@ def answer_support(
     """AI reads the question and answers from allowed knowledge + this account."""
     from support_agent.agent import run
 
-    out = run(
-        text,
-        lang=lang,
-        has_image=has_image,
-        history=history,
-        user=user,
-        account_card=account_card,
-        cosmo_user_id=cosmo_user_id,
-    )
     L = detect_reply_lang(text, lang)
+    try:
+        out = run(
+            text,
+            lang=lang,
+            has_image=has_image,
+            history=history,
+            user=user,
+            account_card=account_card,
+            cosmo_user_id=cosmo_user_id,
+        )
+    except Exception:
+        log.exception("[support_ai] run failed")
+        return {
+            "escalate": False,
+            "reply": _quick_reply(text, L),
+            "source": "error",
+        }
     reply = scrub_customer_reply(str(out.get("reply") or ""), L)
     if not reply.strip():
-        return {
-            "escalate": True,
-            "reply": wait_for_support_reply(L),
-            "source": "empty",
-        }
+        reply = _quick_reply(text, L)
     return {
-        "escalate": bool(out.get("escalate")),
+        "escalate": bool(out.get("escalate")) if str(out.get("source") or "") == "llm" else False,
         "reply": reply,
         "source": str(out.get("source") or ""),
         "intent": out.get("intent") or "",
@@ -106,7 +122,7 @@ def maybe_auto_reply(
     min_think: float | None = None,
     user: Any = None,
 ) -> dict[str, Any]:
-    """Always append a bot reply in this request so the phone is never left typing."""
+    """Save a real bot answer immediately, then let AI upgrade it in the background."""
     msgs = rec.get("messages") if isinstance(rec.get("messages"), list) else []
     if human_is_handling(msgs):
         return {"handled": False, "escalate": True, "source": "human_live"}
@@ -117,37 +133,37 @@ def maybe_auto_reply(
     text = str(user_msg.get("text") or "")
     has_image = bool(user_msg.get("image_url"))
     cid = (cosmo_user_id or str(rec.get("cosmo_user_id") or "")).strip()
-    try:
-        decision = answer_support(
-            text,
-            lang=lang,
-            has_image=has_image,
-            history=msgs,
-            cosmo_user_id=cid,
-            account_card=account_card,
-            user=user,
-        )
-    except Exception:
-        log.exception("[support_ai] answer_support failed")
-        L = detect_reply_lang(text, lang)
-        decision = {
-            "escalate": False,
-            "reply": wait_for_support_reply(L),
-            "source": "error",
-        }
-    reply = str(decision.get("reply") or "").strip()
-    if not reply:
-        reply = wait_for_support_reply(detect_reply_lang(text, lang))
-        decision["reply"] = reply
-    bot = append_message(tid, sender="bot", text=reply)
+    L = detect_reply_lang(text, lang)
+    quick = _quick_reply(text, L)
+    bot = append_message(tid, sender="bot", text=quick)
     if not bot.get("ok"):
-        return {"handled": False, "escalate": True, "source": "append_failed", "reply": reply}
-    if decision.get("escalate"):
-        mark_escalated(tid)
+        return {"handled": False, "escalate": False, "source": "append_failed", "reply": quick}
+
+    def _upgrade() -> None:
+        try:
+            decision = answer_support(
+                text,
+                lang=lang,
+                has_image=has_image,
+                history=msgs,
+                cosmo_user_id=cid,
+                account_card=account_card,
+                user=user,
+            )
+            reply = str(decision.get("reply") or "").strip()
+            if not reply or reply == quick:
+                return
+            extra = append_message(tid, sender="bot", text=reply)
+            if extra.get("ok") and decision.get("escalate"):
+                mark_escalated(tid)
+        except Exception:
+            log.exception("[support_ai] background AI upgrade failed")
+
+    threading.Thread(target=_upgrade, daemon=True, name="support-ai-upgrade").start()
     return {
         "handled": True,
         "pending": False,
-        "escalate": bool(decision.get("escalate")),
-        "reply": reply,
-        "source": str(decision.get("source") or "llm"),
+        "escalate": False,
+        "reply": quick,
+        "source": "quick",
     }

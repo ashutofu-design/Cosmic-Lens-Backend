@@ -288,8 +288,7 @@ export default function HelpSupportScreen() {
     };
   }, [user?.id, user?.api_key, ensureThread, refresh]);
 
-  const lastMsg = messages.length ? messages[messages.length - 1] : null;
-  const waitingHelp = sending || (!!lastMsg && lastMsg.sender === "user");
+  const waitingHelp = sending;
 
   useEffect(() => {
     if (!threadId) return;

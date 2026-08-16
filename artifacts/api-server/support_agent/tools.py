@@ -1,96 +1,151 @@
-"""Narrow tools — this logged-in customer only, customer-visible fields only."""
+"""This-customer-only tools. No unrestricted DB. Empty on failure — never invent."""
 from __future__ import annotations
 
-import re
 from typing import Any
 
 
-def parse_account_card(account_card: str) -> dict[str, Any]:
-    """Read the customer-safe card already built for this user. No extra DB."""
-    purchases: list[dict[str, Any]] = []
-    cosmo = ""
-    for line in (account_card or "").splitlines():
-        s = line.strip()
-        if s.lower().startswith("user id:"):
-            cosmo = s.split(":", 1)[-1].strip()
-        if s.startswith("- "):
-            body = s[2:].strip()
-            amount = 0
-            m = re.search(r"₹\s*(\d+)", body)
-            if m:
-                amount = int(m.group(1))
-            title = re.split(r"₹", body, 1)[0].strip() or body
-            purchases.append({"title": title[:80], "amount": amount})
-    return {"cosmo": cosmo, "purchases": purchases, "card": account_card or ""}
-
-
-def customer_facts(
-    user: Any = None,
-    account_card: str = "",
-    cosmo_user_id: str = "",
-) -> dict[str, Any]:
-    facts = lookup_this_account(user) if user is not None else {
-        "cosmo": "",
-        "name": "",
-        "plan": "Free",
-        "ask_left": 0,
-        "purchases": [],
-        "card": "",
-    }
-    parsed = parse_account_card(account_card)
-    if not facts.get("purchases") and parsed.get("purchases"):
-        facts["purchases"] = parsed["purchases"]
-    if account_card and not facts.get("card"):
-        facts["card"] = account_card
-    cid = str(facts.get("cosmo") or cosmo_user_id or parsed.get("cosmo") or "").strip()
-    if cid:
-        facts["cosmo"] = cid
-    return facts
-
-
-def lookup_this_account(user: Any) -> dict[str, Any]:
-    """Paid orders + plan this user can already see in the app."""
+def _safe_user_id(user: Any) -> int | None:
     try:
-        from support_account import build_customer_facts
+        uid = getattr(user, "id", None)
+        return int(uid) if uid is not None else None
+    except (TypeError, ValueError):
+        return None
 
-        return build_customer_facts(user)
+
+def get_user_profile(user: Any) -> dict[str, Any]:
+    if user is None:
+        return {"ok": False, "error": "no_user"}
+    cosmo = str(getattr(user, "cosmo_user_id", None) or "").strip().upper()
+    uid = _safe_user_id(user)
+    if not cosmo and uid is not None:
+        try:
+            from cosmo_user_id import cosmo_display_id_for_user_id
+
+            cosmo = str(cosmo_display_id_for_user_id(uid) or "").strip().upper()
+        except Exception:
+            cosmo = f"COSMO{uid}"
+    return {
+        "ok": True,
+        "cosmo": cosmo,
+        "name": str(getattr(user, "name", None) or "").strip(),
+        "ask_pack_left": max(0, int(getattr(user, "ask_v1_questions_left", 0) or 0)),
+    }
+
+
+def get_subscription(user: Any) -> dict[str, Any]:
+    if user is None:
+        return {"ok": False, "error": "no_user"}
+    try:
+        from support_account import _plan_label
+
+        return {"ok": True, "plan": _plan_label(user)}
     except Exception:
-        return {
-            "cosmo": "",
-            "name": "",
-            "plan": "Free",
-            "ask_left": 0,
-            "purchases": [],
-            "card": "",
-        }
+        plan = str(getattr(user, "plan", None) or "free")
+        return {"ok": True, "plan": plan.title() if plan else "Free"}
 
 
-def format_transactions(facts: dict[str, Any], lang: str) -> str:
-    rows = facts.get("purchases") if isinstance(facts.get("purchases"), list) else []
-    if lang == "en":
-        if not rows:
-            return (
-                "There is no wallet in Cosmic Lens. I checked this account and do not see "
-                "a paid order on Help → Transactions yet. If money was deducted, a team "
-                "member will join this chat shortly — please wait here."
+def get_wallet_status(user: Any) -> dict[str, Any]:
+    """Cosmic Lens has no rupee wallet. Ask credits only."""
+    profile = get_user_profile(user)
+    return {
+        "ok": True,
+        "has_wallet": False,
+        "ask_pack_left": int(profile.get("ask_pack_left") or 0),
+        "note": "No wallet. Paid orders = Help → Transactions. Ask credits = Profile → Cosmic Packs.",
+    }
+
+
+def get_transactions(user: Any) -> dict[str, Any]:
+    uid = _safe_user_id(user)
+    if uid is None:
+        return {"ok": False, "error": "no_user", "orders": []}
+    orders: list[dict[str, Any]] = []
+    try:
+        from purchase_history import build_user_purchase_history
+
+        for row in build_user_purchase_history(uid)[:8]:
+            if not isinstance(row, dict):
+                continue
+            orders.append(
+                {
+                    "title": str(row.get("title") or "").strip()[:80],
+                    "amount_inr": int(row.get("amount_inr") or 0),
+                    "status": str(row.get("status") or "paid"),
+                    "paid_at": str(row.get("paid_at") or "")[:16],
+                }
             )
-        listed = "; ".join(
-            f"{p.get('title')} ₹{p.get('amount')}" for p in rows[:5] if isinstance(p, dict)
+    except Exception:
+        return {"ok": False, "error": "tool_failed", "orders": []}
+    return {"ok": True, "orders": orders}
+
+
+def get_report_status(user: Any) -> dict[str, Any]:
+    uid = _safe_user_id(user)
+    if uid is None:
+        return {"ok": False, "error": "no_user", "reports": []}
+    try:
+        import report_cache as _rc
+
+        rows = _rc.list_for_user(uid, 8)
+    except Exception:
+        return {"ok": False, "error": "tool_failed", "reports": []}
+    reports = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        reports.append(
+            {
+                "type": str(r.get("report_type") or r.get("kind") or "pdf")[:40],
+                "date": str(r.get("date") or "")[:16],
+            }
         )
-        return (
-            "There is no wallet in Cosmic Lens. I checked this account — Help → Transactions "
-            f"currently shows: {listed}. If the payment you made is not in that list, "
-            "a team member will join this chat shortly — please wait here."
-        )
-    if not rows:
-        return (
-            "App mein wallet nahi hota. Is account pe Help → Transactions mein abhi koi "
-            "paid order nahi dikha. Agar paise kat gaye hon to team yahin join karegi — wait kariye."
-        )
-    listed = "; ".join(
-        f"{p.get('title')} ₹{p.get('amount')}" for p in rows[:5] if isinstance(p, dict)
-    )
-    return (
-        "App mein wallet nahi hota. Is account pe Help → Transactions mein abhi yeh dikh raha hai: "
-        f"{listed}. Agar aapka payment is list mein nahi hai to team yahin join karegi — wait kariye."
-    )
+    return {"ok": True, "reports": reports}
+
+
+def snapshot(user: Any) -> dict[str, Any]:
+    """Run all bounded tools for this logged-in customer."""
+    profile = get_user_profile(user)
+    sub = get_subscription(user)
+    wallet = get_wallet_status(user)
+    tx = get_transactions(user)
+    reports = get_report_status(user)
+    lines = [
+        f"get_user_profile: ok={profile.get('ok')} cosmo={profile.get('cosmo') or '(unknown)'} "
+        f"name={profile.get('name') or '(on Profile)'} ask_pack_left={profile.get('ask_pack_left')}",
+        f"get_subscription: ok={sub.get('ok')} plan={sub.get('plan')}",
+        f"get_wallet_status: has_wallet=false ask_pack_left={wallet.get('ask_pack_left')} "
+        f"note={wallet.get('note')}",
+    ]
+    if not tx.get("ok"):
+        lines.append("get_transactions: TOOL FAILED — do not invent orders. Escalate if they ask about a payment.")
+    elif not tx.get("orders"):
+        lines.append("get_transactions: no paid orders on Help → Transactions.")
+    else:
+        bits = [
+            f"{o.get('title')} ₹{o.get('amount_inr')} {o.get('status')}"
+            for o in tx["orders"]
+            if isinstance(o, dict)
+        ]
+        lines.append("get_transactions: " + "; ".join(bits[:6]))
+    if not reports.get("ok"):
+        lines.append("get_report_status: TOOL FAILED — do not invent PDFs. Escalate if they ask about a missing report.")
+    elif not reports.get("reports"):
+        lines.append("get_report_status: no PDFs in My Reports yet.")
+    else:
+        bits = [
+            f"{r.get('type')} {r.get('date')}"
+            for r in reports["reports"]
+            if isinstance(r, dict)
+        ]
+        lines.append("get_report_status: " + "; ".join(bits[:6]))
+    return {
+        "profile": profile,
+        "subscription": sub,
+        "wallet": wallet,
+        "transactions": tx,
+        "reports": reports,
+        "text": "\n".join(lines),
+        "tx_ok": bool(tx.get("ok")),
+        "tx_count": len(tx.get("orders") or []),
+        "reports_ok": bool(reports.get("ok")),
+    }

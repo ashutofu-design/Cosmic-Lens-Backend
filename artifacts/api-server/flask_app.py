@@ -4875,10 +4875,10 @@ def support_message_post_route(thread_id: str):
         from support_ai import human_is_handling
 
         if not human_is_handling(msgs_now):
-            from support_agent.escalation import fallback_help_reply
+            from support_ai import wait_for_support_reply
 
             lang = str(getattr(user, "preferred_language", None) or "")
-            fallback = fallback_help_reply(lang if lang in ("en", "hn", "hi") else "hn")
+            fallback = wait_for_support_reply(lang if lang in ("en", "hn", "hi") else "hn")
             try:
                 bot = append_message(
                     (thread_id or "").strip(),
@@ -4888,9 +4888,10 @@ def support_message_post_route(thread_id: str):
                 if bot.get("ok"):
                     auto = {
                         "handled": True,
-                        "escalate": False,
+                        "escalate": True,
                         "reply": fallback,
                         "source": "unsolved",
+                        "agent_state": "waiting_for_human",
                     }
             except Exception:
                 auto = {"handled": False, "escalate": True}
@@ -4921,12 +4922,17 @@ def support_message_post_route(thread_id: str):
     out = dict(result)
     if isinstance(packed.get("messages"), list):
         out["messages"] = packed["messages"]
+    out["agent_state"] = str(
+        (auto or {}).get("agent_state") or packed.get("agent_state") or ""
+    )
+    out["agent_typing"] = bool(packed.get("agent_typing"))
     if auto:
         out["ai"] = {
             "handled": bool(auto.get("handled")),
             "escalate": bool(auto.get("escalate")),
             "reply": auto.get("reply") or "",
             "pending": bool(auto.get("pending")),
+            "agent_state": str(auto.get("agent_state") or packed.get("agent_state") or ""),
         }
     return jsonify(out)
 

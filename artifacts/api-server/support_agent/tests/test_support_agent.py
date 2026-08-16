@@ -53,11 +53,24 @@ class SupportAgentTests(unittest.TestCase):
         sag._llm = lambda *_a, **_k: None  # type: ignore[method-assign]
         try:
             r = run("qwerty asdf zxcvb plugh", lang="en")
-            self.assertFalse(r["escalate"])
+            self.assertTrue(r["escalate"])
             self.assertEqual(r["source"], "ai_unavailable")
-            self.assertIn("wallet", r["reply"].lower())
+            self.assertEqual(r["agent_state"], "waiting_for_human")
         finally:
             sag._llm = orig
+
+    def test_knowledge_base_loads(self) -> None:
+        from support_agent.knowledge import ALLOWED_KNOWLEDGE
+
+        self.assertIn("Numerology", ALLOWED_KNOWLEDGE)
+        self.assertIn("NO wallet", ALLOWED_KNOWLEDGE)
+
+    def test_wallet_tool_has_no_wallet(self) -> None:
+        from support_agent.tools import get_wallet_status
+
+        w = get_wallet_status(None)
+        self.assertTrue(w.get("ok"))
+        self.assertFalse(w.get("has_wallet"))
 
     def test_string_false_does_not_escalate(self) -> None:
         import support_agent.agent as sag

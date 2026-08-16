@@ -160,6 +160,9 @@ export default function HelpSupportScreen() {
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  sendingRef.current = sending;
+  const [agentTyping, setAgentTyping] = useState(false);
   const [loading, setLoading] = useState(true);
   const [adminTyping, setAdminTyping] = useState(false);
   const [tab, setTab] = useState<TabKey>("chat");
@@ -225,8 +228,10 @@ export default function HelpSupportScreen() {
       }
       if (!res.ok) return null;
       const msgs: SupportMessage[] = Array.isArray(json.messages) ? json.messages : [];
+      if (sendingRef.current) return msgs;
       setMessages(ensureBotReply(msgs, "", "", user?.cosmo_user_id || "") as SupportMessage[]);
       setAdminTyping(Boolean(json.admin_typing));
+      setAgentTyping(Boolean(json.agent_typing) || json.agent_state === "processing");
       return msgs;
     },
     [user?.id, user?.api_key, authHeaders, ensureThread],
@@ -288,7 +293,9 @@ export default function HelpSupportScreen() {
     };
   }, [user?.id, user?.api_key, ensureThread, refresh]);
 
-  const waitingHelp = sending;
+  const lastMsg = messages.length ? messages[messages.length - 1] : null;
+  const waitingHelp =
+    sending || agentTyping || (!!lastMsg && lastMsg.sender === "user" && agentTyping);
 
   useEffect(() => {
     if (!threadId) return;
@@ -300,6 +307,7 @@ export default function HelpSupportScreen() {
     const text = (forcedText ?? draft).trim();
     if (!text || !threadId || sending || !user?.id) return;
     setSending(true);
+    setAgentTyping(true);
     setDraft("");
     const localUser: SupportMessage = {
       id: `local-user-${Date.now()}`,
@@ -309,7 +317,12 @@ export default function HelpSupportScreen() {
     };
     setMessages(
       (prev) =>
-        ensureBotReply([...prev, localUser], text, "", user?.cosmo_user_id || "") as SupportMessage[],
+        ensureBotReply(
+          [...prev, localUser],
+          text,
+          "",
+          user?.cosmo_user_id || "",
+        ) as SupportMessage[],
     );
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     const ac = new AbortController();
@@ -382,6 +395,9 @@ export default function HelpSupportScreen() {
         user?.cosmo_user_id || "",
       ) as SupportMessage[];
       setMessages(withBot);
+      setAgentTyping(
+        json.agent_state === "processing" || Boolean(json.agent_typing),
+      );
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     } catch (e) {
       const aborted =
@@ -745,6 +761,7 @@ export default function HelpSupportScreen() {
         <FlatList
           ref={listRef}
           data={messages}
+          extraData={messages.length}
           keyExtractor={(m) => m.id}
           contentContainerStyle={s.list}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}

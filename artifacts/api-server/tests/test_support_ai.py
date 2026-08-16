@@ -45,8 +45,8 @@ class SupportAiTests(unittest.TestCase):
     def test_no_ai_handoff(self) -> None:
         sag._llm = lambda *_a, **_k: None  # type: ignore[method-assign]
         r = sai.answer_support("qwerty asdf zxcvb plugh", lang="hn")
-        self.assertFalse(r["escalate"])
-        self.assertRegex(r["reply"], r"wallet|Transactions|Cosmic Packs", re.I)
+        self.assertTrue(r["escalate"])
+        self.assertEqual(r.get("agent_state"), "waiting_for_human")
         self.assertNotRegex(r["reply"], r"telegram|api_key", re.I)
 
     def test_wallet_question_does_not_escalate(self) -> None:

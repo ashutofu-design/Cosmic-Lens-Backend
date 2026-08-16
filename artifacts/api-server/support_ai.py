@@ -1,16 +1,15 @@
-"""Help & Support Flask entry. Always save a bot reply before the HTTP response returns."""
+"""Help & Support Flask entry — bounded agent with server-side lifecycle."""
 from __future__ import annotations
 
 import logging
-import threading
 from typing import Any
 
 log = logging.getLogger("support_ai")
 
 _WAIT = {
-    "en": "I couldn’t fully resolve this here. Customer support will join this chat shortly — please wait, they’ll reply here.",
-    "hn": "Yeh yahan clear nahi ho paaya. Customer support abhi is chat mein aayenge — thoda wait kariye, yahin reply aayega.",
-    "hi": "यह यहाँ पूरा हल नहीं हो पाया। कस्टमर सपोर्ट अभी इस चैट में आएंगे — थोड़ा इंतज़ार करें, यहीं जवाब आएगा।",
+    "en": "I’m unable to resolve this directly. A team member will join shortly — please wait here.",
+    "hn": "Yeh yahan solve nahi ho paaya. Team member abhi is chat mein aayenge — yahin wait kariye.",
+    "hi": "यह यहाँ हल नहीं हो पाया। टीम सदस्य जल्द इस चैट में आएंगे — यहीं प्रतीक्षा करें।",
 }
 
 
@@ -30,7 +29,6 @@ def wait_for_support_reply(lang: str) -> str:
 
 
 def human_is_handling(msgs: list[Any] | None) -> bool:
-    """True only if a human agent is currently in this chat (last staff msg is admin)."""
     found_latest_user = False
     for m in reversed(msgs or []):
         if not isinstance(m, dict):
@@ -50,24 +48,12 @@ def human_is_handling(msgs: list[Any] | None) -> bool:
 
 
 def scrub_customer_reply(reply: str, lang: str) -> str:
-    """Leak filter only — does not choose the answer."""
     from support_agent.response_guard import guard
 
     text, leaked = guard(reply or "", lang)
     if leaked or not (text or "").strip():
-        from support_agent.escalation import fallback_help_reply
-
-        text, _ = guard(fallback_help_reply(lang), lang)
+        return wait_for_support_reply(lang)
     return text
-
-
-def _quick_reply(text: str, lang: str | None) -> str:
-    from support_agent.escalation import fallback_help_reply
-    from support_agent.response_guard import guard
-
-    L = detect_reply_lang(text, lang)
-    reply, _ = guard(fallback_help_reply(L), L)
-    return reply
 
 
 def answer_support(
@@ -80,7 +66,6 @@ def answer_support(
     account_card: str = "",
     user: Any = None,
 ) -> dict[str, Any]:
-    """AI reads the question and answers from allowed knowledge + this account."""
     from support_agent.agent import run
 
     L = detect_reply_lang(text, lang)
@@ -97,18 +82,27 @@ def answer_support(
     except Exception:
         log.exception("[support_ai] run failed")
         return {
-            "escalate": False,
-            "reply": _quick_reply(text, L),
+            "escalate": True,
+            "reply": wait_for_support_reply(L),
             "source": "error",
+            "agent_state": "waiting_for_human",
         }
     reply = scrub_customer_reply(str(out.get("reply") or ""), L)
     if not reply.strip():
-        reply = _quick_reply(text, L)
+        reply = wait_for_support_reply(L)
+        return {
+            "escalate": True,
+            "reply": reply,
+            "source": "empty",
+            "agent_state": "waiting_for_human",
+        }
+    escalate = bool(out.get("escalate"))
     return {
-        "escalate": bool(out.get("escalate")) if str(out.get("source") or "") == "llm" else False,
+        "escalate": escalate,
         "reply": reply,
         "source": str(out.get("source") or ""),
         "intent": out.get("intent") or "",
+        "agent_state": str(out.get("agent_state") or ("waiting_for_human" if escalate else "answered")),
     }
 
 
@@ -122,48 +116,46 @@ def maybe_auto_reply(
     min_think: float | None = None,
     user: Any = None,
 ) -> dict[str, Any]:
-    """Save a real bot answer immediately, then let AI upgrade it in the background."""
+    """processing → tools+knowledge → answered | waiting_for_human. No fake replies."""
+    from support_chat import append_message, mark_escalated, set_agent_state
+
     msgs = rec.get("messages") if isinstance(rec.get("messages"), list) else []
-    if human_is_handling(msgs):
-        return {"handled": False, "escalate": True, "source": "human_live"}
-
-    from support_chat import append_message, mark_escalated
-
     tid = str(rec.get("thread_id") or "")
+    if human_is_handling(msgs):
+        set_agent_state(tid, "waiting_for_human")
+        return {"handled": False, "escalate": True, "source": "human_live", "agent_state": "waiting_for_human"}
+
     text = str(user_msg.get("text") or "")
     has_image = bool(user_msg.get("image_url"))
     cid = (cosmo_user_id or str(rec.get("cosmo_user_id") or "")).strip()
-    L = detect_reply_lang(text, lang)
-    quick = _quick_reply(text, L)
-    bot = append_message(tid, sender="bot", text=quick)
+    set_agent_state(tid, "processing")
+    decision = answer_support(
+        text,
+        lang=lang,
+        has_image=has_image,
+        history=msgs,
+        cosmo_user_id=cid,
+        account_card=account_card,
+        user=user,
+    )
+    reply = str(decision.get("reply") or "").strip() or wait_for_support_reply(
+        detect_reply_lang(text, lang)
+    )
+    bot = append_message(tid, sender="bot", text=reply)
     if not bot.get("ok"):
-        return {"handled": False, "escalate": False, "source": "append_failed", "reply": quick}
+        set_agent_state(tid, "failed")
+        return {"handled": False, "escalate": True, "source": "append_failed", "reply": reply}
 
-    def _upgrade() -> None:
-        try:
-            decision = answer_support(
-                text,
-                lang=lang,
-                has_image=has_image,
-                history=msgs,
-                cosmo_user_id=cid,
-                account_card=account_card,
-                user=user,
-            )
-            reply = str(decision.get("reply") or "").strip()
-            if not reply or reply == quick:
-                return
-            extra = append_message(tid, sender="bot", text=reply)
-            if extra.get("ok") and decision.get("escalate"):
-                mark_escalated(tid)
-        except Exception:
-            log.exception("[support_ai] background AI upgrade failed")
-
-    threading.Thread(target=_upgrade, daemon=True, name="support-ai-upgrade").start()
+    escalate = bool(decision.get("escalate"))
+    state = "waiting_for_human" if escalate else "answered"
+    set_agent_state(tid, state)
+    if escalate:
+        mark_escalated(tid)
     return {
         "handled": True,
         "pending": False,
-        "escalate": False,
-        "reply": quick,
-        "source": "quick",
+        "escalate": escalate,
+        "reply": reply,
+        "source": str(decision.get("source") or "llm"),
+        "agent_state": state,
     }

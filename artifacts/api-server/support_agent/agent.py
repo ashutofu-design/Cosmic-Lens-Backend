@@ -1,4 +1,4 @@
-"""Support Agent — the model understands the question and answers from allowed knowledge."""
+"""Bounded Support Agent: knowledge + this-user tools → answer or human handoff."""
 from __future__ import annotations
 
 import json
@@ -7,11 +7,11 @@ import os
 import re
 from typing import Any
 
-from support_agent.escalation import fallback_help_reply
-from support_agent.knowledge import ALLOWED_KNOWLEDGE
+from support_agent.escalation import handoff_reply
+from support_agent.knowledge import ALLOWED_KNOWLEDGE, load_knowledge
 from support_agent.response_guard import guard
 from support_agent.system_prompt import SYSTEM_PROMPT
-from support_agent.tools import customer_facts
+from support_agent.tools import snapshot
 
 log = logging.getLogger("support_agent")
 
@@ -60,7 +60,7 @@ def _llm(
     text: str,
     lang: str,
     history: list[dict[str, Any]],
-    account_card: str,
+    tool_text: str,
     *,
     has_image: bool,
 ) -> dict[str, Any] | None:
@@ -86,14 +86,15 @@ def _llm(
         body = str(m.get("text") or "").strip()
         if body:
             hist_lines.append(f"{who}: {body[:240]}")
-    extra = "User attached a screenshot.\n" if has_image else ""
+    extra = "User attached a screenshot. Escalate.\n" if has_image else ""
     prompt = (
         f"{extra}"
-        f"Reply language: {lang_name} (match the user).\n"
+        f"Reply language: {lang_name}.\n"
         "JSON only: {\"escalate\": false, \"reply\": \"...\"}\n"
-        "escalate=true only for refund/legal/screenshot. Wallet/transaction how-to = escalate false.\n\n"
+        "Use TOOL RESULTS for this account. Do not invent orders. "
+        "If a tool failed and they asked about that topic, escalate=true.\n\n"
         f"ALLOWED KNOWLEDGE:\n{ALLOWED_KNOWLEDGE}\n\n"
-        f"THIS CUSTOMER ACCOUNT:\n{(account_card or '').strip() or '(none)'}\n\n"
+        f"TOOL RESULTS (this customer only):\n{tool_text}\n\n"
         f"RECENT CHAT:\n" + ("\n".join(hist_lines) or "(none)") + "\n\n"
         f"USER: {(text or '')[:1200]}"
     )
@@ -114,10 +115,7 @@ def _llm(
     except Exception as exc:
         log.warning("[support_agent] llm failed model=%s: %s", model, exc)
         return None
-    parsed = _parse_llm_text(raw)
-    if not parsed:
-        log.warning("[support_agent] llm empty/unparsed model=%s raw=%s", model, raw[:180])
-    return parsed
+    return _parse_llm_text(raw)
 
 
 def run(
@@ -130,36 +128,50 @@ def run(
     account_card: str = "",
     cosmo_user_id: str = "",
 ) -> dict[str, Any]:
-    """AI reads the question, then answers from allowed knowledge + this account."""
+    """Tools first, then knowledge, then answer or escalate. Never guess account facts."""
     history = history if isinstance(history, list) else []
     L = (lang or "").strip().lower()
     if L not in ("en", "hn", "hi"):
         L = "en" if (text or "")[:1].isascii() else "hn"
-    facts = customer_facts(user, account_card, cosmo_user_id)
-    card = str(facts.get("card") or account_card or "")
-    cid = str(facts.get("cosmo") or cosmo_user_id or "").strip()
-    if cid and "User ID" not in card:
-        card = f"User ID: {cid}\n{card}".strip()
 
-    llm = _llm(text, L, history, card, has_image=has_image)
+    tools = snapshot(user)
+    if has_image:
+        reply, _ = guard(handoff_reply(L), L)
+        return {
+            "escalate": True,
+            "reply": reply,
+            "source": "screenshot",
+            "agent_state": "waiting_for_human",
+            "tools": tools,
+        }
+
+    llm = _llm(text, L, history, str(tools.get("text") or ""), has_image=False)
     if llm:
         reply, leaked = guard(str(llm.get("reply") or ""), L)
-        escalate = bool(has_image) or (_as_bool(llm.get("escalate")) and not leaked)
+        escalate = bool(llm.get("escalate")) or leaked
         if leaked:
-            reply, _ = guard(fallback_help_reply(L), L)
-            escalate = False
+            reply, _ = guard(handoff_reply(L), L)
+            escalate = True
         return {
             "escalate": escalate,
             "reply": reply,
             "source": "llm",
+            "agent_state": "waiting_for_human" if escalate else "answered",
+            "tools": tools,
         }
 
-    reply, _ = guard(fallback_help_reply(L), L)
-    return {"escalate": bool(has_image), "reply": reply, "source": "ai_unavailable"}
+    reply, _ = guard(handoff_reply(L), L)
+    return {
+        "escalate": True,
+        "reply": reply,
+        "source": "ai_unavailable",
+        "agent_state": "waiting_for_human",
+        "tools": tools,
+    }
 
 
 def load_rules() -> str:
-    return ALLOWED_KNOWLEDGE
+    return load_knowledge() or ALLOWED_KNOWLEDGE
 
 
 def apply_check_delay(*_a, **_k) -> None:

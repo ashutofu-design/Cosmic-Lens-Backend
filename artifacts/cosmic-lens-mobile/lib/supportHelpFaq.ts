@@ -1,4 +1,4 @@
-/** Do not invent Help answers on the phone. The Support AI on the server replies. */
+/** Server is the source of truth. Do not invent Help answers on the phone. */
 
 export function localSupportAnswer(
   _text: string,
@@ -15,7 +15,7 @@ export function ensureBotReply(
     ts: string;
     image_url?: string;
   }>,
-  userText: string,
+  _userText: string,
   serverReply?: string,
   _cosmoId?: string,
 ): typeof msgs {
@@ -27,9 +27,7 @@ export function ensureBotReply(
     const next = msgs[i + 1];
     if (next && (next.sender === "bot" || next.sender === "admin")) continue;
     const isLatestUser = !msgs.slice(i + 1).some((x) => x.sender === "user");
-    const text = isLatestUser
-      ? (serverReply || "").trim()
-      : "";
+    const text = isLatestUser ? (serverReply || "").trim() : "";
     if (!text) continue;
     out.push({
       id: `local-bot-${m.id}`,

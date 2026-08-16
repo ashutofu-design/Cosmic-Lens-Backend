@@ -74,7 +74,7 @@ def _finalize_ask_out_after_llm(out, user, quota_on_success=None):
     except ImportError:
         if not isinstance(out, dict):
             return out
-        if out.get("source") == "raw_passthrough_error":
+        if out.get("source") in ("raw_passthrough_error", "raw_passthrough_empty"):
             if user:
                 try:
                     from subscription_helper import can_ask_question, refund_question
@@ -88,6 +88,77 @@ def _finalize_ask_out_after_llm(out, user, quota_on_success=None):
         elif quota_on_success is not None:
             out["quota"] = quota_on_success
         return out
+
+
+def _client_ask_payload(out) -> dict:
+    """Lean Ask payload for apps — drop admin debug blobs, guarantee text."""
+    if not isinstance(out, dict):
+        return {
+            "text": str(out or "").strip()
+            or "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
+            "follow_ups": [],
+        }
+    # Only keep JSON-safe primitives — nested debug objects often break jsonify.
+    keep = (
+        "text", "answer", "response", "follow_ups", "topic", "domain", "bucket",
+        "archetype", "subject", "source", "question_id", "quota", "plan",
+        "clarification", "requires_partner_profile", "partner_cta",
+        "response_schema", "cards", "trimmed_count", "confidence",
+        "question_type", "engine_tag", "llm_failed",
+    )
+    payload = {}
+    for k in keep:
+        if k not in out:
+            continue
+        v = out.get(k)
+        if v is None:
+            continue
+        if isinstance(v, (str, int, float, bool, list, dict)):
+            payload[k] = v
+        else:
+            try:
+                payload[k] = json.loads(json.dumps(v, default=str))
+            except Exception:
+                payload[k] = str(v)
+    text = str(
+        payload.get("text")
+        or payload.get("answer")
+        or payload.get("response")
+        or ""
+    ).strip()
+    if not text:
+        text = "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein."
+    payload["text"] = text
+    if "follow_ups" not in payload or not isinstance(payload.get("follow_ups"), list):
+        payload["follow_ups"] = []
+    return payload
+
+
+def _ask_stream_client_response(out, *, status: int = 200):
+    """Return lean application/json for mobile one-shot Ask answers."""
+    try:
+        payload = _client_ask_payload(out)
+        print(
+            f"[ask/stream] json_wrap source={payload.get('source')!r} "
+            f"text_len={len(str(payload.get('text') or ''))}",
+            flush=True,
+        )
+        resp = jsonify(payload)
+        resp.status_code = int(status)
+        resp.headers["X-Cosmic-Ask-Format"] = "json"
+        return resp
+    except Exception as exc:
+        import traceback
+
+        print(f"[ask/stream] json_wrap FAILED: {exc}", flush=True)
+        traceback.print_exc()
+        return jsonify(
+            {
+                "text": "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
+                "follow_ups": [],
+                "source": "ask_stream_json_wrap_error",
+            }
+        ), 200
 
 
 def _build_admin_ask_questions(**kwargs):
@@ -4768,14 +4839,96 @@ def support_message_post_route(thread_id: str):
         if result.get("error") == "forbidden":
             code = 403
         return jsonify(result), code
+
+    rec = get_thread((thread_id or "").strip()) or {}
+    auto: dict = {}
     try:
-        notify_admin_new_support_message(
-            get_thread((thread_id or "").strip()) or {},
+        from support_ai import maybe_auto_reply
+
+        lang = str(getattr(user, "preferred_language", None) or "")
+        cosmo = str(getattr(user, "cosmo_user_id", "") or "").strip()
+        card = ""
+        try:
+            from support_account import build_customer_facts
+
+            card = str(build_customer_facts(user).get("card") or "")
+        except Exception:
+            card = ""
+        auto = maybe_auto_reply(
+            rec,
             result.get("message") or {},
+            lang=lang,
+            cosmo_user_id=cosmo,
+            account_card=card,
+            user=user,
+        ) or {}
+    except Exception:
+        try:
+            app.logger.exception("[support] AI auto-reply failed")
+        except Exception:
+            pass
+        auto = {}
+
+    if not auto.get("handled"):
+        rec_now = get_thread((thread_id or "").strip()) or rec
+        msgs_now = rec_now.get("messages") if isinstance(rec_now.get("messages"), list) else []
+        human_live = any(
+            isinstance(m, dict) and m.get("sender") == "admin" for m in msgs_now
+        )
+        if not human_live:
+            from support_ai import wait_for_support_reply
+
+            lang = str(getattr(user, "preferred_language", None) or "")
+            fallback = wait_for_support_reply(lang)
+            try:
+                bot = append_message(
+                    (thread_id or "").strip(),
+                    sender="bot",
+                    text=fallback,
+                )
+                if bot.get("ok"):
+                    auto = {
+                        "handled": True,
+                        "escalate": True,
+                        "reply": fallback,
+                        "source": "unsolved",
+                    }
+            except Exception:
+                auto = {"handled": False, "escalate": True}
+
+    if auto.get("escalate"):
+        try:
+            from support_chat import mark_escalated
+
+            tid = (thread_id or "").strip()
+            marked = mark_escalated(tid)
+            rec2 = get_thread(tid) or rec
+            if marked.get("ok") and isinstance(marked.get("thread"), dict):
+                rec2 = {**rec2, **marked["thread"], "escalated": True}
+            rec2["escalated"] = True
+            notify_admin_new_support_message(rec2, result.get("message") or {})
+        except Exception:
+            pass
+    # AI handled with no escalate → do not ping admin or Telegram.
+    packed = {}
+    try:
+        from support_chat import get_messages as _get_support_messages
+
+        packed = _get_support_messages(
+            (thread_id or "").strip(), mark_read_for="user"
         )
     except Exception:
-        pass
-    return jsonify(result)
+        packed = {}
+    out = dict(result)
+    if isinstance(packed.get("messages"), list):
+        out["messages"] = packed["messages"]
+    if auto:
+        out["ai"] = {
+            "handled": bool(auto.get("handled")),
+            "escalate": bool(auto.get("escalate")),
+            "reply": auto.get("reply") or "",
+        }
+    return jsonify(out)
 
 
 @app.route("/api/support/media/<filename>", methods=["GET"])
@@ -4788,6 +4941,14 @@ def support_media_route(filename: str):
         return jsonify({"error": "not_found"}), 404
     data, mime = got
     return Response(data, mimetype=mime)
+
+
+try:
+    from support_chat import start_idle_closer
+
+    start_idle_closer()
+except Exception:
+    pass
 
 
 @app.route("/api/admin/support/threads", methods=["GET"])
@@ -6390,7 +6551,10 @@ def planet_transits():
                 pd_sign = None
             else:
                 # legacy flat payload — synthesize domain_ctx so everything is D1
-                pd_sign = int(natal["pd_planet_sign"]) % 12
+                raw_pd = natal.get("pd_planet_sign")
+                pd_sign = (
+                    int(raw_pd) % 12 if raw_pd is not None else moon_sign
+                )
                 raw_dhs = natal.get("domain_house_signs", {}) or {}
                 domain_ctx = {}
                 for d in DOMAINS:
@@ -6504,6 +6668,7 @@ def planet_transits():
         "Jupiter": swe.JUPITER,
         "Saturn": swe.SATURN,
         "Sun": swe.SUN,
+        "Moon": swe.MOON,
         "Mars": swe.MARS,
         "Venus": swe.VENUS,
         "Mercury": swe.MERCURY,
@@ -9683,7 +9848,11 @@ def ask_route():
                 return jsonify({"error": "Unauthorized"}), 401
             from ask_kundli_resolver import resolve_kundli_for_user
 
-            kundli, k_err, birth = resolve_kundli_for_user(rp_user, kundli, birth)
+            _kres = resolve_kundli_for_user(rp_user, kundli, birth)
+            if isinstance(_kres, (list, tuple)) and len(_kres) >= 3:
+                kundli, k_err, birth = _kres[0], _kres[1], _kres[2]
+            else:
+                kundli, k_err = _kres[0], _kres[1]
             if k_err:
                 return k_err
             rp_q = consume_question(rp_user)
@@ -9835,7 +10004,10 @@ def ask_route():
         except Exception as _align_exc:
             print(f"[ask:RP] lang_align skipped: {_align_exc}", flush=True)
         # Phase 2.5.11.19 — Ask Q&A persistence (sync raw passthrough exit).
-        if rp_user is not None and out.get("source") != "raw_passthrough_error":
+        if rp_user is not None and out.get("source") not in (
+            "raw_passthrough_error",
+            "raw_passthrough_empty",
+        ):
             try:
                 from question_history import persist_ask_question_result
 
@@ -10693,7 +10865,7 @@ def ask_stream_route():
             f"q={question[:40]!r}",
             flush=True,
         )
-        return jsonify(_shortcut_early_s)
+        return _ask_stream_client_response(_shortcut_early_s)
 
     try:
         from ask_language_gate import assess_ask_language, language_refusal_payload
@@ -10705,7 +10877,7 @@ def ask_stream_route():
                 f"script={_lang_v_s.script_blocked!r}",
                 flush=True,
             )
-            return jsonify(language_refusal_payload())
+            return _ask_stream_client_response(language_refusal_payload())
     except Exception as _lg_exc_s:
         print(
             f"[ask/stream] language_gate error (non-fatal): {_lg_exc_s}",
@@ -10722,7 +10894,7 @@ def ask_stream_route():
                 flush=True,
             )
             _log_brand_guard_question(question, data)
-            return jsonify(scope_refusal_payload(_scope_v_s.reason, question=question, lang=lang))
+            return _ask_stream_client_response(scope_refusal_payload(_scope_v_s.reason, question=question, lang=lang))
         if getattr(_scope_v_s, "normalized_question", None):
             question = _scope_v_s.normalized_question
             print(f"[ask/stream] scope_llm normalized q={question[:60]!r}", flush=True)
@@ -10738,7 +10910,7 @@ def ask_stream_route():
                 f"[ask/stream] privacy_hard_guard blocked q={question[:60]!r}",
                 flush=True,
             )
-            return jsonify(_priv_s)
+            return _ask_stream_client_response(_priv_s)
     except Exception as _priv_exc_s:
         print(f"[ask/stream] privacy_guard error (non-fatal): {_priv_exc_s}", flush=True)
 
@@ -10789,43 +10961,72 @@ def ask_stream_route():
         rp_plan_s = "free"
         _api_key_s = request.headers.get("X-API-Key", "").strip()
         if user_id or _api_key_s:
-            from question_history import resolve_user_for_ask_request
+            try:
+                from question_history import resolve_user_for_ask_request
 
-            rp_user_s = resolve_user_for_ask_request(user_id, _api_key_s)
-            if user_id and not rp_user_s:
-                return jsonify({"error": "User not found"}), 404
-            if not rp_user_s:
-                return jsonify({"error": "Unauthorized"}), 401
-            from ask_kundli_resolver import resolve_kundli_for_user
+                rp_user_s = resolve_user_for_ask_request(user_id, _api_key_s)
+                if user_id and not rp_user_s:
+                    return jsonify({"error": "User not found"}), 404
+                if not rp_user_s:
+                    return jsonify({"error": "Unauthorized"}), 401
+                from ask_kundli_resolver import resolve_kundli_for_user
 
-            kundli, k_err, birth = resolve_kundli_for_user(rp_user_s, kundli, birth)
-            if k_err:
-                return k_err
-            rp_q_s = consume_question(rp_user_s)
-            if not rp_q_s.get("allowed"):
+                _kres_s = resolve_kundli_for_user(rp_user_s, kundli, birth)
+                if isinstance(_kres_s, (list, tuple)) and len(_kres_s) >= 3:
+                    kundli, k_err, birth = _kres_s[0], _kres_s[1], _kres_s[2]
+                else:
+                    kundli, k_err = _kres_s[0], _kres_s[1]
+                if k_err:
+                    return k_err
+                rp_q_s = consume_question(rp_user_s)
+                if not rp_q_s.get("allowed"):
+                    return (
+                        jsonify(
+                            {
+                                "error": "daily_limit_reached",
+                                "message": (
+                                    f"Aaj ka {rp_q_s.get('limit',0)} "
+                                    f"questions ka limit poora ho gaya."
+                                ),
+                                "quota": {
+                                    "used": rp_q_s.get("used", 0),
+                                    "limit": rp_q_s.get("limit", 0),
+                                },
+                                "plan": effective_plan(rp_user_s),
+                                "upgrade_required": True,
+                            }
+                        ),
+                        402,
+                    )
+                rp_quota_s = {
+                    "used": rp_q_s.get("used", 0),
+                    "limit": rp_q_s.get("limit", 0),
+                }
+                rp_plan_s = effective_plan(rp_user_s)
+            except Exception as _auth_q_exc:
+                import traceback
+
+                print(
+                    f"[ask/stream:RP] auth/quota crashed: {_auth_q_exc}",
+                    flush=True,
+                )
+                traceback.print_exc()
                 return (
                     jsonify(
                         {
-                            "error": "daily_limit_reached",
-                            "message": (
-                                f"Aaj ka {rp_q_s.get('limit',0)} "
-                                f"questions ka limit poora ho gaya."
+                            "text": (
+                                "Abhi jawab generate nahi ho pa raha. "
+                                "Thodi der baad try karein."
                             ),
-                            "quota": {
-                                "used": rp_q_s.get("used", 0),
-                                "limit": rp_q_s.get("limit", 0),
-                            },
-                            "plan": effective_plan(rp_user_s),
-                            "upgrade_required": True,
+                            "topic": "general",
+                            "confidence": 0.0,
+                            "source": "ask_stream_auth_quota_error",
+                            "follow_ups": [],
+                            "error": "auth_quota_error",
                         }
                     ),
-                    402,
+                    200,
                 )
-            rp_quota_s = {
-                "used": rp_q_s.get("used", 0),
-                "limit": rp_q_s.get("limit", 0),
-            }
-            rp_plan_s = effective_plan(rp_user_s)
         else:
             try:
                 from anon_rate_limit import check_anon_quota as _caq_s
@@ -10950,7 +11151,10 @@ def ask_stream_route():
                     )
         except Exception as _align_exc_s:
             print(f"[ask/stream:RP] lang_align skipped: {_align_exc_s}", flush=True)
-        if rp_user_s is not None and out_s.get("source") != "raw_passthrough_error":
+        if rp_user_s is not None and out_s.get("source") not in (
+            "raw_passthrough_error",
+            "raw_passthrough_empty",
+        ):
             try:
                 from question_history import persist_ask_question_result
 
@@ -10970,7 +11174,7 @@ def ask_stream_route():
                     f"(non-fatal): {_qh_exc_s}",
                     flush=True,
                 )
-        return jsonify(out_s)
+        return _ask_stream_client_response(out_s)
 
     # ── P1.2.9 (A1) — Question length cap (stream parity) ───────────────────
     # Same hard cap as /api/ask. Killswitch: env MAX_QUESTION_CHARS=0.
@@ -11716,7 +11920,11 @@ def _parse_batch_ask_request(data: dict):
     user_id_int = int(user.id) if user is not None else None
     primary_kundli_id = _batch_primary_kundli_id(user)
 
-    kundli, k_err, birth = resolve_kundli_for_user(user, kundli, birth)
+    _kres_b = resolve_kundli_for_user(user, kundli, birth)
+    if isinstance(_kres_b, (list, tuple)) and len(_kres_b) >= 3:
+        kundli, k_err, birth = _kres_b[0], _kres_b[1], _kres_b[2]
+    else:
+        kundli, k_err = _kres_b[0], _kres_b[1]
     if k_err:
         return None, k_err
 
@@ -19492,6 +19700,16 @@ except Exception as _lr_reg_exc:
     except Exception:
         pass
 
+try:
+    from numerology_agent_bridge import register_numerology_agent_routes
+
+    register_numerology_agent_routes(app)
+except Exception as _na_reg_exc:
+    try:
+        print(f"[numerology_agent] route register failed: {_na_reg_exc}", flush=True)
+    except Exception:
+        pass
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

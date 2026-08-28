@@ -23,10 +23,10 @@ def get_user_profile(user: Any) -> dict[str, Any]:
 
             cosmo = str(cosmo_display_id_for_user_id(uid) or "").strip().upper()
         except Exception:
-            cosmo = f"COSMO{uid}"
+            cosmo = ""  # never invent COSMO{uid}
     return {
         "ok": True,
-        "cosmo": cosmo,
+        "cosmo": cosmo or "(see Profile)",
         "name": str(getattr(user, "name", None) or "").strip(),
         "ask_pack_left": max(0, int(getattr(user, "ask_v1_questions_left", 0) or 0)),
     }
@@ -112,9 +112,10 @@ def snapshot(user: Any) -> dict[str, Any]:
     lines = [
         f"get_user_profile: ok={profile.get('ok')} cosmo={profile.get('cosmo') or '(unknown)'} "
         f"name={profile.get('name') or '(on Profile)'} ask_pack_left={profile.get('ask_pack_left')}",
-        f"get_subscription: ok={sub.get('ok')} plan={sub.get('plan')}",
-        f"get_wallet_status: has_wallet=false ask_pack_left={wallet.get('ask_pack_left')} "
-        f"note={wallet.get('note')}",
+        f"get_subscription: ok={sub.get('ok')} plan={sub.get('plan')} "
+        f"(NOTE: Cosmic Lens sells one-time products — not monthly Basic/Pro plans; "
+        f"ignore legacy plan labels for product pricing answers)",
+        f"get_wallet_status: has_wallet=false ask_pack_left={wallet.get('ask_pack_left')}",
     ]
     if not tx.get("ok"):
         lines.append("get_transactions: TOOL FAILED — do not invent orders. Escalate if they ask about a payment.")

@@ -1,20 +1,17 @@
-# Reports and Pro PDFs
+# Reports delivery and My Reports
 
-Paid Pro PDFs arrive in My Reports. Standard usually 24h, priority 12h.
+## Where reports go
+Paid Pro PDFs and videos arrive in My Reports after the expert prepares them. They are not instant AI PDFs. Palmistry VIP video may go to WhatsApp instead of a PDF file.
 
-Love Reality (Life Map → Relationship → Love Reality):
-- Basic (free, on-screen): Love Compatibility, Breakup Chances, Loyalty Check, Future Outcome.
-- Pro PDF is written by our expert after pay — not an instant AI PDF. Offer ₹499 (was ₹999). Priority +₹300 (12h) = ₹799.
-- If 12h priority is missed, the ₹300 priority fee is refunded.
+## After you pay
+Order success screen: Order Confirmed, optional Order ID, ETA text. Tap Track in My Reports to follow delivery. Trust line: Secure · Expert reviewed · PDF or WhatsApp video as purchased.
 
-Kundli Milan (Life Map → Relationship → Kundli Milan):
-- Basic (free): marriage structure /100 + Gun Milan /36.
-- Pro PDF expert-written, not instant AI. Offer ₹699 (was ₹999). Priority +₹300 (12h) = ₹999.
+## Delivery time
+Standard delivery: 4–6 business days (shown on product screens).
+Priority (when offered): about 12 hours. If Priority is missed, Priority fee is 100% refunded per on-screen guarantee.
 
-Numerology (Life Map → Explore → Numerology):
-- Basic = free numbers on screen.
-- Pro PDF expert-written after pay — not instant AI. Offer ₹299. Priority +₹100 (12h) = ₹399.
+## Priority fees (when offered)
+Report priority fee typically ₹149; video priority fee typically ₹299 (some products use ₹299 for report priority too — confirm on Pay).
 
-AstroVastu PDFs also land in My Reports.
-
-If the user says a paid PDF is missing, use get_report_status. If the tool shows no report and the wait window (24h / 12h) has not been verified, do not invent a delivery time — explain My Reports and escalate if they already waited.
+## Missing report
+If a paid PDF is missing, Cosmic Help uses this account’s report status tool. Open My Reports and pull to refresh. If nothing is listed after the stated window, escalate.

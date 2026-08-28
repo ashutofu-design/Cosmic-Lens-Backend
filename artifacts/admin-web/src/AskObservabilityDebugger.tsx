@@ -4,9 +4,7 @@ import { formatInr } from "./api";
 import {
   OBS_DEBUGGER_VERSION,
   resolveAskObservability,
-  normalizeHealthDnaJudgeAudit,
   isHealthAskRow,
-  type ObservabilityHealthDnaJudgeAudit,
   type ObservabilityHealthSelectedBlocks,
   type ObservabilityRule,
 } from "./askObservability";
@@ -51,18 +49,46 @@ function PipelineList({ steps }: { steps: { label: string; value: string }[] }) 
   );
 }
 
-function DnaPipelineGrid({ steps }: { steps: { label: string; value: string }[] }) {
+function DnaComplianceBox({
+  steps,
+  summary,
+}: {
+  steps: { label: string; value: string; followed?: boolean; follow_reason?: string }[];
+  summary?: import("./askObservability").ObservabilityDnaFollowedSummary | null;
+}) {
+  const total = summary?.total ?? steps.length;
+  const followed = summary?.followed_count ?? steps.filter((s) => s.followed === true).length;
+  const pct = summary?.pct ?? (total ? Math.round((100 * followed) / total) : 0);
+  const allOk = total > 0 && followed === total;
+
   return (
-    <table className="obs-dna-table">
-      <tbody>
-        {steps.map((step, i) => (
-          <tr key={`${step.label}-${i}`}>
-            <th scope="row">{step.label}</th>
-            <td>{step.value}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="obs-dna-box">
+      <div className="obs-dna-box-header">
+        <span className="obs-dna-box-title">Question DNA</span>
+        <span className={`obs-dna-followed-badge ${allOk ? "obs-dna-followed-ok" : "obs-dna-followed-partial"}`}>
+          Followed {followed}/{total} · {pct}%
+        </span>
+      </div>
+      <table className="obs-dna-table">
+        <tbody>
+          {steps.map((step, i) => (
+            <tr
+              key={`${step.label}-${i}`}
+              className={step.followed === false ? "obs-dna-row-fail" : undefined}
+              title={step.follow_reason || undefined}
+            >
+              <th scope="row">
+                <span className="obs-dna-tick" aria-hidden>
+                  {step.followed === true ? "✅" : step.followed === false ? "❌" : "·"}
+                </span>
+                {step.label}
+              </th>
+              <td>{step.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -371,6 +397,103 @@ function formatDomainPackExtras(
   return steps;
 }
 
+function formatModulesCheckedSteps(
+  pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
+): { label: string; value: string }[] {
+  if (!pack) return [];
+  const rows = pack.modules_checked;
+  const fmt = (r: import("./askObservability").ObservabilityModuleChecked) => {
+    const mod = String(r.module || "?").toUpperCase();
+    const used = r.llm_used ?? r.checked;
+    const loaded = r.engine_loaded !== false;
+    if (!loaded) return `${mod} ❌ not loaded — ${r.reason || "engine missing"}`;
+    if (used) return `${mod} ✅ LLM used — ${r.reason || "cited in answer"}`;
+    return `${mod} ❌ not in answer — ${r.reason || "engine loaded but LLM skipped"}`;
+  };
+  if (Array.isArray(rows) && rows.length) {
+    return [{
+      label: "Chart modules (LLM used)",
+      value: rows.map(fmt).join("\n"),
+    }];
+  }
+  const d1Loaded = pack.d1_engine_loaded ?? Boolean(pack.d1 && !pack.d1.error);
+  const d9Loaded = pack.d9_engine_loaded ?? Boolean(pack.d9 && !pack.d9.error);
+  const d1Ok = pack.d1_checked === true;
+  const d9Ok = pack.d9_checked === true;
+  return [{
+    label: "Chart modules (LLM used)",
+    value: [
+      `D1 ${d1Ok ? "✅ LLM used" : "❌ not in answer"}${d1Loaded ? "" : " (not loaded)"}`,
+      `D9 ${d9Ok ? "✅ LLM used" : "❌ not in answer"}${d9Loaded ? "" : " (not loaded)"}`,
+    ].join("\n"),
+  }];
+}
+
+function resolveActiveEnginePack(
+  exec: ReturnType<typeof resolveAskObservability>["engine_execution"],
+): import("./askObservability").ObservabilityHealthEngineExecution | null | undefined {
+  return (
+    exec?.health_engine_execution
+    || exec?.relationship_engine_execution
+    || exec?.finance_engine_execution
+    || exec?.travel_engine_execution
+    || (exec as { general_chart_engine_execution?: import("./askObservability").ObservabilityHealthEngineExecution | null })
+      .general_chart_engine_execution
+    || exec?.domain_engine_execution
+    || null
+  );
+}
+
+function EngineModuleBadges({
+  pack,
+}: {
+  pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined;
+}) {
+  if (!pack) return null;
+  const rows = pack.modules_checked;
+  const badges =
+    Array.isArray(rows) && rows.length
+      ? rows
+      : [
+          {
+            module: "D1",
+            llm_used: pack.d1_checked,
+            engine_loaded: pack.d1_engine_loaded ?? Boolean(pack.d1 && !pack.d1.error),
+            reason: "D1",
+          },
+          {
+            module: "D9",
+            llm_used: pack.d9_checked,
+            engine_loaded: pack.d9_engine_loaded ?? Boolean(pack.d9 && !pack.d9.error),
+            reason: "D9",
+          },
+        ];
+  return (
+    <span className="obs-module-badges">
+      {badges.map((r) => {
+        const used = r.llm_used ?? r.checked;
+        const loaded = r.engine_loaded !== false;
+        const title = r.reason || (used ? "LLM used in answer" : loaded ? "Loaded but not cited" : "Not loaded");
+        return (
+          <span
+            key={String(r.module || "?")}
+            title={title}
+            className={
+              used
+                ? "obs-module-badge obs-module-ok"
+                : loaded
+                  ? "obs-module-badge obs-module-skip"
+                  : "obs-module-badge obs-module-miss"
+            }
+          >
+            {String(r.module || "?").toUpperCase()} {used ? "✅" : "❌"}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function formatHealthEngineExecutionSteps(
   pack: import("./askObservability").ObservabilityHealthEngineExecution | null | undefined,
   opts?: { domain?: "health" | "relationship" | "finance" | "travel" | "domain" },
@@ -379,6 +502,7 @@ function formatHealthEngineExecutionSteps(
   const domain = opts?.domain || "health";
 
   const steps: { label: string; value: string }[] = [
+    ...formatModulesCheckedSteps(pack),
     ...formatHealthChartFactsSteps(pack.d1, "D1", { domain }),
     ...formatHealthChartFactsSteps(pack.d9, "D9", { domain }),
   ];
@@ -538,108 +662,6 @@ function buildEngineExecutionSteps(
   return steps;
 }
 
-function HealthDnaJudgePanel({
-  audit,
-  domainLabel = "health",
-}: {
-  audit: ObservabilityHealthDnaJudgeAudit | undefined;
-  domainLabel?: string;
-}) {
-  if (!audit?.applies) {
-    return (
-      <p className="detail-muted">
-        Question DNA Judge: health, relationship, finance, travel, general chart, plus Unified+Gap
-        (anger, career, charity, children, dreams, education, enemies, fame, litigation, luck,
-        network, parents, personality, pets, property, remedy, settlement, siblings, spiritual,
-        vastu, vehicle, wellness). Re-ask after API+admin deploy ({domainLabel}).
-      </p>
-    );
-  }
-
-  const contract = audit.contract || {};
-  const ran = audit.enabled && audit.passed != null;
-
-  return (
-    <div className="obs-validator">
-      <div
-        className={`obs-validator-judge ${audit.passed ? "obs-validator-judge-pass" : "obs-validator-judge-fail"}`}
-        style={{
-          padding: "12px 14px",
-          borderRadius: 8,
-          marginBottom: 12,
-          border: `1px solid ${audit.passed ? "#2e7d32" : "#c62828"}`,
-          background: audit.passed ? "rgba(46,125,50,0.08)" : "rgba(198,40,40,0.08)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong>Question DNA LLM Judge</strong>
-          <span className={audit.passed ? "obs-rule-pass" : "obs-rule-fail"}>
-            {!ran ? "—" : audit.passed ? "PASS" : "FAIL"}
-          </span>
-        </div>
-        <p className="detail-muted" style={{ margin: "6px 0 0" }}>
-          Did the answer match what the user asked? (user_wants + intent + normalized question)
-        </p>
-        {!audit.passed && (audit.issues || []).length > 0 ? (
-          <p className="obs-rule-reason" style={{ margin: "8px 0 0", color: "#c62828" }}>
-            {(audit.issues || []).join(" · ")}
-          </p>
-        ) : null}
-        {!audit.passed && audit.fix_hint ? (
-          <p className="detail-muted" style={{ margin: "6px 0 0" }}>
-            Fix hint: {audit.fix_hint}
-          </p>
-        ) : null}
-        {audit.skipped ? (
-          <p className="detail-muted" style={{ margin: "6px 0 0" }}>
-            Skipped: {audit.skipped}
-          </p>
-        ) : null}
-      </div>
-
-      {contract.user_wants || contract.normalized_question ? (
-        <div className="obs-rule-decisions" style={{ marginBottom: 10 }}>
-          {contract.normalized_question ? (
-            <p className="detail-muted">
-              <strong>Normalized Q:</strong> {contract.normalized_question}
-            </p>
-          ) : null}
-          {contract.user_wants ? (
-            <p className="detail-muted">
-              <strong>User wants:</strong> {contract.user_wants}
-            </p>
-          ) : null}
-          {contract.intent ? (
-            <p className="detail-muted">
-              <strong>Intent:</strong> {contract.intent}
-            </p>
-          ) : null}
-          {contract.question_type ? (
-            <p className="detail-muted">
-              <strong>Type:</strong> {contract.question_type}
-            </p>
-          ) : null}
-          {contract.answer_style ? (
-            <p className="detail-muted">
-              <strong>Style:</strong> {contract.answer_style}
-            </p>
-          ) : null}
-          {contract.answer_approach ? (
-            <p className="detail-muted">
-              <strong>Plan:</strong> {contract.answer_approach}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      <p className="detail-muted">
-        Observability only — answer is never blocked by DNA Judge.
-        {audit.source ? ` Source: ${audit.source}` : ""}
-      </p>
-    </div>
-  );
-}
-
 function HealthSelectedBlocksPanel({
   audit,
   domainLabel = "health",
@@ -744,19 +766,6 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
       : null;
   const exec = obs.engine_execution || {};
   const perf = obs.performance || {};
-  const dnaJudgeCandidates = [
-    obs.health_dna_judge_audit,
-    obs.health_validator_audit,
-    obs.relationship_dna_judge_audit,
-    obs.finance_dna_judge_audit,
-    obs.travel_dna_judge_audit,
-    obs.unified_dna_judge_audit,
-  ];
-  // Only pick audits that explicitly apply — never fall back to {applies:false}
-  // (that bug showed "health/relationship/finance/travel only" on career/gap rows).
-  const dnaJudgeAudit = normalizeHealthDnaJudgeAudit(
-    dnaJudgeCandidates.find((a) => a?.applies === true),
-  );
   const selectedBlocksCandidates = [
     obs.health_selected_blocks,
     obs.relationship_selected_blocks,
@@ -764,26 +773,13 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
     obs.travel_selected_blocks,
     obs.general_selected_blocks,
     obs.unified_selected_blocks,
-    (dnaJudgeAudit as ObservabilityHealthDnaJudgeAudit | undefined)?.selected_blocks,
   ];
   const selectedBlocks = selectedBlocksCandidates.find((b) => b?.applies === true);
-  const domainLabel = obs.health_dna_judge_audit?.applies
-    ? "health"
-    : obs.relationship_dna_judge_audit?.applies
-      ? "relationship"
-      : obs.finance_dna_judge_audit?.applies
-        ? "finance"
-        : obs.travel_dna_judge_audit?.applies
-          ? "travel"
-          : obs.general_selected_blocks?.applies
-            ? "general"
-            : obs.unified_dna_judge_audit?.applies || obs.unified_selected_blocks?.applies
-              ? String(
-                  (obs.unified_dna_judge_audit as { domain?: string } | undefined)?.domain ||
-                    exec.unified_domain ||
-                    "unified",
-                )
-              : "all domains";
+  const activeEnginePack = resolveActiveEnginePack(exec);
+  const domainLabel =
+    exec.unified_domain ||
+    row.topic ||
+    (exec.health_engine_execution ? "health" : exec.relationship_engine_execution ? "relationship" : "engine");
 
   return (
     <div className="obs-debugger">
@@ -793,7 +789,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
           <span className="obs-version-badge">v{OBS_DEBUGGER_VERSION}</span>
         </div>
         <p className="detail-muted">
-          Question → DNA → Routing → Modules → Rules → Evidence → Score → Verdict → Narrator → Answer
+          Question → DNA → Routing → Engine → Evidence → Score → Verdict → Answer
         </p>
         <p className="obs-telemetry detail-muted">
           {perf.model || row.llm_model ? `Model ${perf.model || row.llm_model}` : null}
@@ -819,7 +815,10 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
       ) : null}
 
       <Section title="1. Question DNA" stars={1} className="obs-section-dna">
-        <DnaPipelineGrid steps={obs.question_dna_pipeline || []} />
+        <DnaComplianceBox
+          steps={obs.question_dna_pipeline || []}
+          summary={obs.question_dna_followed_summary}
+        />
       </Section>
 
       <Section title="2. Engine Execution" stars={5}>
@@ -827,6 +826,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
           {exec.display_mode === "health_charts" || exec.health_engine_execution ? (
             <>
               Health charts: <code>D1 + D9</code>
+              <EngineModuleBadges pack={activeEnginePack} />
               {exec.health_engine_execution?.schema_version
                 ? ` · ${exec.health_engine_execution.schema_version}`
                 : null}
@@ -835,6 +835,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
             exec.relationship_engine_execution ? (
             <>
               Relationship charts: <code>D1 + D9</code>
+              <EngineModuleBadges pack={activeEnginePack} />
               {exec.relationship_engine_execution?.schema_version
                 ? ` · ${exec.relationship_engine_execution.schema_version}`
                 : null}
@@ -842,6 +843,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
           ) : exec.display_mode === "finance_charts" || exec.finance_engine_execution ? (
             <>
               Finance charts: <code>D1 + D9</code>
+              <EngineModuleBadges pack={activeEnginePack} />
               {exec.finance_engine_execution?.schema_version
                 ? ` · ${exec.finance_engine_execution.schema_version}`
                 : null}
@@ -849,6 +851,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
           ) : exec.display_mode === "travel_charts" || exec.travel_engine_execution ? (
             <>
               Travel charts: <code>D1 + D9</code>
+              <EngineModuleBadges pack={activeEnginePack} />
               {exec.travel_engine_execution?.schema_version
                 ? ` · ${exec.travel_engine_execution.schema_version}`
                 : null}
@@ -858,6 +861,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
               .general_chart_engine_execution ? (
             <>
               General charts: <code>D1 + D9 + DASHA</code>
+              <EngineModuleBadges pack={activeEnginePack} />
               {(exec as { general_chart_engine_execution?: { schema_version?: string } | null })
                 .general_chart_engine_execution?.schema_version
                 ? ` · ${(exec as { general_chart_engine_execution?: { schema_version?: string } }).general_chart_engine_execution?.schema_version}`
@@ -874,6 +878,7 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
                   : "Domain";
                 return <>{label} charts: <code>D1 + D9</code></>;
               })()}
+              <EngineModuleBadges pack={activeEnginePack} />
               {exec.domain_engine_execution?.schema_version
                 ? ` · ${exec.domain_engine_execution.schema_version}`
                 : null}
@@ -888,12 +893,8 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
         <PipelineList steps={buildEngineExecutionSteps(exec, row, ctx)} />
       </Section>
 
-      <Section title="3. Question DNA Judge" stars={5}>
-        <HealthDnaJudgePanel audit={dnaJudgeAudit} domainLabel={domainLabel} />
-      </Section>
-
-      <Section title="4. LLM Selected JSON Blocks" stars={5}>
-        <HealthSelectedBlocksPanel audit={selectedBlocks} domainLabel={domainLabel} />
+      <Section title="3. LLM Selected JSON Blocks" stars={5}>
+        <HealthSelectedBlocksPanel audit={selectedBlocks} domainLabel={String(domainLabel)} />
       </Section>
     </div>
   );

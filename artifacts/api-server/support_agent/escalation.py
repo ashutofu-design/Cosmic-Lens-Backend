@@ -4,9 +4,9 @@ from __future__ import annotations
 from support_agent.knowledge import pick
 
 FALLBACK = {
-    "en": "Happy to help. Cosmic Lens has no wallet — paid orders show on Help → Transactions. Ask credits are under Profile → Cosmic Packs. Pro PDFs (Love Reality, Milan, Numerology) are written by our expert after pay, not instant AI, and arrive in My Reports.",
-    "hn": "Ji, Cosmic Lens mein wallet nahi hota — paid orders Help → Transactions pe dikhte hain. Ask credits Profile → Cosmic Packs mein. Pro PDF (Love Reality, Milan, Numerology) expert likhte hain pay ke baad, instant AI nahi, My Reports mein aati hai.",
-    "hi": "जी, Cosmic Lens में वॉलेट नहीं होता — पेड ऑर्डर हेल्प → ट्रांजैक्शन्स में दिखते हैं। Ask क्रेडिट प्रोफ़ाइल → कॉस्मिक पैक्स में। प्रो PDF विशेषज्ञ लिखते हैं, तुरंत AI नहीं, माई रिपोर्ट्स में आती है।",
+    "en": "Tell me the app issue — payment, PDF, login, or how-to — and I’ll answer that.",
+    "hn": "App ka issue batao — payment, PDF, login, ya how-to — usi ka jawab dunga.",
+    "hi": "ऐप की समस्या बताएं — पेमेंट, PDF, लॉगिन — उसी का जवाब दूँगा।",
 }
 
 HANDOFF = {
@@ -16,9 +16,9 @@ HANDOFF = {
 }
 
 OUT_OF_SCOPE = {
-    "en": "I can’t share internal system details, code, or private data. I only help with the Cosmic Lens app — payments, My Reports, Profile, and how-to.",
-    "hn": "Internal system details, code, ya private data share nahi kar sakte. Sirf Cosmic Lens app how-to: payments, My Reports, Profile.",
-    "hi": "आंतरिक सिस्टम, कोड या निजी डेटा यहाँ नहीं दे सकते। केवल Cosmic Lens ऐप हाउ-टू।",
+    "en": "I can’t share internal stats, sales counts, other customers’ data, code, or admin details. I only help with YOUR Cosmic Lens account — payments, My Reports, Profile, and how-to. A team member can join if needed.",
+    "hn": "Internal stats, sales counts, dusre customers ka data, code, ya admin details share nahi kar sakte. Sirf AAPKE Cosmic Lens account pe help: payments, My Reports, Profile, how-to. Zarurat ho to team join karegi.",
+    "hi": "आंतरिक आँकड़े, बिक्री संख्या, अन्य ग्राहक डेटा, कोड या एडमिन विवरण यहाँ नहीं दे सकते। केवल आपके Cosmic Lens खाते पर मदद — पेमेंट, माई रिपोर्ट्स, प्रोफ़ाइल।",
 }
 
 OFF_APP = {

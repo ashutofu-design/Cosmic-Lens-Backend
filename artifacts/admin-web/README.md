@@ -1,4 +1,6 @@
-# Cosmic Lens Admin (local)
+# Cosmic Lens web (public site + admin)
+
+Public marketing homepage is `/`. The existing admin dashboard is preserved at `/admin` and still requires login. Help & Support is `/help-support`.
 
 Browser dashboard for users, payments, and reports. **Not** included in the Play Store app.
 
@@ -56,7 +58,9 @@ cd D:\Cosmic-Lens-Backend
 
 | Use | URL |
 |-----|-----|
-| Admin in browser (no pnpm) | `http://187.127.174.55/` |
+| Public homepage | `http://187.127.174.55/` |
+| Admin panel (login required) | `http://187.127.174.55/admin` |
+| Help & Support | `http://187.127.174.55/help-support` |
 | pnpm dev UI | `http://127.0.0.1:5174` + `.env` → `VITE_API_PROXY_TARGET=http://187.127.174.55` |
 | Mobile / API | `https://api.cosmiclens.app` (DNS A → 187.127.174.55) |
 

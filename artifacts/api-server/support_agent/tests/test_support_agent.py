@@ -21,6 +21,19 @@ class SupportAgentTests(unittest.TestCase):
         )
         self.assertFalse(leaked)
         self.assertIn("expert", text.lower())
+        self.assertNotRegex(text, re.compile(r"Happy to help", re.I))
+
+    def test_guard_strips_wallet_dump_from_howto(self) -> None:
+        raw = (
+            "Happy to help. Cosmic Lens has no wallet — paid orders show on Help → Transactions. "
+            "Ask credits are under Profile → Cosmic Packs. Pro PDFs (Love Reality, Milan, Numerology) "
+            "are written by our expert after pay, not instant AI, and arrive in My Reports. "
+            "AstroVastu is under Life Map → Explore."
+        )
+        text, leaked = guard(raw, "en", "AstroVastu kaise use karun?")
+        self.assertFalse(leaked)
+        self.assertNotRegex(text, re.compile(r"no wallet|Happy to help|Transactions", re.I))
+        self.assertIn("AstroVastu", text)
 
     def test_ai_answers_relationship_report(self) -> None:
         import support_agent.agent as sag
@@ -46,24 +59,94 @@ class SupportAgentTests(unittest.TestCase):
         finally:
             sag._llm = orig
 
-    def test_no_ai_falls_back_to_handoff(self) -> None:
+    def test_no_ai_falls_back_to_knowledge(self) -> None:
         import support_agent.agent as sag
 
         orig = sag._llm
         sag._llm = lambda *_a, **_k: None  # type: ignore[method-assign]
         try:
-            r = run("qwerty asdf zxcvb plugh", lang="en")
-            self.assertTrue(r["escalate"])
-            self.assertEqual(r["source"], "ai_unavailable")
-            self.assertEqual(r["agent_state"], "waiting_for_human")
+            r = run("What is Numerology Pro?", lang="en")
+            self.assertFalse(r["escalate"])
+            self.assertEqual(r["source"], "knowledge_retrieve")
+            self.assertEqual(r["agent_state"], "answered")
+            self.assertTrue(len(r["reply"]) > 20)
         finally:
             sag._llm = orig
+
+    def test_retrieve_covers_high_gaps(self) -> None:
+        from support_agent.retrieve import clear_index_cache, retrieve_chunks
+
+        clear_index_cache()
+        cases = {
+            "Palmistry Pro price": "vastu",
+            "How does V3 Live work": "ask_packs",
+            "refund policy": "payments",
+            "Birth Time Rectification": "faq",
+            "How to cancel subscription": "subscription",
+            "Is there a monthly Pro plan": "subscription",
+            "What is Dosh Analysis": "home_radar",
+            "How does Panchang work": "app",
+            "What is Personalization": "app",
+            "Career unlock 1 rupee": "faq",
+            "Ask free vs pack vs plan questions": "ask_packs",
+            "AstroVastu room scan credits": "vastu",
+            "Sabse sasta pack kitne ka hota hai": "ask_packs",
+            "V3 Live me half hour session roughly kitne ka": "ask_packs",
+            "Poora 1 hour V3 Live book karun to total kitna": "ask_packs",
+            "Kundli Milan ka personalized video kitna costly hai": "relationship",
+            "Sirf 15 minute live guide se baat karni ho to kitna charge": "ask_packs",
+        }
+        for q, src in cases.items():
+            ch = retrieve_chunks(q, top_k=5, max_chars=2200)
+            self.assertGreaterEqual(len(ch), 1, q)
+            self.assertTrue(
+                any(src in c.source for c in ch),
+                f"{q} expected source {src}, got {[c.source for c in ch]}",
+            )
+
+        # Price asks must surface the ₹ price chunk, not how-to / dosh
+        pack = retrieve_chunks("Sabse sasta pack kitne ka?", top_k=3)
+        self.assertTrue(
+            any("₹49" in c.text or "Starter" in c.text for c in pack),
+            [c.title for c in pack],
+        )
+        v3 = retrieve_chunks("V3 Live me half hour session roughly kitne ka?", top_k=3)
+        self.assertTrue(
+            any("₹699" in c.text or "30" in c.text for c in v3),
+            [c.title + ":" + c.text[:80] for c in v3],
+        )
+        milan = retrieve_chunks(
+            "Kundli Milan ka personalized video kitna costly hai?", top_k=3
+        )
+        self.assertTrue(
+            any("relationship" in c.source and "₹1299" in c.text for c in milan),
+            [(c.source, c.title) for c in milan],
+        )
+        self.assertFalse(
+            any("dosh" in (c.title or "").lower() for c in milan[:1]),
+            milan[0].title if milan else "empty",
+        )
+
+    def test_nonsense_no_retrieval_escalates(self) -> None:
+        r = run("qwerty asdf zxcvb plugh", lang="en")
+        self.assertTrue(r["escalate"])
+        self.assertEqual(r["source"], "no_retrieval")
 
     def test_knowledge_base_loads(self) -> None:
         from support_agent.knowledge import ALLOWED_KNOWLEDGE
 
         self.assertIn("Numerology", ALLOWED_KNOWLEDGE)
         self.assertIn("NO wallet", ALLOWED_KNOWLEDGE)
+
+    def test_internal_sales_ask_refuses(self) -> None:
+        r = run(
+            "give me internal data how many clients buyed today",
+            lang="en",
+        )
+        self.assertTrue(r["escalate"])
+        self.assertEqual(r["source"], "internal_refuse")
+        self.assertNotRegex(r["reply"], re.compile(r"AstroVastu|expert-written", re.I))
+        self.assertRegex(r["reply"], re.compile(r"internal|sales|can.?t share", re.I))
 
     def test_wallet_tool_has_no_wallet(self) -> None:
         from support_agent.tools import get_wallet_status

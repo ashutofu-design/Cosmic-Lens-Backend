@@ -716,6 +716,15 @@ button:disabled {
   animation: shake-in 0.45s var(--ease-out-expo);
 }
 
+.success {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  color: #bbf7d0;
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+}
+
 @keyframes shake-in {
   0% {
     opacity: 0;
@@ -748,6 +757,265 @@ button:disabled {
   animation: fade-up 0.4s var(--ease-out-expo);
 }
 
+.user-id-lookup {
+  margin: 14px 0 22px;
+}
+
+.user-id-lookup > h3 {
+  margin-top: 0;
+}
+
+.user-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.user-usage-grid .stat-card {
+  padding: 14px;
+}
+
+.user-usage-grid .stat-card .value {
+  font-size: 1.2rem;
+}
+
+.product-access-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.product-access-grid p {
+  margin: 8px 0 0;
+}
+
+.lifemap-subtabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+@media (min-width: 720px) {
+  .lifemap-subtabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.lifemap-subtab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 10px;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card, rgba(255, 255, 255, 0.03));
+  color: var(--text, #e5e7eb);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.lifemap-subtab.active {
+  border-color: var(--accent, #a78bfa);
+  background: rgba(167, 139, 250, 0.14);
+  color: var(--accent, #a78bfa);
+}
+
+.lifemap-card {
+  margin-top: 18px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.lifemap-card-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--accent, #a78bfa);
+  background: rgba(167, 139, 250, 0.06);
+}
+
+.lifemap-card-head h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lifemap-count {
+  display: inline-block;
+  min-width: 24px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.18);
+  color: var(--accent, #a78bfa);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.lifemap-table-wrap {
+  overflow-x: auto;
+}
+
+.lifemap-bookings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.lifemap-empty {
+  padding: 18px 16px;
+  color: var(--muted, #94a3b8);
+}
+
+.lifemap-booking {
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent, #a78bfa);
+}
+
+.lifemap-booking-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.lifemap-booking-head h3 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+
+.lifemap-booking-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lifemap-block-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted, #94a3b8);
+  font-weight: 700;
+  margin: 4px 0 8px;
+}
+
+.lifemap-booking-meta strong {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #94a3b8);
+  margin-bottom: 2px;
+}
+
+.lifemap-people {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lifemap-person {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.lifemap-person strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.lifemap-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.lifemap-room-thumb {
+  display: block;
+  margin-top: 8px;
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.lifemap-report-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.lifemap-report-input {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.lifemap-booking-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lifemap-booking-actions .primary {
+  width: 100%;
+  min-height: 46px;
+}
+
+.lifemap-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.lifemap-head-actions .danger {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+}
+
+.lifemap-head-actions .primary {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
 .detail-account {
   margin-bottom: 16px;
   padding-bottom: 14px;
@@ -764,13 +1032,6 @@ button:disabled {
 
 .detail-table-compact {
   margin-bottom: 14px;
-}
-
-.detail-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
 }
 
 .detail-muted {
@@ -1810,6 +2071,10 @@ code {
     gap: 10px;
   }
 
+  .user-usage-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .stat-card {
     padding: 14px 14px;
   }
@@ -1851,10 +2116,22 @@ code {
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Phone: tables scroll sideways instead of squeezing columns so thin
+     that badges/buttons break into one letter per line. */
   table {
-    font-size: 0.82rem;
-    min-width: 0;
+    font-size: 0.84rem;
     width: 100%;
+    min-width: 560px;
+    table-layout: auto;
+  }
+
+  /* Single-column layouts (Ask Q&A) and compact DNA tables keep natural width. */
+  table:has(.ask-q-block),
+  .obs-dna-table {
+    min-width: 0;
+  }
+
+  .obs-dna-table {
     table-layout: fixed;
   }
 
@@ -1862,9 +2139,31 @@ code {
   td {
     padding: 10px 12px;
     vertical-align: top;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-    max-width: 100%;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+
+  th {
+    white-space: nowrap;
+  }
+
+  .badge {
+    white-space: nowrap;
+  }
+
+  td button,
+  .actions-cell button,
+  .row-actions button {
+    white-space: nowrap;
+    min-height: 40px;
+    padding: 8px 14px;
+  }
+
+  .actions-cell,
+  .row-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
   .ask-q-block {
@@ -1887,31 +2186,37 @@ code {
   }
 
   .user-detail-panel,
-  .detail-account,
-  .detail-actions {
+  .detail-account {
     overflow-x: auto;
   }
 
-  .detail-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .detail-actions button {
-    width: 100%;
-    min-height: 44px;
-  }
-
+  /* Ask list row: badge on its own compact line, then Copy + View share one row 2:1 */
   .ask-q-actions {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: stretch;
+    gap: 8px;
+  }
+
+  .ask-q-actions .question-lang-badge {
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 36px;
+    font-size: 0.7rem;
   }
 
   .ask-q-actions .copy-text-btn,
   .ask-q-actions button {
-    width: 100%;
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
     min-height: 44px;
     text-align: center;
+    white-space: nowrap;
+  }
+
+  .ask-q-actions button.copy-text-btn:first-of-type {
+    flex: 2 1 0;
   }
 
   .ask-detail-title {
@@ -2140,6 +2445,39 @@ code {
   margin: 0 0 12px;
 }
 
+.obs-module-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.obs-module-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.obs-module-ok {
+  background: rgba(34, 197, 94, 0.14);
+  color: #15803d;
+}
+
+.obs-module-miss {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.obs-module-skip {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
 .obs-pipeline-value.obs-pipeline-pre {
   white-space: pre-wrap;
 }
@@ -2197,6 +2535,60 @@ code {
 
 .obs-section-dna .obs-section-body {
   padding: 2px 4px 4px;
+}
+
+.obs-dna-box {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.18);
+  padding: 8px 10px 6px;
+}
+
+.obs-dna-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.obs-dna-box-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.obs-dna-followed-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.obs-dna-followed-ok {
+  background: rgba(34, 197, 94, 0.14);
+  color: #15803d;
+}
+
+.obs-dna-followed-partial {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.obs-dna-tick {
+  display: inline-block;
+  width: 1.1rem;
+  margin-right: 2px;
+}
+
+.obs-dna-row-fail td,
+.obs-dna-row-fail th {
+  background: rgba(239, 68, 68, 0.06);
 }
 
 .obs-dna-table {

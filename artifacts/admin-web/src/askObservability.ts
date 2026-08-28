@@ -4,6 +4,14 @@ import { formatDate, formatInr } from "./api";
 export interface ObservabilityPipelineStep {
   label: string;
   value: string;
+  followed?: boolean;
+  follow_reason?: string;
+}
+
+export interface ObservabilityDnaFollowedSummary {
+  total?: number;
+  followed_count?: number;
+  pct?: number;
 }
 
 export interface ObservabilityModule {
@@ -271,8 +279,22 @@ export interface ObservabilityHealthChartFacts {
 
 export type ObservabilityHealthD1Facts = ObservabilityHealthChartFacts;
 
+export interface ObservabilityModuleChecked {
+  module?: string;
+  checked?: boolean;
+  engine_loaded?: boolean;
+  llm_used?: boolean;
+  reason?: string;
+}
+
 export interface ObservabilityHealthEngineExecution {
   schema_version?: string;
+  d1_checked?: boolean;
+  d9_checked?: boolean;
+  d1_engine_loaded?: boolean;
+  d9_engine_loaded?: boolean;
+  modules_llm_used?: string[];
+  modules_checked?: ObservabilityModuleChecked[];
   d1?: ObservabilityHealthChartFacts;
   d9?: ObservabilityHealthChartFacts;
   lagnesh?: {
@@ -340,6 +362,7 @@ export interface ObservabilityHallucinationSummary {
 export interface AskObservability {
   user_question?: ObservabilityPipelineStep[];
   question_dna_pipeline?: ObservabilityPipelineStep[];
+  question_dna_followed_summary?: ObservabilityDnaFollowedSummary | null;
   routing_decision?: {
     selected_engine?: string;
     why_selected?: string;
@@ -359,13 +382,19 @@ export interface AskObservability {
   finance_selected_blocks?: ObservabilityHealthSelectedBlocks;
   travel_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
   travel_selected_blocks?: ObservabilityHealthSelectedBlocks;
+  general_selected_blocks?: ObservabilityHealthSelectedBlocks;
+  /** Career / education / children / property / vehicle / litigation / luck / network / gap topics */
+  unified_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit;
+  unified_selected_blocks?: ObservabilityHealthSelectedBlocks;
   engine_execution?: {
-    display_mode?: "health_charts" | "relationship_charts" | "finance_charts" | "travel_charts" | "domain_charts" | "engine_rules";
+    display_mode?: "health_charts" | "relationship_charts" | "finance_charts" | "travel_charts" | "general_charts" | "domain_charts" | "engine_rules";
     health_engine_execution?: ObservabilityHealthEngineExecution | null;
     relationship_engine_execution?: ObservabilityHealthEngineExecution | null;
     finance_engine_execution?: ObservabilityHealthEngineExecution | null;
     travel_engine_execution?: ObservabilityHealthEngineExecution | null;
+    general_chart_engine_execution?: ObservabilityHealthEngineExecution | null;
     domain_engine_execution?: ObservabilityHealthEngineExecution | null;
+    unified_domain?: string | null;
     engine_name?: string;
     engine_version?: string;
     modules?: ObservabilityModule[];
@@ -491,7 +520,7 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.6.7";
+export const OBS_DEBUGGER_VERSION = "2.7.0";
 
 const DNA_DOMAIN_LABEL: Record<string, string> = {
   love: "Relationship",
@@ -638,7 +667,11 @@ function deriveAnswerApproach(
   risk: string,
 ): string {
   const raw = String(dnaItem.answer_approach || li.answer_approach || "").trim();
-  if (raw) return raw;
+  if (raw && !/^(followup_lock|phase2_understand|phase2|dna_fallback)$/i.test(raw)) {
+    return raw;
+  }
+  const userWants = String(dnaItem.user_wants || li.user_wants || "").trim();
+  if (userWants.length >= 12) return userWants;
   const parts: string[] = [];
   if (domain === "health") {
     parts.push(
@@ -830,6 +863,329 @@ export function buildFullDnaPipeline(
       ),
     },
   ];
+}
+
+const DNA_DOMAIN_ANSWER_RX: Record<string, RegExp> = {
+  finance: /\b(paisa|paise|money|wealth|dhan|income|profit|loss|invest|saving|loan|debt|finance|salary|kamai|business)\b/i,
+  health: /\b(health|swasthya|sehat|bimari|disease|body|treatment|doctor|pain|energy|vitality|mental)\b/i,
+  love: /\b(love|pyar|prem|rishta|relationship|partner|bf|gf|dil|feelings|mohabbat)\b/i,
+  marriage: /\b(shaadi|shadi|marriage|vivah|wedding|husband|wife|pati|patni|spouse)\b/i,
+  career: /\b(career|job|naukri|promotion|office|work|profession|business|salary)\b/i,
+  education: /\b(education|padhai|study|exam|degree|college|school|learning)\b/i,
+  travel: /\b(travel|abroad|visa|foreign|yatra|trip|migration|settle)\b/i,
+  children: /\b(child|children|baby|pregnancy|conceive|baccha|santaan|putra|putri)\b/i,
+  property: /\b(property|ghar|house|land|real\s*estate|flat|home|makaan)\b/i,
+  spiritual: /\b(spiritual|adhyatm|meditation|moksha|guru|bhakti|dharma)\b/i,
+};
+
+const DNA_TIME_REF_RX =
+  /\b(20\d\d|19\d\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|mahin|saal|varsh|month|year|week|window|period|dasha|antardasha|mahadasha|transit|gochar|abhi\s*se|jald|soon|currently)\b/i;
+
+const DNA_STOPWORDS = new Set([
+  "about", "after", "before", "could", "should", "would", "their", "there",
+  "which", "where", "when", "what", "that", "this", "with", "from", "have",
+  "will", "your", "mine", "mera", "meri", "mere", "kya", "hai", "hoga", "hogi",
+]);
+
+function dnaContentWords(text: string): string[] {
+  return (text.toLowerCase().match(/[a-z]+/g) || []).filter(
+    (w) => w.length >= 4 && !DNA_STOPWORDS.has(w),
+  );
+}
+
+function dnaValuePresent(value: string): boolean {
+  const s = (value || "").trim();
+  return Boolean(s && s !== "—" && s !== "-" && s.toLowerCase() !== "unknown");
+}
+
+function dnaWordHits(words: string[], answerLow: string, minRatio = 0.25): { ok: boolean; reason: string } {
+  if (!words.length) return { ok: true, reason: "seen in DNA" };
+  const hits = words.filter((w) => answerLow.includes(w));
+  const ok = hits.length >= Math.max(1, Math.floor(words.length * minRatio));
+  const detail = `${hits.length}/${words.length} keywords in answer`;
+  return ok ? { ok, reason: detail } : { ok: false, reason: `weak — ${detail}` };
+}
+
+function dnaFieldFollowed(
+  label: string,
+  value: string,
+  contract: Record<string, unknown>,
+  answer: string,
+): { ok: boolean; reason: string } {
+  if (!dnaValuePresent(value)) return { ok: false, reason: "DNA value missing" };
+  const ans = (answer || "").trim();
+  if (!ans) return { ok: false, reason: "no final answer" };
+  const ansLow = ans.toLowerCase();
+  const key = label.trim().toLowerCase();
+
+  if (key === "normalized") {
+    return dnaWordHits(dnaContentWords(value).slice(0, 8), ansLow, 0.2);
+  }
+  if (key === "domain") {
+    let dom = String(contract.domain || "").trim().toLowerCase();
+    const m = value.match(/\(([^)]+)\)\s*$/);
+    if (m) dom = m[1].trim().toLowerCase();
+    const rx = DNA_DOMAIN_ANSWER_RX[dom];
+    if (rx && rx.test(ans)) return { ok: true, reason: `${dom} theme in answer` };
+    if (rx) return { ok: false, reason: `${dom} theme not detected in answer` };
+    return { ok: true, reason: "domain seen in DNA" };
+  }
+  if (key === "intent" || key === "llm understand question") {
+    return dnaWordHits(dnaContentWords(value).slice(0, 10), ansLow, 0.2);
+  }
+  if (key === "llm answer plan") {
+    return dnaWordHits(dnaContentWords(value).slice(0, 12), ansLow, 0.15);
+  }
+  if (key === "bucket") {
+    let bucket = String(contract.bucket || "").trim().toLowerCase();
+    const m = value.match(/\(([^)]+)\)/);
+    if (m) bucket = m[1].trim().toLowerCase();
+    const parts = bucket.split(/[_\s]+/).filter((p) => p.length >= 3);
+    if (parts.some((p) => ansLow.includes(p))) return { ok: true, reason: "bucket theme in answer" };
+    return { ok: false, reason: "bucket theme weak in answer" };
+  }
+  if (key === "timing required") {
+    if (/^yes$/i.test(value.trim())) {
+      const ok = DNA_TIME_REF_RX.test(ans);
+      return ok ? { ok: true, reason: "WHEN answered" } : { ok: false, reason: "WHEN missing in answer" };
+    }
+    return { ok: true, reason: "timing not required" };
+  }
+  if (key === "question type") {
+    const qtype = String(contract.question_type || value).trim().toLowerCase();
+    if (qtype === "timing" || contract.timing) {
+      const ok = DNA_TIME_REF_RX.test(ans);
+      return ok ? { ok: true, reason: "timing type honored" } : { ok: false, reason: "timing answer missing" };
+    }
+    if (qtype === "decision") {
+      const ok = /\b(yes|no|maybe|haan|nahi|shayad|possible|unlikely|better|avoid)\b/i.test(ans);
+      return ok ? { ok: true, reason: "decision tone present" } : { ok: false, reason: "decision unclear" };
+    }
+    return { ok: true, reason: `type=${qtype}` };
+  }
+  if (key === "answer style") {
+    const sentences = ans.split(/[.!?।]+/).filter((s) => s.trim());
+    const style = String(contract.answer_style || "").trim().toLowerCase();
+    if (style === "short_paragraph" && sentences.length < 2) {
+      return { ok: false, reason: `too short (${sentences.length} sentences)` };
+    }
+    if ((style === "detailed_explain" || style === "detailed") && sentences.length < 3) {
+      return { ok: false, reason: `not detailed enough (${sentences.length} sentences)` };
+    }
+    return { ok: true, reason: `style ok (${sentences.length} sentences)` };
+  }
+  if (
+    key === "confidence" ||
+    key === "bucket match" ||
+    key === "understanding confidence" ||
+    key === "engine archetype" ||
+    key === "modules" ||
+    key === "follow-up" ||
+    key === "multiple questions" ||
+    key === "subject" ||
+    key === "target" ||
+    key === "time context" ||
+    key === "emotion" ||
+    key === "risk"
+  ) {
+    return { ok: true, reason: "seen in DNA contract" };
+  }
+  return { ok: true, reason: "seen in DNA" };
+}
+
+function dnaContractFromCtx(ctx: AskLlmContext | null): Record<string, unknown> {
+  const item = getDnaPrimaryItem(ctx) || {};
+  return {
+    domain: item.domain,
+    bucket: item.bucket,
+    intent: item.intent,
+    subject: item.subject,
+    target: item.target,
+    question_type: item.question_type,
+    timing: item.timing,
+    tense: item.tense,
+    emotion: item.emotion,
+    risk: item.risk,
+    answer_style: item.answer_style,
+  };
+}
+
+export function enrichDnaPipelineFollowed(
+  steps: ObservabilityPipelineStep[],
+  answer: string,
+  ctx: AskLlmContext | null,
+): { steps: ObservabilityPipelineStep[]; summary: ObservabilityDnaFollowedSummary } {
+  if (steps.some((s) => s.followed != null)) {
+    const followedCount = steps.filter((s) => s.followed === true).length;
+    const total = steps.length;
+    return {
+      steps,
+      summary: {
+        total,
+        followed_count: followedCount,
+        pct: total ? Math.round((100 * followedCount) / total) : 0,
+      },
+    };
+  }
+  const contract = dnaContractFromCtx(ctx);
+  let followedCount = 0;
+  const enriched = steps.map((step) => {
+    const { ok, reason } = dnaFieldFollowed(step.label, step.value, contract, answer);
+    if (ok) followedCount += 1;
+    return { ...step, followed: ok, follow_reason: reason };
+  });
+  const total = enriched.length;
+  return {
+    steps: enriched,
+    summary: {
+      total,
+      followed_count: followedCount,
+      pct: total ? Math.round((100 * followedCount) / total) : 0,
+    },
+  };
+}
+
+const ENGINE_PLANETS = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"] as const;
+const ENGINE_D1_RX = /\b(d1|birth\s*chart|rashi\s*chart|lagna)\b/i;
+const ENGINE_D9_RX = /\b(d9|navamsa|navamsha|vargottama)\b/i;
+const ENGINE_DASHA_RX = /\b(dasha|mahadasha|antardasha|pratyantar|\bmd\b|\bad\b|\bpd\b)\b/i;
+const ENGINE_TRANSIT_RX = /\b(transit|gochar)\b/i;
+const ENGINE_TIME_RX =
+  /\b(20\d\d|19\d\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|mahin|saal|varsh|month|year|week|window|period|phase|jald|soon|currently)\b/i;
+const ENGINE_PH_RX =
+  /\b(Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn|Rahu|Ketu)\b.{0,48}?(?:(?:ghar|house|h)\s*(\d{1,2})|(\d{1,2})(?:st|nd|rd|th)?\s*(?:ghar|house))/i;
+
+function engineChartOk(chart: unknown): chart is Record<string, unknown> {
+  return Boolean(chart && typeof chart === "object" && !(chart as { error?: string }).error);
+}
+
+function enginePlanetHouses(chart: unknown): Record<string, Set<number>> {
+  const out: Record<string, Set<number>> = {};
+  if (!engineChartOk(chart)) return out;
+  for (const row of (chart.planets as unknown[]) || []) {
+    if (!row || typeof row !== "object") continue;
+    const name = String((row as { name?: string }).name || "").trim().toLowerCase();
+    const house = Number((row as { house?: number }).house || 0);
+    if (name && house >= 1 && house <= 12) {
+      if (!out[name]) out[name] = new Set();
+      out[name].add(house);
+    }
+  }
+  return out;
+}
+
+function enginePlanetHouseCites(answer: string): Array<[string, number]> {
+  const cites: Array<[string, number]> = [];
+  const rx = new RegExp(ENGINE_PH_RX.source, "gi");
+  let m: RegExpExecArray | null;
+  while ((m = rx.exec(answer)) !== null) {
+    const planet = String(m[1] || "").trim();
+    const house = Number(m[2] || m[3] || 0);
+    if (planet && house >= 1 && house <= 12) cites.push([planet, house]);
+  }
+  return cites;
+}
+
+function engineDefaultModules(pack: Record<string, unknown>): string[] {
+  const charts = pack.charts_used;
+  if (Array.isArray(charts) && charts.length) {
+    return charts.map((c) => String(c).trim().toUpperCase()).filter(Boolean);
+  }
+  const mods = ["D1"];
+  if (engineChartOk(pack.d9)) mods.push("D9");
+  const dasha = pack.dasha_timing_compact as Record<string, unknown> | undefined;
+  if (dasha && (dasha.current || (dasha.top_windows as unknown[])?.length)) mods.push("DASHA");
+  return mods;
+}
+
+function engineModuleLoaded(mod: string, pack: Record<string, unknown>): boolean {
+  const m = mod.toUpperCase();
+  if (m === "D1") return engineChartOk(pack.d1);
+  if (m === "D9") return engineChartOk(pack.d9);
+  if (m === "DASHA") {
+    const dc = pack.dasha_timing_compact as Record<string, unknown> | undefined;
+    return Boolean(dc && (dc.current || (dc.top_windows as unknown[])?.length) && !dc.error);
+  }
+  if (m === "TRANSIT") return Boolean(pack.transit || pack.transit_facts);
+  return false;
+}
+
+function engineModuleLlmUsed(mod: string, answer: string, pack: Record<string, unknown>): { ok: boolean; reason: string } {
+  const text = (answer || "").trim();
+  if (!text) return { ok: false, reason: "no final answer" };
+  const m = mod.toUpperCase();
+  const cites = enginePlanetHouseCites(text);
+  const d1Map = enginePlanetHouses(pack.d1);
+  const d9Map = enginePlanetHouses(pack.d9);
+
+  if (m === "D1") {
+    if (ENGINE_D1_RX.test(text)) return { ok: true, reason: "D1/lagna cited" };
+    for (const [planet, house] of cites) {
+      if (d1Map[planet.toLowerCase()]?.has(house)) return { ok: true, reason: `${planet} H${house} → D1` };
+    }
+    for (const planet of ENGINE_PLANETS) {
+      if (new RegExp(`\\b${planet}\\b`, "i").test(text) && d1Map[planet.toLowerCase()]) {
+        return { ok: true, reason: `${planet} cited (D1)` };
+      }
+    }
+    return { ok: false, reason: "D1 not used in answer" };
+  }
+  if (m === "D9") {
+    if (ENGINE_D9_RX.test(text)) return { ok: true, reason: "D9/navamsa cited" };
+    for (const [planet, house] of cites) {
+      if (d9Map[planet.toLowerCase()]?.has(house)) return { ok: true, reason: `${planet} H${house} → D9` };
+    }
+    return { ok: false, reason: "D9 not used in answer" };
+  }
+  if (m === "DASHA") {
+    if (ENGINE_DASHA_RX.test(text) || ENGINE_TIME_RX.test(text)) {
+      return { ok: true, reason: "dasha/timing cited" };
+    }
+    return { ok: false, reason: "dasha not used in answer" };
+  }
+  if (m === "TRANSIT") {
+    return ENGINE_TRANSIT_RX.test(text)
+      ? { ok: true, reason: "transit cited" }
+      : { ok: false, reason: "transit not used in answer" };
+  }
+  return { ok: false, reason: `${m} not detected in answer` };
+}
+
+function enrichEnginePackModulesLlmUsed(
+  pack: ObservabilityHealthEngineExecution | null | undefined,
+  answer: string,
+  requiredModules?: string[],
+): ObservabilityHealthEngineExecution | null | undefined {
+  if (!pack || typeof pack !== "object") return pack;
+  if (Array.isArray(pack.modules_checked) && pack.modules_checked.some((r) => r.llm_used != null)) {
+    return pack;
+  }
+  const p = pack as Record<string, unknown>;
+  const mods = (requiredModules?.length ? requiredModules : engineDefaultModules(p)).map((x) => x.toUpperCase());
+  const rows: ObservabilityModuleChecked[] = [];
+  for (const mod of mods) {
+    const loaded = engineModuleLoaded(mod, p);
+    const used = loaded ? engineModuleLlmUsed(mod, answer, p) : { ok: false, reason: "not loaded in engine" };
+    rows.push({
+      module: mod,
+      engine_loaded: loaded,
+      llm_used: used.ok,
+      checked: used.ok,
+      reason: used.reason,
+    });
+  }
+  const next = { ...pack, modules_checked: rows, modules_llm_used: rows.filter((r) => r.llm_used).map((r) => String(r.module)) };
+  const d1 = rows.find((r) => r.module === "D1");
+  const d9 = rows.find((r) => r.module === "D9");
+  if (d1) {
+    next.d1_checked = Boolean(d1.llm_used);
+    next.d1_engine_loaded = Boolean(d1.engine_loaded);
+  }
+  if (d9) {
+    next.d9_checked = Boolean(d9.llm_used);
+    next.d9_engine_loaded = Boolean(d9.engine_loaded);
+  }
+  return next;
 }
 
 function commitmentRoutingWarning(question: string, archetype: string): string | null {
@@ -1148,8 +1504,44 @@ function enrichObservability(
   ) {
     exec.display_mode = "travel_charts";
   }
+  if (!exec.general_chart_engine_execution) {
+    const gcPack =
+      checks.general_chart_engine_execution ||
+      smChecks.general_chart_engine_execution ||
+      null;
+    if (gcPack && typeof gcPack === "object") {
+      exec.general_chart_engine_execution = gcPack as ObservabilityHealthEngineExecution;
+      if (
+        exec.display_mode !== "health_charts" &&
+        exec.display_mode !== "relationship_charts" &&
+        exec.display_mode !== "finance_charts" &&
+        exec.display_mode !== "travel_charts"
+      ) {
+        exec.display_mode = "general_charts";
+      }
+    }
+  }
+  if (
+    exec.display_mode !== "health_charts" &&
+    exec.display_mode !== "relationship_charts" &&
+    exec.display_mode !== "finance_charts" &&
+    exec.display_mode !== "travel_charts" &&
+    exec.general_chart_engine_execution &&
+    (String(sm.slice || "") === "general_chart_engine_v1" ||
+      String(checks.engine_version || smChecks.engine_version || "") ===
+        "general_chart_engine_execution_v1" ||
+      checks.general_chart_engine_execution ||
+      smChecks.general_chart_engine_execution)
+  ) {
+    exec.display_mode = "general_charts";
+  }
   // Generic unified domain EE (career/education/children/…/gap topics)
-  if (!exec.travel_engine_execution && !exec.finance_engine_execution && !exec.health_engine_execution) {
+  if (
+    !exec.travel_engine_execution &&
+    !exec.finance_engine_execution &&
+    !exec.health_engine_execution &&
+    !exec.general_chart_engine_execution
+  ) {
     const unifiedDom = String(checks.unified_domain || smChecks.unified_domain || "").trim();
     const eeKey = unifiedDom ? `${unifiedDom}_engine_execution` : "";
     const uniPack =
@@ -1176,6 +1568,43 @@ function enrichObservability(
     if (d1HealthFacts && typeof d1HealthFacts === "object") {
       exec.d1_health_facts = d1HealthFacts as ObservabilityHealthD1Facts;
     }
+  }
+
+  const dnaItemForMods = getDnaPrimaryItem(ctx);
+  const reqMods = Array.isArray(dnaItemForMods?.required_modules)
+    ? (dnaItemForMods!.required_modules as unknown[]).map((m) => String(m).trim().toUpperCase()).filter(Boolean)
+    : undefined;
+  const answerText = row.answer_text || obs.narrator_output || "";
+  if (exec.health_engine_execution) {
+    exec.health_engine_execution = enrichEnginePackModulesLlmUsed(
+      exec.health_engine_execution, answerText, reqMods,
+    ) as typeof exec.health_engine_execution;
+  }
+  if (exec.relationship_engine_execution) {
+    exec.relationship_engine_execution = enrichEnginePackModulesLlmUsed(
+      exec.relationship_engine_execution, answerText, reqMods,
+    ) as typeof exec.relationship_engine_execution;
+  }
+  if (exec.finance_engine_execution) {
+    exec.finance_engine_execution = enrichEnginePackModulesLlmUsed(
+      exec.finance_engine_execution, answerText, reqMods,
+    ) as typeof exec.finance_engine_execution;
+  }
+  if (exec.travel_engine_execution) {
+    exec.travel_engine_execution = enrichEnginePackModulesLlmUsed(
+      exec.travel_engine_execution, answerText, reqMods,
+    ) as typeof exec.travel_engine_execution;
+  }
+  const gcExec = (exec as { general_chart_engine_execution?: ObservabilityHealthEngineExecution })
+    .general_chart_engine_execution;
+  if (gcExec) {
+    (exec as { general_chart_engine_execution?: ObservabilityHealthEngineExecution }).general_chart_engine_execution =
+      enrichEnginePackModulesLlmUsed(gcExec, answerText, reqMods) as ObservabilityHealthEngineExecution;
+  }
+  if (exec.domain_engine_execution) {
+    exec.domain_engine_execution = enrichEnginePackModulesLlmUsed(
+      exec.domain_engine_execution, answerText, reqMods,
+    ) as typeof exec.domain_engine_execution;
   }
 
   const hallSummary = obs.hallucination_summary || {
@@ -1220,9 +1649,13 @@ function enrichObservability(
     if (score != null) exec.final_score = score;
   }
 
+  const dnaPipelineRaw = resolveDnaPipeline(obs, ctx, row);
+  const dnaFollow = enrichDnaPipelineFollowed(dnaPipelineRaw, row.answer_text || "", ctx);
+
   const enriched: AskObservability = {
     ...obs,
-    question_dna_pipeline: resolveDnaPipeline(obs, ctx, row),
+    question_dna_pipeline: dnaFollow.steps,
+    question_dna_followed_summary: obs.question_dna_followed_summary || dnaFollow.summary,
     routing_warning: routingWarning,
     routing_decision: {
       ...(obs.routing_decision || {}),
@@ -1293,22 +1726,28 @@ function enrichObservability(
         (checks.travel_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
         (smChecks.travel_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined),
     ),
-    // Unified remaining domains (career/education/…)
+    general_selected_blocks:
+      (obs.general_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (checks.general_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.general_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
+      (checks.general_selected_blocks_preview as ObservabilityHealthSelectedBlocks | undefined) ||
+      (smChecks.general_selected_blocks_preview as ObservabilityHealthSelectedBlocks | undefined),
+    // Unified remaining domains (career/education/…/gap topics)
     ...((): Partial<AskObservability> => {
-      const uniAudit =
-        (obs as AskObservability & { unified_dna_judge_audit?: ObservabilityHealthDnaJudgeAudit })
-          .unified_dna_judge_audit ||
-        (checks.unified_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
-        (smChecks.unified_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined);
+      const uniAudit = normalizeHealthDnaJudgeAudit(
+        obs.unified_dna_judge_audit ||
+          (checks.unified_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined) ||
+          (smChecks.unified_dna_judge_audit as ObservabilityHealthDnaJudgeAudit | undefined),
+      );
       const uniBlocks =
+        (obs.unified_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
         (checks.unified_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
         (smChecks.unified_selected_blocks as ObservabilityHealthSelectedBlocks | undefined) ||
         (uniAudit?.selected_blocks as ObservabilityHealthSelectedBlocks | undefined);
-      if (!uniAudit && !uniBlocks) return {};
+      if (!uniAudit?.applies && !uniBlocks?.applies) return {};
       return {
-        // Reuse finance slots as fallback display when domain-specific empty
-        finance_dna_judge_audit: obs.finance_dna_judge_audit || normalizeHealthDnaJudgeAudit(uniAudit),
-        finance_selected_blocks: obs.finance_selected_blocks || uniBlocks,
+        unified_dna_judge_audit: uniAudit,
+        unified_selected_blocks: uniBlocks,
       };
     })(),
     astrology_checks: astro,
@@ -1628,54 +2067,12 @@ export function buildAskDetailCopyText(row: AskQuestionItem): string {
   }
   lines.push("");
 
-  lines.push("=== 3. QUESTION DNA JUDGE ===");
-  const judgeCandidates = [
-    obs.health_dna_judge_audit,
-    obs.health_validator_audit,
-    obs.relationship_dna_judge_audit,
-    obs.finance_dna_judge_audit,
-    obs.travel_dna_judge_audit,
-  ];
-  const judgeObs =
-    judgeCandidates.find((a) => a?.applies) || judgeCandidates.find(Boolean);
-  if (!judgeObs?.applies) {
-    lines.push("— (health / relationship / finance / travel unified questions only)", "");
-  } else {
-    lines.push(
-      `Enabled: ${judgeObs.enabled ? "yes" : "no"} | Passed: ${judgeObs.passed ? "yes" : "no"} | Source: ${judgeObs.source || "—"}`,
-    );
-    const contract = judgeObs.contract || {};
-    if (contract.user_wants) {
-      lines.push(`User wants: ${contract.user_wants}`);
-    }
-    if (contract.normalized_question) {
-      lines.push(`Normalized Q: ${contract.normalized_question}`);
-    }
-    if (contract.answer_style) {
-      lines.push(`Answer style: ${contract.answer_style}`);
-    }
-    if (contract.answer_approach) {
-      lines.push(`Answer plan: ${contract.answer_approach}`);
-    }
-    if ((judgeObs.issues || []).length) {
-      lines.push(`Issues: ${(judgeObs.issues || []).join(", ")}`);
-    }
-    if (judgeObs.fix_hint) {
-      lines.push(`Fix hint: ${judgeObs.fix_hint}`);
-    }
-    lines.push("");
-  }
-
-  lines.push("=== 4. LLM SELECTED JSON BLOCKS ===");
+  lines.push("=== 3. LLM SELECTED JSON BLOCKS ===");
   const blocksCandidates = [
     obs.health_selected_blocks,
     obs.relationship_selected_blocks,
     obs.finance_selected_blocks,
     obs.travel_selected_blocks,
-    obs.health_dna_judge_audit?.selected_blocks,
-    obs.relationship_dna_judge_audit?.selected_blocks,
-    obs.finance_dna_judge_audit?.selected_blocks,
-    obs.travel_dna_judge_audit?.selected_blocks,
   ];
   const blocksObs =
     blocksCandidates.find((b) => b?.applies) || blocksCandidates.find(Boolean);

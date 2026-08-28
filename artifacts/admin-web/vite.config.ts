@@ -30,9 +30,20 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    appType: "spa",
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("src/App.tsx") || id.includes("src/Ask")) return "admin";
+            if (id.includes("src/site/")) return "site";
+          },
+        },
+      },
+    },
     server: {
       port: Number(env.PORT) || 5174,
-      host: "127.0.0.1",
+      host: true,
       proxy: {
         "/api": {
           target: apiTarget,

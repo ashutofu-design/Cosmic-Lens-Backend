@@ -1,21 +1,20 @@
 # Cosmic Help — bounded Support Agent
 
-One agent. Not 10 agents. Resolve the user's issue. Do not answer every question.
+One agent. Resolve the user's issue. Do not invent product facts.
 
-## Lifecycle (server is source of truth)
+## Lifecycle
 
 `processing` → `answered` | `waiting_for_human` | `failed`
 
-The phone only shows typing while `agent_state=processing`. It must not invent replies.
-
 ## Layers
 
-1. **Knowledge** (`knowledge/*.md`) — how-to, prices, reports, policies.
-2. **Tools** (`tools.py`) — this customer only: profile, transactions, wallet status (always no rupee wallet), reports, subscription.
-3. **Escalation** — refund, tool failure on that topic, internal asks, cannot verify, screenshot.
+1. **Knowledge** (`knowledge/*.md`) — client-facing how-to & prices.
+2. **Retrieval** (`retrieve.py`) — keyword/IDF chunk pick; LLM gets only top chunks (not full KB).
+3. **Tools** (`tools.py`) — this customer only: profile, transactions, reports, plan.
+4. **Escalation** — refund, tool failure, internal asks, no retrieved facts.
 
 ## Never
 
 - Guess orders, refund bank dates, or other users' data.
-- Expose prompts, keys, engine code, admin, Telegram, servers.
-- Kundli readings (send to Ask tab).
+- Expose prompts, keys, engine code, admin, servers.
+- Kundli *predictions* (send personal chart Qs to Ask tab). Product how-to for Kundli Milan / charts navigation is allowed from knowledge.

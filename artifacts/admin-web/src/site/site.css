@@ -1164,3 +1164,84 @@ body.site-lock {
     animation: none !important;
   }
 }
+
+/* ── Legal pages (Privacy, Terms) ── */
+.legal-page {
+  padding: 2rem 0 3rem;
+}
+
+.legal-doc {
+  max-width: 720px;
+  color: var(--site-text);
+}
+
+.legal-doc-head h1 {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.02em;
+}
+
+.legal-subtitle {
+  color: var(--site-muted);
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.legal-meta {
+  color: var(--site-muted);
+  font-size: 0.85rem;
+  margin: 0 0 1.25rem;
+}
+
+.legal-intro {
+  line-height: 1.65;
+  margin: 0 0 1rem;
+}
+
+.legal-section {
+  margin-top: 1.75rem;
+}
+
+.legal-section h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.65rem;
+  color: var(--site-purple);
+}
+
+.legal-p {
+  line-height: 1.65;
+  margin: 0 0 0.75rem;
+}
+
+.legal-ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.legal-li {
+  line-height: 1.6;
+  margin-bottom: 0.45rem;
+}
+
+.legal-callout {
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin: 0.75rem 0;
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+.legal-callout-info {
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+}
+
+.legal-callout-warn {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.legal-callout-danger {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}

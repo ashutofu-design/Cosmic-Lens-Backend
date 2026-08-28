@@ -2,7 +2,9 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { isAdminRoute, routePath } from "./routePath";
 import { hasValidAdminGate } from "./lib/adminGate";
 import { HelpSupportPage } from "./site/HelpSupportPage";
+import { PrivacyPolicyPage } from "./site/PrivacyPolicyPage";
 import { PublicHomePage } from "./site/PublicHomePage";
+import { TermsPage } from "./site/TermsPage";
 
 const AdminApp = lazy(() => import("./App"));
 
@@ -40,6 +42,14 @@ export function Router() {
 
   if (path === "/help-support") {
     return <HelpSupportPage />;
+  }
+
+  if (path === "/privacy") {
+    return <PrivacyPolicyPage />;
+  }
+
+  if (path === "/terms") {
+    return <TermsPage />;
   }
 
   return <PublicHomePage />;

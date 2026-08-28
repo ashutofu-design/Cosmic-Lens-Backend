@@ -97,6 +97,17 @@ export function SiteChrome({
             </div>
           </div>
           <div>
+            <h4>Legal</h4>
+            <ul>
+              <li>
+                <a href="/privacy">Privacy Policy</a>
+              </li>
+              <li>
+                <a href="/terms">Terms of Service</a>
+              </li>
+            </ul>
+          </div>
+          <div>
             <h4>Support</h4>
             <ul>
               <li>
@@ -110,7 +121,13 @@ export function SiteChrome({
         </div>
         <div className="site-wrap site-footer-bottom">
           <p>© {new Date().getFullYear()} Cosmic Lens</p>
-          <p>For entertainment and personal guidance. Outcomes are not guaranteed.</p>
+          <p>
+            <a href="/privacy">Privacy</a>
+            {" · "}
+            <a href="/terms">Terms</a>
+            {" · "}
+            For entertainment and personal guidance. Outcomes are not guaranteed.
+          </p>
         </div>
       </footer>
     </div>

@@ -25,6 +25,38 @@ def admin_security_relaxed() -> bool:
     return os.environ.get("ADMIN_SECURITY_RELAXED", "").strip() == "1"
 
 
+def admin_allow_all_devices() -> bool:
+    """When true, any valid device ID is allowed (no enroll code / cap)."""
+    raw = os.environ.get("ADMIN_ALLOW_ALL_DEVICES", "1").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def _ensure_device_registered(device_id: str, label: str = "auto") -> None:
+    did = _normalize_device_id(device_id)
+    if not _valid_device_id(did):
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    with _STORE_LOCK:
+        store = _load_store()
+        devices = [d for d in (store.get("devices") or []) if isinstance(d, dict)]
+        for item in devices:
+            if _normalize_device_id(str(item.get("device_id") or "")) == did:
+                item["last_seen_at"] = now
+                store["devices"] = devices
+                _save_store(store)
+                return
+        devices.append(
+            {
+                "device_id": did,
+                "label": str(label or "auto").strip()[:80],
+                "registered_at": now,
+                "last_seen_at": now,
+            }
+        )
+        store["devices"] = devices
+        _save_store(store)
+
+
 def admin_security_enabled() -> bool:
     try:
         from admin_dashboard import admin_no_auth
@@ -131,6 +163,9 @@ def is_device_allowed(device_id: str) -> bool:
     did = _normalize_device_id(device_id)
     if not _valid_device_id(did):
         return False
+    if admin_allow_all_devices():
+        _ensure_device_registered(did)
+        return True
     with _STORE_LOCK:
         store = _load_store()
         for item in store.get("devices") or []:
@@ -163,6 +198,9 @@ def register_device(device_id: str, *, label: str = "", enroll_code: str = "") -
     did = _normalize_device_id(device_id)
     if not _valid_device_id(did):
         return False, "invalid_device_id"
+    if admin_allow_all_devices():
+        _ensure_device_registered(did, label=label or "auto")
+        return True, "auto_allowed"
     if is_device_allowed(did):
         touch_device(did)
         return True, "already_allowed"

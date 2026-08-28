@@ -43,7 +43,7 @@ try {
     if ($dirty) {
         Write-Host "Uncommitted admin/API changes - auto-committing deploy bundle..." -ForegroundColor Yellow
         git add artifacts/admin-web/src artifacts/admin-web/public artifacts/admin-web/index.html artifacts/admin-web/vite.config.ts artifacts/admin-web/README.md
-        git add artifacts/api-server/instagram_answers.py artifacts/api-server/flask_app.py artifacts/api-server/models.py artifacts/api-server/question_history.py
+        git add artifacts/api-server/admin_security.py artifacts/api-server/question_history.py
         git add artifacts/api-server/lifemap_admin_deliver.py artifacts/api-server/support_chat.py artifacts/api-server/admin_privacy.py artifacts/api-server/admin_push.py artifacts/api-server/admin_security.py
         git add artifacts/api-server/cosmic_intelligence_v3_sessions.py artifacts/api-server/founder_text_pdf.py artifacts/api-server/founder_structure.py
         git add artifacts/api-server/cosmic_pro_report_design.py artifacts/api-server/birth_time_rectification_orders.py

@@ -70,27 +70,8 @@ try {
 
 Write-Host "=== 2/3 Sync VPS to GitHub (no git clean) ===" -ForegroundColor Cyan
 
-$remoteCmd = @'
-set -e
-cd REPO_PLACEHOLDER
-cp -a artifacts/api-server/.env /tmp/cosmic-api-env.bak 2>/dev/null || true
-git fetch origin
-git reset --hard origin/BRANCH_PLACEHOLDER
-git log -1 --oneline
-test -f artifacts/admin-web/src/PalmistryAnalysisWorkspace.tsx || { echo "MISSING PalmistryAnalysisWorkspace.tsx"; exit 1; }
-test -f artifacts/api-server/instagram_answers.py || { echo "MISSING instagram_answers.py"; exit 1; }
-grep -q "Instagram Answers" artifacts/admin-web/src/App.tsx
-cd artifacts/api-server
-find . -name '*.pyc' -delete
-pm2 restart cosmic-api --update-env
-sleep 5
-cd REPO_PLACEHOLDER
-bash scripts/vps-deploy-admin-mobile.sh
-grep -l "Instagram Answers" /var/www/cosmic-admin/assets/*.js | head -1 || { echo "BUILD OK but string not in JS"; exit 1; }
-echo VPS_DEPLOY_OK
-'@
-
-$remoteCmd = $remoteCmd.Replace("REPO_PLACEHOLDER", $remoteRepo).Replace("BRANCH_PLACEHOLDER", $branch)
+# Single-line remote command — avoids Windows CRLF breaking multi-line ssh bash.
+$remoteCmd = "bash -lc 'cd $($remoteRepo) && git fetch origin && git reset --hard origin/$branch && bash scripts/vps-sync-main-deploy.sh $branch'"
 
 try {
     Invoke-SshRetry -RemoteCommand $remoteCmd
@@ -99,13 +80,12 @@ try {
     Write-Host "SSH failed - use Hostinger Browser Terminal and paste:" -ForegroundColor Red
     Write-Host ("cd {0}" -f $remoteRepo) -ForegroundColor Yellow
     Write-Host ("git fetch origin && git reset --hard origin/{0}" -f $branch) -ForegroundColor Yellow
-    Write-Host "cd artifacts/api-server && find . -name '*.pyc' -delete && pm2 restart cosmic-api --update-env && sleep 5" -ForegroundColor Yellow
-    Write-Host ("cd {0} && bash scripts/vps-deploy-admin-mobile.sh" -f $remoteRepo) -ForegroundColor Yellow
+    Write-Host ("bash scripts/vps-sync-main-deploy.sh {0}" -f $branch) -ForegroundColor Yellow
     throw
 }
 
 Write-Host ""
 Write-Host "=== 3/3 DONE ===" -ForegroundColor Green
 Write-Host "  Admin: https://admin.coosmic.icu/admin"
-Write-Host "  Hard refresh: Ctrl+Shift+R - Instagram Answers tab should appear."
+Write-Host "  Hard refresh: Ctrl+Shift+R - Instagram Auto tab should appear."
 Write-Host "  Do NOT run git clean -fd on VPS."

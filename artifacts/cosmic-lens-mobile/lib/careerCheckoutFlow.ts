@@ -37,7 +37,7 @@ export async function gateCareerLifeMapAccess(opts: {
 
   try {
     const access = await checkCareerAccess(opts.user);
-    if (access.entitled || access.payment_bypass || !access.payment_required) {
+    if (access.entitled || !access.payment_required) {
       router.push("/career" as const);
       return;
     }

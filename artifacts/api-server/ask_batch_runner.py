@@ -466,7 +466,7 @@ def _run_batch_question_inner(
     try:
         from ask_scope_gate import assess_ask_scope, scope_refusal_payload
 
-        sv = assess_ask_scope(q, history)
+        sv = assess_ask_scope(q, history, kundli=kundli)
         if not sv.allowed:
             return _maybe_ack(
                 scope_refusal_payload(sv.reason, question=q, lang=lang),
@@ -490,7 +490,7 @@ def _run_batch_question_inner(
     try:
         from openai_helper import astro_scope_refusal as _ask_scope_refusal
 
-        hit = _ask_scope_refusal(q, lang, None, history)
+        hit = _ask_scope_refusal(q, lang, None, history, kundli=kundli)
         if hit:
             kind, msg = hit
             return _maybe_ack(

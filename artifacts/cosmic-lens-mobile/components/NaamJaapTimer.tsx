@@ -30,7 +30,6 @@ import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
-import { playJaapCompleteSound, playJaapMalaSound, preloadJaapSounds } from "@/lib/jaapSounds";
 import { useScreenLayout } from "@/lib/screenLayout";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -216,11 +215,6 @@ export function NaamJaapTimer() {
   const dialStage = dialSize + glowPad * 2;
 
   // Hydrate
-  // Warm up audio so first complete chime isn't delayed
-  useEffect(() => {
-    void preloadJaapSounds();
-  }, []);
-
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -355,11 +349,9 @@ export function NaamJaapTimer() {
 
       if (completed) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        void playJaapCompleteSound();
         setRunning(false);
       } else if (malaHit) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        void playJaapMalaSound();
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       }

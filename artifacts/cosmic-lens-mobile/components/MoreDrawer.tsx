@@ -21,7 +21,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ScalePressable } from "@/components/motion/ScalePressable";
 import { ReportsCountBadge } from "@/components/ReportsCountBadge";
 import { useUnreadReportsCount } from "@/lib/unreadReportsBadge";
 import { useC } from "@/context/ThemeContext";
@@ -37,6 +36,8 @@ const OPEN_MS = 480;
 const CLOSE_MS = 340;
 const EASE_OPEN  = Easing.bezier(0.22, 1, 0.36, 1);
 const EASE_CLOSE = Easing.bezier(0.4, 0, 1, 1);
+/** Android Modal needs a beat after unmount before router.push is reliable. */
+const POST_CLOSE_MS = Platform.OS === "android" ? 320 : 50;
 
 type FeatureItem = {
   id: string;
@@ -52,6 +53,30 @@ type FeatureItem = {
 export type MoreDrawerHandle = {
   close: (onDone?: () => void) => void;
 };
+
+/**
+ * Plain Pressable — ScalePressable nests a Reanimated scale transform.
+ * Inside a translated Modal drawer that breaks Android hit-testing.
+ */
+function DrawerRow({
+  onPress,
+  style,
+  children,
+}: {
+  onPress: () => void;
+  style?: object | (object | false | null | undefined)[];
+  children: React.ReactNode;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      android_ripple={{ color: "rgba(255,255,255,0.08)" }}
+      style={({ pressed }) => [style, pressed && Platform.OS !== "android" && { opacity: 0.72 }]}
+    >
+      {children}
+    </Pressable>
+  );
+}
 
 export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => void }>(function MoreDrawer({
   visible, onClose,
@@ -84,8 +109,10 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
     opacity: progress.value,
   }));
 
+  // Animate `right` (layout), not translateX — Android hit-tests transformed
+  // Modal children unreliably even when translateX settles at 0.
   const drawerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: DRAWER_W * (1 - progress.value) }],
+    right: -DRAWER_W * (1 - progress.value),
   }));
 
   useEffect(() => {
@@ -127,13 +154,15 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
    * Strict Mode remounts and lingering animations cannot drop navigation.
    */
   function afterDrawerClosed(action: () => void) {
-    if (closingRef.current && pendingActionRef.current) return;
+    // Replace any in-flight pending action with the latest tap.
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current);
+      pendingTimerRef.current = null;
+    }
     closingRef.current = true;
     pendingActionRef.current = action;
     progress.value = 0;
     onClose();
-    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
-    const delay = Platform.OS === "android" ? 280 : 50;
     pendingTimerRef.current = setTimeout(() => {
       const next = pendingActionRef.current;
       pendingActionRef.current = null;
@@ -145,7 +174,27 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
       } catch (e) {
         console.warn("[MoreDrawer] post-close action failed", e);
       }
-    }, delay);
+    }, POST_CLOSE_MS);
+  }
+
+  function goToRoute(route: string) {
+    const q = route.indexOf("?");
+    if (q >= 0) {
+      const pathname = route.slice(0, q);
+      const params = Object.fromEntries(new URLSearchParams(route.slice(q + 1)));
+      router.navigate({ pathname: pathname as any, params } as any);
+      return;
+    }
+    // Tab routes: navigate (not push) avoids blank stack frames on Android.
+    if (route.includes("(tabs)")) {
+      router.navigate(route as any);
+      return;
+    }
+    try {
+      router.push(route as any);
+    } catch {
+      router.navigate(route as any);
+    }
   }
 
   function navigate(route: string) {
@@ -154,17 +203,7 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
     } catch {}
     afterDrawerClosed(() => {
       try {
-        const q = route.indexOf("?");
-        if (q >= 0) {
-          const pathname = route.slice(0, q);
-          const params = Object.fromEntries(new URLSearchParams(route.slice(q + 1)));
-          router.navigate({ pathname: pathname as any, params } as any);
-        } else if (route.includes("(tabs)")) {
-          // Tab routes: navigate (not push) avoids blank stack frames on Android.
-          router.navigate(route as any);
-        } else {
-          router.push(route as any);
-        }
+        goToRoute(route);
       } catch (e) {
         console.warn("[MoreDrawer] navigate failed", route, e);
       }
@@ -173,7 +212,9 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
 
   function onItemPress(item: FeatureItem) {
     if (item.id === "gemstones") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch {}
       afterDrawerClosed(() => {
         void openFounderWhatsApp(
           gemstoneWhatsAppMessage("Certified Vedic Gemstone"),
@@ -194,13 +235,18 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
       hardwareAccelerated
       onRequestClose={() => closeDrawer()}
     >
-      <View style={s.root}>
-        {/* Dimmed area only — must not cover the drawer or Android steals item taps. */}
-        <Animated.View style={[s.overlay, overlayStyle]} pointerEvents="box-none">
-          <Pressable style={s.overlayHit} onPress={() => closeDrawer()} />
+      {/*
+        Backdrop BEHIND drawer (full screen). Drawer is a later sibling with
+        elevation — Android then delivers taps to menu rows, not the dimmer.
+      */}
+      <View style={s.root} collapsable={false}>
+        <Animated.View style={[s.overlay, overlayStyle]} pointerEvents="auto">
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => closeDrawer()} />
         </Animated.View>
 
         <Animated.View
+          collapsable={false}
+          pointerEvents="auto"
           style={[
             s.drawer,
             drawerStyle,
@@ -212,27 +258,30 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
             },
           ]}
         >
-          <View style={s.header}>
+          <View style={s.header} pointerEvents="box-none">
             <View>
               <Text style={[s.headerTitle, { color: C.text }]}>More</Text>
               <Text style={[s.headerSub, { color: C.textMuted }]}>{t.moreSubtitle}</Text>
             </View>
-            <ScalePressable
-              haptic="light"
+            <Pressable
               onPress={() => closeDrawer()}
+              android_ripple={{ color: "rgba(255,255,255,0.12)", borderless: true }}
               style={[s.closeBtn, { backgroundColor: C.bgCard2, borderColor: C.border }]}
             >
               <Feather name="x" size={16} color={C.textMuted} />
-            </ScalePressable>
+            </Pressable>
           </View>
 
           <ScrollView
+            style={s.scroll}
+            contentContainerStyle={s.scrollContent}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 22 }}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            bounces
           >
             {/* ── Talk to Founder → contact page ──────────────────────── */}
-            <ScalePressable
-              haptic="medium"
+            <DrawerRow
               onPress={() => navigate("/talk-to-founder")}
               style={[s.founderCard, { borderColor: "#25D36640", backgroundColor: C.bgCard }]}
             >
@@ -254,7 +303,7 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
               <View style={[s.founderArrow, { backgroundColor: "#25D366" }]}>
                 <Feather name="chevron-right" size={14} color="#fff" />
               </View>
-            </ScalePressable>
+            </DrawerRow>
 
             {CATEGORIES.map((cat) => {
               const accent = cat.items[0]?.accent ?? "#a78bfa";
@@ -262,6 +311,7 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                 <View key={cat.title}>
                   <Text style={[s.catLabel, { color: accent }]}>{cat.title}</Text>
                   <View
+                    collapsable={false}
                     style={[
                       s.catCard,
                       {
@@ -279,9 +329,8 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                       ]}
                     />
                     {cat.items.map((item, idx) => (
-                      <ScalePressable
+                      <DrawerRow
                         key={item.id}
-                        haptic="none"
                         onPress={() => onItemPress(item)}
                         style={[
                           s.item,
@@ -309,7 +358,7 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                           <Text style={[s.itemSub, { color: "#9aa3c7" }]}>{item.subtitle}</Text>
                         </View>
                         <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={14} color={`${accent}99`} />
-                      </ScalePressable>
+                      </DrawerRow>
                     ))}
                   </View>
                 </View>
@@ -327,28 +376,35 @@ const s = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.52)",
-  },
-  /** Leave the right drawer strip free so menu presses hit the drawer, not the backdrop. */
-  overlayHit: {
-    ...StyleSheet.absoluteFillObject,
-    right: DRAWER_W,
+    zIndex: 1,
   },
   drawer: {
     position: "absolute",
     top: 0,
     bottom: 0,
-    right: 0,
+    // `right` is driven by Reanimated (slide in/out) — do not pin to 0 here.
     width: DRAWER_W,
     zIndex: 10,
     elevation: 24,
     borderLeftWidth: 1,
     borderLeftColor: "rgba(255,255,255,0.06)",
     overflow: "hidden",
+    flexDirection: "column",
   },
   header: {
     flexDirection: "row", alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20, paddingVertical: 14,
+    flexShrink: 0,
+  },
+  scroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+    gap: 22,
   },
   headerTitle: { fontSize: 20, fontFamily: "Nunito_700Bold", letterSpacing: -0.3 },
   headerSub: { fontSize: 11, fontFamily: "Nunito_400Regular", marginTop: 1 },

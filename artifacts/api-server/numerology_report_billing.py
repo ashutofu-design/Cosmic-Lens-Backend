@@ -17,9 +17,37 @@ VALID_PRODUCTS = {PRODUCT_LIFE_MASTERY}
 CATALOG: dict[str, dict[str, Any]] = {
     PRODUCT_LIFE_MASTERY: {
         "label": "Life Mastery Report",
-        "amount_inr": int(os.environ.get("LIFE_MASTERY_PRICE_INR", "249")),
+        "amount_inr": int(os.environ.get("LIFE_MASTERY_PRICE_INR", "299")),
     },
 }
+
+VIDEO_PRICE_INR = int(os.environ.get("LIFE_MASTERY_VIDEO_PRICE_INR", "799"))
+REPORT_PRIORITY_FEE_INR = int(os.environ.get("NUMEROLOGY_REPORT_PRIORITY_FEE_INR", "149"))
+VIDEO_PRIORITY_FEE_INR = int(os.environ.get("NUMEROLOGY_VIDEO_PRIORITY_FEE_INR", "299"))
+
+
+def normalize_deliverable(raw) -> str:
+    d = str(raw or "report").strip().lower()
+    return "video" if d == "video" else "report"
+
+
+def amount_for(deliverable: str = "report", urgent: bool = False) -> int:
+    kind = normalize_deliverable(deliverable)
+    spec = catalog_for(PRODUCT_LIFE_MASTERY) or {}
+    base = VIDEO_PRICE_INR if kind == "video" else int(spec.get("amount_inr") or 299)
+    if not urgent:
+        return base
+    fee = VIDEO_PRIORITY_FEE_INR if kind == "video" else REPORT_PRIORITY_FEE_INR
+    return base + fee
+
+
+def label_for(deliverable: str = "report", urgent: bool = False) -> str:
+    kind = normalize_deliverable(deliverable)
+    base = "Personalized Video Explanation" if kind == "video" else "Life Mastery Report"
+    if urgent:
+        return f"{base} (Priority)"
+    return base
+
 
 
 def payment_bypass() -> bool:
@@ -144,8 +172,17 @@ def check_access(user_id: int, cache_params: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def create_purchase_intent(user_id: int, cache_params: dict[str, Any], lang: str):
-    spec = catalog_for(PRODUCT_LIFE_MASTERY) or {}
+def create_purchase_intent(
+    user_id: int,
+    cache_params: dict[str, Any],
+    lang: str,
+    deliverable: str = "report",
+    urgent: bool = False,
+):
+    kind = normalize_deliverable(deliverable)
+    urgent_b = bool(urgent)
+    amount = amount_for(kind, urgent_b)
+    label = label_for(kind, urgent_b)
     phash = params_hash(cache_params)
     access = check_access(user_id, cache_params)
     if access.get("entitled"):
@@ -154,6 +191,8 @@ def create_purchase_intent(user_id: int, cache_params: dict[str, Any], lang: str
             "cache_hit": access.get("cache_hit"),
             "already_paid": access.get("already_paid"),
             "params_hash": phash,
+            "amount": amount,
+            "label": label,
         }, None
 
     CoupleReportPurchase = _get_purchase_model()
@@ -174,17 +213,40 @@ def create_purchase_intent(user_id: int, cache_params: dict[str, Any], lang: str
             user_id=int(user_id),
             product=PRODUCT_LIFE_MASTERY,
             params_hash=phash,
-            params_json=json.dumps({"params": cache_params, "lang": lang}, ensure_ascii=False, default=str),
+            params_json=json.dumps(
+                {
+                    "params": cache_params,
+                    "lang": lang,
+                    "deliverable": kind,
+                    "urgent": urgent_b,
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
             lang=lang,
-            amount=spec.get("amount_inr", 249),
+            amount=amount,
             status="created",
         )
         db.session.add(pending)
         db.session.commit()
+    else:
+        if int(pending.amount or 0) != amount:
+            pending.amount = amount
+        pending.params_json = json.dumps(
+            {
+                "params": cache_params,
+                "lang": lang,
+                "deliverable": kind,
+                "urgent": urgent_b,
+            },
+            ensure_ascii=False,
+            default=str,
+        )
+        db.session.commit()
     return {
         "purchase_id": pending.id,
         "amount": pending.amount,
-        "label": spec.get("label"),
+        "label": label,
         "params_hash": phash,
     }, None
 

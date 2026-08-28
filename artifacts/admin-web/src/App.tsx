@@ -125,7 +125,7 @@ const NAV_ITEMS: { id: Tab; label: string; icon: string }[] = [
   { id: "v3live", label: "V3 Live Chats", icon: "⚡" },
   { id: "support", label: "Support", icon: "💬" },
   { id: "askqa", label: "Ask Q&A", icon: "?" },
-  { id: "instagram", label: "Instagram Answers", icon: "▶" },
+  { id: "instagram", label: "Instagram Auto", icon: "▶" },
 ];
 
 const TAB_META: Record<Tab, { title: string; subtitle: string }> = {
@@ -171,8 +171,8 @@ const TAB_META: Record<Tab, { title: string; subtitle: string }> = {
     subtitle: "User questions with answers, tokens, and LLM chart context.",
   },
   instagram: {
-    title: "Instagram Answers",
-    subtitle: "Reel video number + exact question → pre-written answers for the mobile app.",
+    title: "Instagram Automations",
+    subtitle: "User DM exact word → saved auto-reply. Key: video number + trigger text.",
   },
 };
 

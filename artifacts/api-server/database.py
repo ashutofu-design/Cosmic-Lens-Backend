@@ -239,6 +239,87 @@ def run_schema_migrations() -> None:
 
                 ))
 
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_questions_left INTEGER NOT NULL DEFAULT 0"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_questions_total INTEGER NOT NULL DEFAULT 0"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_expires_at TIMESTAMP"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_pack_id VARCHAR(20)"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_last_consume_source VARCHAR(12)"
+                ))
+                # Existing accounts must not receive a fresh signup grant.
+                # PostgreSQL fills old rows with 3, then future users default to 0.
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_free_questions_used "
+                    "INTEGER NOT NULL DEFAULT 3"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE users ALTER COLUMN ask_v1_free_questions_used SET DEFAULT 0"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_bonus_questions "
+                    "INTEGER NOT NULL DEFAULT 0"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id INTEGER"
+                ))
+                try:
+                    conn.execute(text(
+                        """
+                        CREATE TABLE IF NOT EXISTS pack_referral_rewards (
+                            id SERIAL PRIMARY KEY,
+                            referrer_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            buyer_user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                            source_kind VARCHAR(20) NOT NULL,
+                            source_key VARCHAR(80) NOT NULL,
+                            questions_granted INTEGER NOT NULL DEFAULT 3,
+                            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                        )
+                        """
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_pack_ref_referrer "
+                        "ON pack_referral_rewards (referrer_user_id)"
+                    ))
+                except Exception:
+                    pass
+
+                try:
+                    conn.execute(text(
+                        """
+                        CREATE TABLE IF NOT EXISTS v3_live_purchases (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            pack_id VARCHAR(10) NOT NULL,
+                            amount INTEGER NOT NULL DEFAULT 0,
+                            order_id VARCHAR(200) UNIQUE,
+                            status VARCHAR(20) NOT NULL DEFAULT 'created',
+                            granted BOOLEAN NOT NULL DEFAULT FALSE,
+                            session_id VARCHAR(80),
+                            preferred_language VARCHAR(10),
+                            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                            paid_at TIMESTAMP
+                        )
+                        """
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_v3_live_purchases_user "
+                        "ON v3_live_purchases (user_id)"
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_v3_live_purchases_session "
+                        "ON v3_live_purchases (session_id)"
+                    ))
+                except Exception:
+                    pass
+
                 try:
 
                     conn.execute(text(
@@ -480,6 +561,13 @@ def ensure_user_auth_columns() -> None:
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS personal_phone_locked BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS career_unlocked BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(4)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_questions_left INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_questions_total INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_expires_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_pack_id VARCHAR(20)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_last_consume_source VARCHAR(12)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ask_v1_free_questions_used INTEGER NOT NULL DEFAULT 3",
+            "ALTER TABLE users ALTER COLUMN ask_v1_free_questions_used SET DEFAULT 0",
         ]
     else:
         statements = []

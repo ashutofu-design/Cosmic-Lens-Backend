@@ -36,7 +36,12 @@ export async function submitMilanHumanOrder(opts: {
   userId: number;
   cosmoUserId?: string | null;
   apiKey?: string | null;
+  deliverable?: "report" | "video";
+  whatsapp?: string;
+  amountInr?: number;
+  priorityFeeInr?: number;
 }): Promise<MilanHumanOrderResult> {
+  const deliverable = opts.deliverable === "video" ? "video" : "report";
   const resp = await fetch(`${API_BASE}/api/kundli-milan/human-order`, {
     method: "POST",
     headers: authHeaders(opts.userId, opts.apiKey),
@@ -45,7 +50,13 @@ export async function submitMilanHumanOrder(opts: {
       p2: opts.p2,
       lang: opts.lang,
       urgent: opts.urgent,
+      deliverable,
+      ...(opts.amountInr != null ? { amount_inr: opts.amountInr } : {}),
+      ...(opts.priorityFeeInr != null ? { priority_fee_inr: opts.priorityFeeInr } : {}),
       ...(opts.cosmoUserId ? { cosmo_user_id: opts.cosmoUserId } : {}),
+      ...(deliverable === "video"
+        ? { contact_method: "whatsapp", contact_value: opts.whatsapp || "", whatsapp: opts.whatsapp || "" }
+        : {}),
     }),
   });
   const json = await resp.json().catch(() => ({}));

@@ -650,27 +650,25 @@ def build_blocked_user_message(result: GatekeeperResult, *, lang: str = "hn") ->
     reason = (result.reason or "").strip().lower()
     if reason == "insufficient_evidence":
         return (
-            "Is sawal ke liye chart se kaafi strong signals nahi mile. "
-            "Thodi der baad dobara puchhein ya sawal thoda specific likhein."
+            "Is sawal ke liye chart se kaafi clear signals nahi mile. "
+            "Sawal thoda specific likh kar dubara try karein."
         )
     if reason in ("routing_error", "routing_archetype_mismatch"):
         return (
-            "Internal routing error — sahi health/career engine load nahi ho paaya. "
-            "Kripya 1 minute baad wahi sawal dobara puchhein."
+            "Abhi is topic par jawab tayyar nahi ho pa raha. "
+            "1-2 minute baad wahi sawal dubara puchiye."
         )
     if reason == "hallucination_detected":
         return (
-            "Answer quality check fail ho gaya — dubara try karein. "
-            "Agar issue repeat ho to hume batayein."
+            "Jawab verify nahi ho paaya. Kripya sawal dubara puchiye."
         )
     if reason == "verdict_mismatch":
         return (
-            "Engine aur final answer match nahi kiye — answer block kiya gaya. "
-            "Kripya sawal dobara puchhein."
+            "Abhi sahi jawab lock nahi ho paaya. Kripya sawal dubara puchiye."
         )
     return (
-        "Abhi is sawal ka verified jawab generate nahi ho paaya. "
-        "Thodi der baad dobara try karein."
+        "Abhi is sawal ka jawab generate nahi ho paaya. "
+        "Thodi der baad dubara try karein."
     )
 
 

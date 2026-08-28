@@ -89,7 +89,7 @@ class AskKundliResolverTests(unittest.TestCase):
         picked = _pick_native_profile_from_rows([partner, self_row])
         self.assertIs(picked, self_row)
 
-    def test_pick_native_profile_prefers_primary_even_if_partner(self):
+    def test_pick_native_profile_skips_partner_even_when_primary(self):
         class _Row:
             def __init__(self, relation, is_primary=False):
                 self.relation = relation
@@ -100,7 +100,7 @@ class AskKundliResolverTests(unittest.TestCase):
         partner_primary = _Row("Wife", is_primary=True)
         self_row = _Row("Self")
         picked = _pick_native_profile_from_rows([self_row, partner_primary])
-        self.assertIs(picked, partner_primary)
+        self.assertIs(picked, self_row)
 
 
 if __name__ == "__main__":

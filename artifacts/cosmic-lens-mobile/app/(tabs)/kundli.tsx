@@ -1724,6 +1724,15 @@ export default function KundliScreen() {
         </View>
       </View>
 
+      <SectionHeader
+        title={L.secDashaTimeline}
+        icon="star"
+        C={C}
+      />
+      <DashaTab kundli={kundli} mahaIdx={mahaIdx} setMahaIdx={setMahaIdx}
+        antarIdx={antarIdx} setAntarIdx={setAntarIdx}
+        pratIdx={pratIdx} setPratIdx={setPratIdx} />
+
       <View style={{ gap: 10 }}>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/planet-position"); }}
@@ -1748,17 +1757,14 @@ export default function KundliScreen() {
 
       </>)}
 
-      <SectionHeader
-        title={sectionTitleFor(activeTab, L)}
-        icon={CHART_BTNS.find(b=>b.tab===activeTab)?.icon}
-        C={C}
-      />
+      {activeTab !== "Kundli" ? (
+        <SectionHeader
+          title={sectionTitleFor(activeTab, L)}
+          icon={CHART_BTNS.find(b=>b.tab===activeTab)?.icon}
+          C={C}
+        />
+      ) : null}
 
-      {activeTab === "Kundli" && (
-        <DashaTab kundli={kundli} mahaIdx={mahaIdx} setMahaIdx={setMahaIdx}
-          antarIdx={antarIdx} setAntarIdx={setAntarIdx}
-          pratIdx={pratIdx} setPratIdx={setPratIdx} />
-      )}
       {activeTab === "Ashtakavarga" && <AshtakavargaTab kundli={kundli} />}
       {activeTab === "Navatara"     && <NavataraTab kundli={kundli} />}
       {activeTab === "Jaimini"      && <JaiminiTab kundli={kundli} />}

@@ -20,7 +20,6 @@ import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
-import { relationLabel } from "./profile-edit";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -33,7 +32,7 @@ export default function MyKundliScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
   const t = useT();
-  const { profiles, primaryProfileId, deleteProfile, setPrimaryProfile } = useUser();
+  const { profiles, primaryProfileId, deleteProfile } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -54,11 +53,8 @@ export default function MyKundliScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
 
-  function handleView(profileId: string) {
+  function handleView(_profileId: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (profileId !== primaryProfileId) {
-      setPrimaryProfile(profileId);
-    }
     router.push("/(tabs)/kundli");
   }
 
@@ -138,9 +134,6 @@ export default function MyKundliScreen() {
                         <Feather name="star" size={7} color={ac} />
                         <Text style={{ color: ac, fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.6 }}>{t.mk_primary}</Text>
                       </View>
-                    )}
-                    {!isPrimary && profile.relation && profile.relation !== "Self" && (
-                      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5, borderWidth: 0.75, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>{relationLabel(profile.relation, t)}</Text>
                     )}
                   </View>
                   <Text style={{ color: isPrimary ? (C.isDark ? "rgba(250,204,21,0.8)" : "#7C3AED") : C.textMuted, fontSize: 11.5, fontFamily: F.medium, marginTop: 2 }} numberOfLines={1}>{astroLine}</Text>

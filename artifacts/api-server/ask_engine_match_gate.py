@@ -1,9 +1,10 @@
-"""Hard engine-match gate — DNA domain/bucket/intent/subject must match executed engine.
+"""Hard engine-match gate — DNA domain/bucket/intent/subject should match executed engine.
 
-Product rule (user):
-  - Mismatch pe answer mat do — pehle sahi engine pe routing lock karo (retry ≤ ~60s).
-  - Engine required → sirf usi engine ke baad gate open.
-  - Engine nahi chahiye (knowledge / general chart / open chart) → direct LLM OK.
+Product rule:
+  - Prefer correct engine (retry coerce/reclass within deadline).
+  - Engine required + matched → open engine path.
+  - Engine not required (knowledge / general chart / open chart) → direct LLM.
+  - Unresolved mismatch → direct LLM fallback (never leave V1 with zero answer).
 """
 from __future__ import annotations
 
@@ -602,48 +603,41 @@ def ensure_correct_engine_route(
         # avoid busy-spin if something else mutates flags externally.
         time.sleep(0.05)
 
-    # Deadline / exhausted — do NOT open wrong engine; block or LLM only if no engine required.
+    # Deadline / exhausted — prefer correct engine when matched; never leave
+    # the user with zero answer. Unresolved mismatch → direct LLM (chart
+    # context) so Cosmic Intelligence V1 still replies.
     expected = expected_engine_from_admin(admin_out)
-    if not expected.get("requires_engine"):
-        decision = EngineMatchDecision(
-            ok=True,
-            path="direct_llm",
-            engine_key=None,
-            domain=str(expected.get("domain") or ""),
-            bucket=str(expected.get("bucket") or ""),
-            archetype=expected.get("archetype"),
-            intent=str(expected.get("intent") or ""),
-            subject=str(expected.get("subject") or ""),
-            flags=_empty_flags(),
-            attempts=attempts,
-            elapsed_ms=int((time.monotonic() - t0) * 1000),
-            reason="deadline_direct_llm",
-            failed_checks=last_failed,
-        )
-        if isinstance(admin, dict):
-            admin["engine_match_gate"] = decision.to_dict()
-        return decision
-
     decision = EngineMatchDecision(
-        ok=False,
-        path="blocked",
-        engine_key=str(expected.get("engine_key") or "") or None,
+        ok=True,
+        path="direct_llm",
+        engine_key=None,
         domain=str(expected.get("domain") or ""),
         bucket=str(expected.get("bucket") or ""),
         archetype=expected.get("archetype"),
         intent=str(expected.get("intent") or ""),
         subject=str(expected.get("subject") or ""),
-        flags=_one_hot(str(expected.get("engine_key") or "")),
-        is_timing=bool(expected.get("is_timing")),
+        flags=_empty_flags(),
+        is_timing=bool(expected.get("is_timing") or is_timing),
         attempts=attempts,
         elapsed_ms=int((time.monotonic() - t0) * 1000),
-        reason="engine_mismatch_unresolved",
-        failed_checks=last_failed or [f"expected={expected.get('engine_key')}"],
+        reason=(
+            "deadline_direct_llm"
+            if not expected.get("requires_engine")
+            else "mismatch_fallback_direct_llm"
+        ),
+        failed_checks=last_failed
+        or (
+            [f"expected={expected.get('engine_key')}"]
+            if expected.get("requires_engine")
+            else []
+        ),
     )
     if isinstance(admin, dict):
         admin["engine_match_gate"] = decision.to_dict()
     print(
-        f"[engine_match_gate] BLOCKED expected={expected.get('engine_key')} "
+        f"[engine_match_gate] FALLBACK direct_llm "
+        f"expected={expected.get('engine_key')} "
+        f"requires_engine={bool(expected.get('requires_engine'))} "
         f"failed={last_failed} attempts={attempts} "
         f"elapsed_ms={decision.elapsed_ms} q={(question or '')[:60]!r}",
         flush=True,

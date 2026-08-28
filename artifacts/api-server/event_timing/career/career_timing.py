@@ -2805,11 +2805,12 @@ def _find_next_job_change_window(
 ) -> Optional[dict]:
     """Cascade PD windows until a 3L/5L/9L change lord activates."""
     today = datetime.utcnow()
+    month_start = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     current_active = (current_ad in change_set) or (current_pd in change_set)
     chain = _flatten_career_dasha_chain(kundli)
 
     for chunk in chain:
-        if chunk["end"] < today - timedelta(days=1):
+        if chunk["end"] < month_start:
             continue
         sc, detail = _score_job_change_chunk(chunk, change_set, outcome_set, lord_sets)
         if sc < _CAREER_MIN_CHANGE_AD_PD:
@@ -2818,11 +2819,14 @@ def _find_next_job_change_window(
             continue
         if current_active and chunk["start"] < today:
             continue
+        start_dt = chunk["start"]
+        if start_dt < month_start:
+            start_dt = month_start
         return {
             "md": chunk["md"],
             "ad": chunk["ad"],
             "pd": chunk.get("pd"),
-            "start": _fmt_career_dasha_date(chunk["start"]),
+            "start": _fmt_career_dasha_date(start_dt),
             "end": _fmt_career_dasha_date(chunk["end"]),
             "reason": " · ".join(detail),
             "change_score": sc,
@@ -2836,12 +2840,20 @@ def _find_next_job_change_window(
             ad_lord = u.get("antardasha") or u.get("ad") or u.get("lord")
             if ad_lord not in change_set:
                 continue
+            raw_start = u.get("start") or u.get("startDate")
+            raw_end = u.get("end") or u.get("endDate")
+            end_dt = _parse_career_iso(raw_end)
+            if end_dt and end_dt < month_start:
+                continue
+            start_dt = _parse_career_iso(raw_start)
+            if start_dt and start_dt < month_start:
+                start_dt = month_start
             return {
                 "md": u.get("mahadasha") or u.get("md"),
                 "ad": ad_lord,
                 "pd": None,
-                "start": u.get("start") or u.get("startDate"),
-                "end": u.get("end") or u.get("endDate"),
+                "start": _fmt_career_dasha_date(start_dt) if start_dt else raw_start,
+                "end": _fmt_career_dasha_date(end_dt) if end_dt else raw_end,
                 "reason": f"AD {_job_change_lord_label(ad_lord, lord_sets)}",
                 "change_score": _CAREER_DASHA_SCORE_AD_CHANGE,
             }
@@ -5607,8 +5619,29 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
             lines.append(f"   • Dasha aliases (validator-safe): {' | '.join(alias_parts)}")
     nxt = tw.get("next_career") or {}
     if nxt and nxt.get("ad"):
-        s_h = _ym_to_human(str(nxt.get("start") or "")[:7])
-        e_h = _ym_to_human(str(nxt.get("end") or "")[:7])
+        range_label = ""
+        clipped_nxt = None
+        try:
+            from event_timing._shared.timing_window_pick import (
+                clip_timing_window_for_display,
+                window_range_label,
+            )
+
+            clipped_nxt = clip_timing_window_for_display({
+                "start": nxt.get("start"),
+                "end": nxt.get("end"),
+                "md": nxt.get("md"),
+                "ad": nxt.get("ad"),
+                "pd": nxt.get("pd"),
+                "lords": nxt.get("lords")
+                or "/".join(x for x in (nxt.get("md"), nxt.get("ad"), nxt.get("pd")) if x),
+            })
+            if clipped_nxt:
+                range_label = window_range_label(clipped_nxt)
+        except Exception:
+            clipped_nxt = None
+        s_h = _ym_to_human(str((clipped_nxt or nxt).get("start") or "")[:7])
+        e_h = _ym_to_human(str((clipped_nxt or nxt).get("end") or "")[:7])
         nxt_md = nxt.get("md") or ""
         nxt_ad = nxt.get("ad") or ""
         nxt_pd = nxt.get("pd") or ""
@@ -5620,7 +5653,10 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
         if nxt_pd:
             nxt_dasha_parts.append(f"{nxt_pd} Pratyantardasha")
         nxt_dasha = " / ".join(nxt_dasha_parts) if nxt_dasha_parts else "(dasha unavailable)"
-        lines.append(f"▸ Next Career window: {s_h} → {e_h} — {nxt_dasha}")
+        if range_label:
+            lines.append(f"▸ Next Career window: {range_label} — {nxt_dasha}")
+        else:
+            lines.append(f"▸ Next Career window: {s_h} → {e_h} — {nxt_dasha}")
         if nxt.get("reason"):
             lines.append(f"   • Reason: {nxt.get('reason')}")
     sat_t = tw.get("saturn_transit") or {}
@@ -5761,9 +5797,16 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
     lines.append("   5. Embed STRATEGY text verbatim (translate keywords only if needed).")
     lines.append("   6. Honour ALL brand-safety bullets above as caveats.")
     lines.append("   7. Hinglish-first — natural code-mix preferred over pure Hindi or pure English.")
+    lines.append("   8. FUTURE timing: past months/years mat bolo — sirf aaj se aage ka window batao.")
     lines.append("════════════════════════════════════════════════════════════")
 
-    return "\n".join(lines)
+    block = "\n".join(lines)
+    try:
+        from event_timing._shared.timing_window_pick import append_locked_window_to_prompt_block
+
+        return append_locked_window_to_prompt_block(block, v, question)
+    except Exception:
+        return block
 
 
 def format_final_answer(v: dict, question: str = "") -> str:

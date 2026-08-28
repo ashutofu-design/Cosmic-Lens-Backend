@@ -12,10 +12,23 @@ if (process.platform !== "win32") {
 
 const require = createRequire(import.meta.url);
 
+function pkgDir(name) {
+  // Avoid require.resolve("pkg/package.json") — newer packages block ./package.json in exports.
+  const entry = require.resolve(name);
+  let dir = path.dirname(entry);
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error("package.json not found for " + name);
+}
+
 try {
-  const winPkgDir = path.dirname(require.resolve("lightningcss-win32-x64-msvc/package.json"));
+  const winPkgDir = pkgDir("lightningcss-win32-x64-msvc");
   const source = path.join(winPkgDir, "lightningcss.win32-x64-msvc.node");
-  const lightningDir = path.dirname(require.resolve("lightningcss/package.json"));
+  const lightningDir = pkgDir("lightningcss");
   const target = path.join(lightningDir, "lightningcss.win32-x64-msvc.node");
 
   if (!fs.existsSync(source)) {

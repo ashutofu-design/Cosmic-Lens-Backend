@@ -49,7 +49,19 @@ class SupportAiTests(unittest.TestCase):
         self.assertEqual(r.get("agent_state"), "waiting_for_human")
         self.assertNotRegex(r["reply"], r"telegram|api_key", re.I)
 
-    def test_wallet_question_does_not_escalate(self) -> None:
+    def test_wallet_boilerplate_stripped_from_unrelated_question(self) -> None:
+        self._fake(
+            "Happy to help. Cosmic Lens has no wallet — paid orders show on Help → Transactions. "
+            "Ask credits are under Profile → Cosmic Packs. Pro PDFs (Love Reality, Milan, Numerology) "
+            "are written by our expert after pay, not instant AI, and arrive in My Reports. "
+            "AstroVastu reports are expert-written after payment."
+        )
+        r = sai.answer_support("AstroVastu kaise use karun?", lang="en")
+        self.assertFalse(r["escalate"])
+        self.assertNotRegex(r["reply"], re.compile(r"no wallet|Happy to help", re.I))
+        self.assertIn("AstroVastu", r["reply"])
+
+    def test_wallet_answer_kept_when_they_ask_wallet(self) -> None:
         self._fake(
             "Cosmic Lens has no wallet. Paid orders show on Help → Transactions.",
             escalate=False,

@@ -24,13 +24,58 @@ VALID_PRODUCTS = {PRODUCT_MILAN, PRODUCT_LOVE}
 CATALOG: dict[str, dict[str, Any]] = {
     PRODUCT_MILAN: {
         "label": "Kundli Milan Pro",
+        # Must match mobile MILAN_PRO_UI_PRICING.todayInr
         "amount_inr": int(os.environ.get("MILAN_PRO_PRICE_INR", "699")),
     },
     PRODUCT_LOVE: {
         "label": "Love Reality Pro",
-        "amount_inr": int(os.environ.get("LOVE_REALITY_PRO_PRICE_INR", "149")),
+        # Must match mobile LOVE_REALITY_PRO_UI_PRICING.todayInr (was wrongly 149)
+        "amount_inr": int(os.environ.get("LOVE_REALITY_PRO_PRICE_INR", "499")),
     },
 }
+
+# Video + priority — keep in sync with mobile milanProOffer / loveRealityProOffer
+_VIDEO_PRICES = {
+    PRODUCT_MILAN: int(os.environ.get("MILAN_VIDEO_PRICE_INR", "1299")),
+    PRODUCT_LOVE: int(os.environ.get("LOVE_REALITY_VIDEO_PRICE_INR", "999")),
+}
+_PRIORITY_FEES = {
+    PRODUCT_MILAN: int(os.environ.get("MILAN_PRIORITY_FEE_INR", "299")),
+    PRODUCT_LOVE: int(os.environ.get("LOVE_REALITY_PRIORITY_FEE_INR", "299")),
+}
+
+
+def normalize_deliverable(raw: Any) -> str:
+    d = str(raw or "report").strip().lower()
+    return "video" if d == "video" else "report"
+
+
+def amount_for(
+    product: str,
+    deliverable: str = "report",
+    urgent: bool = False,
+) -> int:
+    """Razorpay charge — must match app sticky CTA total."""
+    spec = catalog_for(product) or {}
+    kind = normalize_deliverable(deliverable)
+    if kind == "video":
+        base = int(_VIDEO_PRICES.get(product) or spec.get("amount_inr") or 0)
+    else:
+        base = int(spec.get("amount_inr") or 0)
+    fee = int(_PRIORITY_FEES.get(product) or 0) if urgent else 0
+    return max(0, base + fee)
+
+
+def label_for(product: str, deliverable: str = "report", urgent: bool = False) -> str:
+    spec = catalog_for(product) or {}
+    base = str(spec.get("label") or product)
+    kind = normalize_deliverable(deliverable)
+    if kind == "video":
+        base = f"{base} — Video"
+    if urgent:
+        base = f"{base} (Priority)"
+    return base
+
 
 
 def payment_bypass() -> bool:
@@ -159,8 +204,24 @@ def check_access(
     return out
 
 
-def store_params_json(p1: dict, p2: dict, lang: str) -> str:
-    return json.dumps({"p1": p1, "p2": p2, "lang": lang}, ensure_ascii=False, default=str)
+def store_params_json(
+    p1: dict,
+    p2: dict,
+    lang: str,
+    deliverable: str = "report",
+    urgent: bool = False,
+) -> str:
+    return json.dumps(
+        {
+            "p1": p1,
+            "p2": p2,
+            "lang": lang,
+            "deliverable": normalize_deliverable(deliverable),
+            "urgent": bool(urgent),
+        },
+        ensure_ascii=False,
+        default=str,
+    )
 
 
 def create_purchase_intent(
@@ -169,11 +230,16 @@ def create_purchase_intent(
     p1: dict,
     p2: dict,
     lang: str,
+    deliverable: str = "report",
+    urgent: bool = False,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Create or reuse pending purchase. Returns (payload, error_code)."""
     if product not in VALID_PRODUCTS:
         return None, "invalid_product"
-    spec = catalog_for(product) or {}
+    kind = normalize_deliverable(deliverable)
+    urgent_b = bool(urgent)
+    amount = amount_for(product, kind, urgent_b)
+    label = label_for(product, kind, urgent_b)
     cp = cache_params_from_birth(lang, p1, p2)
     phash = params_hash(cp)
     access = check_access(user_id, product, cp)
@@ -183,6 +249,8 @@ def create_purchase_intent(
             "cache_hit": access.get("cache_hit"),
             "already_paid": access.get("already_paid"),
             "params_hash": phash,
+            "amount": amount,
+            "label": label,
         }, None
 
     CoupleReportPurchase = _get_purchase_model()
@@ -203,17 +271,27 @@ def create_purchase_intent(
             user_id=int(user_id),
             product=product,
             params_hash=phash,
-            params_json=store_params_json(p1, p2, lang),
+            params_json=store_params_json(p1, p2, lang, kind, urgent_b),
             lang=lang,
-            amount=spec.get("amount_inr", 0),
+            amount=amount,
             status="created",
         )
         db.session.add(pending)
         db.session.commit()
+    else:
+        # Always refresh amount to UI total (fixes stale ₹149 pending rows)
+        changed = False
+        if int(pending.amount or 0) != amount:
+            pending.amount = amount
+            changed = True
+        pending.params_json = store_params_json(p1, p2, lang, kind, urgent_b)
+        changed = True
+        if changed:
+            db.session.commit()
     return {
         "purchase_id": pending.id,
         "amount": pending.amount,
-        "label": spec.get("label"),
+        "label": label,
         "params_hash": phash,
     }, None
 

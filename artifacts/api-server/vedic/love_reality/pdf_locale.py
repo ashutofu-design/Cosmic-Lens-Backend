@@ -44,21 +44,11 @@ def founder_report_title(lang: str | None) -> str:
 
 
 def founder_report_subtitle(lang: str | None) -> str:
-    return _tx3(
-        lang,
-        "Founder-verified relationship report",
-        "Founder ne verify kiya rishta report",
-        "संस्थापक-सत्यापित रिश्ता रिपोर्ट",
-    )
+    return ""
 
 
 def founder_report_meta(lang: str | None) -> str:
-    return _tx3(
-        lang,
-        "Cosmic Lens · Founder-verified report",
-        "Cosmic Lens · Founder verified report",
-        "कॉस्मिक लेंस · संस्थापक-सत्यापित रिपोर्ट",
-    )
+    return _tx3(lang, "Cosmic Lens", "Cosmic Lens", "कॉस्मिक लेंस")
 
 
 def cover_subtitle(lang: str | None) -> str:

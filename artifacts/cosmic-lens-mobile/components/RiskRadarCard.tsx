@@ -5,10 +5,9 @@ import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
 import { I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
 import { useC } from "@/context/ThemeContext";
-import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import type { UILang } from "@/lib/i18n";
-import { getLuckyColors, getRiskBucket } from "@/lib/riskRadarContent";
+import { getRiskBucket } from "@/lib/riskRadarContent";
 
 const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTHS_HI = ["जन","फ़र","मार्च","अप्रै","मई","जून","जुल","अग","सित","अक्टू","नव","दिस"];
@@ -62,40 +61,90 @@ const AVOID_TIME_SLOTS = [
   "1:45 PM — 3:15 PM",
 ];
 
+/** Moon-sign lucky digits — same table as the Lucky screen (Mesh=1,9 …). */
+const RASHI_LUCKY_NUMS: number[][] = [
+  [1, 9], [2, 6], [3, 5], [2, 7], [1, 4], [5, 6],
+  [6, 8], [1, 9], [3, 9], [8, 4], [4, 8], [3, 7],
+];
+
+/** Canonical Hinglish names so Forecast i18n (Suneheri → Golden) still maps. */
+const RASHI_LUCKY_COLOR: LuckyColor[] = [
+  { name: "Kesari",   emoji: "🟠", hex: "#ef4444" },
+  { name: "Safed",    emoji: "⚪", hex: "#f8fafc" },
+  { name: "Hara",     emoji: "🟢", hex: "#84cc16" },
+  { name: "Safed",    emoji: "⚪", hex: "#e2e8f0" },
+  { name: "Suneheri", emoji: "🟠", hex: "#f59e0b" },
+  { name: "Hara",     emoji: "🟢", hex: "#22c55e" },
+  { name: "Neela",    emoji: "🔵", hex: "#60a5fa" },
+  { name: "Kesari",   emoji: "🟠", hex: "#f43f5e" },
+  { name: "Pila",     emoji: "🟡", hex: "#eab308" },
+  { name: "Neela",    emoji: "🔵", hex: "#1d4ed8" },
+  { name: "Neela",    emoji: "🔵", hex: "#7dd3fc" },
+  { name: "Pila",     emoji: "🟡", hex: "#fef08a" },
+];
+
+export type NatalLuckyHints = {
+  moonSign: number;
+  lagnaSign: number;
+};
+
 function dayHash(dateMs: number): number { return Math.floor(dateMs / 86400000); }
 
-function getLuckyNumbers(dateMs: number, score: number): number[] {
-  const seed = dayHash(dateMs) + score;
-  const nums: number[] = [];
-  let i = 1;
-  while (nums.length < 3 && i < 60) {
-    const n = ((Math.abs(seed * (i * 17 + 7))) % 99) + 1;
-    if (!nums.includes(n)) nums.push(n);
-    i++;
-  }
-  return nums;
-}
-function getLuckyColor(level: RiskLevel, dateMs: number, lang: UILang): LuckyColor {
-  const arr = getLuckyColors(lang, level);
-  return arr[dayHash(dateMs) % arr.length];
-}
-function getBestTime(dateMs: number): string {
-  return BEST_TIME_SLOTS[dayHash(dateMs) % BEST_TIME_SLOTS.length];
-}
-function getAvoidTime(dateMs: number): string {
-  return AVOID_TIME_SLOTS[(dayHash(dateMs) + 2) % AVOID_TIME_SLOTS.length];
+/** Mix calendar-day with chart seed (NOT dateMs+seed — seed is << 1 day in ms). */
+function chartDayMix(dateMs: number, chartSeed: number, salt = 0): number {
+  return Math.abs(dayHash(dateMs) * 10007 + Math.abs(chartSeed) * 7919 + salt * 104729);
 }
 
-export function computeRisk(score: number, _dayIdx: number, date: Date, lang: UILang = "en") {
+function getLuckyNumbers(dateMs: number, chartSeed: number, natal?: NatalLuckyHints): number[] {
+  const moon = ((natal?.moonSign ?? (Math.abs(chartSeed) % 12)) + 12) % 12;
+  const lagna = ((natal?.lagnaSign ?? 0) + 12) % 12;
+  const pair = RASHI_LUCKY_NUMS[moon];
+  const mix = chartDayMix(dateMs, chartSeed, lagna + 1);
+  const primary = pair[mix % pair.length];
+  const secondary = pair[(mix + 1) % pair.length];
+  const tertiary = 1 + ((mix + moon + lagna) % 9);
+  const nums = [primary, secondary, tertiary].filter((n, i, a) => a.indexOf(n) === i);
+  while (nums.length < 3) nums.push(1 + ((mix + nums.length * 11) % 9));
+  return nums.slice(0, 3);
+}
+
+function getLuckyColor(dateMs: number, chartSeed: number, natal?: NatalLuckyHints): LuckyColor {
+  const moon = ((natal?.moonSign ?? (Math.abs(chartSeed) % 12)) + 12) % 12;
+  const lagna = ((natal?.lagnaSign ?? 0) + 12) % 12;
+  const mix = chartDayMix(dateMs, chartSeed, 3);
+  const sign = mix % 2 === 0 ? moon : lagna;
+  return RASHI_LUCKY_COLOR[sign % 12];
+}
+
+function getBestTime(dateMs: number, chartSeed: number, natal?: NatalLuckyHints): string {
+  const moon = natal?.moonSign ?? 0;
+  const lagna = natal?.lagnaSign ?? 0;
+  const idx = chartDayMix(dateMs, chartSeed, moon * 3 + lagna * 5 + 1) % BEST_TIME_SLOTS.length;
+  return BEST_TIME_SLOTS[idx];
+}
+
+function getAvoidTime(dateMs: number, chartSeed: number, natal?: NatalLuckyHints): string {
+  const moon = natal?.moonSign ?? 0;
+  const lagna = natal?.lagnaSign ?? 0;
+  const bestIdx = chartDayMix(dateMs, chartSeed, moon * 3 + lagna * 5 + 1) % AVOID_TIME_SLOTS.length;
+  let idx = chartDayMix(dateMs, chartSeed, moon * 3 + lagna * 5 + 2) % AVOID_TIME_SLOTS.length;
+  if (idx === bestIdx) idx = (idx + 3) % AVOID_TIME_SLOTS.length;
+  return AVOID_TIME_SLOTS[idx];
+}
+
+export function computeRisk(
+  score: number,
+  _dayIdx: number,
+  date: Date,
+  lang: UILang = "en",
+  chartSeed = 0,
+  natal?: NatalLuckyHints,
+) {
   const riskScore = scoreToRiskScore(score);
   const level     = scoreToRiskLevel(riskScore);
   const bucket    = getRiskBucket(lang, level);
   const dateMs    = date.getTime();
-  // Content is selected by date hash (not array index) so the same calendar
-  // date always renders the same risk copy across screens (forecast CTA preview
-  // vs dasha-risk full card). _dayIdx is kept in the signature for backwards
-  // compatibility but no longer drives content selection.
-  const dh        = dayHash(dateMs);
+  const dh        = chartDayMix(dateMs, chartSeed);
   const shortLine = bucket.shorts[dh % bucket.shorts.length];
   const det       = bucket.details[dh % bucket.details.length];
   return {
@@ -107,10 +156,10 @@ export function computeRisk(score: number, _dayIdx: number, date: Date, lang: UI
     riskAvoid:    det.avoid,
     riskKarna:    det.karna,
     riskRemedy:   det.remedy,
-    luckyNumbers: getLuckyNumbers(dateMs, score),
-    luckyColor:   getLuckyColor(level, dateMs, lang),
-    bestTime:     getBestTime(dateMs),
-    avoidTime:    getAvoidTime(dateMs),
+    luckyNumbers: getLuckyNumbers(dateMs, chartSeed, natal),
+    luckyColor:   getLuckyColor(dateMs, chartSeed, natal),
+    bestTime:     getBestTime(dateMs, chartSeed, natal),
+    avoidTime:    getAvoidTime(dateMs, chartSeed, natal),
   };
 }
 
@@ -132,20 +181,7 @@ export function RiskRadarCard({
 }) {
   const C = useC();
   const t = useT();
-  const { user, kundli, birthData } = useUser();
-
-  // The Shubh Ank/Rang state + /api/lucky/today fetch that used to live
-  // here has moved to the Forecast screen along with the lucky panel.
-  //
-  // The /api/risk-radar fetch that used to enrich this card with the
-  // server's 8-signal Vedic engine (Chandrashtama, Tara Bal, Sade Sati,
-  // Mars affliction, PD weakness, Tithi, Rahukal, Volatile day) was
-  // removed too: the user reported jarring contradictions like Energy 71
-  // (green) sitting next to Risk 7/10 (red) on the same day, because the
-  // two engines share no inputs. The Daily Energy Score (computed on
-  // Forecast from /api/transits) is now the SINGLE source of truth, and
-  // the local computeRisk()/scoreToRiskScore() inverse formula derives
-  // every risk field from it deterministically.
+  // Risk fields come from parent (dasha-risk merges /api/risk-radar per kundli).
 
   const [streak, setStreak] = useState(0);
   useEffect(() => {
@@ -170,14 +206,8 @@ export function RiskRadarCard({
   const sel = days[selected];
   if (!sel) return null;
 
-  // ── Energy Score is the SINGLE source of truth ──────────────────────
-  // Every risk field (score, level, badge, short line, kya-risk/avoid/
-  // karna/upay) is already populated on `sel` by the parent screen via
-  // computeRisk(score, …), which inverts the per-day Energy Score from
-  // /api/transits using scoreToRiskScore(). No server override happens
-  // anymore — see the comment block at the top of the component for why.
-  // Time tiles (bestTime/avoidTime) live on the Forecast lucky panel
-  // now, so this card needs nothing beyond `sel` itself.
+  // Risk fields on `sel` come from parent — preferably /api/risk-radar
+  // (kundli + DOB personalised). Local computeRisk() is fallback only.
   const selData: DayForecast = sel;
 
   // (The "Aaj Ka Shubh Ank + Rang" resolver that used to live here moved

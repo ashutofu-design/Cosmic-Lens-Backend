@@ -335,11 +335,12 @@ def understand_to_question_dna(u: dict[str, Any], *, question: str = "") -> dict
     domain = _normalize_domain(u.get("domain") or "general")
     # relationship already aliased in normalize_understand → love
     raw_bucket = str(u.get("archetype") or u.get("bucket") or "general")
+    summary = str(u.get("question_summary") or "").strip()[:400]
     item_raw = {
         "normalized_question": (question or "").strip()[:500],
         "domain": domain,
         "bucket": raw_bucket,
-        "intent": str(u.get("question_summary") or "")[:400],
+        "intent": (summary[:200] if summary else str(u.get("question_summary") or "")[:200]),
         "subject": u.get("subject") or "unknown",
         "target": u.get("target") or "unknown",
         "question_type": u.get("question_type") or "explanation",
@@ -350,10 +351,11 @@ def understand_to_question_dna(u: dict[str, Any], *, question: str = "") -> dict
         "is_followup": bool(u.get("is_followup") or u.get("turn_type") == "followup"),
         "followup_of": "",
         "confidence": float(u.get("confidence") or 0.7),
-        "user_wants": str(u.get("question_summary") or "")[:400],
+        "user_wants": summary,
         "understanding_confidence": float(u.get("confidence") or 0.7),
         "answer_style": "short_paragraph",
-        "answer_approach": "phase2_understand",
+        # LLM Answer Plan = what user wants (Phase-2 question_summary, 2–3 lines).
+        "answer_approach": summary,
         "engine_archetype": u.get("archetype"),
         "turn_type": u.get("turn_type") or "new",
         "effective_question": str(u.get("effective_question") or question or "")[:500],
@@ -453,14 +455,13 @@ def understand_to_admin(u: dict[str, Any], *, question: str = "", question_raw: 
 def refuse_payload(*, question: str = "", lang: str = "hn", reason: str = "understand_refuse") -> dict[str, Any]:
     if lang == "en":
         text = (
-            "I can't help with that request. Ask me about your chart, timing, "
-            "relationship, career, health, or general Vedic astrology."
+            "This question doesn't seem related to astrology. "
+            "Ask about your chart or life — I'll answer from your kundli."
         )
     else:
         text = (
-            "Maaf kijiye — yeh request Cosmic Lens ke astrology scope me nahi aati. "
-            "Apni kundli, timing, relationship, career, health, ya general jyotish "
-            "ke baare me poochiye."
+            "Yeh sawaal astrology se related nahi lagta. "
+            "Apni kundli ya life se juda kuch puchiye — main chart ke hisaab se jawab dunga."
         )
     return {
         "text": text,
@@ -470,8 +471,8 @@ def refuse_payload(*, question: str = "", lang: str = "hn", reason: str = "under
         "source": reason,
         "engine_tag": "ans-cosmo",
         "follow_ups": [
-            "Meri kundli se related sawaal poochun?",
-            "General jyotish concept samjhao",
+            "Meri kundli se career kaisa rahega?",
+            "Meri shaadi kab hogi?",
         ],
     }
 

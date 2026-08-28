@@ -33,6 +33,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { VastuDeliveryOptions } from "@/components/VastuDeliveryOptions";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 
 import { useC } from "@/context/ThemeContext";
@@ -49,9 +50,8 @@ import { submitAstrovastuRoomHumanOrder } from "@/lib/astrovastuHumanOrder";
 import { purchaseFloorPlanSku } from "@/lib/astrovastuFloorPlanPurchase";
 import { FLOOR_PLAN_CATALOG } from "@/lib/astrovastuFloorPlanPricing";
 import { startAstrovastuRoomUploadCheckout } from "@/lib/astrovastuRoomUploadCheckout";
-import {
-  ROOM_EXPERT_UPLOAD_PRICE_INR,
-} from "@/lib/astrovastuRoomUploadPricing";
+import { ROOM_EXPERT_UPLOAD_PRICE_INR } from "@/lib/astrovastuRoomUploadPricing";
+import { REPORT_PRIORITY_FEE_INR } from "@/lib/deliverySla";
 import {
   consumeAstrovastuRoomPaidReady,
   getPendingAstrovastuRoomUpload,
@@ -220,9 +220,12 @@ export default function AstroVastuProScreen() {
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
   const [uploadSuccessVisible, setUploadSuccessVisible] = useState(false);
   const [planPicking, setPlanPicking] = useState(false);
+  const [priorityDelivery, setPriorityDelivery] = useState(false);
 
+  const roomPayTotal = ROOM_EXPERT_UPLOAD_PRICE_INR + (priorityDelivery ? REPORT_PRIORITY_FEE_INR : 0);
+  const homePdfTotal = HOME_PDF_PRICE + (priorityDelivery ? REPORT_PRIORITY_FEE_INR : 0);
   const paySubmitLabel = String(t.avp_uploadPaySubmit || "Pay ₹{amount}")
-    .replace("{amount}", String(ROOM_EXPERT_UPLOAD_PRICE_INR));
+    .replace("{amount}", String(roomPayTotal));
   const homePdfLabel = `${t.avp_btnUploadHomePdf || "Upload Full Home PDF"} (₹${HOME_PDF_PRICE})`;
   const perRoomLabel = t.avp_uploadPricePerRoom || "per room";
   const cameraLabel = `${t.avp_btnSmartScan} (₹${ROOM_EXPERT_UPLOAD_PRICE_INR}/${perRoomLabel})`;
@@ -282,6 +285,7 @@ export default function AstroVastuProScreen() {
           void submitAstrovastuRoomHumanOrder({
             user: { id: user.id, api_key: user.api_key },
             purchaseId: pending.purchase_id,
+            urgent: !!pending.urgent,
           })
             .then((ok) => {
               if (ok) setUploadSuccessVisible(true);
@@ -342,12 +346,13 @@ export default function AstroVastuProScreen() {
         data_url: g.data_url,
         base64: g.base64,
       },
+      urgent: priorityDelivery,
     })
       .then((result) => {
         if (result === "submitted") setUploadSuccessVisible(true);
       })
       .finally(() => setUploadSubmitting(false));
-  }, [t.avp_errAuthRequired, user]);
+  }, [t.avp_errAuthRequired, user, priorityDelivery]);
 
   // ── Full home plan: pay ₹999 → return here → auto-run scan ───────────────
   const onWholePlanPay = useCallback(() => {
@@ -356,14 +361,15 @@ export default function AstroVastuProScreen() {
       setError({ error: "auth_required", message: t.avp_errAuthRequired });
       return;
     }
-    setPendingAstrovastuFloorPlan({ floor_plan_upload: wholePlan });
+    setPendingAstrovastuFloorPlan({ floor_plan_upload: wholePlan, urgent: priorityDelivery });
     void purchaseFloorPlanSku({
       user: { id: user.id, api_key: user.api_key },
       planKind: "home",
       propertyName: "",
       returnTo: "astrovastu-pro",
+      urgent: priorityDelivery,
     });
-  }, [t.avp_errAuthRequired, user, wholePlan]);
+  }, [t.avp_errAuthRequired, user, wholePlan, priorityDelivery]);
 
   const onPickHomePlanPdf = useCallback(async () => {
     if (loading || planPicking) return;
@@ -435,8 +441,10 @@ export default function AstroVastuProScreen() {
       </LinearGradient>
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
+        style={{ flex: 1, minHeight: 0 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 48, flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
         showsVerticalScrollIndicator={false}
       >
         <FadeInView delay={0}>
@@ -502,6 +510,12 @@ export default function AstroVastuProScreen() {
                 </Text>
               </View>
             </FadeInView>
+
+            <VastuDeliveryOptions
+              isDark={C.isDark}
+              priority={priorityDelivery}
+              onPriorityChange={setPriorityDelivery}
+            />
 
             <SectionShell
               icon="map-pin"
@@ -581,7 +595,7 @@ export default function AstroVastuProScreen() {
                   compact
                   photoOnly
                   paidManual
-                  priceInr={ROOM_EXPERT_UPLOAD_PRICE_INR}
+                  priceInr={roomPayTotal}
                   pricePerRoomLabel={t.avp_uploadPricePerRoom}
                   payLabel={paySubmitLabel}
                   onPaySubmit={onUploadPaySubmit}
@@ -694,7 +708,7 @@ export default function AstroVastuProScreen() {
                       <View style={ui.submitInner}>
                         <Feather name="credit-card" size={16} color="#0B0F19" />
                         <Text style={[styles.runScanText, { color: "#0B0F19" }]}>
-                          {loading ? t.avp_btnAnalysing : `Pay ₹${HOME_PDF_PRICE}`}
+                          {loading ? t.avp_btnAnalysing : `Pay ₹${homePdfTotal}`}
                         </Text>
                       </View>
                     )}
@@ -1000,7 +1014,11 @@ export default function AstroVastuProScreen() {
         }}
         title="Order Confirmed!"
         message="Your room photo has been received. Our Vastu expert is personally reviewing it — your personalised report is on its way."
-        etaLabel="Report in My Reports within 24–48 hrs"
+        etaLabel={
+          priorityDelivery
+            ? "Report in My Reports within 12 hrs"
+            : "Report in My Reports in 4–6 business days"
+        }
       />
     </View>
   );

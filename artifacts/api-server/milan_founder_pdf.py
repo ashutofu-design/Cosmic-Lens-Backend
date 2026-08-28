@@ -1,72 +1,43 @@
-"""Founder-authored Marriage Compatibility Pro PDF — plain text → branded PDF."""
+"""Founder-authored Marriage Compatibility Pro PDF — Universal Pro design."""
 from __future__ import annotations
 
 import io
-import re
 import unicodedata
 from typing import Any
 
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
+import cosmic_pro_report_design as pro
+from founder_structure import (
+    founder_verbatim_markup,
+    iter_verbatim_blocks,
+    normalize_founder_pages_and_images,
+)
+from founder_text_pdf import _flowable_image
 from milan_pdf import (
-    BRAND_GOLD,
-    BRAND_PURPLE,
-    TEXT_MID,
     _ensure_native_pdf_fonts_registered,
-    _font_pair,
+    _has_indic,
     _latinize_pdf_plain,
-    _on_page,
     _pick_body_premium,
     _safe,
     _styles,
 )
 from vedic.compat.milan_pdf_locale import tx
-from vedic.compat.premium_chapters import normalize_pro_pdf_lang
-
-
-def _pdf_ui_hi(lang: str | None) -> bool:
-    return (lang or "en").strip().lower() == "hi"
 
 
 def _pdf_lang(code: str) -> str:
-    return normalize_pro_pdf_lang(code)
+    c = (code or "en").strip().lower()
+    if c in ("hi", "hn", "en"):
+        return "hi" if c == "hi" else ("hn" if c == "hn" else "en")
+    return "en"
 
 
 def _founder_title(lang: str) -> str:
-    if _pdf_ui_hi(lang):
-        return "विवाह अनुकूलता प्रो"
     return tx(lang, "Marriage Compatibility Pro", "Marriage Compatibility Pro")
-
-
-def _founder_subtitle(lang: str) -> str:
-    if _pdf_ui_hi(lang):
-        return "संस्थापक-सत्यापित विवाह परामर्श"
-    return tx(
-        lang,
-        "Founder-verified marriage consultation",
-        "Founder-verified shaadi consultation",
-    )
-
-
-def _founder_meta(lang: str) -> str:
-    if _pdf_ui_hi(lang):
-        return "Cosmic Lens संस्थापक द्वारा · D1/D9 विवाह इंजन"
-    return tx(
-        lang,
-        "Personally prepared by Cosmic Lens · D1/D9 marriage engine",
-        "Cosmic Lens founder dwara tayyar · D1/D9 marriage engine",
-    )
-
-
-def _split_paragraphs(text: str) -> list[str]:
-    chunks = [p.strip() for p in re.split(r"\n\s*\n+", (text or "").strip()) if p.strip()]
-    if chunks:
-        return chunks
-    return [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
 
 
 def _sanitize_founder_plain(text: str) -> str:
@@ -87,10 +58,7 @@ def _sanitize_founder_plain(text: str) -> str:
 
 
 def _founder_body_markup(plain: str) -> str:
-    lines = [ln.strip() for ln in plain.split("\n") if ln.strip()]
-    if not lines:
-        return _safe(plain)
-    return "<br/>".join(_safe(ln).replace("%", "&#37;") for ln in lines)
+    return founder_verbatim_markup(plain, escape_fn=_safe)
 
 
 def render_founder_milan_pdf(
@@ -98,96 +66,94 @@ def render_founder_milan_pdf(
     p1_name: str,
     p2_name: str,
     lang: str,
-    body_text: str,
+    body_text: str = "",
+    pages: list[str] | None = None,
+    page_images: list[str | None] | None = None,
     order_id: str = "",
 ) -> bytes:
     content_lang = _pdf_lang(lang)
+    page_list, img_list = normalize_founder_pages_and_images(
+        body_text, pages, page_images
+    )
     last_exc: Exception | None = None
     for attempt_lang in (content_lang, "en"):
         try:
             render_lang = attempt_lang
             _ensure_native_pdf_fonts_registered(render_lang)
-            s = _styles(render_lang)
-            H_REG, H_BOLD = _font_pair(render_lang)
+            base = _styles(render_lang)
+            s = pro.styles()
+            report_title = _founder_title(render_lang)
+            client = f"{p1_name} & {p2_name}"
 
-            title = f"Marriage Compatibility Pro — {p1_name} & {p2_name}"
             buf = io.BytesIO()
-            doc = SimpleDocTemplate(
-                buf,
-                pagesize=A4,
-                leftMargin=16 * mm,
-                rightMargin=16 * mm,
-                topMargin=18 * mm,
-                bottomMargin=20 * mm,
-                title=title,
-                author="Cosmic Lens",
-            )
+            m = pro.content_margins()
+            doc = SimpleDocTemplate(buf, pagesize=A4, **m)
             doc.milan_pdf_lang = render_lang
-            doc.milan_pdf_footer_pro = True
-            doc.milan_pdf_footer_center = _founder_meta(render_lang)
-
-            eyebrow = ParagraphStyle(
-                "milan_founder_eye",
-                parent=s["body"],
-                fontName=H_REG,
-                fontSize=9,
-                textColor=TEXT_MID,
-                alignment=TA_CENTER,
-                spaceAfter=4,
-            )
-            h1 = ParagraphStyle(
-                "milan_founder_h1",
-                parent=s["body"],
-                fontName=H_BOLD,
-                fontSize=18,
-                textColor=BRAND_PURPLE,
-                alignment=TA_CENTER,
-                spaceAfter=6,
-                leading=22,
-            )
-            h2 = ParagraphStyle(
-                "milan_founder_h2",
-                parent=s["body"],
-                fontName=H_BOLD,
-                fontSize=13,
-                textColor=BRAND_GOLD,
-                alignment=TA_CENTER,
-                spaceAfter=10,
-                leading=17,
-            )
-            meta = ParagraphStyle(
-                "milan_founder_meta",
-                parent=s["body"],
-                fontName=H_REG,
-                fontSize=8.5,
-                textColor=TEXT_MID,
-                alignment=TA_CENTER,
-                spaceAfter=14,
+            doc.pro_footer_left = (
+                "Cosmic Lens · Powered by Cosmic Intelligence Engine"
             )
 
-            story: list[Any] = [
-                Spacer(1, 8 * mm),
-                Paragraph("COSMIC LENS", eyebrow),
-                Paragraph(_safe(_founder_title(render_lang)), h1),
-                Paragraph(_safe(f"{p1_name} &amp; {p2_name}"), h2),
-                Paragraph(_safe(_founder_subtitle(render_lang)), meta),
-            ]
-            if order_id:
-                story.append(Paragraph(_safe(f"Order #{order_id[:8]}"), meta))
-            story.append(Spacer(1, 4 * mm))
+            story: list[Any] = []
+            story.extend(
+                pro.build_cover(
+                    report_type=report_title,
+                    client_name=client,
+                    prepared_by="Ashutosh Bharadwaj",
+                    tagline="Personalized Analysis & Guidance",
+                    order_id=order_id or "",
+                )
+            )
 
-            for para in _split_paragraphs(body_text):
-                plain = _sanitize_founder_plain(_latinize_pdf_plain(para, render_lang))
-                if not plain:
-                    continue
-                body_style = _pick_body_premium(plain, s, render_lang, relax=True)
-                body_style.alignment = TA_LEFT
-                body_style.spaceAfter = 8
-                body_style.leading = 15
-                story.append(Paragraph(_founder_body_markup(plain), body_style))
+            max_w = A4[0] - 2 * (pro.FRAME_INSET + 10 * mm)
+            max_h = 110 * mm
 
-            story.append(PageBreak())
-            doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+            for i, page_body in enumerate(page_list):
+                story.append(PageBreak())
+                if i > 0:
+                    story.append(
+                        Paragraph(
+                            f"<font color='{pro.hex_str(pro.TEXT_MUTED)}'>"
+                            f"COSMIC LENS · {_safe(report_title)}</font>",
+                            s["running"],
+                        )
+                    )
+                    story.append(Spacer(1, 2 * mm))
+                    story.append(pro.thin_rule(gold=False))
+                    story.append(Spacer(1, 5 * mm))
+                flow = _flowable_image(
+                    img_list[i] if i < len(img_list) else None,
+                    max_w=max_w,
+                    max_h=max_h,
+                )
+                if flow is not None:
+                    story.append(flow)
+                    story.append(Spacer(1, 5 * mm))
+                for block in iter_verbatim_blocks(page_body):
+                    plain = _sanitize_founder_plain(
+                        _latinize_pdf_plain(block.text, render_lang)
+                    )
+                    if not plain:
+                        continue
+                    if _has_indic(plain):
+                        st = _pick_body_premium(plain, base, render_lang, relax=True)
+                        st = ParagraphStyle(
+                            f"milan_pro_indic_{id(plain)}",
+                            parent=st,
+                            textColor=pro.TEXT,
+                            alignment=TA_LEFT,
+                            spaceAfter=10,
+                            leading=17,
+                            fontSize=11,
+                        )
+                        story.append(Paragraph(_founder_body_markup(plain), st))
+                    else:
+                        story.append(Paragraph(_founder_body_markup(plain), s["body"]))
+
+            doc.build(
+                story,
+                onFirstPage=pro.on_cover_page,
+                onLaterPages=pro.on_content_page,
+            )
             return buf.getvalue()
         except Exception as exc:
             last_exc = exc

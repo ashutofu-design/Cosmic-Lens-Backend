@@ -191,6 +191,8 @@ def save(user_id: int, kind: str, report_type: str,
                 "name":         (params or {}).get("name", ""),
                 "dob":          (params or {}).get("dob", ""),
                 "language":     (params or {}).get("lang") or (params or {}).get("language", ""),
+                "order_id":     str((params or {}).get("order_id") or ""),
+                "public_order_id": str((params or {}).get("public_order_id") or ""),
                 "params_hash":  h,
                 "filename":     filename,
                 "size_bytes":   len(pdf_bytes),
@@ -235,6 +237,8 @@ def list_for_user(user_id: int, limit: int = 50) -> List[dict]:
                     "language":    r.get("language"),
                     "size_bytes":  r.get("size_bytes"),
                     "date":        r.get("created_at"),
+                    "order_id":    r.get("order_id") or "",
+                    "public_order_id": r.get("public_order_id") or "",
                     "download_url": f"/api/my-reports/{r['id']}",
                 })
         return out

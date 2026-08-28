@@ -22,6 +22,8 @@ export type SmartScanUploadValue = {
   type: "image" | "pdf";
   base64?: string;            // raw base64 (PDF or fallback)
   data_url?: string;          // data URL (preferred for images)
+  /** Local file URI — prefer over base64 in React state (large PDFs OOM). */
+  uri?: string;
   filename?: string;
   size_bytes?: number;
   north_at?: NorthAt;         // where North points on the uploaded plan (default "top")

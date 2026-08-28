@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -30,15 +30,19 @@ import {
 } from "@/lib/coupleReportCheckoutFlow";
 import { getPendingCoupleCheckout } from "@/lib/pendingCoupleCheckout";
 import { submitLoveRealityHumanOrder } from "@/lib/loveRealityHumanOrder";
+import { registerPendingMyReport } from "@/lib/registerPendingMyReport";
+import { STANDARD_DELIVERY_ETA } from "@/lib/deliverySla";
 import {
   LOVE_REALITY_CHECKOUT_CONFIG,
   LOVE_REALITY_PRO_UI_PRICING,
   loveRealityOrderTotalInr,
+  normalizeWhatsappDigits,
   runLoveRealityProUnlockCta,
+  type CoupleProDeliverable,
 } from "@/lib/loveRealityProOffer";
 import { packLovePerson } from "@/lib/loveRealityProPdfDownload";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
-import { loveRealityProScreenCopy } from "@/lib/loveRealityProCopyI18n";
+import { loveRealityProPurchaseCopy, loveRealityProScreenCopy } from "@/lib/loveRealityProCopyI18n";
 
 export default function LoveRealityProScreen() {
   const C = useC();
@@ -60,10 +64,42 @@ export default function LoveRealityProScreen() {
   const canPro = hasSelfKundli && hasPartnerKundli;
 
   const [priorityDelivery, setPriorityDelivery] = useState(false);
+  const [deliverable, setDeliverable] = useState<CoupleProDeliverable>("report");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [selectedPdfLang, setSelectedPdfLang] = useState(coerceProPdfLang(language || t.lang));
   const displayLang = coerceProPdfLang(selectedPdfLang);
   const proCopy = loveRealityProScreenCopy(displayLang);
+  const purchaseCopy = loveRealityProPurchaseCopy(displayLang);
+  /** Prefer typed WhatsApp; fall back to profile only when field is empty. */
+  const waDigits = normalizeWhatsappDigits(whatsapp || user?.phone || "");
+  const whatsappLocked = !!(user?.personal_phone_locked || normalizeWhatsappDigits(user?.phone || "").length === 10);
+
+  function notify(title: string, message: string) {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.alert(`${title}\n\n${message}`);
+      return;
+    }
+    Alert.alert(title, message, [{ text: "OK" }]);
+  }
+
+  /** Video CTA: require a real 10-digit mobile. Returns digits or null. */
+  function requireVideoMobile(): string | null {
+    const typed = normalizeWhatsappDigits(whatsapp);
+    const fromProfile = normalizeWhatsappDigits(user?.phone || "");
+    const wa = typed.length === 10 ? typed : fromProfile.length === 10 ? fromProfile : typed || fromProfile;
+    if (wa.length === 10) {
+      setWhatsappError(null);
+      if (typed.length !== 10 && fromProfile.length === 10) setWhatsapp(fromProfile);
+      return wa;
+    }
+    const msg = purchaseCopy.whatsappRequired;
+    setWhatsappError(msg);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    notify("Mobile number required", msg);
+    return null;
+  }
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [preparingBanner, setPreparingBanner] = useState<{
@@ -71,15 +107,26 @@ export default function LoveRealityProScreen() {
     etaHours: number;
   } | null>(null);
 
+  useEffect(() => {
+    const fromProfile = normalizeWhatsappDigits(user?.phone || "");
+    if (fromProfile.length === 10) setWhatsapp(fromProfile);
+  }, [user?.phone]);
+
   useFocusEffect(
     useCallback(() => {
       if (consumeCouplePaidReady()) {
         const pending = getPendingCoupleCheckout();
         if (pending?.lang) setSelectedPdfLang(coerceProPdfLang(pending.lang));
         if (pending?.urgent != null) setPriorityDelivery(pending.urgent);
+        if (pending?.contactMethod === "whatsapp") {
+          setDeliverable("video");
+          if (pending.contactValue) setWhatsapp(normalizeWhatsappDigits(pending.contactValue));
+        }
         void placeVerifiedPdfOrder({
           langOverride: pending?.lang,
           urgentOverride: pending?.urgent,
+          deliverableOverride: pending?.contactMethod === "whatsapp" ? "video" : "report",
+          whatsappOverride: pending?.contactValue,
         });
       }
     }, []),
@@ -110,11 +157,22 @@ export default function LoveRealityProScreen() {
   async function placeVerifiedPdfOrder(opts?: {
     langOverride?: string;
     urgentOverride?: boolean;
+    deliverableOverride?: CoupleProDeliverable;
+    whatsappOverride?: string;
   }) {
     if (!primaryProfile?.birthData || !partnerProfile?.birthData || !user?.id) return;
 
     const lang = coerceProPdfLang(opts?.langOverride ?? selectedPdfLang);
     const urgent = opts?.urgentOverride ?? priorityDelivery;
+    const kind = opts?.deliverableOverride ?? deliverable;
+    const wa = normalizeWhatsappDigits(opts?.whatsappOverride ?? waDigits);
+
+    if (kind === "video" && wa.length !== 10) {
+      const msg = purchaseCopy.whatsappRequired;
+      setWhatsappError(msg);
+      notify("Mobile number required", msg);
+      return;
+    }
 
     setSubmittingOrder(true);
     try {
@@ -128,11 +186,34 @@ export default function LoveRealityProScreen() {
         userId: user.id,
         cosmoUserId: user.cosmo_user_id,
         apiKey: user.api_key,
+        deliverable: kind,
+        whatsapp: wa,
+        amountInr: loveRealityOrderTotalInr(urgent, kind),
+        priorityFeeInr: urgent ? 299 : 0,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const displayOid = String(result.order_id || "").slice(0, 8).toUpperCase();
+      const couple = `${(primaryProfile.name || "You").trim()} & ${(partnerProfile.name || "Partner").trim()}`;
+      try {
+        await registerPendingMyReport(user.id, {
+          kind: "love_reality",
+          title: kind === "video"
+            ? `${couple} — Video (WhatsApp)`
+            : `${couple} — Love Reality Report`,
+          subtitle: displayOid ? `Order ${displayOid}` : "Preparing…",
+          orderId: result.order_id || undefined,
+          publicOrderId: displayOid || undefined,
+          etaLabel: urgent
+            ? "⚡ Priority — within 12 hours"
+            : `📦 Standard — ${STANDARD_DELIVERY_ETA}`,
+          deliverable: kind,
+        });
+      } catch {
+        /* ignore */
+      }
       setPreparingBanner({
         priority: urgent,
-        etaHours: Number(result.eta_hours) || (urgent ? 12 : 24),
+        etaHours: Number(result.eta_hours) || (urgent ? 12 : 144),
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Order failed";
@@ -148,6 +229,10 @@ export default function LoveRealityProScreen() {
       showKundliRequired();
       return;
     }
+    if (deliverable === "video" && !requireVideoMobile()) {
+      return;
+    }
+    setWhatsappError(null);
     runLoveRealityProUnlockCta({
       continueProExperience: () => {
         void (async () => {
@@ -167,12 +252,18 @@ export default function LoveRealityProScreen() {
     if (!primaryProfile?.birthData || !partnerProfile?.birthData) return;
 
     if (!user?.id) {
-      Alert.alert(
-        "Login required",
-        proCopy.loginRequired,
-        [{ text: "OK" }],
-      );
+      notify("Login required", proCopy.loginRequired);
       return;
+    }
+
+    let videoWa: string | undefined;
+    if (deliverable === "video") {
+      const wa = requireVideoMobile();
+      if (!wa) {
+        setLangPickerVisible(false);
+        return;
+      }
+      videoWa = wa;
     }
 
     const lang = coerceProPdfLang(selectedPdfLang);
@@ -180,7 +271,10 @@ export default function LoveRealityProScreen() {
     setLangPickerVisible(false);
 
     if (LOVE_REALITY_CHECKOUT_CONFIG.bypassCheckoutForTesting) {
-      await placeVerifiedPdfOrder();
+      await placeVerifiedPdfOrder({
+        whatsappOverride: videoWa,
+        deliverableOverride: deliverable,
+      });
       return;
     }
 
@@ -195,12 +289,17 @@ export default function LoveRealityProScreen() {
         p1,
         p2,
         lang,
-        label: "Love Reality Pro",
-        amountInr: loveRealityOrderTotalInr(priorityDelivery),
+        label: deliverable === "video" ? "Personalized Video Explanation" : "Love Reality Pro Report",
+        amountInr: loveRealityOrderTotalInr(priorityDelivery, deliverable),
         bypassCheckout: false,
         urgent: priorityDelivery,
+        contactMethod: deliverable === "video" ? "whatsapp" : undefined,
+        contactValue: deliverable === "video" ? videoWa : undefined,
         onEntitled: () => {
-          void placeVerifiedPdfOrder();
+          void placeVerifiedPdfOrder({
+            whatsappOverride: videoWa,
+            deliverableOverride: deliverable,
+          });
         },
       });
     } finally {
@@ -235,11 +334,13 @@ export default function LoveRealityProScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minHeight: 0 }}>
           <ScrollView
             style={s.scroll}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: botPad + 88, gap: 12 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: botPad + 88, gap: 12, flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
           >
             {!canPro && (
               <FadeInView delay={staggerDelay(0)}>
@@ -264,6 +365,18 @@ export default function LoveRealityProScreen() {
                 partnerName={partnerProfile?.name}
                 priorityDelivery={priorityDelivery}
                 onPriorityDeliveryChange={setPriorityDelivery}
+                deliverable={deliverable}
+                onDeliverableChange={(id) => {
+                  setDeliverable(id);
+                  setWhatsappError(null);
+                }}
+                whatsapp={whatsapp}
+                onWhatsappChange={(t) => {
+                  setWhatsapp(t);
+                  if (whatsappError) setWhatsappError(null);
+                }}
+                whatsappLocked={whatsappLocked}
+                whatsappError={whatsappError}
                 lang={displayLang}
               />
             </FadeInView>
@@ -274,9 +387,10 @@ export default function LoveRealityProScreen() {
             canPro={canPro}
             loading={ctaLoading}
             regularInr={LOVE_REALITY_PRO_UI_PRICING.regularInr}
-            totalInr={loveRealityOrderTotalInr(priorityDelivery)}
+            totalInr={loveRealityOrderTotalInr(priorityDelivery, deliverable)}
             onUnlock={startProUnlock}
             lang={displayLang}
+            isVideo={deliverable === "video"}
           />
         </View>
       </View>
@@ -300,11 +414,19 @@ export default function LoveRealityProScreen() {
           router.push("/my-reports" as any);
         }}
         title="Order Confirmed!"
-        message="Your order has been received. Our expert is personally preparing your Love Reality Pro report — it's on its way."
+        message={
+          deliverable === "video"
+            ? "Your Personalized Video Explanation is being prepared. It will be sent to your WhatsApp. No PDF/report is included."
+            : "Your order has been received. Our expert is personally preparing your Love Reality Pro report — it's on its way."
+        }
         etaLabel={
-          preparingBanner?.priority
-            ? "Report in My Reports within 12 hrs"
-            : "Report in My Reports within 24 hrs"
+          deliverable === "video"
+            ? preparingBanner?.priority
+              ? "Video on WhatsApp within 12 hrs"
+              : "Video on WhatsApp within 24 hrs"
+            : preparingBanner?.priority
+              ? "Report in My Reports within 12 hrs"
+              : "Report in My Reports within 24 hrs"
         }
       />
     </CosmicBg>
@@ -312,8 +434,8 @@ export default function LoveRealityProScreen() {
 }
 
 const s = StyleSheet.create({
-  shell: { flex: 1 },
-  scroll: { flex: 1 },
+  shell: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",

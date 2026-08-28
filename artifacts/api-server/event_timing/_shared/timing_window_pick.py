@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from datetime import datetime
+from typing import Any, Optional
 
 _MONTH_EN = {
     "01": "January",
@@ -187,7 +188,63 @@ def timing_window_index(
     return 0
 
 
-def _normalize_window_row(w: dict[str, Any], rank: int = 0) -> dict[str, Any]:
+def _current_month_start(today: Optional[datetime] = None) -> datetime:
+    now = today or datetime.utcnow()
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _parse_ym(val: Any) -> Optional[tuple[str, datetime]]:
+    s = str(val or "").strip()
+    if not s:
+        return None
+    ym = s[:7]
+    if len(ym) < 7 or ym[4] != "-":
+        return None
+    try:
+        return ym, datetime.strptime(f"{ym}-01", "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def clip_timing_window_for_display(
+    w: dict[str, Any] | None,
+    *,
+    today: Optional[datetime] = None,
+) -> dict[str, Any] | None:
+    """Drop fully-past windows; clip start to the current month when already underway."""
+    if not isinstance(w, dict):
+        return None
+    now = today or datetime.utcnow()
+    month_start = _current_month_start(now)
+    today_ym = month_start.strftime("%Y-%m")
+
+    start_raw = w.get("start") or w.get("start_iso")
+    end_raw = w.get("end") or w.get("end_iso")
+    start_p = _parse_ym(start_raw)
+    end_p = _parse_ym(end_raw)
+
+    if end_p and end_p[1] < month_start:
+        return None
+    if start_p and end_p and start_p[1] > end_p[1]:
+        return None
+
+    out = dict(w)
+    if start_p and start_p[1] < month_start:
+        out["start"] = today_ym
+        if start_raw and str(start_raw).strip().lower() in ("current", "now", "running"):
+            out["start"] = today_ym
+
+    end_ym = end_p[0] if end_p else (str(end_raw)[:7] if end_raw else None)
+    start_ym = out.get("start") or (start_p[0] if start_p else None)
+    if start_ym and end_ym:
+        out["window"] = f"{start_ym} → {end_ym}"
+    elif start_ym:
+        out["window"] = str(start_ym)
+
+    return out
+
+
+def _normalize_window_row(w: dict[str, Any], rank: int = 0) -> dict[str, Any] | None:
     start = w.get("start") or w.get("start_iso")
     end = w.get("end") or w.get("end_iso")
     md, ad, pd = w.get("md"), w.get("ad"), w.get("pd")
@@ -199,7 +256,7 @@ def _normalize_window_row(w: dict[str, Any], rank: int = 0) -> dict[str, Any]:
         window = f"{str(start)[:7]} → {str(end)[:7]}"
     elif not window and start:
         window = str(start)[:7]
-    return {
+    row = {
         "rank": w.get("rank") or rank,
         "md": md,
         "ad": ad,
@@ -211,6 +268,18 @@ def _normalize_window_row(w: dict[str, Any], rank: int = 0) -> dict[str, Any]:
         "reason": w.get("reason"),
         "score": w.get("score"),
     }
+    return clip_timing_window_for_display(row)
+
+
+def _normalize_window_list(rows: list[Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for i, w in enumerate(rows):
+        if not isinstance(w, dict):
+            continue
+        norm = _normalize_window_row(w, i + 1)
+        if norm:
+            out.append(norm)
+    return out
 
 
 def extract_ranked_timing_windows(engine_result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -223,7 +292,7 @@ def extract_ranked_timing_windows(engine_result: dict[str, Any]) -> list[dict[st
         timing = promo.get("timing") if isinstance(promo.get("timing"), dict) else {}
         raw = timing.get("windows")
         if isinstance(raw, list) and raw:
-            return [_normalize_window_row(w, i + 1) for i, w in enumerate(raw) if isinstance(w, dict)]
+            return _normalize_window_list(raw)
 
     sa = engine_result.get("step_audit")
     if isinstance(sa, dict):
@@ -231,30 +300,33 @@ def extract_ranked_timing_windows(engine_result: dict[str, Any]) -> list[dict[st
         if isinstance(s8, dict):
             pw = s8.get("promotion_windows")
             if isinstance(pw, list) and pw:
-                return [_normalize_window_row(w, i + 1) for i, w in enumerate(pw) if isinstance(w, dict)]
+                return _normalize_window_list(pw)
 
     top3 = engine_result.get("top_3_windows")
     if isinstance(top3, list) and top3:
-        return [_normalize_window_row(w, i + 1) for i, w in enumerate(top3) if isinstance(w, dict)]
+        return _normalize_window_list(top3)
 
     next3 = engine_result.get("next_3_windows")
     if isinstance(next3, list) and next3:
-        return [_normalize_window_row(w, i + 1) for i, w in enumerate(next3) if isinstance(w, dict)]
+        return _normalize_window_list(next3)
 
     viable = engine_result.get("viable_top_3")
     if isinstance(viable, list) and viable:
-        return [_normalize_window_row(w, i + 1) for i, w in enumerate(viable) if isinstance(w, dict)]
+        return _normalize_window_list(viable)
 
     tw = engine_result.get("timing_window")
     if isinstance(tw, dict):
         rows: list[dict[str, Any]] = []
         nxt = tw.get("next_career")
         if isinstance(nxt, dict) and (nxt.get("start") or nxt.get("lords")):
-            rows.append(_normalize_window_row(nxt, 1))
+            norm = _normalize_window_row(nxt, 1)
+            if norm:
+                rows.append(norm)
         rec = tw.get("recommended") or tw.get("current")
         if isinstance(rec, dict) and (rec.get("start") or rec.get("lords")):
-            if not rows or rows[0].get("start") != _normalize_window_row(rec, 1).get("start"):
-                rows.insert(0, _normalize_window_row(rec, 1))
+            rec_norm = _normalize_window_row(rec, 1)
+            if rec_norm and (not rows or rows[0].get("start") != rec_norm.get("start")):
+                rows.insert(0, rec_norm)
         if rows:
             return rows
 
@@ -287,15 +359,27 @@ def pick_timing_answer_window(
     idx = timing_window_index(question, history, windows)
     if idx >= len(windows):
         idx = max(0, len(windows) - 1)
-    return dict(windows[idx])
+    picked = clip_timing_window_for_display(dict(windows[idx]))
+    if picked:
+        return picked
+    for w in windows[idx + 1:]:
+        clipped = clip_timing_window_for_display(dict(w))
+        if clipped:
+            return clipped
+    for w in windows[:idx]:
+        clipped = clip_timing_window_for_display(dict(w))
+        if clipped:
+            return clipped
+    return None
 
 
 def window_range_label(w: dict[str, Any] | None) -> str:
     if not isinstance(w, dict):
         return ""
-    if w.get("window"):
-        return str(w["window"]).strip()
-    return _format_range_label(w.get("start"), w.get("end"))
+    clipped = clip_timing_window_for_display(w) or w
+    if clipped.get("window"):
+        return str(clipped["window"]).strip()
+    return _format_range_label(clipped.get("start"), clipped.get("end"))
 
 
 def _ym_to_label(ym: str) -> str:

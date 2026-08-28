@@ -9,9 +9,11 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
+import { PRO_PICKER_ACCENTS, ProProductPicker } from "@/components/ProProductPicker";
 import { LoveRealitySocialProof } from "@/components/loveReality/LoveRealitySocialProof";
 import { FOUNDER_PROFILE } from "@/lib/founderProfile";
 import { loveRealityProPurchaseCopy } from "@/lib/loveRealityProCopyI18n";
@@ -19,8 +21,12 @@ import type { ProPdfLangCode } from "@/lib/proPdfLang";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
 import {
   LOVE_REALITY_PRO_UI_PRICING,
+  LOVE_REALITY_PRIORITY_FEE_INR,
+  LOVE_REALITY_VIDEO_PRICE_INR,
   loveRealityFirstTimeSavingsInr,
   loveRealityOrderTotalInr,
+  normalizeWhatsappDigits,
+  type CoupleProDeliverable,
 } from "@/lib/loveRealityProOffer";
 
 export function LoveRealityProPurchase({
@@ -29,6 +35,12 @@ export function LoveRealityProPurchase({
   partnerName,
   priorityDelivery,
   onPriorityDeliveryChange,
+  deliverable,
+  onDeliverableChange,
+  whatsapp,
+  onWhatsappChange,
+  whatsappLocked,
+  whatsappError,
   lang = "en",
 }: {
   isDark: boolean;
@@ -36,6 +48,12 @@ export function LoveRealityProPurchase({
   partnerName?: string | null;
   priorityDelivery: boolean;
   onPriorityDeliveryChange: (value: boolean) => void;
+  deliverable: CoupleProDeliverable;
+  onDeliverableChange: (value: CoupleProDeliverable) => void;
+  whatsapp: string;
+  onWhatsappChange: (value: string) => void;
+  whatsappLocked?: boolean;
+  whatsappError?: string | null;
   lang?: ProPdfLangCode;
 }) {
   const lane = coerceProPdfLang(lang);
@@ -56,9 +74,10 @@ export function LoveRealityProPurchase({
   const border = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
   const titleColor = isDark ? "#f8fafc" : "#0f172a";
   const bodyColor = isDark ? "rgba(226,232,240,0.72)" : "#64748b";
-  const { regularInr } = LOVE_REALITY_PRO_UI_PRICING;
+  const { regularInr, todayInr } = LOVE_REALITY_PRO_UI_PRICING;
   const savingsInr = loveRealityFirstTimeSavingsInr();
-  const totalInr = loveRealityOrderTotalInr(priorityDelivery);
+  const isVideo = deliverable === "video";
+  const totalInr = loveRealityOrderTotalInr(priorityDelivery, deliverable);
   const savingsGreen = isDark ? "#86efac" : "#15803d";
   const standardDelivery = copy.deliveryOptions[0];
   const priorityOption = copy.deliveryOptions[1];
@@ -92,6 +111,38 @@ export function LoveRealityProPurchase({
           </Text>
         </View>
       </View>
+
+      <ProProductPicker
+        title={copy.productPickerTitle}
+        subtitle={copy.productPickerSubtitle}
+        selectedId={deliverable}
+        onSelect={(id) => onDeliverableChange(id as CoupleProDeliverable)}
+        isDark={isDark}
+        cardBg={cardBg}
+        border={border}
+        titleColor={titleColor}
+        bodyColor={bodyColor}
+        accent={isDark ? PRO_PICKER_ACCENTS.pinkDark : PRO_PICKER_ACCENTS.pink}
+        options={[
+          {
+            id: "report",
+            emoji: "📄",
+            title: copy.productReportTitle,
+            hint: copy.productReportHint,
+            priceLabel: `₹${todayInr}`,
+            strikeLabel: regularInr > todayInr ? `₹${regularInr}` : undefined,
+            badge: copy.productReportBadge,
+          },
+          {
+            id: "video",
+            emoji: "🎥",
+            title: copy.productVideoTitle,
+            hint: copy.productVideoHint,
+            priceLabel: `₹${LOVE_REALITY_VIDEO_PRICE_INR}`,
+            badge: copy.productVideoBadge,
+          },
+        ]}
+      />
 
       {/* Founder trust — compact, expandable */}
       <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
@@ -159,6 +210,7 @@ export function LoveRealityProPurchase({
       </View>
 
       {/* Report content — compact */}
+      {!isVideo ? (
       <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Text style={[s.sectionTitle, { color: titleColor }]}>{copy.reportSectionTitle}</Text>
         <Text style={[s.reportSummary, { color: bodyColor }]}>{copy.unlockItems.length} personalized sections</Text>
@@ -173,12 +225,40 @@ export function LoveRealityProPurchase({
           ))}
         </View>
       </View>
+      ) : null}
+
+      {isVideo ? (
+        <View style={[s.card, { backgroundColor: cardBg, borderColor: whatsappError ? "#ef4444" : border }]}>
+          <Text style={[s.sectionTitle, { color: titleColor }]}>{copy.videoWhatsappTitle}</Text>
+          <Text style={[s.reportSummary, { color: bodyColor }]}>{copy.videoWhatsappHint}</Text>
+          <TextInput
+            value={whatsapp}
+            onChangeText={(t) => onWhatsappChange(normalizeWhatsappDigits(t))}
+            editable={!whatsappLocked}
+            keyboardType="phone-pad"
+            maxLength={10}
+            placeholder={copy.videoWhatsappPlaceholder}
+            placeholderTextColor={bodyColor}
+            style={[
+              s.waInput,
+              {
+                color: titleColor,
+                borderColor: whatsappError ? "#ef4444" : border,
+                opacity: whatsappLocked ? 0.85 : 1,
+              },
+            ]}
+          />
+          {whatsappError ? (
+            <Text style={s.waError}>{whatsappError}</Text>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Delivery — compact */}
       <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Text style={[s.sectionTitle, { color: titleColor }]}>{copy.deliveryOptions[0].title}</Text>
-        <Text style={[s.deliveryStandardLine, { color: bodyColor }]} numberOfLines={1}>
-          📁 My Reports · {standardDelivery.eta.toLowerCase()}
+        <Text style={[s.deliveryStandardLine, { color: bodyColor }]} numberOfLines={2}>
+          {isVideo ? copy.videoStandardLine : `📁 My Reports · ${standardDelivery.eta.toLowerCase()}`}
         </Text>
         <Pressable
           onPress={() => {
@@ -197,24 +277,30 @@ export function LoveRealityProPurchase({
             {priorityDelivery ? <Feather name="check" size={10} color="#fff" /> : null}
           </View>
           <Text style={[s.deliveryPriorityTxt, { color: titleColor }]} numberOfLines={1}>
-            {priorityOption.emoji} Priority +₹{priorityOption.surchargeInr} · {priorityOption.eta.toLowerCase()}
+            {priorityOption.emoji} Priority +₹{LOVE_REALITY_PRIORITY_FEE_INR} · {priorityOption.eta.toLowerCase()}
           </Text>
         </Pressable>
         <Text style={[s.deliveryRefundNote, { color: bodyColor }]} numberOfLines={2}>
           {copy.priorityRefund}
         </Text>
         <View style={[s.priceDivider, { backgroundColor: border }]} />
-        <Text style={[s.priceInline, { color: titleColor }]}>
-          <Text style={[s.priceStrikeTiny, { color: bodyColor }]}>₹{regularInr}</Text>
-          <Text style={s.priceArrow}> → </Text>
-          <Text style={s.priceTotalTiny}>₹{totalInr}</Text>
-          <Text style={[s.priceSavedTiny, { color: savingsGreen }]}> · {copy.savings(savingsInr)}</Text>
-        </Text>
+        {isVideo ? (
+          <Text style={[s.priceInline, { color: titleColor }]}>
+            <Text style={s.priceTotalTiny}>₹{totalInr}</Text>
+          </Text>
+        ) : (
+          <Text style={[s.priceInline, { color: titleColor }]}>
+            <Text style={[s.priceStrikeTiny, { color: bodyColor }]}>₹{regularInr}</Text>
+            <Text style={s.priceArrow}> → </Text>
+            <Text style={s.priceTotalTiny}>₹{totalInr}</Text>
+            <Text style={[s.priceSavedTiny, { color: savingsGreen }]}> · {copy.savings(savingsInr)}</Text>
+          </Text>
+        )}
       </View>
 
       <LoveRealitySocialProof visible={false} />
 
-      <Text style={[s.trustBar, { color: bodyColor }]}>{copy.trustBar}</Text>
+      <Text style={[s.trustBar, { color: bodyColor }]}>{isVideo ? copy.videoTrustBar : copy.trustBar}</Text>
     </Animated.View>
   );
 }
@@ -340,5 +426,21 @@ const s = StyleSheet.create({
     textAlign: "center",
     lineHeight: 16,
     paddingHorizontal: 4,
+  },
+  waInput: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+  },
+  waError: {
+    marginTop: 8,
+    fontSize: 12,
+    fontFamily: "Nunito_700Bold",
+    color: "#ef4444",
+    lineHeight: 16,
   },
 });

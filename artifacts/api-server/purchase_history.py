@@ -25,6 +25,7 @@ def build_user_purchase_history(user_id: int) -> list[dict[str, Any]]:
         AstroVastuPropertyUnlock,
         AstroVastuPurchase,
         CoupleReportPurchase,
+        GemstoneOrder,
         User,
     )
     from subscription_helper import PLAN_PRICES, SKU_CATALOG
@@ -67,6 +68,24 @@ def build_user_purchase_history(user_id: int) -> list[dict[str, Any]]:
                 "title": title,
                 "subtitle": (p.property_name or "").strip(),
                 "amount_inr": int(p.amount or spec.get("price") or 0),
+                "order_id": p.order_id or "",
+                "status": "paid",
+                "paid_at": _iso(p.paid_at) or _iso(p.created_at),
+            }
+        )
+
+    for p in (
+        GemstoneOrder.query.filter_by(user_id=user_id, status="paid")
+        .order_by(GemstoneOrder.paid_at.desc(), GemstoneOrder.id.desc())
+        .all()
+    ):
+        rows.append(
+            {
+                "id": f"gem-{p.id}",
+                "kind": "gemstone",
+                "title": (p.sku or "Gemstone").replace("_", " ").title(),
+                "subtitle": f"Delivery: {p.delivery_status or 'pending'}",
+                "amount_inr": int(p.amount_inr or 0),
                 "order_id": p.order_id or "",
                 "status": "paid",
                 "paid_at": _iso(p.paid_at) or _iso(p.created_at),
@@ -138,6 +157,43 @@ def build_user_purchase_history(user_id: int) -> list[dict[str, Any]]:
             }
         )
 
+    # ── Cosmic Intelligence V1 question packs ───────────────────────────────
+    try:
+        from ask_v1_billing import ASK_V1_PACK_CATALOG
+        from models import AskV1Purchase
+
+        for p in (
+            AskV1Purchase.query.filter_by(user_id=user_id, status="paid")
+            .order_by(AskV1Purchase.paid_at.desc(), AskV1Purchase.id.desc())
+            .all()
+        ):
+            pack = ASK_V1_PACK_CATALOG.get((p.pack_id or "").strip().lower()) or {}
+            q = int(pack.get("questions") or 0)
+            days = int(pack.get("days") or 0)
+            label = str(pack.get("label") or p.pack_id or "V1 Pack").title()
+            rows.append(
+                {
+                    "id": f"av1-{p.id}",
+                    "kind": "ask_v1",
+                    "title": f"Cosmic Intelligence V1 · {label}",
+                    "subtitle": f"{q} questions · {days} days" if q else "",
+                    "amount_inr": int(p.amount or pack.get("price_inr") or 0),
+                    "order_id": p.order_id or "",
+                    "status": "paid",
+                    "paid_at": _iso(p.paid_at) or _iso(p.created_at),
+                }
+            )
+    except Exception:
+        pass
+
+    # ── Cosmic Intelligence V3 live sessions ────────────────────────────────
+    try:
+        from cosmic_intelligence_v3_sessions import list_v3_transactions_for_user
+
+        rows.extend(list_v3_transactions_for_user(user_id))
+    except Exception:
+        pass
+
     rows.sort(key=lambda r: r.get("paid_at") or "", reverse=True)
     return rows
 
@@ -163,11 +219,17 @@ def build_admin_transactions(
     user_id: int | None = None,
     status: str = "paid",
 ) -> dict[str, Any]:
-    """All transactions across users — for admin panel (paid / failed / all)."""
+    """All transactions across users — for admin panel (paid / failed / all).
+
+    Includes reports, AstroVastu, gemstones, subscriptions, career unlock,
+    Cosmic Intelligence V1 packs, and V3 live sessions.
+    """
     from models import (
+        AskV1Purchase,
         AstroVastuPropertyUnlock,
         AstroVastuPurchase,
         CoupleReportPurchase,
+        GemstoneOrder,
         User,
     )
     from subscription_helper import PLAN_PRICES, SKU_CATALOG
@@ -178,6 +240,15 @@ def build_admin_transactions(
     email_q = (email or "").strip().lower()
     user_cache: dict[int, dict[str, Any]] = {}
     rows: list[dict[str, Any]] = []
+    # Fast path: recent-window merge (avoids loading every purchase into RAM).
+    use_fast_path = not email_q and user_id is None
+    fetch_cap = min(500, max(per_page * page * 3, 120)) if use_fast_path else None
+
+    def _limited(q, date_col):
+        ordered = q.order_by(date_col.desc())
+        if fetch_cap is not None:
+            return ordered.limit(fetch_cap).all()
+        return ordered.all()
 
     def _matches_user(uid: int) -> bool:
         if user_id is not None and uid != user_id:
@@ -191,12 +262,18 @@ def build_admin_transactions(
 
     couple_statuses = ["paid"]
     av_statuses = ["paid"]
+    pack_statuses = ["paid"]
+    gem_statuses = ["paid"]
     if status_norm == "failed":
         couple_statuses = ["created", "failed", "expired"]
         av_statuses = ["created", "failed", "expired"]
+        pack_statuses = ["created", "failed"]
+        gem_statuses = ["created", "failed"]
     elif status_norm == "all":
         couple_statuses = []  # no filter
         av_statuses = []
+        pack_statuses = []
+        gem_statuses = []
 
     cq = CoupleReportPurchase.query
     if couple_statuses:
@@ -204,7 +281,7 @@ def build_admin_transactions(
     if user_id is not None:
         cq = cq.filter(CoupleReportPurchase.user_id == user_id)
 
-    for p in cq.all():
+    for p in _limited(cq, CoupleReportPurchase.paid_at):
         if not _matches_user(p.user_id):
             continue
         base = {
@@ -226,7 +303,7 @@ def build_admin_transactions(
     if user_id is not None:
         aq = aq.filter(AstroVastuPurchase.user_id == user_id)
 
-    for p in aq.all():
+    for p in _limited(aq, AstroVastuPurchase.paid_at):
         if not _matches_user(p.user_id):
             continue
         if p.order_id:
@@ -243,6 +320,71 @@ def build_admin_transactions(
             "paid_at": _iso(p.paid_at) or _iso(p.created_at),
         }
         rows.append({**_user_snapshot(user_cache, p.user_id), **base})
+
+    # ── Gemstone orders ─────────────────────────────────────────────────────
+    gq = GemstoneOrder.query
+    if gem_statuses:
+        gq = gq.filter(GemstoneOrder.status.in_(gem_statuses))
+    if user_id is not None:
+        gq = gq.filter(GemstoneOrder.user_id == user_id)
+
+    for p in _limited(gq, GemstoneOrder.paid_at):
+        if not _matches_user(p.user_id):
+            continue
+        base = {
+            "id": f"gem-{p.id}",
+            "kind": "gemstone",
+            "title": (p.sku or "Gemstone").replace("_", " ").title(),
+            "subtitle": f"Delivery: {p.delivery_status or 'pending'}",
+            "amount_inr": int(p.amount_inr or 0),
+            "order_id": p.order_id or "",
+            "status": p.status or "paid",
+            "paid_at": _iso(p.paid_at) or _iso(p.created_at),
+        }
+        rows.append({**_user_snapshot(user_cache, p.user_id), **base})
+
+    # ── Cosmic Intelligence V1 question packs ───────────────────────────────
+    try:
+        from ask_v1_billing import ASK_V1_PACK_CATALOG
+
+        v1q = AskV1Purchase.query
+        if pack_statuses:
+            v1q = v1q.filter(AskV1Purchase.status.in_(pack_statuses))
+        if user_id is not None:
+            v1q = v1q.filter(AskV1Purchase.user_id == user_id)
+
+        for p in _limited(v1q, AskV1Purchase.paid_at):
+            if not _matches_user(p.user_id):
+                continue
+            pack = ASK_V1_PACK_CATALOG.get((p.pack_id or "").strip().lower()) or {}
+            q = int(pack.get("questions") or 0)
+            days = int(pack.get("days") or 0)
+            label = str(pack.get("label") or p.pack_id or "V1 Pack").title()
+            base = {
+                "id": f"av1-{p.id}",
+                "kind": "ask_v1",
+                "title": f"Cosmic Intelligence V1 · {label}",
+                "subtitle": f"{q} questions · {days} days" if q else "",
+                "amount_inr": int(p.amount or pack.get("price_inr") or 0),
+                "order_id": p.order_id or "",
+                "status": p.status or "paid",
+                "paid_at": _iso(p.paid_at) or _iso(p.created_at),
+            }
+            rows.append({**_user_snapshot(user_cache, p.user_id), **base})
+    except Exception:
+        pass
+
+    # ── Cosmic Intelligence V3 live sessions ────────────────────────────────
+    try:
+        from cosmic_intelligence_v3_sessions import list_v3_transactions_admin
+
+        for base in list_v3_transactions_admin(user_id=user_id, status_mode=status_norm):
+            uid = int(base.pop("user_id", 0) or 0)
+            if uid <= 0 or not _matches_user(uid):
+                continue
+            rows.append({**_user_snapshot(user_cache, uid), **base})
+    except Exception:
+        pass
 
     if status_norm in ("paid", "all"):
         for u in AstroVastuPropertyUnlock.query.all():
@@ -314,7 +456,19 @@ def build_admin_transactions(
             rows.append({**_user_snapshot(user_cache, user.id), **base})
 
     rows.sort(key=lambda r: r.get("paid_at") or "", reverse=True)
-    total = len(rows)
+    if use_fast_path:
+        total = cq.count() + aq.count() + gq.count()
+        if "v1q" in locals():
+            total += v1q.count()
+        if status_norm in ("paid", "all"):
+            total += AstroVastuPropertyUnlock.query.count()
+            total += User.query.filter(
+                User.plan_order_id.isnot(None), User.plan != "free"
+            ).count()
+            total += User.query.filter_by(career_unlocked=True).count()
+        total = max(total, len(rows))
+    else:
+        total = len(rows)
     start = (page - 1) * per_page
     end = start + per_page
     pages = max(1, (total + per_page - 1) // per_page)

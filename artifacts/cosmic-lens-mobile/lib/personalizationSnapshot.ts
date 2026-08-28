@@ -826,17 +826,29 @@ function vargottamaWealthPlanets(d1: KundliData, d9: KundliData): string[] {
 
 function dhanLordPairBonus(houseA: number, houseB: number, link: "parivartana" | "conjunction" | "mutual_aspect"): number {
   const key = `${Math.min(houseA, houseB)}-${Math.max(houseA, houseB)}`;
-  if (link === "parivartana") return key === "2-11" || key === "9-11" ? 12 : 10;
-  if (link === "conjunction") return key === "2-11" ? 10 : 8;
-  return 6;
+  if (link === "parivartana") return key === "2-11" || key === "9-11" ? 8 : 7;
+  if (link === "conjunction") return key === "2-11" ? 6 : 5;
+  return 4;
 }
 
 function rajLordPairBonus(houseA: number, houseB: number, link: "parivartana" | "conjunction" | "mutual_aspect"): number {
   const set = new Set([houseA, houseB]);
   const dharmaKarma = set.has(9) && set.has(10);
-  if (link === "parivartana") return dharmaKarma ? 10 : 8;
-  if (link === "conjunction") return dharmaKarma ? 8 : 6;
-  return dharmaKarma ? 6 : 5;
+  if (link === "parivartana") return dharmaKarma ? 7 : 6;
+  if (link === "conjunction") return dharmaKarma ? 6 : 5;
+  return dharmaKarma ? 4 : 3;
+}
+
+/** Diminishing returns so weak/common yoga hits cannot stack Wealth Builder to the top on every chart. */
+function finalizeWealthYogaScore(bonuses: number[]): number {
+  if (!bonuses.length) return 48;
+  const sorted = [...bonuses].sort((a, b) => b - a);
+  let uplift = 0;
+  sorted.forEach((bonus, idx) => {
+    const factor = idx === 0 ? 1 : idx === 1 ? 0.72 : idx === 2 ? 0.48 : idx <= 4 ? 0.28 : 0.1;
+    uplift += bonus * factor;
+  });
+  return Math.max(8, Math.min(72, 48 + Math.min(14, uplift)));
 }
 
 function scanVipreetRajYogas(kundli: KundliData): string[] {
@@ -882,9 +894,14 @@ function scanGajaKesari(kundli: KundliData): string | null {
 }
 
 function d1WealthYogaLinksResult(kundli: KundliData) {
-  let yogaRaw = 50;
+  const yogaBonuses: number[] = [];
   const yogaFactors: string[] = [];
   const linkedPairs = new Set<string>();
+
+  const pushYoga = (bonus: number, label: string) => {
+    yogaBonuses.push(bonus);
+    yogaFactors.push(label);
+  };
 
   for (const [houseA, houseB, label] of DHAN_LORD_PAIR_SPECS) {
     const link = lordPairLinkType(kundli, houseA, houseB);
@@ -893,24 +910,21 @@ function d1WealthYogaLinksResult(kundli: KundliData) {
     if (linkedPairs.has(pairKey)) continue;
     linkedPairs.add(pairKey);
     const bonus = dhanLordPairBonus(houseA, houseB, link);
-    yogaRaw += bonus;
-    yogaFactors.push(`${label} (${link}): +${bonus}`);
+    pushYoga(bonus, `${label} (${link}): +${bonus}`);
   }
 
   const jup = getPlanet(kundli, "Jupiter");
   if (jup?.house && STRONG_HOUSES.has(jup.house)) {
     const jDig = dignity("Jupiter", planetSign(jup));
     if (jDig.label === "exalted" || jDig.label === "own sign") {
-      yogaRaw += 6;
-      yogaFactors.push("Kubera Yoga: Jupiter dignified in strong house (+6)");
+      pushYoga(4, "Kubera Yoga: Jupiter dignified in strong house (+4)");
     }
   }
 
   const sun = getPlanet(kundli, "Sun");
   const merc = getPlanet(kundli, "Mercury");
   if (sun && merc && sun.house === merc.house && sun.house && STRONG_HOUSES.has(sun.house)) {
-    yogaRaw += 5;
-    yogaFactors.push(`Budhaditya Yoga: Sun-Mercury in ${sun.house}H (+5)`);
+    pushYoga(3, `Budhaditya Yoga: Sun-Mercury in ${sun.house}H (+3)`);
   }
 
   for (const [kH, tH, label] of RAJ_KENDRA_TRIKONA_SPECS) {
@@ -920,32 +934,27 @@ function d1WealthYogaLinksResult(kundli: KundliData) {
     if (linkedPairs.has(pairKey)) continue;
     linkedPairs.add(pairKey);
     const bonus = rajLordPairBonus(kH, tH, link);
-    yogaRaw += bonus;
-    yogaFactors.push(`${label} (${link}): +${bonus}`);
+    pushYoga(bonus, `${label} (${link}): +${bonus}`);
   }
 
   for (const line of scanVipreetRajYogas(kundli)) {
-    yogaRaw += 6;
-    yogaFactors.push(line);
+    pushYoga(4, line.replace("(+6)", "(+4)"));
   }
 
   const yogakaraka = scanYogakarakaRaj(kundli);
   if (yogakaraka) {
-    yogaRaw += 8;
-    yogaFactors.push(yogakaraka);
+    pushYoga(5, yogakaraka.replace("(+8)", "(+5)"));
   }
 
   const gaja = scanGajaKesari(kundli);
   if (gaja) {
-    yogaRaw += 5;
-    yogaFactors.push(gaja);
+    pushYoga(3, gaja.replace("(+5)", "(+3)"));
   }
 
   for (const tH of TRIKONA_HOUSES) {
     const lord = houseLord(kundli, tH);
     if (planetHouseNum(kundli, lord) === 10) {
-      yogaRaw += 5;
-      yogaFactors.push(`Trikona lord ${lord} (${tH}H) in 10H (+5)`);
+      pushYoga(3, `Trikona lord ${lord} (${tH}H) in 10H (+3)`);
     }
   }
 
@@ -953,8 +962,7 @@ function d1WealthYogaLinksResult(kundli: KundliData) {
     const lord = houseLord(kundli, kH);
     const h = planetHouseNum(kundli, lord);
     if (h != null && [1, 5, 9].includes(h)) {
-      yogaRaw += 4;
-      yogaFactors.push(`Kendra lord ${lord} (${kH}H) in trikona ${h}H (+4)`);
+      pushYoga(2, `Kendra lord ${lord} (${kH}H) in trikona ${h}H (+2)`);
     }
   }
 
@@ -972,33 +980,32 @@ function d1WealthYogaLinksResult(kundli: KundliData) {
     const p = getPlanet(kundli, row.lord);
     if (!p?.house) continue;
     if ([2, 11].includes(p.house)) {
-      yogaRaw += 7;
-      yogaFactors.push(`${row.label} ${row.lord} in ${p.house}H: +7`);
+      pushYoga(4, `${row.label} ${row.lord} in ${p.house}H: +4`);
     }
     if (p2Sign != null && hasAspect(p, p2Sign) && !linkedPairs.has(row.pair2)) {
-      yogaRaw += 3;
-      yogaFactors.push(`${row.label} ${row.lord} aspects 2H lord: +3`);
+      pushYoga(2, `${row.label} ${row.lord} aspects 2H lord: +2`);
     }
     if (p11Sign != null && hasAspect(p, p11Sign) && !linkedPairs.has(row.pair11)) {
-      yogaRaw += 3;
-      yogaFactors.push(`${row.label} ${row.lord} aspects 11H lord: +3`);
+      pushYoga(2, `${row.label} ${row.lord} aspects 11H lord: +2`);
     }
   }
 
   if (!linkedPairs.has("2-11")) {
     if (p2 && p11Sign != null && hasAspect(p2, p11Sign)) {
-      yogaRaw += 4;
-      yogaFactors.push(`2H lord ${lord2} one-way aspect 11H lord: +4`);
+      pushYoga(2, `2H lord ${lord2} one-way aspect 11H lord: +2`);
     }
     if (p11 && p2Sign != null && hasAspect(p11, p2Sign)) {
-      yogaRaw += 4;
-      yogaFactors.push(`11H lord ${lord11} one-way aspect 2H lord: +4`);
+      pushYoga(2, `11H lord ${lord11} one-way aspect 2H lord: +2`);
     }
   }
 
   if (!yogaFactors.length) yogaFactors.push("No strong dhan/raj wealth yoga found");
+  const score = finalizeWealthYogaScore(yogaBonuses);
+  if (yogaBonuses.length) {
+    yogaFactors.push(`Capped yoga uplift applied — final yoga score ${score}%`);
+  }
   return {
-    score: Math.max(8, Math.min(96, yogaRaw)),
+    score,
     factors: yogaFactors,
   };
 }
@@ -1137,12 +1144,12 @@ function d1WealthPromiseResult(kundli: KundliData, specs: CleanHouseSpec[]) {
   const filterScore = Math.max(8, Math.min(96, filterRaw));
 
   const score = weighted([
-    [coreScore, 0.35],
-    [yogaScore, 0.20],
+    [coreScore, 0.43],
+    [yogaScore, 0.10],
     [occupantScore, 0.15],
     [aspectScore, 0.12],
     [karakaScore, 0.10],
-    [filterScore, 0.08],
+    [filterScore, 0.10],
   ]);
 
   return {
@@ -1178,18 +1185,19 @@ function horaNameForPlanet(chart: KundliData, planet: string): "Moon Hora" | "Su
 function d2HoraCapacityResult(kundli: KundliData, wealthBase: number) {
   if (!hasVarga(kundli, "D2")) {
     const fallback = weighted([
-      [wealthBase, 0.45],
-      [normPlanetScore(planetStrength(kundli, "Jupiter").score), 0.30],
-      [normPlanetScore(planetStrength(kundli, "Venus").score), 0.25],
+      [wealthBase, 0.55],
+      [normPlanetScore(planetStrength(kundli, "Jupiter").score), 0.25],
+      [normPlanetScore(planetStrength(kundli, "Venus").score), 0.20],
     ]);
+    const cappedFallback = Math.min(fallback, wealthBase + 8);
     return {
-      score: fallback,
+      score: cappedFallback,
       factors: [
-        "D2 missing: fallback used",
+        "D2 missing: fallback used (capped near D1 2H base)",
         `Fallback D1 2H: ${wealthBase}%`,
         `Fallback Jupiter strength: ${normPlanetScore(planetStrength(kundli, "Jupiter").score)}%`,
         `Fallback Venus strength: ${normPlanetScore(planetStrength(kundli, "Venus").score)}%`,
-        `Aggregate fallback: ${fallback}%`,
+        `Aggregate fallback: ${cappedFallback}%`,
       ],
     };
   }
@@ -1567,12 +1575,12 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
   const globalLeakage = globalWealthLeakagePenalty(kundli);
 
   let score = weightedPrecise([
-    [d1Wealth.score, 0.50],
-    [d2Hora.score, 0.25],
-    [d10Income.score, 0.25],
+    [d1Wealth.score, 0.58],
+    [d2Hora.score, 0.21],
+    [d10Income.score, 0.21],
   ]);
-  score += d9Validation.modifier;
-  score += wealthAshtak.modifier;
+  score += d9Validation.modifier * 0.65;
+  score += wealthAshtak.modifier * 0.65;
   score += globalLeakage.penalty;
   const baseScore = preciseCategoryScore(score);
   const details: KundliCategoryDetailRow[] = [
@@ -1580,7 +1588,7 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
       key: "money-d1",
       label: "D1 wealth promise",
       score: d1Wealth.score,
-      weightPct: 50,
+      weightPct: 58,
       detail: "D1: 2H/11H/10H/9H lords, full dhan yogas, raj wealth yogas (VIPREET, kendra-trikona, Yogakaraka, Gaja Kesari), occupants, aspects, karakas.",
       factors: d1Wealth.factors,
     },
@@ -1588,7 +1596,7 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
       key: "money-d2",
       label: "D2 capacity",
       score: d2Hora.score,
-      weightPct: 25,
+      weightPct: 21,
       detail: "D2 Hora: Sun/Moon dominance, Lagna, vault, Jupiter/Venus and D1 wealth-lord status.",
       factors: d2Hora.factors,
     },
@@ -1596,7 +1604,7 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
       key: "money-d10",
       label: "D10 income engine",
       score: d10Income.score,
-      weightPct: 25,
+      weightPct: 21,
       detail: "D10: 10L/11L dignity & placement, 9L-10L Dharma-Karmadhipati, 10L-11L links, D1+D10 sustain, companions, D1 2/9/10/11 bridge.",
       factors: d10Income.factors,
     },
@@ -1638,11 +1646,12 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
       "D9 2L/5L/9L/11L dignity, placement, lord links, D1+D9 sustain, vargottama",
     ],
     rules: [
-      "Score = 50% D1 + 25% D2 + 25% D10, then small D9/Ashtak/leakage modifiers.",
+      "Score = 58% D1 + 21% D2 + 21% D10, then reduced D9/Ashtak modifiers.",
+      "Wealth yogas use capped diminishing returns so common links do not dominate every chart.",
       "No duplicate wealth-planet layer (Jupiter/Venus already inside D1 karakas).",
       "D1 loop 2 = Finance dhan yogas + raj yogas (parivartana/conjunction/mutual aspect, Kubera, Budhaditya, VIPREET, placements).",
       "No modern/foreign-tech dusthana discount for Mercury 12H.",
-      "No D1 weight drop when D2 and D10 are high.",
+      "D2 missing fallback is capped near D1 2H base.",
       "D10 upachaya: only Jupiter/Venus in 10H/11H get a small +1.",
       "10H/11H occupants: benefic +4, malefic -2 (no malefic ambition boost).",
     ],
@@ -1745,6 +1754,23 @@ function categoryMeaning(type: string) {
     meaning: "This Kundli category reflects a core life pattern in your birth chart.",
     points: ["It is calculated from your saved kundli and stays fixed for your chart."],
   };
+}
+
+/** Prevent Wealth Builder from winning category ranking unless it clearly beats peer categories. */
+function calibrateWealthForCategoryRanking<T extends { type: string; score: number }>(options: T[]): T[] {
+  const wealth = options.find(o => o.type === "Wealth Builder Kundli");
+  if (!wealth) return options;
+  const peers = options.filter(o => o.type !== "Wealth Builder Kundli");
+  const peerTop = [...peers].sort((a, b) => b.score - a.score).slice(0, 3);
+  const peerBenchmark = peerTop.reduce((sum, o) => sum + o.score, 0) / (peerTop.length || 1);
+  const maxLead = 5;
+  const capped = Math.min(wealth.score, peerBenchmark + maxLead);
+  if (capped >= wealth.score) return options;
+  return options.map(o =>
+    o.type === "Wealth Builder Kundli"
+      ? { ...o, score: preciseCategoryScore(capped) }
+      : o
+  );
 }
 
 function buildStrictPowerOptions(kundli: KundliData, valueOf: (key: string) => number, wealthBase: number) {
@@ -2042,10 +2068,12 @@ function buildStrictPowerOptions(kundli: KundliData, valueOf: (key: string) => n
     },
   ].map(opt => ({ ...opt, score: preciseCategoryScore(opt.score) }));
 
+  const calibrated = calibrateWealthForCategoryRanking(options);
+
   return {
     coreIdentity,
     atmakaraka: ak?.name,
-    options: options.sort((a, b) => b.score - a.score || a.type.localeCompare(b.type)),
+    options: calibrated.sort((a, b) => b.score - a.score || a.type.localeCompare(b.type)),
   };
 }
 

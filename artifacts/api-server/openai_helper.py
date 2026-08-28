@@ -6006,10 +6006,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from ask_scope_gate import assess_ask_scope, scope_refusal_payload
 
-        # Policy: scope → engine → LLM fallback; random off-topic refused here.
-        _sv = assess_ask_scope(question, history)
+        _sv = assess_ask_scope(question, history, kundli=kundli)
         if not _sv.allowed:
             return scope_refusal_payload(_sv.reason, question=question, lang=lang)
+        if getattr(_sv, "normalized_question", None):
+            question = _sv.normalized_question or question
     except Exception:
         pass
 
@@ -6189,7 +6190,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     f"latency_ms={_phase2_understand.get('latency_ms')}",
                     flush=True,
                 )
-                if _p2_branch == "refuse":
+                if _p2_branch == "refuse" and not (
+                    isinstance(kundli, dict)
+                    and isinstance(kundli.get("planets"), list)
+                    and len(kundli.get("planets") or []) > 0
+                ):
                     return _attach_admin(
                         refuse_payload(question=question or "", lang=lang or "hn"),
                         question=question or "",
@@ -6200,6 +6205,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         intent_source="understand_phase2",
                         llm_intent=_llm_intent_admin,
                     )
+                if _p2_branch == "refuse":
+                    _p2_branch = "engine"
+                    _phase2_understand["branch"] = "engine"
                 if _p2_branch == "knowledge":
                     try:
                         from ask_knowledge_fast import try_astrology_knowledge_fast_answer
@@ -6440,47 +6448,101 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _litigation_archetype_override = None
     if (os.environ.get("ASK_LLM_INTENT") or "1").strip() == "1":
         try:
-            from ask_route_from_understanding import classify_and_route_ask
+            if not _phase2_ok:
+                from ask_route_from_understanding import classify_and_route_ask
 
-            _route = classify_and_route_ask(
-                _user_turn_question or question or "",
-                client=client,
-                understanding=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
-                question_raw=_question_raw,
-            )
-            _llm_intent = _route.get("llm_intent")
-            _llm_intent_record = _route.get("llm_intent_record")
-            if isinstance(_route.get("llm_intent_admin"), dict):
-                _llm_intent_admin = _route["llm_intent_admin"]
-            _intent_source = str(_route.get("intent_source") or "regex")
-            _mr_archetype_override = _route.get("mr_archetype")
-            _career_archetype_override = _route.get("career_archetype")
-            _finance_archetype_override = _route.get("finance_archetype")
-            _health_archetype_override = _route.get("health_archetype")
-            _education_archetype_override = _route.get("education_archetype")
-            _children_archetype_override = _route.get("children_archetype")
-            _property_archetype_override = _route.get("property_archetype")
-            _travel_archetype_override = _route.get("travel_archetype")
-            _litigation_archetype_override = _route.get("litigation_archetype")
-            if _llm_intent is None and isinstance(_llm_intent_admin, dict):
-                if _llm_intent_admin.get("routed_domain") or _llm_intent_admin.get("routed_archetype"):
-                    _llm_intent = {
-                        "domain": _llm_intent_admin.get("routed_domain") or "general",
-                        "is_timing": bool(_llm_intent_admin.get("routed_timing")),
-                        "mr_archetype": _llm_intent_admin.get("routed_archetype"),
-                        "source": "understanding_route",
-                    }
-                    if not _mr_archetype_override:
-                        _mr_archetype_override = _llm_intent_admin.get("routed_archetype")
-                    _intent_source = "understanding_route"
-            print(
-                f"[raw_passthrough] ROUTE_FROM_UNDERSTANDING "
-                f"domain={(_llm_intent_admin or {}).get('routed_domain')} "
-                f"archetype={(_llm_intent_admin or {}).get('routed_archetype')} "
-                f"timing={(_llm_intent_admin or {}).get('routed_timing')} "
-                f"source={_intent_source}",
-                flush=True,
-            )
+                _route = classify_and_route_ask(
+                    _user_turn_question or question or "",
+                    client=client,
+                    understanding=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    question_raw=_question_raw,
+                )
+                _llm_intent = _route.get("llm_intent")
+                _llm_intent_record = _route.get("llm_intent_record")
+                if isinstance(_route.get("llm_intent_admin"), dict):
+                    _llm_intent_admin = _route["llm_intent_admin"]
+                _intent_source = str(_route.get("intent_source") or "regex")
+                _mr_archetype_override = _route.get("mr_archetype")
+                _career_archetype_override = _route.get("career_archetype")
+                _finance_archetype_override = _route.get("finance_archetype")
+                _health_archetype_override = _route.get("health_archetype")
+                _education_archetype_override = _route.get("education_archetype")
+                _children_archetype_override = _route.get("children_archetype")
+                _property_archetype_override = _route.get("property_archetype")
+                _travel_archetype_override = _route.get("travel_archetype")
+                _litigation_archetype_override = _route.get("litigation_archetype")
+                if _llm_intent is None and isinstance(_llm_intent_admin, dict):
+                    if _llm_intent_admin.get("routed_domain") or _llm_intent_admin.get("routed_archetype"):
+                        _llm_intent = {
+                            "domain": _llm_intent_admin.get("routed_domain") or "general",
+                            "is_timing": bool(_llm_intent_admin.get("routed_timing")),
+                            "mr_archetype": _llm_intent_admin.get("routed_archetype"),
+                            "source": "understanding_route",
+                        }
+                        if not _mr_archetype_override:
+                            _mr_archetype_override = _llm_intent_admin.get("routed_archetype")
+                        _intent_source = "understanding_route"
+                print(
+                    f"[raw_passthrough] ROUTE_FROM_UNDERSTANDING "
+                    f"domain={(_llm_intent_admin or {}).get('routed_domain')} "
+                    f"archetype={(_llm_intent_admin or {}).get('routed_archetype')} "
+                    f"timing={(_llm_intent_admin or {}).get('routed_timing')} "
+                    f"source={_intent_source}",
+                    flush=True,
+                )
+            elif isinstance(_llm_intent_admin, dict):
+                # Phase2 already understood + routed — skip 3rd intent LLM (quality-safe).
+                _dom = str(
+                    _llm_intent_admin.get("routed_domain")
+                    or _llm_intent_admin.get("domain")
+                    or "general"
+                ).strip().lower()
+                _arch = str(
+                    _llm_intent_admin.get("routed_archetype")
+                    or _llm_intent_admin.get("archetype")
+                    or _llm_intent_admin.get("dna_engine_archetype")
+                    or ""
+                ).strip().lower()
+                _intent_source = "understand_phase2"
+                _llm_intent = {
+                    "domain": _dom,
+                    "is_timing": bool(_llm_intent_admin.get("routed_timing")),
+                    "mr_archetype": _arch or None,
+                    "source": "understand_phase2",
+                }
+                _mr_archetype_override = _llm_intent_admin.get("mr_archetype") or (
+                    _arch if _dom in ("love", "marriage", "relationship") else None
+                )
+                _career_archetype_override = _llm_intent_admin.get("career_archetype") or (
+                    _arch if _dom == "career" else None
+                )
+                _finance_archetype_override = _llm_intent_admin.get("finance_archetype") or (
+                    _arch if _dom == "finance" else None
+                )
+                _health_archetype_override = _llm_intent_admin.get("health_archetype") or (
+                    _arch if _dom == "health" else None
+                )
+                _education_archetype_override = _llm_intent_admin.get("education_archetype") or (
+                    _arch if _dom == "education" else None
+                )
+                _children_archetype_override = _llm_intent_admin.get("children_archetype") or (
+                    _arch if _dom == "children" else None
+                )
+                _property_archetype_override = _llm_intent_admin.get("property_archetype") or (
+                    _arch if _dom == "property" else None
+                )
+                _travel_archetype_override = _llm_intent_admin.get("travel_archetype") or (
+                    _arch if _dom == "travel" else None
+                )
+                _litigation_archetype_override = _llm_intent_admin.get("litigation_archetype") or (
+                    _arch if _dom == "litigation" else None
+                )
+                print(
+                    f"[raw_passthrough] ROUTE_FROM_PHASE2 skip_intent_llm "
+                    f"domain={_dom} archetype={_arch!r} "
+                    f"timing={bool(_llm_intent_admin.get('routed_timing'))}",
+                    flush=True,
+                )
             try:
                 from ask_intent_fidelity import enforce_commitment_archetype_from_question
 
@@ -8048,10 +8110,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if not _direct_llm_bypass and not _is_open_chart_qa:
         try:
             from ask_engine_match_gate import (
+                EngineMatchDecision,
                 apply_match_decision_to_static_bools,
                 ensure_correct_engine_route,
             )
-            from ask_execution_gatekeeper import build_blocked_response
 
             _pre_flags = {
                 "education": _is_education_static,
@@ -8077,35 +8139,37 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 is_timing=bool(is_timing),
                 direct_llm_bypass=False,
             )
-            if isinstance(_llm_intent_admin, dict):
-                _llm_intent_admin["engine_match_gate"] = _engine_match_decision.to_dict()
-
-            if not _engine_match_decision.ok and _engine_match_decision.path == "blocked":
+            # Never refuse the user — coerce legacy "blocked" into direct LLM.
+            if (
+                not _engine_match_decision.ok
+                or _engine_match_decision.path == "blocked"
+            ):
                 print(
-                    f"[raw_passthrough] ENGINE_MATCH_GATE blocked "
+                    f"[raw_passthrough] ENGINE_MATCH_GATE blocked→direct_llm "
                     f"expected={_engine_match_decision.engine_key} "
                     f"failed={_engine_match_decision.failed_checks} "
                     f"attempts={_engine_match_decision.attempts} "
                     f"q={(question or '')[:60]!r}",
                     flush=True,
                 )
-                from ask_execution_gatekeeper import GatekeeperResult
-
-                _block = build_blocked_response(
-                    GatekeeperResult(
-                        ok=False,
-                        stage="routing",
-                        reason="routing_error",
-                        rule="engine_match_gate",
-                        failed_checks=list(_engine_match_decision.failed_checks or []),
-                        retry_engine_key=_engine_match_decision.engine_key,
-                    ),
-                    question=question or "",
-                    qtype=qtype,
-                    lang=lang or "hn",
+                _engine_match_decision = EngineMatchDecision(
+                    ok=True,
+                    path="direct_llm",
+                    engine_key=None,
+                    domain=_engine_match_decision.domain,
+                    bucket=_engine_match_decision.bucket,
+                    archetype=_engine_match_decision.archetype,
+                    intent=_engine_match_decision.intent,
+                    subject=_engine_match_decision.subject,
+                    flags={},
+                    is_timing=_engine_match_decision.is_timing,
+                    attempts=_engine_match_decision.attempts,
+                    elapsed_ms=_engine_match_decision.elapsed_ms,
+                    reason="blocked_coerced_to_direct_llm",
+                    failed_checks=list(_engine_match_decision.failed_checks or []),
                 )
-                _block["engine_match_gate"] = _engine_match_decision.to_dict()
-                return _block
+            if isinstance(_llm_intent_admin, dict):
+                _llm_intent_admin["engine_match_gate"] = _engine_match_decision.to_dict()
 
             _matched_flags = apply_match_decision_to_static_bools(_engine_match_decision)
             if _engine_match_decision.path == "direct_llm":
@@ -12165,6 +12229,83 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             flush=True,
                         )
                         _llm_raw_text = _repair_truncated_answer(_llm_raw_text)
+                # Deterministic DNA compliance — one rewrite if contract violated (no LLM judge).
+                _dna_compliance_audit: dict[str, Any] = {}
+                try:
+                    _dna_strict = os.getenv("ASK_DNA_STRICT_COMPLIANCE", "1").strip().lower() not in (
+                        "0", "false", "no", "off",
+                    )
+                    if _dna_strict and _llm_raw_text and isinstance(_llm_intent_admin, dict):
+                        from ask_question_dna import (
+                            build_dna_compliance_retry_user_message,
+                            dna_judge_contract_from_intent,
+                            dna_primary_item,
+                        )
+                        from ask_selected_blocks_common import deterministic_dna_judge
+
+                        _dna_item = dna_primary_item(_llm_intent_admin.get("question_dna"))
+                        _dna_contract = dna_judge_contract_from_intent(_llm_intent_admin)
+                        if _dna_contract:
+                            _dna_verdict = deterministic_dna_judge(
+                                question or "",
+                                _llm_raw_text,
+                                _dna_contract,
+                            )
+                            _dna_compliance_audit = dict(_dna_verdict)
+                            if not _dna_verdict.get("passed"):
+                                print(
+                                    "[raw_passthrough] DNA_COMPLIANCE_FAIL "
+                                    f"issues={_dna_verdict.get('issues')} — retrying once",
+                                    flush=True,
+                                )
+                                _dna_retry_msgs = list(_llm_messages) + [
+                                    {"role": "assistant", "content": _llm_raw_text},
+                                    {
+                                        "role": "user",
+                                        "content": build_dna_compliance_retry_user_message(
+                                            list(_dna_verdict.get("issues") or []),
+                                            _dna_item,
+                                        ),
+                                    },
+                                ]
+                                _dna_retry_tok = min(_max_tok + 150, 900)
+                                try:
+                                    _dna_resp = client.chat.completions.create(
+                                        model=model,
+                                        messages=_dna_retry_msgs,
+                                        max_tokens=_dna_retry_tok,
+                                    )
+                                    _dna_t2 = (_dna_resp.choices[0].message.content or "").strip()
+                                    if _dna_t2:
+                                        _dna_verdict2 = deterministic_dna_judge(
+                                            question or "",
+                                            _dna_t2,
+                                            _dna_contract,
+                                        )
+                                        _dna_compliance_audit["retry"] = dict(_dna_verdict2)
+                                        _llm_raw_text = _dna_t2
+                                        if _dna_verdict2.get("passed"):
+                                            _dna_compliance_audit["passed_after_retry"] = True
+                                        else:
+                                            _dna_compliance_audit["passed_after_retry"] = False
+                                            print(
+                                                "[raw_passthrough] DNA_COMPLIANCE_RETRY_STILL_FAIL "
+                                                f"issues={_dna_verdict2.get('issues')}",
+                                                flush=True,
+                                            )
+                                except Exception as _dna_retry_exc:
+                                    _dna_compliance_audit["retry_error"] = str(_dna_retry_exc)
+                                    print(
+                                        f"[raw_passthrough] DNA compliance retry failed: {_dna_retry_exc}",
+                                        flush=True,
+                                    )
+                            if isinstance(_eng_checks, dict):
+                                _eng_checks["dna_compliance"] = _dna_compliance_audit
+                except Exception as _dna_comp_exc:
+                    print(
+                        f"[raw_passthrough] DNA compliance check skipped: {_dna_comp_exc}",
+                        flush=True,
+                    )
             except Exception:
                 pass
     except Exception as exc:
@@ -12603,6 +12744,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 print(f"[raw_passthrough] ANSWER_FIDELITY skipped: {_fid_exc}", flush=True)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
+        text = _finalize_user_ask_text(text)
         # Skip robotic [Checked: ...] trace — user wants human replies only.
         text = _ensure_checked_trace(
             text,
@@ -12797,9 +12939,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "unified_execution",
                 "routing_label",
                 "relationship_selected_blocks_preview",
+                "relationship_selected_blocks",
             ):
                 if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
                     _pt_checks[_ck] = _sm_checks[_ck]
+            if (
+                "relationship_selected_blocks" not in _pt_checks
+                and isinstance(_sm_checks.get("relationship_selected_blocks_preview"), dict)
+            ):
+                _pt_checks["relationship_selected_blocks"] = _sm_checks[
+                    "relationship_selected_blocks_preview"
+                ]
             if _mr_dna_judge_audit:
                 _pt_checks["relationship_dna_judge_audit"] = _mr_dna_judge_audit
                 if isinstance(_mr_dna_judge_audit.get("selected_blocks"), dict):
@@ -12823,9 +12973,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "health_engine_execution",
                 "engine_version",
                 "rules_version",
+                "health_selected_blocks_preview",
+                "health_selected_blocks",
             ):
                 if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
                     _pt_checks[_ck] = _sm_checks[_ck]
+            if (
+                "health_selected_blocks" not in _pt_checks
+                and isinstance(_sm_checks.get("health_selected_blocks_preview"), dict)
+            ):
+                _pt_checks["health_selected_blocks"] = _sm_checks["health_selected_blocks_preview"]
             if _health_dna_judge_audit:
                 _pt_checks["health_dna_judge_audit"] = _health_dna_judge_audit
                 if isinstance(_health_dna_judge_audit.get("selected_blocks"), dict):
@@ -12864,9 +13021,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "unified_execution",
                 "routing_label",
                 "finance_selected_blocks_preview",
+                "finance_selected_blocks",
             ):
                 if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
                     _pt_checks[_ck] = _sm_checks[_ck]
+            if (
+                "finance_selected_blocks" not in _pt_checks
+                and isinstance(_sm_checks.get("finance_selected_blocks_preview"), dict)
+            ):
+                _pt_checks["finance_selected_blocks"] = _sm_checks["finance_selected_blocks_preview"]
             if _finance_dna_judge_audit:
                 _pt_checks["finance_dna_judge_audit"] = _finance_dna_judge_audit
                 if isinstance(_finance_dna_judge_audit.get("selected_blocks"), dict):
@@ -12894,10 +13057,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "unified_execution",
                 "routing_label",
                 "travel_selected_blocks_preview",
+                "travel_selected_blocks",
                 "travel_score",
             ):
                 if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
                     _pt_checks[_ck] = _sm_checks[_ck]
+            if (
+                "travel_selected_blocks" not in _pt_checks
+                and isinstance(_sm_checks.get("travel_selected_blocks_preview"), dict)
+            ):
+                _pt_checks["travel_selected_blocks"] = _sm_checks["travel_selected_blocks_preview"]
             if _travel_dna_judge_audit:
                 _pt_checks["travel_dna_judge_audit"] = _travel_dna_judge_audit
                 if isinstance(_travel_dna_judge_audit.get("selected_blocks"), dict):
@@ -13039,7 +13208,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _tag = "ans-engine" if _mr_engine_narrator else "ans-cosmo"
         return _attach_admin(
             {
-                "text": _llm_raw_text,
+                "text": _finalize_user_ask_text(_llm_raw_text or ""),
                 "topic": (qtype or "static").lower(),
                 "question_type": qtype,
                 "confidence": 1.0,
@@ -17133,27 +17302,26 @@ def _maybe_inject_multi_intent_ack(text, question, lang="hinglish",
         return text
 
 
-def astro_scope_refusal(question: str, lang: str = "en", user=None, history=None):
+def astro_scope_refusal(question: str, lang: str = "en", user=None, history=None, kundli=None):
     """Flask /api/ask shim — personal jyotish only; blocks GK and off-topic."""
     from ask_scope_gate import astro_scope_refusal as _refusal
 
-    return _refusal(question, lang, user, history)
+    return _refusal(question, lang, user, history, kundli=kundli)
 
 
 _BRAND_SAFE_REDIRECT = {
-    "en": ("Beta, this guide answers only jyotish (astrology) questions — your kundli, dasha, "
-           "marriage, career, health, finance, family, vastu, remedies, and life-path matters. "
-           "Cooking, coding, weather, news, sports, exam answers, translations and similar topics "
-           "are outside this scope. Please ask me an astrology question from your own life and I'll guide you with full heart."),
-    "hi": ("बेटा, यह मार्गदर्शिका केवल ज्योतिष से जुड़े प्रश्नों का उत्तर देती है — आपकी कुंडली, दशा, "
-           "विवाह, करियर, स्वास्थ्य, धन, परिवार, वास्तु, उपाय और जीवन-पथ के विषय। "
-           "खाना बनाना, कोडिंग, मौसम, समाचार, खेल, परीक्षा-उत्तर, अनुवाद आदि इसके दायरे में नहीं आते। "
-           "कृपया अपने जीवन से जुड़ा कोई ज्योतिष प्रश्न पूछिए — मैं पूरे मन से मार्गदर्शन करूँगा।"),
-    "hn": ("Beta, yeh guide sirf jyotish (astrology) ke prashno ka uttar deti hai — aapki kundli, dasha, "
-           "shaadi, career, swasthya, dhan, parivar, vastu, upay aur jeevan-path ke vishay. "
-           "Khaana banana, coding, mausam, news, khel, exam-uttar, translation jaisi cheezein iske dayre "
-           "mein nahi aati. Kripya apne jeevan se judi koi jyotish se sambandhit prashn poochein — "
-           "main poore mann se margdarshan karunga."),
+    "en": (
+        "This question doesn't seem related to astrology. "
+        "Ask something about your chart or life — I'll answer from your kundli."
+    ),
+    "hi": (
+        "यह प्रश्न ज्योतिष से संबंधित नहीं लगता। "
+        "अपनी कुंडली या जीवन से जुड़ा कोई प्रश्न पूछिए — मैं chart के अनुसार उत्तर दूँगा।"
+    ),
+    "hn": (
+        "Yeh sawaal astrology se related nahi lagta. "
+        "Apni kundli ya life se juda kuch puchiye — main chart ke hisaab se jawab dunga."
+    ),
 }
 
 
@@ -19018,9 +19186,8 @@ def _safe_narration_gate(qu: dict,
 # are intentionally not flagged.
 
 _POST_LOGIC_REFUSAL_TEXT = (
-    "Mujhe abhi data inspect karne mein chhoti si discrepancy mil rahi hai — "
-    "sahi answer dene ke liye birth time aur place ek baar dobara confirm "
-    "kar do, ya thodi der baad try karo. Galat baat bolna nahi chahta."
+    "Abhi chart se clear signal nahi mil raha. Birth time aur place confirm "
+    "karke dubara try karein."
 )
 
 # Phase 4.4 (Apr 28, 2026) — defensive timeout for VALIDATOR RETRY calls only.
@@ -19252,9 +19419,7 @@ def _slim_transit_for_narrative(s: str) -> str:
 # `engine_status.overall == "empty"`. The new stance: engine failure on a
 # primary phase = real backend bug → refuse honestly, never guess.
 _ENGINE_HONESTY_REFUSAL_TEXT = (
-    "Abhi engine se kundli ka core data calculate karne mein technical issue "
-    "aa raha hai — sahi answer dene ke liye thodi der baad try karo. Galat "
-    "date ya prediction nahi dena chahta."
+    "Abhi chart calculate nahi ho pa rahi. Thodi der baad dubara try karein."
 )
 
 # Phase 4.2 — warning footer for OPTIONAL-phase failures (Sprint-33+
@@ -19263,9 +19428,36 @@ _ENGINE_HONESTY_REFUSAL_TEXT = (
 # don't trust transit/varshaphala-derived claims that aren't in the answer.
 _ENGINE_WARN_FOOTER_MARKER = "ⓘ Note:"
 _ENGINE_WARN_FOOTER_TEXT = (
-    "\n\nⓘ Note: kuch advanced calculations (transits/varshaphala/sahams) "
-    "abhi available nahi hain — main answer affected nahi hai."
+    ""  # Suppressed — users must not see internal calculation footers.
 )
+
+
+def _finalize_user_ask_text(text: str) -> str:
+    """Last-mile scrub before any Ask answer reaches the mobile client."""
+    try:
+        if not text or not isinstance(text, str):
+            return text or ""
+        t = text.strip()
+        if not t:
+            return t
+        if _ENGINE_WARN_FOOTER_MARKER in t:
+            t = t.split(_ENGINE_WARN_FOOTER_MARKER, 1)[0].rstrip()
+        t = _strip_decision_template_labels(t)
+        t = _scrub_ai_tells(t)
+        _internal_rx = _re_scrub.compile(
+            r"(?i)(internal routing|execution_gatekeeper|gatekeeper|"
+            r"answer quality check|engine aur final answer|hallucination|"
+            r"verified jawab generate|discrepancy mil rahi|technical issue|"
+            r"as an ai|language model|openai|chatgpt|hope this helps|"
+            r"let me know if you|consult a professional)"
+        )
+        parts = _SCRUB_SENT_SPLIT_RX.split(t)
+        kept = [p.strip() for p in parts if p.strip() and not _internal_rx.search(p)]
+        if kept:
+            t = " ".join(kept).strip()
+        return t or "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein."
+    except Exception:
+        return text or ""
 
 
 def _engine_honesty_check(engine_status, qu=None):
@@ -24223,11 +24415,28 @@ def _phase59_format_career_facts_block(v: Any) -> str:
         if isinstance(nxt, dict) and (nxt.get("md") or nxt.get("ad")):
             md = _safe_str(nxt.get("md"))
             ad = _safe_str(nxt.get("ad"))
-            ns = _safe_str(nxt.get("start"))[:7]
-            ne = _safe_str(nxt.get("end"))[:7]
             label = f"{md}/{ad}".strip("/")
-            tail = f" ({ns}..{ne})" if (ns or ne) else ""
-            lines.append(f"  - next_career_window: {label}{tail}")
+            try:
+                from event_timing._shared.timing_window_pick import (
+                    clip_timing_window_for_display,
+                    window_range_label,
+                )
+
+                clipped = clip_timing_window_for_display({
+                    "start": nxt.get("start"),
+                    "end": nxt.get("end"),
+                    "lords": label,
+                })
+                win_label = window_range_label(clipped) if clipped else ""
+            except Exception:
+                win_label = ""
+            if win_label:
+                lines.append(f"  - next_career_window: {label} ({win_label})")
+            else:
+                ns = _safe_str(nxt.get("start"))[:7]
+                ne = _safe_str(nxt.get("end"))[:7]
+                tail = f" ({ns}..{ne})" if (ns or ne) else ""
+                lines.append(f"  - next_career_window: {label}{tail}")
 
     top_reasons = [_safe_str(r) for r in _safe_iter(v.get("reasons"))[:4]]
     top_reasons = [r for r in top_reasons if r]
@@ -25680,9 +25889,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "cross_domain_root_cause": _qu_cross_domain,
         })
 
-    # ── Brand-safety: refuse off-topic / fortune-telling questions WITHOUT
-    # calling the LLM at all. Cheap, deterministic, never leaks chart data.
-    if _is_brand_unsafe(question):
+    has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
+
+    # ── Brand-safety: refuse clearly off-topic questions WITHOUT calling the LLM.
+    # Skip when user chart is present — try kundli-context answer instead.
+    if _is_brand_unsafe(question) and not has_planets:
         eff_lang = _resolve_response_lang(question, lang, preferred_language)
         msg = _BRAND_SAFE_REDIRECT.get(eff_lang) or _BRAND_SAFE_REDIRECT["hn"]
         return {
@@ -25707,7 +25918,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # "DO NOT GUESS" — invented planet positions are the worst possible
     # failure mode for an astrology app's credibility. General-mode concept
     # questions ("kp vs vedic kya hai") don't need a chart and skip this.
-    has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
     # Sprint-26: mode is derived from the AI understanding result. A pure
     # concept question (intent=analysis + topic=general) doesn't need a chart;
     # everything else does.
@@ -29538,8 +29748,10 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "reason": str(_pt_exc_s)[:200],
             })
 
-    # Brand-safety gate — non-streamable.
-    if _is_brand_unsafe(question):
+    has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
+
+    # Brand-safety gate — non-streamable. Skip when chart present.
+    if _is_brand_unsafe(question) and not has_planets:
         _trace(req_id, "2.MODE_DETECT", {"path": "brand_guard → oneshot"})
         yield {"kind": "oneshot",
                "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
@@ -29547,7 +29759,6 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         return
 
     # No chart — non-streamable fail-safe.
-    has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
     if not has_planets:
         _trace(req_id, "2.MODE_DETECT", {"path": "no_chart_failsafe → oneshot"})
         yield {"kind": "oneshot",

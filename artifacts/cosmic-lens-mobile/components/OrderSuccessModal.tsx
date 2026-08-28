@@ -25,6 +25,10 @@ type Props = {
   title?: string;
   message?: string;
   etaLabel?: string;
+  /** Public serial order id shown to user, e.g. PALM-1001 */
+  orderId?: string;
+  /** When false, trust chip says WhatsApp instead of PDF report */
+  showPdfTrust?: boolean;
 };
 
 export function OrderSuccessModal({
@@ -33,7 +37,9 @@ export function OrderSuccessModal({
   onViewReports,
   title = "Order Confirmed!",
   message = "Your room photo has been received. Our Vastu expert is personally reviewing it.",
-  etaLabel = "Report in My Reports within 24–48 hrs",
+  etaLabel = "Report in My Reports in 4–6 days",
+  orderId,
+  showPdfTrust = true,
 }: Props) {
   const cardScale = useRef(new Animated.Value(0.8)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
@@ -169,6 +175,14 @@ export function OrderSuccessModal({
             </View>
 
             <Text style={s.title}>{title}</Text>
+            {orderId ? (
+              <View style={s.orderIdChip}>
+                <Text style={s.orderIdLabel}>Order ID</Text>
+                <Text style={s.orderIdValue} selectable>
+                  {orderId}
+                </Text>
+              </View>
+            ) : null}
             <Text style={s.message}>{message}</Text>
 
             {/* ETA chip */}
@@ -182,7 +196,10 @@ export function OrderSuccessModal({
               {[
                 { icon: "shield" as const, label: "Secure" },
                 { icon: "award" as const, label: "Expert reviewed" },
-                { icon: "file-text" as const, label: "PDF report" },
+                {
+                  icon: (showPdfTrust ? "file-text" : "message-circle") as const,
+                  label: showPdfTrust ? "PDF report" : "WhatsApp video",
+                },
               ].map((tItem) => (
                 <View key={tItem.label} style={s.trustChip}>
                   <Feather name={tItem.icon} size={11} color="#a78bfa" />
@@ -280,6 +297,31 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
     marginBottom: 8,
     textAlign: "center",
+  },
+  orderIdChip: {
+    alignItems: "center",
+    backgroundColor: "rgba(251,191,36,0.14)",
+    borderColor: "rgba(251,191,36,0.5)",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 12,
+    width: "100%",
+  },
+  orderIdLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(251,191,36,0.9)",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  orderIdValue: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#fde68a",
+    letterSpacing: 0.6,
   },
   message: {
     fontSize: 13.5,

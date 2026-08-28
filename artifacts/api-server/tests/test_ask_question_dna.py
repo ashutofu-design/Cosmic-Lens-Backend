@@ -7,7 +7,9 @@ from ask_question_dna import (
     DNA_BUCKETS_BY_DOMAIN,
     DNA_DEFAULT_BUCKET,
     DNA_DOMAINS,
+    build_dna_compliance_retry_user_message,
     build_question_dna_narrator_rules,
+    dna_judge_contract_from_item,
     derive_required_modules,
     validate_question_dna,
     validate_question_dna_item,
@@ -96,6 +98,21 @@ class ValidationTests(unittest.TestCase):
         self.assertAlmostEqual(item["understanding_confidence"], 0.94)
         self.assertEqual(item["answer_style"], "short_paragraph")
         self.assertIn("D1/D9", item["answer_approach"])
+
+    def test_derive_answer_approach_prefers_user_wants_over_placeholder(self):
+        from ask_question_dna import validate_question_dna_item
+
+        item = validate_question_dna_item({
+            "domain": "career",
+            "bucket": "govt_job",
+            "user_wants": "User wants government job timing and whether SSC attempt will succeed.",
+            "answer_approach": "phase2_understand",
+            "question_type": "timing",
+            "timing": True,
+            "confidence": 0.9,
+        })
+        self.assertIn("government job timing", item["answer_approach"])
+        self.assertNotEqual(item["answer_approach"], "phase2_understand")
 
     def test_llm_understanding_fields_derived_when_missing(self):
         item = validate_question_dna_item({
@@ -332,11 +349,65 @@ class NarratorRulesTests(unittest.TestCase):
             {"question_dna": dna},
             question="Kya mera boyfriend cheat kar raha hai?",
         )
-        self.assertIn("MUST follow every time", rules)
+        self.assertIn("QUESTION DNA CONTRACT", rules)
         self.assertIn("short_2_3_lines", rules)
         self.assertIn("LLM Answer Plan", rules)
         self.assertIn("Direct present-state read", rules)
-        self.assertIn("overrides default length/style rules", rules)
+        self.assertIn("third_person_infidelity", rules)
+        self.assertIn("Intent lock", rules)
+        self.assertIn("current_state", rules)
+
+    def test_narrator_rules_include_full_dna_contract(self):
+        item = validate_question_dna_item({
+            "normalized_question": "Shaadi kab hogi?",
+            "domain": "marriage",
+            "bucket": "marriage_timing",
+            "intent": "marriage timing",
+            "target": "self",
+            "question_type": "timing",
+            "timing": True,
+            "tense": "future",
+            "emotion": "hope",
+            "is_followup": True,
+            "followup_of": "marriage prediction",
+            "confidence": 0.95,
+            "user_wants": "User wants marriage timing window.",
+            "answer_style": "short_paragraph",
+            "answer_approach": "Lead with AD/PD window then confirm via transit.",
+        })
+        dna = {"questions": [item]}
+        rules = build_question_dna_narrator_rules(
+            {"question_dna": dna},
+            question="Exact month?",
+        )
+        self.assertIn("marriage_timing", rules)
+        self.assertIn("Timing=true", rules)
+        self.assertIn("Time context=future", rules)
+        self.assertIn("Emotion=hope", rules)
+        self.assertIn("Follow-up=true", rules)
+        self.assertIn("marriage prediction", rules)
+
+    def test_dna_judge_contract_and_retry_message(self):
+        item = validate_question_dna_item({
+            "domain": "career",
+            "bucket": "govt_job",
+            "intent": "government job timing",
+            "question_type": "timing",
+            "timing": True,
+            "answer_style": "short_paragraph",
+            "answer_approach": "Lead with dasha window.",
+            "confidence": 0.9,
+        })
+        contract = dna_judge_contract_from_item(item)
+        self.assertTrue(contract["timing"])
+        self.assertEqual(contract["bucket"], "govt_job")
+        msg = build_dna_compliance_retry_user_message(
+            ["timing_missing — no period in answer"],
+            item,
+        )
+        self.assertIn("timing_missing", msg)
+        self.assertIn("govt_job", msg)
+        self.assertIn("LLM Answer Plan", msg)
 
     def test_health_validator_note_when_enabled(self):
         dna = validate_question_dna({

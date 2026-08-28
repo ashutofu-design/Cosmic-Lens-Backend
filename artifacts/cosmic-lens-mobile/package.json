@@ -4,11 +4,14 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "EXPO_PUBLIC_REPL_ID=$REPL_ID bash scripts/start-tunnel.sh",
+    "dev": "node scripts/run-dev.mjs",
+    "dev:tunnel": "bash scripts/start-tunnel.sh",
     "dev:local": "node scripts/dev-local.mjs",
     "dev:local:web": "node scripts/dev-local.mjs --web",
-    "dev:web": "node scripts/dev-web-with-proxy.mjs --clear",
-    "dev:web:direct": "node scripts/dev-local.mjs --web --clear",
+    "dev:web": "node scripts/dev-web-with-proxy.mjs",
+    "dev:web:clear": "node scripts/dev-web-with-proxy.mjs --clear",
+    "dev:web:direct": "node scripts/dev-local.mjs --web",
+    "dev:web:direct:clear": "node scripts/dev-local.mjs --web --clear",
     "dev:web:tunnel": "node scripts/dev-web-tunnel.mjs",
     "dev:phone": "node scripts/start-phone-dev.mjs",
     "dev:phone:clean": "node scripts/start-phone-dev.mjs --clear",
@@ -24,7 +27,9 @@
     "eas:login": "eas login",
     "eas:build:dev": "eas build --profile development --platform android",
     "eas:build:preview": "eas build --profile preview --platform android",
-    "eas:build:prod": "eas build --profile production --platform android"
+    "eas:build:prod": "eas build --profile production --platform android",
+    "eas:submit:prod": "eas submit --profile production --platform android --latest",
+    "eas:release:prod": "eas build --profile production --platform android --non-interactive && eas submit --profile production --platform android --latest --non-interactive"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -81,7 +86,6 @@
     "@react-native-google-signin/google-signin": "^14.0.1",
     "@react-native-firebase/app": "^24.0.0",
     "@react-native-firebase/auth": "^24.0.0",
-    "expo-audio": "~1.1.1",
     "expo-build-properties": "~1.0.10",
     "expo-camera": "~17.0.10",
     "expo-clipboard": "~8.0.8",

@@ -68,6 +68,26 @@ export async function applyRTLForLang(
   const wantRTL = isRTLLang(lang);
   const currentRTL = I18nManager.isRTL;
 
+  // Web: never call Updates.reloadAsync / DevSettings.reload — that loops the
+  // Expo loading spinner forever when I18nManager.isRTL disagrees with lang.
+  if (Platform.OS === "web") {
+    try {
+      I18nManager.allowRTL(wantRTL);
+      I18nManager.forceRTL(wantRTL);
+    } catch (err) {
+      console.warn("[rtl] forceRTL failed (web):", err);
+    }
+    try {
+      if (typeof document !== "undefined") {
+        document.documentElement.dir = wantRTL ? "rtl" : "ltr";
+        document.documentElement.lang = String(lang || "en");
+      }
+    } catch {
+      /* ignore */
+    }
+    return "no_change";
+  }
+
   if (wantRTL === currentRTL) return "no_change";
   if (_rtlApplyInFlight) return "no_change";
   _rtlApplyInFlight = true;

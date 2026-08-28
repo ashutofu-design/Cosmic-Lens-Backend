@@ -71,10 +71,11 @@ function findMonorepoRoot(startDir) {
 
 function expoCliCandidates(...roots) {
   const rel = [
+    ["node_modules", "expo", "bin", "cli"],
     ["node_modules", "expo", "bin", "cli.js"],
     ["node_modules", "expo", "bin", "cli.cjs"],
-    ["node_modules", "@expo", "cli", "build", "bin", "cli.js"],
     ["node_modules", "@expo", "cli", "build", "bin", "cli"],
+    ["node_modules", "@expo", "cli", "build", "bin", "cli.js"],
   ];
   const out = [];
   for (const root of roots) {

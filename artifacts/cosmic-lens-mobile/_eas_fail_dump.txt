@@ -1,0 +1,272 @@
+﻿=== EAS FAIL DUMP 2026-08-25T11:20:02.0482146+05:30 ===
+--- build:list ---
+node.exe : Γÿà eas-cli@22.4.0 is now available.
+At C:\Users\HP\AppData\Roaming\npm\eas.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/eas-cli/bin/run" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Γÿà eas-cli@22.4.0 is now available.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+To upgrade, run:
+npm install -g eas-cli
+Proceeding with outdated version.
+
+Found eas-cli in your project dependencies.
+It's recommended to use the "cli.version" field in eas.json to enforce the eas-cli version for your project.
+Learn more: https://github.com/expo/eas-cli#enforcing-eas-cli-version-for-your-project
+
+[
+  {
+    "id": "f92c6e1a-b991-42f8-a562-db72eaadffb7",
+    "status": "ERRORED",
+    "platform": "ANDROID",
+    "error": {
+      "errorCode": "UNKNOWN_ERROR",
+      "message": "Unknown error. See logs of the Install dependencies build phase for more information."
+    },
+    "artifacts": {},
+    "fingerprint": {
+      "id": "01a0376a-c644-7677-9158-535890734cbf",
+      "hash": "8ebe87fe0383eb1754fd15fc98f49e17cec88f36"
+    },
+    "initiatingActor": {
+      "id": "bf4658ac-a52a-4696-9dbc-a83894821722",
+      "displayName": "cosmiclens"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/781866fe-35d7-4023-8b96-793f099eb824/f92c6e1a-b991-42f8-a562-db72eaadffb7/2026-08-25T05%3A35%3A42Z-8b773f55-72b6-40ca-b07a-a8ba9c7a4fda.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260825%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260825T055012Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=1427c033a565567a59d0c7232906d247aa4b3e2db1ec69afe97126636373ee498ca9f615350481ec19e3b6465431a2497b2432ad74e932667794d36c07a559e5d3ce6bdc7da1a595d0a3129f1f857f99aa58e696da9a93a72c62619bc3caa77b71abec32aa1e8350929b19e5c92504da8c27469f2e661ce9a2c755d0761bbd4228315b1d83e280311a728e9b12cf9576bcf0bbe54adb61f3173a00dc5c2cccfea6d6f99c51636897f69c0b399e8ac6875672e875f33dff7bf6f5bd17d32359c2f8646ab89fdd5b8ee4755e925982066bf424f885f10951ae86de664a85118d1456fcd37bff2a5b70ec3cc98f2ac5d77f7d137975d665b90d75502d9c7077707d"
+    ],
+    "project": {
+      "id": "781866fe-35d7-4023-8b96-793f099eb824",
+      "name": "cosmic-lens-mobile",
+      "slug": "cosmic-lens-mobile",
+      "ownerAccount": {
+        "id": "4d8735c8-a0d1-462c-9921-84bfdde5a7eb",
+        "name": "cosmiclens"
+      }
+    },
+    "channel": "production",
+    "distribution": "STORE",
+    "buildProfile": "production",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.13",
+    "appBuildVersion": "20",
+    "runtimeVersion": "exposdk:54.0.0",
+    "gitCommitHash": "f372834892580bc7e676e08f91bd410fe7c22dec",
+    "gitCommitMessage": "Help Support: bounded agent with knowledge, account tools, and human handoff lifecycle.",
+    "priority": "HIGH",
+    "createdAt": "2026-08-25T05:35:39.549Z",
+    "updatedAt": "2026-08-25T05:35:55.247Z",
+    "completedAt": "2026-08-25T05:35:55.064Z",
+    "expirationDate": "2026-09-24T05:35:39.578Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 2665,
+      "buildQueueTime": 4528,
+      "buildDuration": 8322
+    }
+  },
+  {
+    "id": "c5564d4b-264f-406e-9d0b-3412af77c09d",
+    "status": "ERRORED",
+    "platform": "ANDROID",
+    "error": {
+      "errorCode": "UNKNOWN_ERROR",
+      "message": "Unknown error. See logs of the Prebuild build phase for more information."
+    },
+    "artifacts": {},
+    "fingerprint": {
+      "id": "01a0371b-a073-7146-b03d-afb671d451f9",
+      "hash": "42af0feb0f1a0912ec9187de096fa2284fd01db2"
+    },
+    "initiatingActor": {
+      "id": "bf4658ac-a52a-4696-9dbc-a83894821722",
+      "displayName": "cosmiclens"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/781866fe-35d7-4023-8b96-793f099eb824/c5564d4b-264f-406e-9d0b-3412af77c09d/2026-08-25T04%3A59%3A17Z-f0dd8352-2068-494a-ad6e-193ae8c5ebce.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260825%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260825T055012Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=2fb8889e96f89012dece264208dea0640c81a4115352b466e22e8ac488df453dcf0f982ce0e58f7e327d264f71d7c82e5d9fc4870285354531aad519662be1c8ebb13d4fd17fc1975e33da09c1e9b99ae4ff7eae6924cf6d9ab42bb6312bfdb3c26adca6dc4260add71213f0bd495299ee8e43903a7732e4ac0082bb909a0db649955883028c304267f8677fa357daa6713682e792f656e822a1a32ebca6686135278aecd1ec9e0ee4fb34a3377002ee0fb2679e4c8d87ca9ffea0fe123662e8d6ba25bfca9810ae3625204b87d9f3afe795b623d8c32ec3a735888964d9917619c7546886a9a1182aabf2b3f3ebeae9e9a18314c6b65ab5c76bac4b7d6d6171"
+    ],
+    "project": {
+      "id": "781866fe-35d7-4023-8b96-793f099eb824",
+      "name": "cosmic-lens-mobile",
+      "slug": "cosmic-lens-mobile",
+      "ownerAccount": {
+        "id": "4d8735c8-a0d1-462c-9921-84bfdde5a7eb",
+        "name": "cosmiclens"
+      }
+    },
+    "channel": "production",
+    "distribution": "STORE",
+    "buildProfile": "production",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.13",
+    "appBuildVersion": "19",
+    "runtimeVersion": "exposdk:54.0.0",
+    "gitCommitHash": "f372834892580bc7e676e08f91bd410fe7c22dec",
+    "gitCommitMessage": "Help Support: bounded agent with knowledge, account tools, and human handoff lifecycle.",
+    "priority": "HIGH",
+    "createdAt": "2026-08-25T04:59:16.827Z",
+    "updatedAt": "2026-08-25T04:59:53.218Z",
+    "completedAt": "2026-08-25T04:59:53.064Z",
+    "expirationDate": "2026-09-24T04:59:16.851Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 312,
+      "buildQueueTime": 4945,
+      "buildDuration": 30980
+    }
+  },
+  {
+    "id": "8c7c08af-b814-43b6-83c8-a9b06e815737",
+    "status": "ERRORED",
+    "platform": "ANDROID",
+    "error": {
+      "errorCode": "UNKNOWN_ERROR",
+      "message": "Unknown error. See logs of the Install dependencies build phase for more information."
+    },
+    "artifacts": {},
+    "fingerprint": {
+      "id": "01a0371b-a073-7146-b03d-afb671d451f9",
+      "hash": "42af0feb0f1a0912ec9187de096fa2284fd01db2"
+    },
+    "initiatingActor": {
+      "id": "bf4658ac-a52a-4696-9dbc-a83894821722",
+      "displayName": "cosmiclens"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/781866fe-35d7-4023-8b96-793f099eb824/8c7c08af-b814-43b6-83c8-a9b06e815737/2026-08-25T04%3A27%3A52Z-f92a5331-3d97-4586-b7d6-4bfeb4f5ed95.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260825%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260825T055012Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=0a16ce3d7ed69c671edc298f24097fd2a054d8ad01d8d222488fc2a827eb171fc301a20dbe49593eec2dbd2ad02a85b2e2849ea4fcfa61781fc948c958ec185d4803d398bd480fb71cca7bf207524729405321d2e50edb7f944696b1dc6af7088ce2059c32d39464a4c30d5de22609a91ab555dc12555b78e27aa8d7fff093a57978e5c97961b506ef98c1e53c72b81c60d7dd5533d8c0712f10ec75bb958bfa75035c0a941cd025f04433d37d76dcc26cad7829cb51491ed8c5024b2e218e9a778402facedcfffa0d5a4e3051128e30937a609d77cffdd3cdfe4f6238b104270779972c7c1aab959b00578dbd69e89de876d39b55893ceb69ae3cb5f4b5fe8c"
+    ],
+    "project": {
+      "id": "781866fe-35d7-4023-8b96-793f099eb824",
+      "name": "cosmic-lens-mobile",
+      "slug": "cosmic-lens-mobile",
+      "ownerAccount": {
+        "id": "4d8735c8-a0d1-462c-9921-84bfdde5a7eb",
+        "name": "cosmiclens"
+      }
+    },
+    "channel": "production",
+    "distribution": "STORE",
+    "buildProfile": "production",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.13",
+    "appBuildVersion": "18",
+    "runtimeVersion": "exposdk:54.0.0",
+    "gitCommitHash": "f372834892580bc7e676e08f91bd410fe7c22dec",
+    "gitCommitMessage": "Help Support: bounded agent with knowledge, account tools, and human handoff lifecycle.",
+    "priority": "HIGH",
+    "createdAt": "2026-08-25T04:27:49.982Z",
+    "updatedAt": "2026-08-25T04:28:04.996Z",
+    "completedAt": "2026-08-25T04:28:04.816Z",
+    "expirationDate": "2026-09-24T04:27:50.001Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 2259,
+      "buildQueueTime": 4620,
+      "buildDuration": 7955
+    }
+  },
+  {
+    "id": "7ac49b1a-ad9d-475d-89d4-dba0b59431cb",
+    "status": "ERRORED",
+    "platform": "ANDROID",
+    "error": {
+      "errorCode": "UNKNOWN_ERROR",
+      "message": "Unknown error. See logs of the Install dependencies build phase for more information."
+    },
+    "artifacts": {},
+    "fingerprint": {
+      "id": "01a0371b-a073-7146-b03d-afb671d451f9",
+      "hash": "42af0feb0f1a0912ec9187de096fa2284fd01db2"
+    },
+    "initiatingActor": {
+      "id": "bf4658ac-a52a-4696-9dbc-a83894821722",
+      "displayName": "cosmiclens"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/781866fe-35d7-4023-8b96-793f099eb824/7ac49b1a-ad9d-475d-89d4-dba0b59431cb/2026-08-25T04%3A09%3A17Z-3d4a0f29-4334-4772-9cfd-a0ee3670f324.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260825%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260825T055012Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=47b6a8a7cad828703001310b0b7424c907ac9a385e4929a335802be92aeb4dc21d3236c8381e905da6a5d4d52ad1eb5c55d9ed0cf10f6ee1aac36169cfa9a6c4c5e29c61e5d4f9f77647bbbccf0bedd4d972081b36129113507bb565cc189177062a1fe0fe983da495bf81a4e6ad7e406e46945b01b9cc9bb200a2d3f1af69da67c86f07dc24ce40b698e3b97dbab2d58e4633530049ad5673aa8e7df0c303539c1bed5e34bd30ec39aefe7b041668b5f2dd4336f8d206c99a782b46bac731c8f8d423d9ebb55905769ac8333e1eed666bd4b7ebffcab61bfeb7b9901a13d4512a7cc470feb029eeaeb695d045f9e9328e03871ad52d3ab82c2e33dea520ea60"
+    ],
+    "project": {
+      "id": "781866fe-35d7-4023-8b96-793f099eb824",
+      "name": "cosmic-lens-mobile",
+      "slug": "cosmic-lens-mobile",
+      "ownerAccount": {
+        "id": "4d8735c8-a0d1-462c-9921-84bfdde5a7eb",
+        "name": "cosmiclens"
+      }
+    },
+    "channel": "production",
+    "distribution": "STORE",
+    "buildProfile": "production",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.13",
+    "appBuildVersion": "17",
+    "runtimeVersion": "exposdk:54.0.0",
+    "gitCommitHash": "f372834892580bc7e676e08f91bd410fe7c22dec",
+    "gitCommitMessage": "Help Support: bounded agent with knowledge, account tools, and human handoff lifecycle.",
+    "priority": "HIGH",
+    "createdAt": "2026-08-25T04:09:12.516Z",
+    "updatedAt": "2026-08-25T04:09:30.049Z",
+    "completedAt": "2026-08-25T04:09:29.890Z",
+    "expirationDate": "2026-09-24T04:09:12.541Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 4612,
+      "buildQueueTime": 4661,
+      "buildDuration": 8101
+    }
+  },
+  {
+    "id": "e6a0b3d9-3555-4fed-a118-2bd1df6587d3",
+    "status": "FINISHED",
+    "platform": "ANDROID",
+    "artifacts": {
+      "buildUrl": "https://expo.dev/artifacts/eas/zbgfmKlJcPvVkidF7fIt6ppl-UhljJ0r7VdrnMVlA2k.aab",
+      "applicationArchiveUrl": "https://expo.dev/artifacts/eas/zbgfmKlJcPvVkidF7fIt6ppl-UhljJ0r7VdrnMVlA2k.aab"
+    },
+    "fingerprint": {
+      "id": "01a02739-5c3e-7ede-bfd3-71d910adc190",
+      "hash": "982026ca05e8dace47c6be4a652c66aa2a9952c0"
+    },
+    "initiatingActor": {
+      "id": "bf4658ac-a52a-4696-9dbc-a83894821722",
+      "displayName": "cosmiclens"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/781866fe-35d7-4023-8b96-793f099eb824/e6a0b3d9-3555-4fed-a118-2bd1df6587d3/2026-08-22T02%3A07%3A47Z-0721070a-57fc-450a-a6b4-ddc24bee280b.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260825%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260825T055012Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=34cd89bc96091cbd6e4fb7570cb33690e9ea18cf414e7ac8f7ab50c0220dcc7691c29f2c02ab92fe82e88753bb9afeb51bb60789f1a0fe47c70a79e0589972de67d8887e090b6450c6c8bbd2ebe8044e2c95173965634fb5a0f1262bd86490299594019f1049ae24f88cb4a39fc9a648f03af204f6813d985d6f708eb7185892ccdb115495b56adc2f4ea663729f08def43b8a83ec818ce0fcc79aa7b33403e603304d0cd1de777acab920c7f466afdf540367f59b5d98115acfda758f53e374cdc7bfd418248a03d6c163c01bf491e96f5d79109f6b6383ecfc8b14e1ecf69b9004980ee22a529b3e24d7f9cbff01ca5b8cf9658badbc619cd70bb493de0483"
+    ],
+    "project": {
+      "id": "781866fe-35d7-4023-8b96-793f099eb824",
+      "name": "cosmic-lens-mobile",
+      "slug": "cosmic-lens-mobile",
+      "ownerAccount": {
+        "id": "4d8735c8-a0d1-462c-9921-84bfdde5a7eb",
+        "name": "cosmiclens"
+      }
+    },
+    "channel": "production",
+    "distribution": "STORE",
+    "buildProfile": "production",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.12",
+    "appBuildVersion": "16",
+    "runtimeVersion": "exposdk:54.0.0",
+    "gitCommitHash": "f372834892580bc7e676e08f91bd410fe7c22dec",
+    "gitCommitMessage": "Help Support: bounded agent with knowledge, account tools, and human handoff lifecycle.",
+    "priority": "HIGH",
+    "createdAt": "2026-08-22T02:07:45.680Z",
+    "updatedAt": "2026-08-22T02:30:50.517Z",
+    "completedAt": "2026-08-22T02:30:50.352Z",
+    "expirationDate": "2026-09-21T02:07:45.716Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 1380,
+      "buildQueueTime": 4528,
+      "buildDuration": 1378764
+    }
+  }
+]
+
+JSON parse failed: Invalid JSON primitive: node.exe.
+
+DONE. File: D:\Cosmic-Lens-Backend\artifacts\cosmic-lens-mobile\_eas_fail_dump.txt

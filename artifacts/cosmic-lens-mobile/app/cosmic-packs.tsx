@@ -166,22 +166,6 @@ function CtaPulse({ children }: { children: React.ReactNode }) {
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
-function RibbonPulse({ children }: { children: React.ReactNode }) {
-  const o = useSharedValue(0.85);
-  useEffect(() => {
-    o.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 700 }),
-        withTiming(0.82, { duration: 700 }),
-      ),
-      -1,
-      false,
-    );
-  }, [o]);
-  const style = useAnimatedStyle(() => ({ opacity: o.value }));
-  return <Animated.View style={style}>{children}</Animated.View>;
-}
-
 function StaggerIn({
   index,
   children,
@@ -319,12 +303,9 @@ export default function CosmicPacksScreen() {
             >
               <HeroShimmer />
               <View style={s.heroTopRow}>
-                <RibbonPulse>
-                  <View style={s.heroRibbon}>
-                    <Feather name="zap" size={11} color="#78350f" />
-                    <Text style={s.heroRibbonTxt}>MOST POWERFUL</Text>
-                  </View>
-                </RibbonPulse>
+                <View style={s.heroRibbon}>
+                  <Text style={s.heroRibbonTxt}>MOST POWERFUL</Text>
+                </View>
                 <View style={s.liveChip}>
                   <LivePulseDot />
                   <Text style={s.liveChipTxt}>LIVE</Text>
@@ -332,9 +313,7 @@ export default function CosmicPacksScreen() {
               </View>
 
               <Text style={s.heroTitle}>Cosmic Intelligence V3</Text>
-              <Text style={s.heroHook} numberOfLines={2}>
-                Live astrologer · your kundli open · not a chatbot
-              </Text>
+              <Text style={s.heroHook}>Deep Astrology session</Text>
             </LinearGradient>
           </View>
         </FadeInView>

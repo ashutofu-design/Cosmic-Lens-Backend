@@ -264,7 +264,12 @@ def _deliver_pending(chat_id: str, *, force: bool) -> str:
     return _format_success(result)
 
 
-def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[str, Any]:
+def fulfill_order_with_founder_text(
+    order_prefix: str,
+    body_text: str,
+    pages: list[str] | None = None,
+    page_images: list[str | None] | None = None,
+) -> dict[str, Any]:
     order, err = find_order_by_prefix(order_prefix)
     if err:
         return {"ok": False, "error": err}
@@ -296,6 +301,8 @@ def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[s
                     p2_name=p2_name,
                     lang=lang,
                     body_text=body_text,
+                    pages=pages,
+                    page_images=page_images,
                     order_id=order_id,
                 )
             except Exception as milan_exc:
@@ -311,6 +318,8 @@ def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[s
                     p2_name=p2_name,
                     lang=lang,
                     body_text=body_text,
+                    pages=pages,
+                    page_images=page_images,
                     order_id=order_id,
                 )
         else:
@@ -321,6 +330,8 @@ def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[s
                 p2_name=p2_name,
                 lang=lang,
                 body_text=body_text,
+                pages=pages,
+                page_images=page_images,
                 order_id=order_id,
             )
     except Exception as exc:
@@ -367,7 +378,7 @@ def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[s
     try:
         from notification_helper import send_to_user
 
-        send_to_user(
+        notify = send_to_user(
             user_id,
             push_title,
             f"{p1_name} & {p2_name} — My Reports mein PDF save ho gayi.",
@@ -376,9 +387,10 @@ def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[s
                 "kind": push_kind,
                 "report_id": report_id,
             },
-        )
+        ) or {}
     except Exception as exc:
         log.warning("[lr_telegram] push notify failed: %s", exc)
+        notify = {"sent": 0}
 
     cosmo_id = (str(order.get("cosmo_user_id") or "").strip().upper())
     if not cosmo_id and user_id:
@@ -399,6 +411,7 @@ def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[s
         "p2_name": p2_name,
         "bytes": len(pdf_bytes),
         "kind": push_kind,
+        "notified": int(notify.get("sent") or 0) > 0,
     }
 
 
@@ -546,7 +559,195 @@ def handle_founder_telegram_chat(text: str, chat_id: str) -> str:
     return _format_error("not_myreport_command")
 
 
+def _answer_callback(callback_id: str, text: str) -> None:
+    token = _telegram_token()
+    if not token or not callback_id:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+            json={"callback_query_id": callback_id, "text": text[:190]},
+            timeout=_TIMEOUT,
+        )
+    except Exception as exc:
+        log.warning("[lr_telegram] answerCallbackQuery failed: %s", exc)
+
+
+def _handle_lifemap_accept_callback(
+    callback_id: str, chat_id: str, data: str
+) -> None:
+    """Accept Order button on LifeMap founder alerts (lma:<code>:<order_id>)."""
+    parts = data.split(":", 2)
+    if len(parts) < 3:
+        _answer_callback(callback_id, "Invalid Accept Order")
+        return
+    code = parts[1].strip().lower()
+    oid = parts[2].strip()
+    kind_map = {
+        "lr": "love_reality_pro",
+        "ml": "milan_pro",
+        "nm": "numerology_pro",
+        "av": "astrovastu_pro",
+        "bz": "business_vastu_pro",
+    }
+    kind = kind_map.get(code)
+    if not kind or not oid:
+        _answer_callback(callback_id, "Unknown LifeMap order")
+        return
+    try:
+        from lifemap_admin_deliver import accept_lifemap_order
+
+        result = accept_lifemap_order(kind, oid, source="telegram")
+        if not result.get("ok"):
+            err = str(result.get("error") or "failed")
+            _answer_callback(callback_id, f"Accept failed — {err}")
+            return
+        already = bool(result.get("already"))
+        _answer_callback(
+            callback_id,
+            "Already accepted ✅" if already else "Order accepted ✅",
+        )
+        if chat_id:
+            label = {
+                "love_reality_pro": "Love Reality Pro",
+                "milan_pro": "Kundli Milan Pro",
+                "numerology_pro": "Numerology Pro",
+                "astrovastu_pro": "AstroVastu Pro",
+                "business_vastu_pro": "Business Vastu",
+            }.get(kind, kind)
+            _send_telegram_reply(
+                chat_id,
+                (
+                    f"✅ LifeMap Accept Order — {label} #{oid[:8]}\n"
+                    if not already
+                    else f"✅ Already accepted — {label} #{oid[:8]}\n"
+                )
+                + "Ab admin panel / MYREPORT se PDF deliver karo.",
+            )
+    except Exception as exc:
+        log.exception("[lr_telegram] lifemap accept failed: %s", exc)
+        _answer_callback(callback_id, "Server error — admin panel use karo")
+
+
+def _handle_v3_callback(update: dict[str, Any]) -> None:
+    """Accept/Reject buttons on the V3 live chat alert (from order_founder_alert)."""
+    cq = update.get("callback_query") or {}
+    callback_id = str(cq.get("id") or "")
+    data = str(cq.get("data") or "")
+    chat = (cq.get("message") or {}).get("chat") or {}
+    chat_id = str(chat.get("id") or "")
+    founder = _founder_chat_id()
+    if founder and chat_id and chat_id != founder:
+        _answer_callback(callback_id, "Not allowed")
+        return
+
+    # LifeMap Accept Order — callback lma:<code>:<order_id>
+    if data.startswith("lma:"):
+        _handle_lifemap_accept_callback(callback_id, chat_id, data)
+        return
+
+    action, _, sid = data.partition(":")
+    sid = sid.strip()
+
+    if action == "v3o":
+        # "Enable chat now" button on the blocked-attempt alert.
+        try:
+            from cosmic_intelligence_v3_sessions import (
+                alert_admin_for_queue_head_if_idle,
+                set_v3_chat_enabled,
+            )
+
+            set_v3_chat_enabled(True)
+            _answer_callback(callback_id, "V3 chat ENABLED 🟢")
+            # Users queued while chat was closed → alert admin for FIFO head now.
+            head_alert = {}
+            try:
+                head_alert = alert_admin_for_queue_head_if_idle()
+            except Exception:
+                head_alert = {}
+            if chat_id:
+                extra = (
+                    "\n⚡ Waitlist me user hai — Accept alert bheja gaya."
+                    if head_alert.get("alerted")
+                    else ""
+                )
+                _send_telegram_reply(
+                    chat_id,
+                    "🟢 V3 live chat ENABLE ho gaya — user ab request bhej sakta hai."
+                    f"{extra}\n"
+                    "Admin panel: https://admin.coosmic.icu → V3 Live Chats",
+                )
+        except Exception as exc:
+            log.exception("[lr_telegram] v3 enable failed: %s", exc)
+            _answer_callback(callback_id, "Enable failed — admin panel use karo")
+        return
+
+    if action not in ("v3a", "v3r") or not sid:
+        _answer_callback(callback_id, "Unknown action")
+        return
+
+    try:
+        from cosmic_intelligence_v3_sessions import (
+            admin_ready_v3_session,
+            get_v3_session,
+            notify_user_v3_ready,
+            reject_v3_session,
+        )
+
+        rec = get_v3_session(sid)
+        if not rec:
+            _answer_callback(callback_id, "Session not found")
+            return
+        status = str(rec.get("status") or "")
+        if action == "v3a":
+            if status == "awaiting_user":
+                _answer_callback(callback_id, "Already waiting for user ✅")
+                return
+            if status == "accepted":
+                _answer_callback(callback_id, "Already live ✅")
+                return
+            if status not in ("pending", "queued"):
+                _answer_callback(callback_id, f"Cannot accept — status: {status}")
+                return
+            result = admin_ready_v3_session(sid)
+            if not result.get("ok"):
+                err = result.get("error") or "failed"
+                if err == "engine_busy":
+                    _answer_callback(callback_id, "Engine busy — end current chat first")
+                elif err == "not_queue_head":
+                    _answer_callback(callback_id, "Not queue head — Accept FIFO #1 only")
+                else:
+                    _answer_callback(callback_id, f"Cannot accept — {err}")
+                return
+            try:
+                notify_user_v3_ready(result.get("session") or {})
+            except Exception:
+                pass
+            _answer_callback(callback_id, "User notified — waiting Accept ⏳")
+            if chat_id:
+                _send_telegram_reply(
+                    chat_id,
+                    f"✅ V3 session #{sid[:8]} — user ko Ready push gaya.\n"
+                    "Timer tab start hoga jab user Accept kare (2 min).\n"
+                    "Admin panel: https://admin.coosmic.icu → V3 Live Chats",
+                )
+        else:
+            if status not in ("pending", "queued", "awaiting_user"):
+                _answer_callback(callback_id, f"Cannot reject — status: {status}")
+                return
+            reject_v3_session(sid)
+            _answer_callback(callback_id, "Rejected ❌")
+            if chat_id:
+                _send_telegram_reply(chat_id, f"❌ V3 session #{sid[:8]} rejected.")
+    except Exception as exc:
+        log.exception("[lr_telegram] v3 callback failed: %s", exc)
+        _answer_callback(callback_id, "Server error — admin panel use karo")
+
+
 def _process_update_async(update: dict[str, Any]) -> None:
+    if update.get("callback_query"):
+        _handle_v3_callback(update)
+        return
     chat_id = ""
     try:
         msg = update.get("message") or update.get("edited_message") or {}
@@ -658,7 +859,7 @@ def _poll_loop() -> None:
                 params={
                     "offset": offset,
                     "timeout": 50,
-                    "allowed_updates": json.dumps(["message"]),
+                    "allowed_updates": json.dumps(["message", "callback_query"]),
                 },
                 timeout=60,
             )

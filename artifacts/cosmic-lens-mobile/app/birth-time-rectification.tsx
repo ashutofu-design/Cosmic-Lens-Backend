@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,13 @@ import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
+import {
+  consumeBirthTimePaidReady,
+  gateBirthTimeRectificationCheckout,
+  getPendingBirthTimePurchaseId,
+} from "@/lib/birthTimeRectificationCheckoutFlow";
+import { clearPendingBirthTimeCheckout } from "@/lib/pendingBirthTimeCheckout";
+import type { BirthTimeSubmitPayload } from "@/lib/pendingBirthTimeCheckout";
 
 type Impact = "" | "positive" | "negative" | "mixed";
 
@@ -318,31 +325,31 @@ export default function BirthTimeRectificationScreen() {
     notify(title, message);
   };
 
-  const submit = async () => {
+  const buildValidatedPayload = (): BirthTimeSubmitPayload | null => {
     setFormError(null);
     if (!user?.id || !user?.api_key) {
       fail("Login required", "Please log in before submitting this form.");
-      return;
+      return null;
     }
     if (!fullName.trim()) {
       fail("Required", "Full name is required.");
-      return;
+      return null;
     }
     if (!gender.trim()) {
       fail("Required", "Please select Gender (Male / Female / Other).");
-      return;
+      return null;
     }
     if (!dob.trim()) {
       fail("Required", "Date of birth is required.");
-      return;
+      return null;
     }
     if (!approxTob.trim()) {
       fail("Required", "Approximate birth time is required.");
-      return;
+      return null;
     }
     if (!birthPlace.trim()) {
       fail("Required", "Birth place is required.");
-      return;
+      return null;
     }
 
     const selected = milestones.filter((m) => m.selected);
@@ -351,7 +358,7 @@ export default function BirthTimeRectificationScreen() {
         "More events needed",
         `Selected ${selected.length}/${MIN_MILESTONES}. Select and complete at least ${MIN_MILESTONES} life milestones.`,
       );
-      return;
+      return null;
     }
 
     const incomplete = selected.find(
@@ -367,7 +374,7 @@ export default function BirthTimeRectificationScreen() {
         "Incomplete milestone",
         `"${incomplete.label}" needs ${why}.`,
       );
-      return;
+      return null;
     }
 
     if (last15y.trim().length < MIN_15Y_CHARS) {
@@ -375,9 +382,35 @@ export default function BirthTimeRectificationScreen() {
         "Required",
         "Please fill the last 15 years box with your top 5 events (Event · Month/Year · Impact).",
       );
-      return;
+      return null;
     }
 
+    return {
+      full_name: fullName.trim(),
+      gender: gender.trim(),
+      dob: dob.trim(),
+      approx_tob: approxTob.trim(),
+      birth_place: birthPlace.trim(),
+      milestone_events: selected.map((m) => ({
+        id: m.id,
+        label: m.label,
+        month: m.month.trim(),
+        year: m.year.trim(),
+        month_year: `${m.month.trim()} ${m.year.trim()}`,
+        impact: m.impact,
+      })),
+      last_15y_events_text: last15y.trim(),
+    };
+  };
+
+  const postSubmit = async (
+    payload: BirthTimeSubmitPayload,
+    purchaseId?: number,
+  ) => {
+    if (!user?.id || !user?.api_key) {
+      fail("Login required", "Please log in before submitting this form.");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`${API_BASE}/api/birth-time-rectification/submit`, {
@@ -385,23 +418,12 @@ export default function BirthTimeRectificationScreen() {
         headers: {
           "Content-Type": "application/json",
           "X-API-Key": user.api_key,
+          "X-User-Id": String(user.id),
         },
         body: JSON.stringify({
           user_id: user.id,
-          full_name: fullName.trim(),
-          gender: gender.trim(),
-          dob: dob.trim(),
-          approx_tob: approxTob.trim(),
-          birth_place: birthPlace.trim(),
-          milestone_events: selected.map((m) => ({
-            id: m.id,
-            label: m.label,
-            month: m.month.trim(),
-            year: m.year.trim(),
-            month_year: `${m.month.trim()} ${m.year.trim()}`,
-            impact: m.impact,
-          })),
-          last_15y_events_text: last15y.trim(),
+          purchase_id: purchaseId,
+          ...payload,
         }),
       });
       const json = await res.json().catch(() => ({} as any));
@@ -411,8 +433,12 @@ export default function BirthTimeRectificationScreen() {
             "API server needs update (birth-time submit route missing). Deploy api-server + pm2 restart cosmic-api.",
           );
         }
+        if (res.status === 402) {
+          throw new Error(json?.message || "Payment required before submit.");
+        }
         throw new Error(json?.message || json?.error || `Submit failed (${res.status})`);
       }
+      clearPendingBirthTimeCheckout();
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {}
@@ -434,6 +460,36 @@ export default function BirthTimeRectificationScreen() {
       setSubmitting(false);
     }
   };
+
+  const submit = async () => {
+    const payload = buildValidatedPayload();
+    if (!payload) return;
+
+    let handedOffToSubmit = false;
+    setSubmitting(true);
+    try {
+      await gateBirthTimeRectificationCheckout({
+        user,
+        payload,
+        onEntitled: (purchaseId) => {
+          handedOffToSubmit = true;
+          void postSubmit(payload, purchaseId ?? getPendingBirthTimePurchaseId());
+        },
+      });
+    } finally {
+      if (!handedOffToSubmit) setSubmitting(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      const paidPayload = consumeBirthTimePaidReady();
+      if (!paidPayload) return;
+      const pid = getPendingBirthTimePurchaseId();
+      void postSubmit(paidPayload, pid);
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- resume once after Razorpay
+    }, [user?.id, user?.api_key]),
+  );
 
   const field = (
     label: string,

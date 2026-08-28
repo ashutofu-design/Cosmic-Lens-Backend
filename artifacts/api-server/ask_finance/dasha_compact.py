@@ -186,6 +186,35 @@ def compute_finance_dasha_compact(
     }
 
 
+import re as _re_dasha
+
+_DASHA_CONTEXT_RX = _re_dasha.compile(
+    r"(?ix)\b("
+    r"dasha|dasa|antardasha|antar\s*dasha|mahadasha|maha\s*dasha|"
+    r"pratyantar|vimshottari|dasha\s*period|dasha\s*bhi|dasha\s*dekh|"
+    r"period\s*ke\s*hisaab|time\s*period"
+    r")\b|(?:दशा|महादशा|अंतर्दशा)"
+)
+
+
+def question_wants_dasha_context(question: str, llm_intent: Optional[dict] = None) -> bool:
+    """True when the user asks to consider dasha — even for a non-WHEN static Q.
+
+    e.g. "wealth ke perspective se study karo aur DASHA BHI DEKHO" is static
+    (no 'kab'), but the user explicitly wants dasha context. Without this the
+    LLM invents a fake current dasha / past month as future.
+    """
+    q = (question or "").strip()
+    if q and _DASHA_CONTEXT_RX.search(q):
+        return True
+    if isinstance(llm_intent, dict):
+        for key in ("intent", "user_wants", "normalized_question", "question_summary"):
+            val = str(llm_intent.get(key) or "")
+            if val and _DASHA_CONTEXT_RX.search(val):
+                return True
+    return False
+
+
 def maybe_attach_dasha_compact(
     pack: dict[str, Any],
     kundli: dict,
@@ -198,13 +227,20 @@ def maybe_attach_dasha_compact(
     q = (question or "").strip()
     if not q:
         return pack
+
+    _wants = False
     try:
         from ask_finance.timing_registry import is_finance_timing_question
 
-        if not is_finance_timing_question(q, llm_intent):
-            pack.pop("dasha_timing_compact", None)
-            return pack
+        _wants = bool(is_finance_timing_question(q, llm_intent))
     except Exception:
+        _wants = False
+    # Also attach when the user explicitly asks for dasha, even without "kab".
+    if not _wants:
+        _wants = question_wants_dasha_context(q, llm_intent)
+
+    if not _wants:
+        pack.pop("dasha_timing_compact", None)
         return pack
 
     pack["dasha_timing_compact"] = compute_finance_dasha_compact(kundli)

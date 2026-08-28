@@ -1,6 +1,7 @@
 /**
- * Local API proxy — browser → localhost → admin.coosmic.icu (IPv6/Cloudflare path).
+ * Local API proxy — browser → localhost → hosted API (admin.coosmic.icu).
  * Fixes "Failed to fetch" when laptop DNS resolves domain to blocked VPS IPv4.
+ * Dev web always uses the hosted API — no local Flask.
  */
 import dns from "node:dns";
 import http from "node:http";
@@ -46,11 +47,23 @@ function upstreamHeaders(req) {
     const val = req.headers[name];
     if (val) out[name] = val;
   }
-  if (!out["content-type"]) out["Content-Type"] = "application/json";
+  // Do not force JSON on uploads — palm-scan is multipart/form-data.
+  if (!out["content-type"] && !out["Content-Type"] && req.method === "GET") {
+    out["Content-Type"] = "application/json";
+  }
   return out;
 }
 
+const AGENT_UPSTREAM = (process.env.DEV_NUMEROLOGY_AGENT_URL || UPSTREAM).replace(
+  /\/$/,
+  "",
+);
+
 function upstreamTimeoutMs(path) {
+  if (path.includes("/api/numerology-agent")) return 180000;
+  if (path.includes("/api/palm-scan") || path.includes("/api/face-scan") || path.includes("/api/palmistry")) return 120000;
+  if (path.includes("/api/palm-reading") || path.includes("/api/face-reading")) return 90000;
+  if (path.includes("/api/support")) return 90000;
   if (path.includes("/api/kundli") || path.includes("/api/ask")) return 90000;
   return 30000;
 }
@@ -72,7 +85,8 @@ async function forward(req, res) {
   }
 
   const path = req.url || "/";
-  const target = `${UPSTREAM}${path}`;
+  const isAgent = (path || "").includes("/api/numerology-agent");
+  const target = `${isAgent ? AGENT_UPSTREAM : UPSTREAM}${path}`;
 
   let body = Buffer.alloc(0);
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -88,15 +102,18 @@ async function forward(req, res) {
       headers,
       body: body.length ? body : undefined,
       signal: AbortSignal.timeout(timeoutMs),
+      duplex: "half",
     });
 
-    const text = await up.text();
+    const buf = Buffer.from(await up.arrayBuffer());
     const outHeaders = {
       "Content-Type": up.headers.get("content-type") || "application/json",
       ...CORS,
     };
+    const cd = up.headers.get("content-disposition");
+    if (cd) outHeaders["Content-Disposition"] = cd;
     res.writeHead(up.status, outHeaders);
-    res.end(text);
+    res.end(buf);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[api-proxy] FAIL", req.method, path, "→", msg);
@@ -126,6 +143,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(LOCAL_PORT, "127.0.0.1", async () => {
   console.log(`[api-proxy] http://127.0.0.1:${LOCAL_PORT} → ${UPSTREAM}`);
+  console.log(`[api-proxy] /api/numerology-agent → ${AGENT_UPSTREAM}`);
   try {
     const probe = await fetch(`${UPSTREAM}/api/healthz`, {
       signal: AbortSignal.timeout(12000),
@@ -133,6 +151,18 @@ server.listen(LOCAL_PORT, "127.0.0.1", async () => {
     const txt = await probe.text();
     if (probe.ok && txt.includes('"status"')) {
       console.log("[api-proxy] upstream OK ✓");
+      try {
+        const j = JSON.parse(txt);
+        if (j.palm_scan === false) {
+          console.warn(
+            "[api-proxy] Hosted API has NO /api/palm-scan (palm_scan=false). Deploy: .\\scripts\\deploy-palm-scan-vps.ps1",
+          );
+        } else if (j.palm_scan === true) {
+          console.log("[api-proxy] hosted /api/palm-scan OK ✓");
+        }
+      } catch {
+        // ignore
+      }
     } else {
       console.warn("[api-proxy] upstream probe HTTP", probe.status, txt.slice(0, 80));
     }

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signOutFromFirebase } from "@/lib/firebaseAuth";
 import { router } from "expo-router";
-import { Alert, AppState, type AppStateStatus } from "react-native";
+import { Alert, AppState, Platform, type AppStateStatus } from "react-native";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
 import { coerceUILang, type UILang } from "@/lib/i18n";
@@ -30,16 +30,49 @@ export interface ProfileEntry {
   kundli: KundliData | null;
 }
 
+/** Romantic partner slots — must never be used as the native Ask chart. */
+const PARTNER_RELATIONS = new Set([
+  "husband", "wife", "boyfriend", "girlfriend",
+  "fiance", "fiancee", "partner", "spouse",
+]);
+
+export function isPartnerProfile(profile: Pick<ProfileEntry, "relation"> | null | undefined): boolean {
+  const rel = (profile?.relation ?? "").trim().toLowerCase();
+  return rel !== "" && PARTNER_RELATIONS.has(rel);
+}
+
+/** Native (self) profile for Ask — never a partner slot, even if marked primary. */
+export function resolveNativeAskProfile(
+  profiles: ProfileEntry[],
+  primaryProfileId: string | null,
+): ProfileEntry | null {
+  if (profiles.length === 0) return null;
+  const flaggedPrimary =
+    profiles.find((p) => p.id === primaryProfileId) ?? profiles[0] ?? null;
+  if (
+    flaggedPrimary &&
+    !isPartnerProfile(flaggedPrimary) &&
+    (flaggedPrimary.kundli?.planets?.length ?? 0) > 0
+  ) {
+    return flaggedPrimary;
+  }
+  const selfWithChart = profiles.find(
+    (p) => !isPartnerProfile(p) && (p.kundli?.planets?.length ?? 0) > 0,
+  );
+  if (selfWithChart) return selfWithChart;
+  if (flaggedPrimary && !isPartnerProfile(flaggedPrimary)) return flaggedPrimary;
+  return profiles.find((p) => !isPartnerProfile(p)) ?? flaggedPrimary;
+}
+
 /** True when user must complete birth profile (post-login onboarding). */
 export function needsProfileSetup(
   profiles: ProfileEntry[],
   primaryProfileId: string | null,
 ): boolean {
   if (profiles.length === 0) return true;
-  const primary =
-    profiles.find((p) => p.id === primaryProfileId) ?? profiles[0];
-  if (!primary?.birthData?.place || primary.birthData.lat == null) return true;
-  if (!primary.kundli?.planets?.length) return true;
+  const native = resolveNativeAskProfile(profiles, primaryProfileId);
+  if (!native?.birthData?.place || native.birthData.lat == null) return true;
+  if (!native.kundli?.planets?.length) return true;
   return false;
 }
 
@@ -130,6 +163,8 @@ interface UserContextType {
 
   // Cloud sync
   syncKundliToCloud: (bd: BirthData, k: KundliData) => Promise<void>;
+  /** Pull cloud profiles then push local — returns primary chart for Ask send. */
+  syncProfilesNow: () => Promise<{ chart: KundliData | null; birth: BirthData | null }>;
 
   // Dosh Analysis (auto-computed for primary kundli)
   doshData: DoshAnalysisResult | null;
@@ -233,16 +268,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // ── RTL boot enforcement (runs once, post-hydration) ──────────────
-        // If the saved language requires a different layout direction than
-        // I18nManager currently reports, silently apply forceRTL + reload.
-        // This mainly fires on the FIRST launch after the user previously
-        // selected Arabic in a session that ended before reload completed.
-        try {
-          const { applyRTLForLang } = await import("@/lib/rtl");
-          await applyRTLForLang(resolvedLang, { silent: true });
-        } catch (err) {
-          console.warn("[UserContext] boot RTL apply failed:", err);
+        // ── RTL boot enforcement (native only) ─────────────────────────────
+        // Web: skip — reload loops leave the Expo spinner spinning forever.
+        if (Platform.OS !== "web") {
+          try {
+            const { applyRTLForLang } = await import("@/lib/rtl");
+            await applyRTLForLang(resolvedLang, { silent: true });
+          } catch (err) {
+            console.warn("[UserContext] boot RTL apply failed:", err);
+          }
         }
 
         const storedLastId = lastUid ? parseInt(lastUid, 10) : null;
@@ -388,8 +422,35 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       if (cloudProfiles.length > 0) {
         const cloudIds = new Set(cloudProfiles.map((p) => p.id));
         const onlyOnDevice = local.filter((p) => !cloudIds.has(p.id));
+        const mergedFromCloud = cloudProfiles.map((cp) => {
+          const localMatch = local.find((lp) => lp.id === cp.id);
+          const localChart = localMatch?.kundli;
+          const cloudChart = cp.kundli;
+          const localBirth = localMatch?.birthData;
+          const cloudBirth = cp.birthData;
+          const birthSame =
+            localBirth &&
+            cloudBirth &&
+            localBirth.day === cloudBirth.day &&
+            localBirth.month === cloudBirth.month &&
+            localBirth.year === cloudBirth.year &&
+            localBirth.hour === cloudBirth.hour &&
+            localBirth.minute === cloudBirth.minute &&
+            localBirth.ampm === cloudBirth.ampm;
+          const keepLocalChart =
+            (localChart?.planets?.length ?? 0) > 0 &&
+            (!(cloudChart?.planets?.length ?? 0) || !birthSame);
+          if (keepLocalChart) {
+            return {
+              ...cp,
+              kundli: localChart,
+              birthData: localMatch?.birthData ?? cp.birthData,
+            };
+          }
+          return cp;
+        });
         const merged =
-          onlyOnDevice.length > 0 ? [...cloudProfiles, ...onlyOnDevice] : cloudProfiles;
+          onlyOnDevice.length > 0 ? [...mergedFromCloud, ...onlyOnDevice] : mergedFromCloud;
 
         _setProfiles(merged);
         profilesRef.current = merged;
@@ -416,10 +477,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     } catch { /* silent */ }
   }, [pushProfilesToCloud, invalidateDeletedAccount]);
 
+  const syncProfilesNow = useCallback(async (): Promise<{ chart: KundliData | null; birth: BirthData | null }> => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+    const currentUser = userRef.current;
+    // Push local first so cloud cannot overwrite a fresher on-device chart.
+    await pushProfilesToCloud(profilesRef.current, primaryIdRef.current);
+    if (currentUser?.id && currentUser?.api_key) {
+      await pullProfilesFromCloud(currentUser);
+    }
+    const prof = resolveNativeAskProfile(profilesRef.current, primaryIdRef.current);
+    return { chart: prof?.kundli ?? null, birth: prof?.birthData ?? null };
+  }, [pushProfilesToCloud, pullProfilesFromCloud]);
+
   // ── Derived values ─────────────────────────────────────────────────────────
   const primaryProfile = profiles.find(p => p.id === primaryId) ?? profiles[0] ?? null;
-  const birthData = primaryProfile?.birthData ?? null;
-  const kundli    = primaryProfile?.kundli ?? null;
+  const nativeAskProfile = resolveNativeAskProfile(profiles, primaryId);
+  const birthData = nativeAskProfile?.birthData ?? primaryProfile?.birthData ?? null;
+  const kundli    = nativeAskProfile?.kundli ?? primaryProfile?.kundli ?? null;
 
   const isIndia = isIndiaPlace(birthData?.place ?? "") ||
                   (birthData?.country ?? "").toLowerCase() === "in";
@@ -498,6 +575,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setPrimaryProfile = useCallback((id: string) => {
+    const target = profilesRef.current.find((p) => p.id === id);
+    if (target && isPartnerProfile(target)) return;
     _setPrimaryId(id);
     primaryIdRef.current = id;
     AsyncStorage.setItem(KEYS.primaryId, id).catch(() => {});
@@ -796,7 +875,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       profiles, primaryProfileId: primaryId,
       addProfile, updateProfile, deleteProfile, setPrimaryProfile,
       language, setLanguage, isIndia,
-      syncKundliToCloud,
+      syncKundliToCloud, syncProfilesNow,
       doshData, doshLoading,
       todayEnergy, moonData, isLoading,
       setUser, setTodayEnergy, setMoonData, logout,
@@ -806,7 +885,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       profiles, primaryId,
       addProfile, updateProfile, deleteProfile, setPrimaryProfile,
       language, setLanguage, isIndia,
-      syncKundliToCloud,
+      syncKundliToCloud, syncProfilesNow,
       doshData, doshLoading,
       todayEnergy, moonData, isLoading,
       setUser, setTodayEnergy, setMoonData, logout,

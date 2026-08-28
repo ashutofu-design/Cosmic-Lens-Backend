@@ -11,3 +11,6 @@ finance_static/_finance_money_cache.sqlite3
 finance_static/_finance_money_cache.sqlite3-*
 health_static/_health_static_cache.sqlite3
 health_static/_health_static_cache.sqlite3-*
+
+# Palm master-extraction session JSON (user scans)
+data/palm_scans/

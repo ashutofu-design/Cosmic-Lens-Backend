@@ -1,11 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import {
-  useAudioPlayer, useAudioPlayerStatus, useAudioRecorder,
-  setAudioModeAsync, requestRecordingPermissionsAsync,
-  RecordingPresets,
-} from "expo-audio";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,12 +20,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-// Edge-to-edge aware KeyboardAvoidingView. RN's built-in one relies on the
-// old Android `adjustResize` window shrink, which SDK 54 edge-to-edge
-// disables — so the input would hide behind the keyboard. This drop-in
-// (backed by the root <KeyboardProvider/>) tracks the keyboard frame
-// natively and pushes the input flush above it on both platforms.
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { AppKeyboardAvoidingView as KeyboardAvoidingView } from "@/components/AppKeyboardAvoidingView";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Reanimated, {
@@ -53,12 +43,13 @@ import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
 import { CardsCarousel, type CardData } from "@/components/CardsCarousel";
 import { MarkdownReply } from "@/components/MarkdownReply";
 import { useC } from "@/context/ThemeContext";
-import { useUser } from "@/context/UserContext";
+import { needsProfileSetup, resolveNativeAskProfile, useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { getT } from "@/lib/i18n";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useTabBar } from "@/context/TabBarContext";
 
+import { sanitizeAskAnswerForDisplay, askErrorToUserMessage } from "@/lib/askAnswerSanitize";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { V3LiveChat } from "@/components/V3LiveChat";
 import { presentV3ReadyNotification, setV3ReadyHandler } from "@/lib/notifications";
@@ -85,6 +76,35 @@ const V3_LIVE_PACKS = [
   { id: "60", minutes: 60, priceInr: 1299, label: "60 min",  timer: "60:00", feel: "Best value",      badge: "best" as const },
 ] as const;
 
+/** Smaller chart payload for /api/ask — avoids proxy body limits; server needs planets + dashas. */
+function slimKundliForAsk(k: Record<string, unknown>): Record<string, unknown> {
+  const planets = Array.isArray(k.planets) ? k.planets : [];
+  const dashas = Array.isArray(k.dashas) ? k.dashas : [];
+  const kp = k.kp && typeof k.kp === "object" ? (k.kp as Record<string, unknown>) : null;
+  return {
+    name: k.name,
+    ascendant: k.ascendant,
+    ascendantDeg: k.ascendantDeg,
+    nakshatra: k.nakshatra,
+    nakshatraPada: k.nakshatraPada,
+    moonSign: k.moonSign,
+    moonLongitude: k.moonLongitude,
+    sunSign: k.sunSign,
+    currentDasha: k.currentDasha,
+    planets,
+    dashas: dashas.slice(0, 12),
+    ...(kp
+      ? {
+          kp: {
+            planets: kp.planets,
+            cusps: kp.cusps,
+            ayanamsa: kp.ayanamsa,
+          },
+        }
+      : {}),
+  };
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -101,8 +121,8 @@ interface Message {
   subject?: string;
   // P6: v2 multi-intent response — when present, the bubble renders a
   // swipeable cards carousel instead of a single MarkdownReply. `text` is
-  // still populated with the legacy combined string so voice playback,
-  // copy, and regenerate continue to work unchanged.
+  // still populated with the legacy combined string so copy / regenerate
+  // continue to work unchanged.
   cards?: CardData[];
   trimmedCount?: number;
   responseSchema?: "v2";
@@ -120,6 +140,8 @@ interface Message {
   // details" button below the bubble that opens profile-edit pre-set
   // to the right relation slot.
   partnerCta?: { label: string; relation: string };
+  /** Fresh JSON answer — typewriter reveal before full markdown. */
+  revealAnswer?: boolean;
 }
 
 const DEMO_MESSAGES: Message[] = [
@@ -586,6 +608,59 @@ function TypewriterHeadline({
   );
 }
 
+/** One-by-one reveal for full Ask answers (JSON path — not SSE deltas). */
+function TypewriterAnswer({
+  text,
+  onComplete,
+}: {
+  text: string;
+  onComplete?: () => void;
+}) {
+  const C = useC();
+  const [shown, setShown] = useState("");
+  const [done, setDone] = useState(false);
+  const blink = useSharedValue(1);
+  useEffect(() => {
+    setShown("");
+    setDone(false);
+    let i = 0;
+    const step = text.length > 900 ? 3 : text.length > 450 ? 2 : 1;
+    const ms = text.length > 900 ? 22 : 32;
+    const id = setInterval(() => {
+      i += step;
+      setShown(text.slice(0, i));
+      if (i >= text.length) {
+        clearInterval(id);
+        setDone(true);
+        onComplete?.();
+      }
+    }, ms);
+    return () => clearInterval(id);
+  }, [text, onComplete]);
+  useEffect(() => {
+    blink.value = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 420 }),
+        withTiming(1, { duration: 420 }),
+      ),
+      -1,
+      false,
+    );
+  }, [blink]);
+  const cursorStyle = useAnimatedStyle(() => ({ opacity: blink.value }));
+  if (done) {
+    return <MarkdownReply text={text} />;
+  }
+  return (
+    <Text style={{ color: C.textMid, fontSize: 14.5, lineHeight: 21 }}>
+      {shown}
+      <Reanimated.Text style={[{ color: "#a78bfa", fontWeight: "300" }, cursorStyle]}>
+        |
+      </Reanimated.Text>
+    </Text>
+  );
+}
+
 /** Orbiting spark dots around the hero badge — reads as cosmic engine. */
 function OrbitBadgeShell({
   children,
@@ -651,6 +726,13 @@ const ASK_EXAMPLE_QUESTIONS = [
   "Is this marriage timing favourable?",
   "Which months look strong for money?",
   "How is my health dasha this year?",
+];
+
+/** Shown on the thinking bubble while the server generates a full JSON answer. */
+const ASK_WAIT_STATUS = [
+  "Aapki kundli padh raha hoon…",
+  "Dasha aur grah dekh raha hoon…",
+  "Cosmic Intelligence jawab taiyar kar rahi hai…",
 ];
 
 /** Rotating example questions under the subtitle — proves the engine is “thinking”. */
@@ -858,13 +940,31 @@ function VoiceWaveBar({
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, birthData, user, primaryProfileId } = useUser();
+  const { kundli, birthData, user, primaryProfileId, profiles, syncProfilesNow } = useUser();
   const t = useT();
   const routeParams = useLocalSearchParams<{ resumeV3?: string | string[] }>();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
-  const showDemo = !kundli;
+
+  const nativeAskProfile = useMemo(
+    () => resolveNativeAskProfile(profiles, primaryProfileId),
+    [profiles, primaryProfileId],
+  );
+
+  const askChart = useMemo(() => {
+    if (nativeAskProfile?.kundli?.planets?.length) return nativeAskProfile.kundli;
+    if (kundli?.planets?.length) return kundli;
+    return null;
+  }, [nativeAskProfile, kundli]);
+
+  const askBirthData = useMemo(
+    () => nativeAskProfile?.birthData ?? birthData,
+    [nativeAskProfile, birthData],
+  );
+
+  const chartReady = (askChart?.planets?.length ?? 0) > 0;
+  const showDemo = !chartReady;
 
   // ── Tab bar height (matches CustomTabBar.BAR_H = 84). Used for both
   // the input row's resting paddingBottom (clear the tab bar) and the
@@ -1159,7 +1259,15 @@ export default function AskScreen() {
           return;
         }
       } catch {
-        /* Cosmic Packs */
+        if (user?.id && user?.api_key) {
+          try {
+            const w = await hasActiveAskV1Wallet(user);
+            if (w.fetchOk === false || (w.active && w.questions_left > 0)) {
+              enterAskChat(lang);
+              return;
+            }
+          } catch { /* packs fallback */ }
+        }
       }
       router.push("/cosmic-packs?focus=v1" as any);
     },
@@ -1760,6 +1868,7 @@ export default function AskScreen() {
       if (snap) messagesRef.current = snap;
       try {
         const w = await hasActiveAskV1Wallet(user);
+        if (w.fetchOk === false) return;
         const stillHas =
           (Boolean(w.pack_active) && Number(w.questions_left || 0) > 0) ||
           Number(w.free_questions_left || 0) > 0;
@@ -1813,10 +1922,37 @@ export default function AskScreen() {
         return;
       }
 
+      let payloadKundli = askChart;
+      let payloadBirth = askBirthData;
+
+      if (user?.id && user?.api_key) {
+        const localReady = (payloadKundli?.planets?.length ?? 0) > 0;
+        // Skip network sync when local chart is ready — saves ~1–2s before send.
+        if (!localReady) {
+          const synced = await syncProfilesNow().catch(() => null);
+          const syncedReady = (synced?.chart?.planets?.length ?? 0) > 0;
+          if (syncedReady) {
+            payloadKundli = synced!.chart;
+            payloadBirth = synced!.birth ?? payloadBirth;
+          }
+        } else {
+          payloadKundli = askChart;
+          payloadBirth = askBirthData;
+        }
+      }
+
+      if (!payloadKundli?.planets?.length) {
+        router.push("/onboarding");
+        return;
+      }
+
+      const payloadKundliSlim = slimKundliForAsk(payloadKundli as Record<string, unknown>);
+
       // No credit → keep chat visible, ask to buy (don't wipe previous baat).
       if (user?.id && user?.api_key) {
         try {
-          const w = await hasActiveAskV1Wallet(user);
+        const w = await hasActiveAskV1Wallet(user);
+        if (w.fetchOk) {
           const stillHas =
             (Boolean(w.pack_active) && Number(w.questions_left || 0) > 0) ||
             Number(w.free_questions_left || 0) > 0;
@@ -1830,7 +1966,8 @@ export default function AskScreen() {
             });
             return;
           }
-        } catch { /* proceed; server 402 is fallback */ }
+        }
+      } catch { /* proceed; server 402 is fallback */ }
       }
 
       const isRegen = !!opts?.regenerate;
@@ -1887,6 +2024,17 @@ export default function AskScreen() {
       if (!isRegen) setInput("");
       setLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      let thinkStatusTimer: ReturnType<typeof setInterval> | null = null;
+      let thinkStep = 0;
+      thinkStatusTimer = setInterval(() => {
+        if (!isCurrent()) return;
+        thinkStep = Math.min(thinkStep + 1, ASK_WAIT_STATUS.length - 1);
+        const caption = ASK_WAIT_STATUS[thinkStep];
+        setMessages((prev) =>
+          prev.map((m) => (m.id === "thinking" ? { ...m, text: caption } : m)),
+        );
+      }, 2800);
 
       // ── Centralised failure handler ───────────────────────────────────
       // For regenerate: silently restore the original thread (no error
@@ -1945,8 +2093,8 @@ export default function AskScreen() {
           headers,
           body: JSON.stringify({
             question: text.trim(),
-            kundli,
-            birthData,
+            kundli: payloadKundliSlim,
+            birthData: payloadBirth,
             history,
             // Question script wins — picker is only a fallback when undetectable.
             lang: askLangToApi(
@@ -2033,17 +2181,52 @@ export default function AskScreen() {
           return;
         }
 
-        // ── One-shot JSON path (brand_guard / no_chart / marriage) ───────
-        if (!isStream) {
-          const json = await res.json().catch(() => null);
-          if (!isCurrent()) return;
+        const pickAnswerText = (json: any): string => {
+          const raw =
+            (typeof json?.text === "string" && json.text.trim()) ||
+            (typeof json?.answer === "string" && json.answer.trim()) ||
+            (typeof json?.response === "string" && json.response.trim()) ||
+            "";
+          return sanitizeAskAnswerForDisplay(raw);
+        };
+
+        const commitJsonAnswer = async (json: any) => {
           if (!json || typeof json !== "object") {
             failQuietly("Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
             return;
           }
-          const answer =
-            json.text ?? json.answer ?? json.response ??
-            "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.";
+          if (json.error === "daily_limit_reached" || json.upgrade_required === true) {
+            if (!isCurrent()) return;
+            const plan = String(json?.plan ?? "free");
+            if (plan === "ask_v1_pack" || plan === "free" || v1WalletBar) {
+              await endAskSessionBecauseEmpty({
+                used: json?.quota?.used ?? 0,
+                limit: json?.quota?.limit ?? 0,
+                plan: plan === "free" ? "free" : "ask_v1_pack",
+              });
+            } else {
+              setQuotaModal({
+                used: json?.quota?.used ?? 0,
+                limit: json?.quota?.limit ?? 0,
+                plan,
+                message: json?.message ?? t.askDailyLimitOver,
+              });
+            }
+            setMessages((prev) => prev.filter((m) => m.id !== "thinking"));
+            return;
+          }
+          const answer = pickAnswerText(json);
+          if (!answer) {
+            failQuietly(
+              askErrorToUserMessage(
+                typeof json?.error === "string" ? json.error : undefined,
+                typeof json?.message === "string" && json.message.trim()
+                  ? String(json.message)
+                  : undefined,
+              ),
+            );
+            return;
+          }
           const followUps: string[] = Array.isArray(json.follow_ups) ? json.follow_ups.slice(0, 3) : [];
           const dnaDomain = typeof (json as any).domain === "string" ? String((json as any).domain) : undefined;
           const dnaBucket = typeof (json as any).bucket === "string" ? String((json as any).bucket) : undefined;
@@ -2051,23 +2234,14 @@ export default function AskScreen() {
           const dnaArchetype = typeof (json as any).archetype === "string" ? String((json as any).archetype) : undefined;
           const dnaSubject = typeof (json as any).subject === "string" ? String((json as any).subject) : undefined;
 
-          // P6 — v2 multi-intent cards detection. When present, attach to
-          // the message so renderMsg switches to CardsCarousel. Legacy
-          // `text` is still kept for voice / copy / regenerate.
           const isV2     = json.response_schema === "v2"
                          && Array.isArray(json.cards)
                          && json.cards.length > 0;
           const cards: CardData[] | undefined = isV2 ? json.cards : undefined;
-          const trimmed = isV2 && typeof json.trimmed_count === "number"
+          const trimmedCount = isV2 && typeof json.trimmed_count === "number"
             ? json.trimmed_count
             : undefined;
 
-          // Phase 7.5 — clarifier UX. Server attaches a `clarification`
-          // object only when its classifier confidence was low. Defensive
-          // shape check + parity with the SSE parser: `clar` is left
-          // undefined unless the FILTERED options list (strings only,
-          // trimmed, non-empty) is itself non-empty. This avoids
-          // storing `{prompt, options: []}` shells in chat history.
           let clar: { prompt: string; options: string[] } | undefined;
           if (
             json.clarification &&
@@ -2084,11 +2258,6 @@ export default function AskScreen() {
             }
           }
 
-          // Phase 2.5.11.6 — partner CTA. Server returns this when the Q
-          // refers to a specific partner ("mere bf se shaadi hogi") but
-          // no partner profile is saved yet. We render an inline button
-          // below the bubble that opens profile-edit pre-set to the
-          // detected relation slot.
           let partnerCta: { label: string; relation: string } | undefined;
           if (
             (json as any).requires_partner_profile === true &&
@@ -2116,10 +2285,11 @@ export default function AskScreen() {
             archetype: dnaArchetype,
             subject: dnaSubject,
             cards,
-            trimmedCount: trimmed,
+            trimmedCount,
             responseSchema: isV2 ? "v2" : undefined,
             clarification: clar,
             partnerCta,
+            revealAnswer: true,
           };
           let snapForArchive: Message[] = messagesRef.current;
           setMessages(prev => {
@@ -2131,6 +2301,18 @@ export default function AskScreen() {
           void fetchHistory();
           void refreshV1WalletLabel();
           await finishAskIfWalletEmpty(snapForArchive);
+        };
+
+        // ── One-shot JSON path (raw passthrough / guards) ───────────────
+        // Peek body once so we can recover when a proxy mislabels JSON as SSE.
+        const rawBody = await res.text();
+        if (!isCurrent()) return;
+
+        const trimmedBody = rawBody.trim();
+        if (!isStream || (trimmedBody.startsWith("{") && !trimmedBody.includes("data:"))) {
+          let json: any = null;
+          try { json = JSON.parse(trimmedBody); } catch { json = null; }
+          await commitJsonAnswer(json);
           return;
         }
 
@@ -2146,23 +2328,9 @@ export default function AskScreen() {
           })
         );
 
-        // Feature detection — RN bridged fetch on some Expo Go builds buffers
-        // the entire body and exposes only .text(). Fall back to one-shot SSE
-        // parse so the user still gets the answer (just no token-by-token).
-        const reader: ReadableStreamDefaultReader<Uint8Array> | null =
-          (res.body && typeof (res.body as any).getReader === "function")
-            ? (res.body as any).getReader()
-            : null;
-
-        const decoder: TextDecoder | null =
-          typeof TextDecoder !== "undefined" ? new TextDecoder() : null;
-
         let accumulated     = "";
         let finalText       = "";
         let finalFollowUps: string[] = [];
-        // Phase 7.5 — clarifier UX (stream path). Server attaches the
-        // `clarification` field on the `done` event when its classifier
-        // confidence was low. Defensive parsing in the evt.done branch.
         let finalClarification: { prompt: string; options: string[] } | undefined;
         let finalDomain: string | undefined;
         let finalBucket: string | undefined;
@@ -2204,7 +2372,7 @@ export default function AskScreen() {
           if (evt.error) { midError = String(evt.error); return; }
           if (typeof evt.delta === "string" && evt.delta.length > 0) {
             accumulated += evt.delta;
-            if (!isCurrent()) return;       // drop stale paint
+            if (!isCurrent()) return;
             scheduleStreamPaint();
           }
           if (evt.done) {
@@ -2216,7 +2384,6 @@ export default function AskScreen() {
             if (typeof evt.topic === "string" && evt.topic.trim()) finalTopic = String(evt.topic);
             if (typeof evt.archetype === "string" && evt.archetype.trim()) finalArchetype = String(evt.archetype);
             if (typeof evt.subject === "string" && evt.subject.trim()) finalSubject = String(evt.subject);
-            // Phase 7.5 — clarifier (defensive shape check; absent → undefined)
             const _clar = (evt as any).clarification;
             if (
               _clar && typeof _clar === "object" &&
@@ -2233,42 +2400,24 @@ export default function AskScreen() {
           }
         };
 
-        if (reader && decoder) {
-          let buffer = "";
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            let nlnl: number;
-            while ((nlnl = buffer.indexOf("\n\n")) >= 0) {
-              const evtRaw = buffer.slice(0, nlnl);
-              buffer = buffer.slice(nlnl + 2);
-              handleEvent(evtRaw);
-            }
-          }
-          if (buffer.trim()) handleEvent(buffer);
-        } else {
-          // No streaming reader → fetch full body and parse all events.
-          const body = await res.text();
-          if (!isCurrent()) return;
-          for (const part of body.split("\n\n")) {
-            if (part.trim()) handleEvent(part);
-          }
+        // Body already buffered (RN often cannot stream) — parse all SSE events.
+        for (const part of rawBody.split("\n\n")) {
+          if (part.trim()) handleEvent(part);
         }
 
-        // Strict finalisation: a stream that never sent `done` is treated as
-        // a failure regardless of partial text — partial deltas have NOT been
-        // tone-scrubbed and may contain banned words. Trust only the server's
-        // `done.text` (post-scrub) for what we publish.
+        // No `done` event: keep usable partial text, else surface error.
         if (!sawDone) {
-          // Abort the bubble we created and route through the standard
-          // restore matrix (regen → restore original; fresh → error bubble).
-          if (isCurrent()) {
-            setMessages(prev => prev.filter(m => m.id !== newAssistantId));
+          const fallback = (accumulated || "").trim();
+          if (fallback.length > 20 && isCurrent()) {
+            finalText = fallback;
+            sawDone = true;
+          } else {
+            if (isCurrent()) {
+              setMessages(prev => prev.filter(m => m.id !== newAssistantId));
+            }
+            failQuietly(midError || "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
+            return;
           }
-          failQuietly(midError || "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
-          return;
         }
 
         // Stale check before final commit.
@@ -2286,9 +2435,8 @@ export default function AskScreen() {
           const next = [...prev];
           next[idx] = {
             ...next[idx],
-            // Phase 7.5 — clarifier (undefined when server omits / disabled)
             clarification: finalClarification,
-            text:      finalText || accumulated,
+            text:      sanitizeAskAnswerForDisplay(finalText || accumulated),
             followUps: finalFollowUps,
             topic: finalTopic || next[idx].topic,
             domain: finalDomain || finalTopic || next[idx].domain,
@@ -2302,8 +2450,6 @@ export default function AskScreen() {
         });
         void fetchHistory();
         void refreshV1WalletLabel();
-        // Pack/free wallet exhausted after this answer → archive, close, recharge.
-        // Do not require v1WalletBar (often null while label still loading).
         await finishAskIfWalletEmpty();
       } catch (e: any) {
         // Two abort cases to disambiguate:
@@ -2321,12 +2467,13 @@ export default function AskScreen() {
         }
         failQuietly("Network error — thodi der baad try karein.");
       } finally {
+        if (thinkStatusTimer) clearInterval(thinkStatusTimer);
         // Only the latest in-flight request clears the loading flag; older
         // (aborted) ones must not flip it off while a newer call is pending.
         if (isCurrent()) setLoading(false);
       }
     },
-    [loading, showDemo, kundli, birthData, user?.id, user?.api_key, askReplyLang, messages, t.askDailyLimitOver, fetchHistory, refreshV1WalletLabel, endAskSessionBecauseEmpty, finishAskIfWalletEmpty, v1WalletBar],
+    [loading, showDemo, askChart, askBirthData, user?.id, user?.api_key, syncProfilesNow, askReplyLang, messages, t.askDailyLimitOver, fetchHistory, refreshV1WalletLabel, endAskSessionBecauseEmpty, finishAskIfWalletEmpty, v1WalletBar],
   );
 
   // Latest assistant message id — only this one shows follow-up chips.
@@ -2337,151 +2484,6 @@ export default function AskScreen() {
     }
     return null;
   }, [messages]);
-
-  // ── Voice INPUT (mic → /api/stt) ─────────────────────────────────────────
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  // When user used mic, we auto-play the next assistant reply in voice.
-  const [autoSpeakNext, setAutoSpeakNext] = useState(false);
-  const lastSpokenIdRef = useRef<string | null>(null);
-
-  const startRecording = useCallback(async () => {
-    try {
-      if (showDemo) { router.push("/onboarding"); return; }
-      const perm = await requestRecordingPermissionsAsync();
-      if (!perm.granted) { return; }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      setIsRecording(true);
-    } catch {
-      setIsRecording(false);
-    }
-  }, [recorder, showDemo]);
-
-  const stopRecordingAndTranscribe = useCallback(async () => {
-    try {
-      try { Haptics.selectionAsync(); } catch {}
-      await recorder.stop();
-      setIsRecording(false);
-      const uri = recorder.uri;
-      if (!uri) return;
-
-      setIsTranscribing(true);
-      const form = new FormData();
-      // RN FormData with local file URI
-      form.append("audio", {
-        uri,
-        name: "speech.m4a",
-        type: "audio/m4a",
-      } as any);
-
-      const res = await fetch(`${API_BASE}/api/stt`, {
-        method: "POST",
-        body: form,
-      });
-      setIsTranscribing(false);
-      if (!res.ok) return;
-      const json = await res.json().catch(() => null);
-      const text = (json?.text || "").trim();
-      if (!text) return;
-
-      // Mark next assistant reply for auto-voice playback
-      setAutoSpeakNext(true);
-      send(text);
-    } catch {
-      setIsRecording(false);
-      setIsTranscribing(false);
-    }
-  }, [recorder, send]);
-
-  // ── Voice playback (TTS via /api/tts) ────────────────────────────────────
-  // One shared player. We swap its source per-message via .replace().
-  // NOTE: pass NO args (not `undefined`) — expo-audio 55's native bridge
-  // mis-counts args when `undefined` is forwarded explicitly, causing
-  // "Received 4 arguments, but 3 was expected" render error on iOS.
-  const ttsPlayer = useAudioPlayer();
-  const ttsStatus = useAudioPlayerStatus(ttsPlayer);
-  const [voiceMsgId, setVoiceMsgId] = useState<string | null>(null);
-  // States: idle | loading | playing
-  const [voiceState, setVoiceState] = useState<"idle" | "loading" | "playing">("idle");
-
-  // Configure audio mode once (play even in silent mode on iOS)
-  useEffect(() => {
-    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false }).catch(() => {});
-  }, []);
-
-  // Auto-stop tracking when audio ends
-  useEffect(() => {
-    if (voiceState === "playing" && ttsStatus && ttsStatus.didJustFinish) {
-      setVoiceState("idle");
-      setVoiceMsgId(null);
-    }
-  }, [ttsStatus?.didJustFinish, voiceState]);
-
-  const handleVoicePlay = useCallback(async (msg: Message) => {
-    try {
-      // Tap same playing message → stop
-      if (voiceMsgId === msg.id && voiceState === "playing") {
-        try { ttsPlayer.pause(); } catch {}
-        setVoiceState("idle"); setVoiceMsgId(null);
-        return;
-      }
-      // Strip markdown for cleaner speech
-      const cleanText = (msg.text || "")
-        .replace(/[*_`#>~]/g, "")
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-        .replace(/\n{2,}/g, ". ")
-        .trim();
-      if (!cleanText) return;
-
-      try { Haptics.selectionAsync(); } catch {}
-      setVoiceMsgId(msg.id);
-      setVoiceState("loading");
-
-      // POST text → server returns mp3 bytes. Convert to data URI for player.
-      const res = await fetch(`${API_BASE}/api/tts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: cleanText, voice: "nova" }),
-      });
-      if (!res.ok) {
-        setVoiceState("idle"); setVoiceMsgId(null);
-        return;
-      }
-      const blob = await res.blob();
-      // RN fetch returns Blob; convert to base64 data URI for the player
-      const reader = new FileReader();
-      const dataUri: string = await new Promise((resolve, reject) => {
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-
-      try { ttsPlayer.replace({ uri: dataUri }); } catch {}
-      try { ttsPlayer.seekTo(0); } catch {}
-      try { ttsPlayer.play(); } catch {}
-      setVoiceState("playing");
-    } catch {
-      setVoiceState("idle"); setVoiceMsgId(null);
-    }
-  }, [voiceMsgId, voiceState, ttsPlayer]);
-
-  // Auto-play voice for the next completed assistant reply when the user
-  // asked via mic. Trigger only once per reply (lastSpokenIdRef guard) and
-  // only after streaming finishes (text non-empty + not loading + not "thinking").
-  useEffect(() => {
-    if (!autoSpeakNext || loading) return;
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== "assistant" || last.id === "thinking" || last.loading) return;
-    if (!last.text?.trim()) return;
-    if (lastSpokenIdRef.current === last.id) return;
-    lastSpokenIdRef.current = last.id;
-    setAutoSpeakNext(false);
-    handleVoicePlay(last);
-  }, [autoSpeakNext, loading, messages, handleVoicePlay]);
 
   const renderMsg = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
@@ -2520,14 +2522,29 @@ export default function AskScreen() {
               ]}
             >
               {item.loading ? (
-                <AcharyaTypingDots caption="Cosmic Intelligence calculating…" />
+                <AcharyaTypingDots
+                  caption={item.text?.trim() || "Cosmic Intelligence calculating…"}
+                />
               ) : item.cards && item.cards.length > 0 ? (
                 <CardsCarousel
                   cards={item.cards}
                   trimmedCount={item.trimmedCount ?? 0}
                 />
+              ) : item.revealAnswer && isLatestAssistant ? (
+                <TypewriterAnswer
+                  text={sanitizeAskAnswerForDisplay(item.text)}
+                  onComplete={() => {
+                    setMessages((prev) => {
+                      const next = prev.map((m) =>
+                        m.id === item.id ? { ...m, revealAnswer: false } : m,
+                      );
+                      messagesRef.current = next;
+                      return next;
+                    });
+                  }}
+                />
               ) : (
-                <MarkdownReply text={item.text} />
+                <MarkdownReply text={sanitizeAskAnswerForDisplay(item.text)} />
               )}
             </LinearGradient>
           )}
@@ -3131,11 +3148,56 @@ export default function AskScreen() {
             </PressScale>
           </FadeInView>
 
+          <FadeInView delay={staggerDelay(4, 70, 140)}>
+            <PressScale
+              accessibilityLabel="Free Instagram Answers"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                if (showDemo) { router.push("/onboarding"); return; }
+                router.push("/instagram-answers");
+              }}
+              style={[s.modeCard, s.rectifyCard, { shadowColor: "#c13584" }]}
+            >
+              <LinearGradient
+                colors={["#4c1d95", "#833ab4", "#fd1d1d"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={s.rectifyGrad}
+              >
+                <CardShimmer />
+                <View style={s.modeIconWrap}>
+                  <FloatIcon delayMs={500}>
+                    <Text style={s.modeEmoji}>📱</Text>
+                  </FloatIcon>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={s.modeTitleRow}>
+                    <Text style={s.modeTitle}>Free Instagram Answers</Text>
+                    <PulsePill style={[s.modeBadge, { backgroundColor: "rgba(255,255,255,0.22)" }]}>
+                      <Text style={s.modeBadgeText}>FREE</Text>
+                    </PulsePill>
+                  </View>
+                  <Text style={s.modeBody}>
+                    Type exact words like an Instagram DM — saved auto-reply from our reel library. Free, no pack.
+                  </Text>
+                  <View style={s.modeMeta}>
+                    <Feather name="smartphone" size={11} color="#ffffffcc" />
+                    <Text style={s.modeMetaText}>DM trigger → auto-reply · Reel # + exact words</Text>
+                  </View>
+                  <View style={s.rectifyCtaRow}>
+                    <Text style={s.rectifyCtaOnGrad}>Get free answer</Text>
+                    <Feather name="arrow-right" size={14} color="#fff" />
+                  </View>
+                </View>
+              </LinearGradient>
+            </PressScale>
+          </FadeInView>
+
           {/* Recent Questions MOVED into the chat view (fresh-thread only).
               Landing picker now stays focused on the mode cards. */}
 
           {/* Optional: small Divya Prashna link (legacy, less prominent) */}
-          <FadeInView delay={staggerDelay(4, 70, 140)}>
+          <FadeInView delay={staggerDelay(5, 70, 160)}>
             <Pressable
             onPress={() => {
               Haptics.selectionAsync();
@@ -3201,16 +3263,6 @@ export default function AskScreen() {
         </View>
       )}
 
-      {/* Recording / transcribing banner */}
-      {(isRecording || isTranscribing) && (
-        <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: C.bgCard, borderTopWidth: 1, borderTopColor: C.border, flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: isRecording ? "#E53935" : C.accent }} />
-          <Text style={{ color: C.text, fontSize: 13, fontWeight: "600" }}>
-            {isRecording ? "Sun raha hoon… dobara mic dabao stop ke liye" : "Samajh raha hoon…"}
-          </Text>
-        </View>
-      )}
-
       {/* Phase 6.1.1 selector REMOVED (May 6 2026) — Ask section ab
           hamesha primary kundli use karega. Profile switching ab sirf
           Profile/My-Kundli screen se hota hai. Reason: users confuse
@@ -3233,10 +3285,10 @@ export default function AskScreen() {
           ]}
           value={input}
           onChangeText={setInput}
-          placeholder={isRecording ? "Bol rahe ho…" : t.askPlaceholder}
+          placeholder={t.askPlaceholder}
           placeholderTextColor={C.textMuted}
           multiline
-          editable={!showDemo && !isRecording && !isTranscribing}
+          editable={!showDemo}
           onSubmitEditing={() => send(input)}
           returnKeyType="send"
         />
@@ -3248,7 +3300,6 @@ export default function AskScreen() {
             s.sendBtnGlow,
             pressed && { opacity: 0.9, transform: [{ scale: 0.92 }] },
           ]}
-          disabled={isRecording || isTranscribing}
         >
           <LinearGradient
             colors={[C.btnGradStart, C.btnGradEnd]}
@@ -4616,13 +4667,6 @@ const s = StyleSheet.create({
   sendBtnGlow: {
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.55,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  micBtnRecGlow: {
-    shadowColor: "#E53935",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
     shadowRadius: 12,
     elevation: 8,
   },

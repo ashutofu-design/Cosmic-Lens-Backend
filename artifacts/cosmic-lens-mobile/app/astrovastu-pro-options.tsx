@@ -82,7 +82,10 @@ export default function AstroVastuProOptions() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]}
+        style={{ flex: 1, minHeight: 0 }}
+        contentContainerStyle={[s.content, { paddingBottom: botPad + 30, flexGrow: 1 }]}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {/* ── HOME VASTU ADVANCED ── */}
@@ -220,7 +223,7 @@ function Bullet({ C, text, color }: { C: any; text: string; color: string }) {
 }
 
 const s = StyleSheet.create({
-  root:           { flex: 1 },
+  root:           { flex: 1, minHeight: 0 },
   header:         { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
   back:           { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   title:          { fontSize: 16, fontWeight: "800" },

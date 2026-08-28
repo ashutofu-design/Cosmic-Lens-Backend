@@ -117,7 +117,18 @@ def register_couple_report_routes(app) -> None:
         if not isinstance(p1, dict) or not isinstance(p2, dict):
             return jsonify({"error": "expected_p1_p2"}), 400
 
-        payload, perr = billing.create_purchase_intent(user.id, product, p1, p2, lang)
+        deliverable = billing.normalize_deliverable(data.get("deliverable"))
+        urgent = bool(data.get("urgent"))
+
+        payload, perr = billing.create_purchase_intent(
+            user.id,
+            product,
+            p1,
+            p2,
+            lang,
+            deliverable=deliverable,
+            urgent=urgent,
+        )
         if perr:
             return jsonify({"error": perr}), 400
         if payload.get("already_entitled"):

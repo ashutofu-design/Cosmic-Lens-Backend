@@ -29,9 +29,17 @@ export async function hasActiveAskV1Wallet(
   pack_active?: boolean;
   pack_id?: string;
   expires_at?: string | null;
+  /** False when wallet API failed — caller must not block Ask; let server decide quota. */
+  fetchOk: boolean;
 }> {
   if (!user?.id || !user.api_key) {
-    return { active: false, questions_left: 0, free_questions_left: 0, free_questions_used: 0 };
+    return {
+      active: false,
+      questions_left: 0,
+      free_questions_left: 0,
+      free_questions_used: 0,
+      fetchOk: true,
+    };
   }
   try {
     const w = await fetchAskV1Wallet(user);
@@ -57,13 +65,15 @@ export async function hasActiveAskV1Wallet(
       free_questions_left: freeLeft,
       free_questions_used: freeUsed,
       expires_at: packActive ? w.expires_at : null,
+      fetchOk: true,
     };
   } catch {
     return {
-      active: false,
-      questions_left: 0,
-      free_questions_left: 0,
+      active: true,
+      questions_left: 1,
+      free_questions_left: 1,
       free_questions_used: 0,
+      fetchOk: false,
     };
   }
 }

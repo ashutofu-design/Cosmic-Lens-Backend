@@ -213,7 +213,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               if (showMore) {
-                moreDrawerRef.current?.close();
+                moreDrawerRef.current?.close(() => setStateShowMore(false));
               } else {
                 setStateShowMore(true);
               }

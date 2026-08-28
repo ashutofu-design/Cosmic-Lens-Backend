@@ -79,7 +79,10 @@ class TestRelationshipSelectedAndDna(unittest.TestCase):
             relationship_dna_judge_enabled,
         )
 
+        self.assertFalse(relationship_dna_judge_enabled())
+        os.environ["ASK_MR_DNA_JUDGE"] = "1"
         self.assertTrue(relationship_dna_judge_enabled())
+        os.environ.pop("ASK_MR_DNA_JUDGE", None)
         prompt = build_relationship_dna_judge_prompt(
             question="partner loyal hai kya",
             answer="Haan Venus 7th me strong hai.",

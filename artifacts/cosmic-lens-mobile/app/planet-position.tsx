@@ -272,6 +272,102 @@ export default function PlanetPositionScreen() {
                 )}
               </View>
 
+              {snapshotRows.length > 0 ? (
+                <View
+                  style={{
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    overflow: "hidden",
+                    backgroundColor: C.bgCard,
+                    borderColor: C.border,
+                    marginTop: 4,
+                    marginBottom: 8,
+                  }}
+                >
+                  <View
+                    style={{
+                      backgroundColor: C.isDark ? "rgba(6,182,212,0.12)" : "rgba(6,182,212,0.1)",
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderBottomWidth: 1,
+                      borderBottomColor: C.border,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Feather name="book-open" size={13} color="#06b6d4" />
+                    <Text style={{ color: "#06b6d4", fontSize: 11, fontFamily: F.bold, letterSpacing: 1 }}>
+                      {L.birthChartSnap}
+                    </Text>
+                  </View>
+                  {snapshotRows.map(({ label, value, icon }, idx) => (
+                    <View
+                      key={label}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: 10,
+                        paddingHorizontal: 14,
+                        gap: 10,
+                        backgroundColor:
+                          idx % 2 === 0
+                            ? "transparent"
+                            : C.isDark
+                              ? "rgba(6,182,212,0.05)"
+                              : "rgba(6,182,212,0.06)",
+                        borderBottomWidth: idx < snapshotRows.length - 1 ? 1 : 0,
+                        borderBottomColor: C.border,
+                      }}
+                    >
+                      <Feather name={icon} size={12} color={C.textMid} />
+                      <Text
+                        style={{
+                          color: C.textMid,
+                          fontSize: 10,
+                          fontFamily: F.bold,
+                          letterSpacing: 0.5,
+                          flex: 1,
+                        }}
+                      >
+                        {label}
+                      </Text>
+                      <Text style={{ color: C.text, fontSize: 13, fontFamily: F.semibold }} numberOfLines={1}>
+                        {value}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {kundli?.dashas?.length ? (
+                <View style={{ gap: 10, marginTop: 4, marginBottom: 8 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Feather name="clock" size={13} color="#06b6d4" />
+                    <Text
+                      style={{
+                        color: "#06b6d4",
+                        fontSize: 12,
+                        fontFamily: F.bold,
+                        letterSpacing: 2,
+                        flex: 1,
+                      }}
+                    >
+                      {L.secDashaTimeline}
+                    </Text>
+                  </View>
+                  <DashaTab
+                    kundli={kundli}
+                    mahaIdx={mahaIdx}
+                    setMahaIdx={setMahaIdx}
+                    antarIdx={antarIdx}
+                    setAntarIdx={setAntarIdx}
+                    pratIdx={pratIdx}
+                    setPratIdx={setPratIdx}
+                  />
+                </View>
+              ) : null}
+
               {planets.map((p) => (
                 <PlanetPositionCard key={p.name} planet={p} sunLon={sunLon} mode="d1" />
               ))}

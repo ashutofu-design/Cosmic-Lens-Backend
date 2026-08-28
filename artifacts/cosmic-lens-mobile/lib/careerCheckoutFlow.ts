@@ -12,9 +12,9 @@ import {
 
 type AuthUser = { id: number; api_key?: string | null };
 
-/** Set false when Razorpay career unlock is live in production. */
+/** Set true only for local QA — skips Razorpay. */
 export const CAREER_CHECKOUT_CONFIG = {
-  bypassCheckoutForTesting: true,
+  bypassCheckoutForTesting: false,
 } as const;
 
 /** Life Map → Career: check access or open career directly (no Razorpay gate in dev). */

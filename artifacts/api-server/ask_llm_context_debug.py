@@ -1477,6 +1477,11 @@ def recompute_marriage_bcp_from_kundli(
         ctx, question_text=question_text, topic=topic,
     ):
         return ctx
+    sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+    sa = sm.get("step_audit") if isinstance(sm.get("step_audit"), dict) else {}
+    if ctx.get("bcp_marriage_ages") or sm.get("bcp_marriage_ages"):
+        if sa.get("step0") or sa.get("step0a") or sa.get("step3"):
+            return ctx
     lagna_si = _resolve_lagna_si_for_admin(chart)
     if lagna_si is None:
         print(
@@ -2783,6 +2788,16 @@ def build_admin_llm_context(
             "d1_health_facts",
             "d9_health_facts",
             "health_engine_execution",
+            "health_selected_blocks_preview",
+            "health_selected_blocks",
+            "relationship_selected_blocks_preview",
+            "relationship_selected_blocks",
+            "finance_selected_blocks_preview",
+            "finance_selected_blocks",
+            "travel_selected_blocks_preview",
+            "travel_selected_blocks",
+            "general_selected_blocks_preview",
+            "general_selected_blocks",
             "scorecard",
             "primary_score",
             "commitment_level",

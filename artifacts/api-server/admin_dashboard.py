@@ -7,11 +7,37 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import report_cache as rc
+
+_DASHBOARD_CACHE_TTL_S = float(os.environ.get("ADMIN_DASHBOARD_CACHE_TTL_S", "45"))
+_dashboard_cache: dict[str, Any] = {"at": 0.0, "payload": None}
+
+
+def resolve_login_activity_display(
+    row: Any,
+    user: Any | None = None,
+) -> dict[str, str]:
+    """Map login_activity row + optional User → method label and identifier for admin UI."""
+    provider = str(getattr(row, "provider", None) or "").strip().lower()
+    row_email = str(getattr(row, "email", None) or "").strip()
+    user_email = str(getattr(user, "email", None) or "").strip() if user else ""
+    user_phone = str(getattr(user, "phone", None) or "").strip() if user else ""
+    email = row_email or user_email
+
+    if provider == "google" or ("@" in email and provider != "phone"):
+        return {"login_method": "gmail", "login_id": email}
+    if provider == "phone" or user_phone:
+        return {"login_method": "phone", "login_id": user_phone or email}
+    if "@" in email:
+        return {"login_method": "gmail", "login_id": email}
+    if email:
+        return {"login_method": "gmail", "login_id": email}
+    return {"login_method": "unknown", "login_id": user_phone or "—"}
 
 _UTC = timezone.utc
 
@@ -230,10 +256,22 @@ def _sum_amount(rows: list, amount_attr: str = "amount", since: datetime | None 
     return total
 
 
-def build_dashboard(db_session) -> dict[str, Any]:
+def build_dashboard(db_session, *, force_refresh: bool = False) -> dict[str, Any]:
+    now_ts = time.time()
+    cached = _dashboard_cache.get("payload")
+    if (
+        not force_refresh
+        and cached
+        and now_ts - float(_dashboard_cache.get("at") or 0.0) < _DASHBOARD_CACHE_TTL_S
+    ):
+        return cached
+
+    from sqlalchemy import func
+
     from models import (
         AstroVastuPurchase,
         CoupleReportPurchase,
+        Kundli,
         Profile,
         User,
     )
@@ -244,20 +282,26 @@ def build_dashboard(db_session) -> dict[str, Any]:
     start_month = _since(days=30)
 
     total_users = User.query.count()
+    pro_users = User.query.filter_by(is_pro=True).count()
+    active_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    active_today = User.query.filter(User.last_active >= active_cutoff).count()
+    total_kundli = Kundli.query.count()
 
-    # ── Payments from DB tables ─────────────────────────────────────────────
-    try:
-        couple_paid = CoupleReportPurchase.query.filter_by(status="paid").all()
-    except Exception:
-        couple_paid = []
-    try:
-        av_paid = AstroVastuPurchase.query.filter_by(status="paid").all()
-    except Exception:
-        av_paid = []
+    # ── Payments from DB tables (SQL aggregates — avoid loading all rows) ───
+    def _sum_couple_since(since: datetime | None) -> int:
+        q = CoupleReportPurchase.query.filter_by(status="paid")
+        if since is not None:
+            q = q.filter(CoupleReportPurchase.paid_at >= since)
+        return int(q.with_entities(func.coalesce(func.sum(CoupleReportPurchase.amount), 0)).scalar() or 0)
+
+    def _sum_av_since(since: datetime | None) -> int:
+        q = AstroVastuPurchase.query.filter_by(status="paid")
+        if since is not None:
+            q = q.filter(AstroVastuPurchase.paid_at >= since)
+        return int(q.with_entities(func.coalesce(func.sum(AstroVastuPurchase.amount), 0)).scalar() or 0)
 
     def payment_totals(since: datetime | None) -> int:
-        t = _sum_amount(couple_paid, since=since) + _sum_amount(av_paid, since=since)
-        # Career one-time unlocks (stored on user row, not purchase table)
+        t = _sum_couple_since(since) + _sum_av_since(since)
         try:
             from career_billing import price_inr as career_price
 
@@ -268,15 +312,18 @@ def build_dashboard(db_session) -> dict[str, Any]:
         if since is not None:
             career_q = career_q.filter(User.career_unlocked_at >= since)
         t += career_q.count() * career_amt
-        # Property unlock amounts
         try:
             from models import AstroVastuPropertyUnlock
 
-            for row in AstroVastuPropertyUnlock.query.all():
-                paid = getattr(row, "unlocked_at", None)
-                if since is not None and not _in_range(paid, since):
-                    continue
-                t += int(getattr(row, "amount_paid", 0) or 0)
+            pu_q = AstroVastuPropertyUnlock.query
+            if since is not None:
+                pu_q = pu_q.filter(AstroVastuPropertyUnlock.unlocked_at >= since)
+            t += int(
+                pu_q.with_entities(
+                    func.coalesce(func.sum(AstroVastuPropertyUnlock.amount_paid), 0)
+                ).scalar()
+                or 0
+            )
         except Exception:
             pass
         return t
@@ -290,11 +337,27 @@ def build_dashboard(db_session) -> dict[str, Any]:
 
     # ── Per-product purchase counts (paid) ───────────────────────────────────
     product_counts: Counter[str] = Counter()
-    for row in couple_paid:
-        product_counts[row.product or "unknown"] += 1
+    try:
+        for product, cnt in (
+            CoupleReportPurchase.query.filter_by(status="paid")
+            .with_entities(CoupleReportPurchase.product, func.count())
+            .group_by(CoupleReportPurchase.product)
+            .all()
+        ):
+            product_counts[product or "unknown"] += int(cnt or 0)
+    except Exception:
+        pass
     av_sku_counts: Counter[str] = Counter()
-    for row in av_paid:
-        av_sku_counts[row.sku or "unknown"] += 1
+    try:
+        for sku, cnt in (
+            AstroVastuPurchase.query.filter_by(status="paid")
+            .with_entities(AstroVastuPurchase.sku, func.count())
+            .group_by(AstroVastuPurchase.sku)
+            .all()
+        ):
+            av_sku_counts[sku or "unknown"] += int(cnt or 0)
+    except Exception:
+        pass
 
     purchases_by_product = [
         {
@@ -338,9 +401,12 @@ def build_dashboard(db_session) -> dict[str, Any]:
     for u in User.query.with_entities(User.plan).all():
         plan_counts[(u.plan or "free").lower()] += 1
 
-    return {
+    payload = {
         "generated_at": now.isoformat() + "Z",
         "total_users": total_users,
+        "pro_users": pro_users,
+        "active_today": active_today,
+        "total_kundli": total_kundli,
         "payments": payments,
         "purchases_by_product": purchases_by_product,
         "astrovastu_purchases": astrovastu_purchases,
@@ -352,10 +418,14 @@ def build_dashboard(db_session) -> dict[str, Any]:
         },
         "subscriptions": {
             "enabled": True,
-            "message": "Gmail sign-in only (no OTP). Plan counts = current labels on user accounts.",
+            "message": "Plan counts = current labels on user accounts (phone + Gmail login).",
             "plan_counts": dict(plan_counts),
         },
     }
+
+    _dashboard_cache["at"] = now_ts
+    _dashboard_cache["payload"] = payload
+    return payload
 
 
 def build_users_list(
@@ -375,7 +445,6 @@ def build_users_list(
         like = f"%{search}%"
         query = query.filter(
             (User.name.ilike(like))
-            | (User.phone.ilike(like))
             | (User.email.ilike(like))
         )
     plan_filter = (plan or "").strip().lower()
@@ -414,7 +483,6 @@ def build_users_list(
             {
                 "id": u.id,
                 "name": u.name or "",
-                "phone": u.phone or "",
                 "email": u.email or "",
                 "plan": u.plan or "free",
                 "plan_expiry": u.plan_expiry.isoformat() if u.plan_expiry else None,
@@ -443,9 +511,118 @@ def build_users_list(
     }
 
 
+def _service_queues_for_user(user_id: int) -> list[dict[str, Any]]:
+    """File-queue intakes linked to a user (not Razorpay purchase rows)."""
+    rows: list[dict[str, Any]] = []
+
+    def _match(uid: Any) -> bool:
+        try:
+            return int(uid or 0) == int(user_id)
+        except (TypeError, ValueError):
+            return False
+
+    try:
+        from love_reality_human_orders import list_human_orders
+
+        for row in list_human_orders(page=1, per_page=100).get("orders") or []:
+            if _match(row.get("user_id")):
+                rows.append(
+                    {
+                        "kind": "love_reality_human",
+                        "label": "Love Reality founder PDF",
+                        "ref": row.get("order_id") or "",
+                        "status": row.get("status") or "",
+                        "created_at": row.get("created_at"),
+                        "detail": f"{row.get('p1_name') or '—'} & {row.get('p2_name') or '—'}",
+                    }
+                )
+    except Exception:
+        pass
+
+    try:
+        from milan_human_orders import list_milan_human_orders
+
+        for row in list_milan_human_orders(page=1, per_page=100).get("orders") or []:
+            if _match(row.get("user_id")):
+                rows.append(
+                    {
+                        "kind": "milan_human",
+                        "label": "Kundli Milan founder PDF",
+                        "ref": row.get("order_id") or "",
+                        "status": row.get("status") or "",
+                        "created_at": row.get("created_at"),
+                        "detail": f"{row.get('p1_name') or '—'} & {row.get('p2_name') or '—'}",
+                    }
+                )
+    except Exception:
+        pass
+
+    try:
+        from business_vastu_human_orders import list_business_vastu_orders
+
+        for row in list_business_vastu_orders(page=1, per_page=100).get("orders") or []:
+            if _match(row.get("user_id")):
+                rows.append(
+                    {
+                        "kind": "business_vastu",
+                        "label": "Business Vastu intake",
+                        "ref": row.get("order_id") or "",
+                        "status": row.get("status") or "",
+                        "created_at": row.get("created_at"),
+                        "detail": row.get("property_name") or row.get("business_type") or "",
+                    }
+                )
+    except Exception:
+        pass
+
+    try:
+        from birth_time_rectification_orders import list_birth_time_rectification_orders
+
+        for row in list_birth_time_rectification_orders(page=1, per_page=100).get(
+            "orders"
+        ) or []:
+            if _match(row.get("user_id")):
+                rows.append(
+                    {
+                        "kind": "birth_time_rectification",
+                        "label": "Birth Time Rectification",
+                        "ref": row.get("order_id") or "",
+                        "status": row.get("status") or "",
+                        "created_at": row.get("created_at"),
+                        "detail": row.get("full_name") or "",
+                    }
+                )
+    except Exception:
+        pass
+
+    try:
+        from cosmic_intelligence_v3_sessions import list_v3_sessions
+
+        for row in list_v3_sessions(page=1, per_page=100).get("sessions") or []:
+            if _match(row.get("user_id")):
+                rows.append(
+                    {
+                        "kind": "v3_live",
+                        "label": "V3 Live Chat",
+                        "ref": row.get("session_id") or "",
+                        "status": row.get("status") or "",
+                        "created_at": row.get("created_at"),
+                        "detail": row.get("label") or f"{row.get('minutes') or '—'} min",
+                    }
+                )
+    except Exception:
+        pass
+
+    rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+    return rows[:40]
+
+
 def build_user_detail(user_id: int) -> dict[str, Any] | None:
+    from datetime import datetime, timedelta
+
     from database import db
     from models import (
+        AppUsageDay,
         AstroVastuPurchase,
         CoupleReportPurchase,
         Kundli,
@@ -490,6 +667,88 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
         reports = []
 
     try:
+        from purchase_history import build_user_purchase_history
+
+        purchase_history = build_user_purchase_history(user_id)
+    except Exception:
+        purchase_history = []
+
+    try:
+        today_ist = (datetime.utcnow() + timedelta(hours=5, minutes=30)).date()
+        since = (today_ist - timedelta(days=29)).isoformat()
+        usage_rows = (
+            AppUsageDay.query.filter(
+                AppUsageDay.user_id == user_id,
+                AppUsageDay.usage_date >= since,
+            )
+            .order_by(AppUsageDay.usage_date.desc())
+            .all()
+        )
+    except Exception:
+        usage_rows = []
+        today_ist = (datetime.utcnow() + timedelta(hours=5, minutes=30)).date()
+
+    usage_total = sum(max(0, int(row.foreground_seconds or 0)) for row in usage_rows)
+    active_days = len([row for row in usage_rows if (row.foreground_seconds or 0) > 0])
+    today_usage = next(
+        (
+            max(0, int(row.foreground_seconds or 0))
+            for row in usage_rows
+            if row.usage_date == today_ist.isoformat()
+        ),
+        0,
+    )
+    seven_day_cutoff = (today_ist - timedelta(days=6)).isoformat()
+    seven_day_total = sum(
+        max(0, int(row.foreground_seconds or 0))
+        for row in usage_rows
+        if row.usage_date >= seven_day_cutoff
+    )
+    bought_couple_products = {row.product for row in couple_paid}
+    has_astrovastu_purchase = bool(av_paid)
+    has_gemstone_purchase = any(
+        row.get("kind") == "gemstone" for row in purchase_history
+    )
+    product_access = [
+        {
+            "key": "subscription",
+            "label": "Paid subscription",
+            "owned": bool(user.plan and user.plan != "free"),
+            "detail": (user.plan or "free").title(),
+        },
+        {
+            "key": "milan_pro",
+            "label": "Kundli Milan Pro PDF",
+            "owned": "milan_pro" in bought_couple_products,
+            "detail": "",
+        },
+        {
+            "key": "love_reality_pro",
+            "label": "Love Compatibility PDF",
+            "owned": "love_reality_pro" in bought_couple_products,
+            "detail": "",
+        },
+        {
+            "key": "astrovastu",
+            "label": "AstroVastu purchase",
+            "owned": has_astrovastu_purchase,
+            "detail": "",
+        },
+        {
+            "key": "career",
+            "label": "Career Life Map",
+            "owned": bool(user.career_unlocked),
+            "detail": "",
+        },
+        {
+            "key": "gemstone",
+            "label": "Gemstone order",
+            "owned": has_gemstone_purchase,
+            "detail": "",
+        },
+    ]
+
+    try:
         recent_logins = (
             LoginActivity.query.filter_by(user_id=user_id)
             .order_by(LoginActivity.created_at.desc())
@@ -513,14 +772,95 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
             "has_chart": bool(kun.chart_data),
         }
 
+    pack_referral: dict[str, Any] = {
+        "referral_code": f"CL{int(user_id)}",
+        "referred_by_user_id": getattr(user, "referred_by_user_id", None),
+        "friends_signed_up": 0,
+        "friends_converted": 0,
+        "questions_earned": 0,
+        "bonus_questions_left": int(getattr(user, "ask_v1_bonus_questions", 0) or 0),
+        "recent_signups": [],
+        "recent_conversions": [],
+    }
+    try:
+        from pack_referral import referral_code_for_user
+
+        pack_referral["referral_code"] = referral_code_for_user(int(user_id))
+    except Exception:
+        pass
+    try:
+        from models import PackReferralReward
+
+        signed_up = (
+            User.query.filter_by(referred_by_user_id=user_id)
+            .order_by(User.created_at.desc())
+            .limit(20)
+            .all()
+        )
+        pack_referral["friends_signed_up"] = User.query.filter_by(
+            referred_by_user_id=user_id
+        ).count()
+        pack_referral["recent_signups"] = [
+            {
+                "user_id": u.id,
+                "name": u.name or "",
+                "email": u.email or "",
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in signed_up
+        ]
+        rewards = (
+            PackReferralReward.query.filter_by(referrer_user_id=user_id)
+            .order_by(PackReferralReward.created_at.desc())
+            .limit(20)
+            .all()
+        )
+        pack_referral["friends_converted"] = PackReferralReward.query.filter_by(
+            referrer_user_id=user_id
+        ).count()
+        try:
+            from sqlalchemy import func
+
+            earned_total = (
+                db.session.query(
+                    func.coalesce(func.sum(PackReferralReward.questions_granted), 0)
+                )
+                .filter(PackReferralReward.referrer_user_id == user_id)
+                .scalar()
+            )
+            pack_referral["questions_earned"] = int(earned_total or 0)
+        except Exception:
+            pack_referral["questions_earned"] = sum(
+                int(r.questions_granted or 0) for r in rewards
+            )
+        pack_referral["recent_conversions"] = [
+            {
+                "buyer_user_id": r.buyer_user_id,
+                "source_kind": r.source_kind,
+                "questions_granted": int(r.questions_granted or 0),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rewards
+        ]
+    except Exception:
+        pass
+
     return {
         "user": {
             "id": user.id,
+            "cosmo_user_id": (getattr(user, "cosmo_user_id", None) or "").strip(),
             "name": user.name,
-            "phone": user.phone or "",
             "email": user.email or "",
             "plan": user.plan,
             "plan_expiry": user.plan_expiry.isoformat() if user.plan_expiry else None,
+            "preferred_language": getattr(user, "preferred_language", None),
+            "daily_questions_used": int(getattr(user, "daily_questions_used", 0) or 0),
+            "daily_questions_date": getattr(user, "daily_questions_date", "") or "",
+            "daily_kundlis_used": int(getattr(user, "daily_kundlis_used", 0) or 0),
+            "daily_kundlis_date": getattr(user, "daily_kundlis_date", "") or "",
+            "astrovastu_room_credits": int(
+                getattr(user, "astrovastu_room_credits", 0) or 0
+            ),
             "last_login": (user.last_active or user.created_at).isoformat()
             if (user.last_active or user.created_at)
             else None,
@@ -540,6 +880,7 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
                 "ip": row.ip or "",
                 "success": bool(row.success),
                 "created_at": row.created_at.isoformat() if row.created_at else None,
+                **resolve_login_activity_display(row, user),
             }
             for row in recent_logins
         ],
@@ -561,6 +902,34 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
             }
             for r in av_paid
         ],
+        "purchase_history": purchase_history,
+        "purchase_summary": {
+            "total_orders": len(purchase_history),
+            "total_spent_inr": sum(
+                max(0, int(row.get("amount_inr") or 0)) for row in purchase_history
+            ),
+        },
+        "product_access": product_access,
+        "service_queues": _service_queues_for_user(user_id),
+        "app_usage": {
+            "tracking_started": bool(usage_rows),
+            "today_seconds": today_usage,
+            "last_7_days_seconds": seven_day_total,
+            "last_30_days_seconds": usage_total,
+            "active_days_last_30": active_days,
+            "avg_seconds_per_active_day": round(usage_total / active_days)
+            if active_days
+            else 0,
+            "daily": [
+                {
+                    "date": row.usage_date,
+                    "seconds": max(0, int(row.foreground_seconds or 0)),
+                    "sessions": max(0, int(row.session_count or 0)),
+                }
+                for row in usage_rows[:14]
+            ],
+        },
+        "pack_referral": pack_referral,
         "cached_reports": reports,
     }
 

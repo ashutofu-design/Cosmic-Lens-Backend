@@ -21,7 +21,7 @@ from database import db
 
 def ask_quota_bypass() -> bool:
     """Testing/dev: unlimited Ask questions (no daily cap). Prod: set ASK_QUOTA_BYPASS=0."""
-    return os.environ.get("ASK_QUOTA_BYPASS", "1") != "0"
+    return os.environ.get("ASK_QUOTA_BYPASS", "0") != "0"
 
 
 def kundli_quota_bypass() -> bool:
@@ -42,7 +42,7 @@ TRIAL_DAYS = 7
 
 # Daily AI question limits (-1 = unlimited)
 QUESTION_LIMITS = {
-    "free":  3,
+    "free":  3,    # signup-only lifetime allowance (not a daily reset)
     "trial": 10,   # trial = same as Basic
     "basic": 10,
     "pro":  -1,
@@ -304,16 +304,63 @@ def reset_daily_quota_if_needed(user) -> None:
 
 
 def can_ask_question(user) -> dict:
-    """Check (without consuming) if user can ask another question today."""
+    """Check whether the user has a pack, paid-plan quota, or signup free Q."""
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
 
     if ask_quota_bypass():
         return {"allowed": True, "used": user.daily_questions_used, "limit": -1}
 
+    # Prefer active V1 question pack wallet.
+    try:
+        import ask_v1_billing as _av1
+
+        snap = _av1.wallet_snapshot(user)
+        if snap.get("active") and int(snap.get("questions_left") or 0) > 0:
+            left = int(snap["questions_left"])
+            total = int(snap.get("questions_total") or 0) or left
+            used = int(snap.get("questions_used") or max(0, total - left))
+            return {
+                "allowed": True,
+                "used": used,
+                "limit": total,
+                "questions_left": left,
+                "questions_total": total,
+                "questions_used": used,
+                "expires_at": snap.get("expires_at"),
+                "via": "ask_v1_pack",
+                "plan": "ask_v1_pack",
+            }
+    except Exception:
+        pass
+
+    plan = effective_plan(user)
+    if plan == "free":
+        used = int(getattr(user, "ask_v1_free_questions_used", 0) or 0)
+        bonus = int(getattr(user, "ask_v1_bonus_questions", 0) or 0)
+        limit = QUESTION_LIMITS["free"]
+        signup_left = max(0, limit - used)
+        free_left = signup_left + max(0, bonus)
+        if free_left <= 0:
+            return {
+                "allowed": False,
+                "used": used,
+                "limit": limit,
+                "reason": "Free signup questions exhausted",
+                "ask_v1_packs": True,
+                "via": "signup_free",
+            }
+        return {
+            "allowed": True,
+            "used": used,
+            "limit": limit + max(0, bonus),
+            "questions_left": free_left,
+            "via": "signup_free" if signup_left > 0 else "referral_bonus",
+            "plan": "free",
+        }
+
     reset_daily_quota_if_needed(user)
     limit = question_limit(user)
-
     if limit == -1:
         return {"allowed": True, "used": user.daily_questions_used, "limit": -1}
 
@@ -323,6 +370,7 @@ def can_ask_question(user) -> dict:
             "used":    user.daily_questions_used,
             "limit":   limit,
             "reason":  "Daily limit reached",
+            "ask_v1_packs": True,
         }
     return {"allowed": True, "used": user.daily_questions_used, "limit": limit}
 
@@ -331,6 +379,7 @@ def consume_question(user) -> dict:
     """
     ATOMIC check + increment. Uses a conditional UPDATE so two parallel
     requests can never both succeed past the daily limit.
+    Prefers Cosmic Intelligence V1 pack wallet when active.
     """
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
@@ -338,19 +387,77 @@ def consume_question(user) -> dict:
     if ask_quota_bypass():
         return {"allowed": True, "used": user.daily_questions_used, "limit": -1}
 
-    reset_daily_quota_if_needed(user)
-    limit = question_limit(user)
-    today = _today_str()
+    try:
+        import ask_v1_billing as _av1
+
+        pack_res = _av1.try_consume_pack(user)
+        if pack_res is not None:
+            return pack_res
+    except Exception as exc:
+        print(f"[subscription] ask_v1 pack consume skipped: {exc}", flush=True)
 
     # Import locally to avoid circular import
     from models import User
+
+    plan = effective_plan(user)
+    if plan == "free":
+        free_limit = QUESTION_LIMITS["free"]
+        # Prefer signup free quota first, then referral bonus pool.
+        result = db.session.execute(
+            update(User)
+            .where(User.id == user.id)
+            .where(User.ask_v1_free_questions_used < free_limit)
+            .values(
+                ask_v1_free_questions_used=User.ask_v1_free_questions_used + 1,
+                ask_v1_last_consume_source="free",
+            )
+        )
+        if result.rowcount != 1:
+            result = db.session.execute(
+                update(User)
+                .where(User.id == user.id)
+                .where(User.ask_v1_bonus_questions > 0)
+                .values(
+                    ask_v1_bonus_questions=User.ask_v1_bonus_questions - 1,
+                    ask_v1_last_consume_source="bonus",
+                )
+            )
+        db.session.commit()
+        db.session.refresh(user)
+        used = int(getattr(user, "ask_v1_free_questions_used", 0) or 0)
+        bonus = int(getattr(user, "ask_v1_bonus_questions", 0) or 0)
+        left = max(0, free_limit - used) + max(0, bonus)
+        if result.rowcount != 1:
+            return {
+                "allowed": False,
+                "used": used,
+                "limit": free_limit,
+                "reason": "Free signup questions exhausted",
+                "ask_v1_packs": True,
+                "via": "signup_free",
+            }
+        return {
+            "allowed": True,
+            "used": used,
+            "limit": free_limit + max(0, bonus),
+            "questions_left": left,
+            "via": getattr(user, "ask_v1_last_consume_source", None) or "free",
+            "plan": "free",
+        }
+
+    reset_daily_quota_if_needed(user)
+    limit = question_limit(user)
+    today = _today_str()
 
     if limit == -1:
         # Unlimited — still track count for analytics
         db.session.execute(
             update(User)
             .where(User.id == user.id)
-            .values(daily_questions_used=User.daily_questions_used + 1)
+            .values(
+                daily_questions_used=User.daily_questions_used + 1,
+                ask_v1_last_consume_source="daily",
+            )
         )
         db.session.commit()
         db.session.refresh(user)
@@ -362,7 +469,10 @@ def consume_question(user) -> dict:
         .where(User.id == user.id)
         .where(User.daily_questions_date == today)
         .where(User.daily_questions_used < limit)
-        .values(daily_questions_used=User.daily_questions_used + 1)
+        .values(
+            daily_questions_used=User.daily_questions_used + 1,
+            ask_v1_last_consume_source="daily",
+        )
     )
     db.session.commit()
 
@@ -373,6 +483,7 @@ def consume_question(user) -> dict:
             "used":    user.daily_questions_used,
             "limit":   limit,
             "reason":  "Daily limit reached",
+            "ask_v1_packs": True,
         }
 
     db.session.refresh(user)
@@ -380,10 +491,46 @@ def consume_question(user) -> dict:
 
 
 def refund_question(user) -> None:
-    """Best-effort: return one daily Ask slot after a failed LLM response."""
+    """Best-effort: return one Ask slot after a failed LLM response."""
     if not user or ask_quota_bypass():
         return
     try:
+        import ask_v1_billing as _av1
+
+        if _av1.try_refund_pack(user):
+            return
+    except Exception:
+        pass
+    try:
+        if (getattr(user, "ask_v1_last_consume_source", None) or "") == "free":
+            from models import User
+
+            db.session.execute(
+                update(User)
+                .where(User.id == user.id)
+                .where(User.ask_v1_free_questions_used > 0)
+                .values(
+                    ask_v1_free_questions_used=User.ask_v1_free_questions_used - 1,
+                    ask_v1_last_consume_source="refunded",
+                )
+            )
+            db.session.commit()
+            db.session.refresh(user)
+            return
+        if (getattr(user, "ask_v1_last_consume_source", None) or "") == "bonus":
+            from models import User
+
+            db.session.execute(
+                update(User)
+                .where(User.id == user.id)
+                .values(
+                    ask_v1_bonus_questions=User.ask_v1_bonus_questions + 1,
+                    ask_v1_last_consume_source="refunded",
+                )
+            )
+            db.session.commit()
+            db.session.refresh(user)
+            return
         reset_daily_quota_if_needed(user)
         if (user.daily_questions_used or 0) <= 0:
             return
@@ -410,6 +557,13 @@ def finalize_ask_out_after_llm(
     if not isinstance(out, dict):
         return out
     if out.get("source") == "raw_passthrough_error":
+        if user:
+            refund_question(user)
+            chk = can_ask_question(user)
+            out["quota"] = {"used": chk["used"], "limit": chk["limit"]}
+        out["llm_failed"] = True
+    elif out.get("source") == "raw_passthrough_empty":
+        # Empty model output is a failed generation — restore the credit.
         if user:
             refund_question(user)
             chk = can_ask_question(user)
@@ -503,7 +657,7 @@ def subscription_status(user) -> dict:
     if user and user.plan_expiry and user.plan in ("basic", "pro", "elite"):
         plan_expires_at = user.plan_expiry.isoformat()
 
-    return {
+    out = {
         "plan":              plan,
         "analysis_mode":     "pro" if plan == "pro" else "basic",
         "is_pro":            plan == "pro",
@@ -513,7 +667,12 @@ def subscription_status(user) -> dict:
         "plan_expires_at":   plan_expires_at,
         "limits": {
             "questions_per_day":  question_limit(user) if user else QUESTION_LIMITS["free"],
-            "questions_used":     user.daily_questions_used if user else 0,
+            "questions_used": (
+                int(getattr(user, "ask_v1_free_questions_used", 0) or 0)
+                if user and plan == "free"
+                else user.daily_questions_used if user else 0
+            ),
+            "questions_are_lifetime": plan == "free",
             "kundlis_per_day":    kundli_limit(user) if user else KUNDLI_LIMITS["free"],
             "kundlis_used":       user.daily_kundlis_used if user else 0,
             "timeline_months":    timeline_months(user) if user else 0,
@@ -522,6 +681,18 @@ def subscription_status(user) -> dict:
         "prices":            PLAN_PRICES,
         "trial_days":        TRIAL_DAYS,
     }
+    try:
+        import ask_v1_billing as _av1
+
+        out["ask_v1"] = _av1.wallet_snapshot(user) if user else {
+            "active": False,
+            "questions_left": 0,
+            "expires_at": None,
+            "packs": _av1.list_packs(),
+        }
+    except Exception:
+        pass
+    return out
 
 
 # ╔════════════════════════════════════════════════════════════════════════════╗

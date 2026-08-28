@@ -1,0 +1,23 @@
+# Cosmic Help — pricing questions (one per line). Lines starting with # are ignored.
+# Run: python scripts/ask_cosmic_help.py -q scripts/cosmic_help_pricing_questions.txt
+
+Bhai signup ke baad free me kitne sawaal milte hain Ask pe?
+Sabse sasta pack kitne ka hota hai aur usme questions kitne?
+Woh jo popular wala pack log lete hain, uska rate aur validity kya hai?
+Zyada questions chahiye to power pack kitna padta hai?
+V3 Live me half hour session roughly kitne ka?
+Sirf 15 minute live guide se baat karni ho to kitna charge?
+Poora 1 hour V3 Live book karun to total kitna?
+Kya yahan monthly Basic/Pro subscription chal raha hai jaise ₹199 ya ₹499 mahine?
+App me Pro likha hai to kya har mahine paise katenge?
+Love Reality Basic free hai ya pehle pay karna padta hai?
+Love Reality ka PDF report roughly kitne ka padta hai?
+Kundli Milan ka personalized video kitna costly hai?
+Numerology me sirf PDF lena ho to offer price kya dikhaya jata hai?
+Palmistry Pro PDF aur VIP video ka difference price me kitna hai?
+AstroVastu me 1 room scan credit pack approximately kitna?
+Business Vastu me shop ka full floor-plan PDF roughly kitna?
+Career Life Map kholne se pehle ₹1 wala unlock kab lagta hai?
+Birth time sahi nahi pata — rectification roughly kitne ka?
+Priority delivery extra kitna lagta hai report vs video pe?
+Wallet me paise add karke baad me use kar sakte hain kya?

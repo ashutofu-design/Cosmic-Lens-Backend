@@ -203,12 +203,22 @@ def _is_health_observability_ctx(ctx: dict[str, Any], question_text: str = "") -
 
 def _is_relationship_observability_ctx(ctx: dict[str, Any], question_text: str = "") -> bool:
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
-    if str(sm.get("slice") or "").strip() == "mr_engine_v1":
+    slice_id = str(sm.get("slice") or "").strip()
+    if slice_id == "mr_engine_v1":
         return True
+    if slice_id and slice_id != "mr_engine_v1":
+        # Another domain's engine executed (finance/career/health/...) —
+        # never re-render this row as a relationship pack.
+        return False
     checks = _merged_checks(ctx)
-    if checks.get("relationship_engine_execution") or checks.get("unified_execution"):
+    ev = str(checks.get("engine_version") or "")
+    if ev and ev != "relationship_engine_execution_v1":
+        return False
+    # NOTE: generic `unified_execution` flag is set by finance/travel packs
+    # too — it alone must NOT mark a row as relationship.
+    if checks.get("relationship_engine_execution"):
         return True
-    if str(checks.get("engine_version") or "") == "relationship_engine_execution_v1":
+    if ev == "relationship_engine_execution_v1":
         return True
     li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
     dom = str(li.get("domain") or li.get("routed_domain") or "").strip().lower()
@@ -518,6 +528,298 @@ def _inject_finance_engine_execution(
     return ctx
 
 
+def _is_general_chart_observability_ctx(ctx: dict[str, Any], question_text: str = "") -> bool:
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    if str(sm.get("slice") or "").strip() == "general_chart_engine_v1":
+        return True
+    checks = _merged_checks(ctx)
+    if checks.get("general_chart_engine_execution"):
+        return True
+    if str(checks.get("engine_version") or "") == "general_chart_engine_execution_v1":
+        return True
+    if checks.get("general_chart") or sm.get("topic") == "general":
+        return True
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    if li.get("general_chart"):
+        return True
+    dom = str(li.get("domain") or li.get("routed_domain") or "").strip().lower()
+    return dom == "general"
+
+
+def _inject_general_chart_engine_execution(
+    ctx: dict[str, Any],
+    kundli: dict[str, Any] | None,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    if not isinstance(ctx, dict):
+        return ctx
+    if not force and not _is_general_chart_observability_ctx(ctx):
+        return ctx
+    checks = _merged_checks(ctx)
+    existing = checks.get("general_chart_engine_execution")
+    has_core = (
+        isinstance(existing, dict)
+        and isinstance(existing.get("d1"), dict)
+        and (existing["d1"].get("planets") or existing["d1"].get("house_lords"))
+    )
+    if has_core:
+        return ctx
+    chart = kundli if isinstance(kundli, dict) else None
+    if chart is None:
+        for key in ("kundli", "chart", "chart_json"):
+            candidate = ctx.get(key)
+            if isinstance(candidate, dict) and candidate.get("planets"):
+                chart = candidate
+                break
+    if chart is None:
+        return ctx
+    try:
+        from ask_general_chart.facts import compute_general_chart_execution
+
+        question = str(ctx.get("question") or ctx.get("question_raw") or "").strip()
+        li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else None
+        pack = compute_general_chart_execution(chart, question=question, llm_intent=li)
+        checks = dict(checks)
+        checks["general_chart_engine_execution"] = pack
+        checks["engine_version"] = "general_chart_engine_execution_v1"
+        checks["unified_execution"] = True
+        checks["routing_label"] = "general_chart"
+        checks["domain"] = "general"
+        ctx["checks"] = checks
+        sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+        sm_checks = dict(sm.get("checks") or {}) if isinstance(sm.get("checks"), dict) else {}
+        for key in (
+            "general_chart_engine_execution",
+            "engine_version",
+            "unified_execution",
+            "routing_label",
+            "domain",
+        ):
+            if key in checks:
+                sm_checks[key] = checks[key]
+        sm["checks"] = sm_checks
+        if not sm.get("slice"):
+            sm["slice"] = "general_chart_engine_v1"
+        sm["topic"] = "general"
+        ctx["slice_meta"] = sm
+    except Exception:
+        pass
+    return ctx
+
+
+def _is_travel_observability_ctx(ctx: dict[str, Any], question_text: str = "") -> bool:
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    if str(sm.get("slice") or "").strip() == "travel_engine_v1":
+        return True
+    checks = _merged_checks(ctx)
+    if checks.get("travel_engine_execution"):
+        return True
+    if str(checks.get("engine_version") or "") == "travel_engine_execution_v1":
+        return True
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    dom = str(li.get("domain") or li.get("routed_domain") or "").strip().lower()
+    if dom == "travel":
+        return True
+    return False
+
+
+def _inject_travel_engine_execution(
+    ctx: dict[str, Any],
+    kundli: dict[str, Any] | None,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    if not isinstance(ctx, dict):
+        return ctx
+    if not _is_travel_observability_ctx(ctx):
+        return ctx
+    checks = _merged_checks(ctx)
+    question = str(ctx.get("question") or ctx.get("question_raw") or "").strip()
+    existing = checks.get("travel_engine_execution")
+    has_core = (
+        isinstance(existing, dict)
+        and isinstance(existing.get("d1"), dict)
+        and existing["d1"].get("planets")
+        and isinstance(existing.get("d9"), dict)
+    )
+    if not force and has_core:
+        return ctx
+    chart = kundli if isinstance(kundli, dict) else None
+    if chart is None:
+        for key in ("kundli", "chart", "chart_json"):
+            candidate = ctx.get(key)
+            if isinstance(candidate, dict) and candidate.get("planets"):
+                chart = candidate
+                break
+    if chart is None:
+        return ctx
+    try:
+        from travel_static.travel_facts import compute_travel_engine_execution
+
+        sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+        label = str(
+            checks.get("routing_label")
+            or sm.get("archetype")
+            or ""
+        ).strip().lower()
+        li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else None
+        pack = compute_travel_engine_execution(
+            chart,
+            question=question,
+            routing_label=label,
+            llm_intent=li,
+        )
+        checks = dict(checks)
+        checks["travel_engine_execution"] = pack
+        checks["d1_travel_facts"] = pack.get("d1") or {}
+        checks["d9_travel_facts"] = pack.get("d9") or {}
+        checks["engine_version"] = "travel_engine_execution_v1"
+        checks["unified_execution"] = True
+        if label:
+            checks["routing_label"] = label
+        ctx["checks"] = checks
+        sm_checks = dict(sm.get("checks") or {}) if isinstance(sm.get("checks"), dict) else {}
+        for key in (
+            "travel_engine_execution",
+            "d1_travel_facts",
+            "d9_travel_facts",
+            "engine_version",
+            "unified_execution",
+            "routing_label",
+        ):
+            if key in checks:
+                sm_checks[key] = checks[key]
+        sm["checks"] = sm_checks
+        if not sm.get("slice"):
+            sm["slice"] = "travel_engine_v1"
+        ctx["slice_meta"] = sm
+    except Exception:
+        pass
+    return ctx
+
+
+def _unified_observability_domain(ctx: dict[str, Any]) -> str:
+    """Unified-domain key (career/education/…/gap topics) for this row, or ''."""
+    checks = _merged_checks(ctx)
+    dom = str(checks.get("unified_domain") or "").strip().lower()
+    if dom:
+        return dom
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    slice_id = str(sm.get("slice") or checks.get("slice_type") or "").strip()
+    if slice_id:
+        try:
+            from ask_unified.specs import slice_to_domain
+
+            mapped = slice_to_domain(slice_id)
+            if mapped:
+                return mapped
+        except Exception:
+            pass
+    # Existing pack key wins (career_engine_execution / siblings_engine_execution etc.)
+    reserved = (
+        "health_engine_execution",
+        "relationship_engine_execution",
+        "finance_engine_execution",
+        "travel_engine_execution",
+    )
+    for key in checks:
+        if key.endswith("_engine_execution") and key not in reserved:
+            return key[: -len("_engine_execution")]
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    dom = str(li.get("routed_domain") or li.get("domain") or "").strip().lower()
+    if dom in ("health", "finance", "travel", "love", "marriage", "relationship", "general", ""):
+        return ""
+    try:
+        from ask_unified.specs import get_domain_spec
+
+        if get_domain_spec(dom):
+            return dom
+    except Exception:
+        pass
+    return ""
+
+
+def _inject_unified_domain_engine_execution(
+    ctx: dict[str, Any],
+    kundli: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Career/education/children/…/gap topics — full D1+D9 pack for the debugger."""
+    if not isinstance(ctx, dict):
+        return ctx
+    checks = _merged_checks(ctx)
+    # Dedicated domains handled by their own injectors.
+    if (
+        checks.get("health_engine_execution")
+        or checks.get("relationship_engine_execution")
+        or checks.get("finance_engine_execution")
+        or checks.get("travel_engine_execution")
+        or checks.get("general_chart_engine_execution")
+    ):
+        return ctx
+    domain = _unified_observability_domain(ctx)
+    if not domain:
+        return ctx
+    ee_key = f"{domain}_engine_execution"
+    existing = checks.get(ee_key)
+    if (
+        isinstance(existing, dict)
+        and isinstance(existing.get("d1"), dict)
+        and existing["d1"].get("planets")
+    ):
+        if not checks.get("unified_domain"):
+            checks = dict(checks)
+            checks["unified_domain"] = domain
+            ctx["checks"] = checks
+        return ctx
+    chart = kundli if isinstance(kundli, dict) else None
+    if chart is None:
+        for key in ("kundli", "chart", "chart_json"):
+            candidate = ctx.get(key)
+            if isinstance(candidate, dict) and candidate.get("planets"):
+                chart = candidate
+                break
+    if chart is None:
+        return ctx
+    try:
+        from ask_unified.facts import compute_domain_engine_execution
+
+        sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+        question = str(ctx.get("question") or ctx.get("question_raw") or "").strip()
+        label = str(checks.get("routing_label") or sm.get("archetype") or "").strip().lower()
+        li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else None
+        pack = compute_domain_engine_execution(
+            chart,
+            domain=domain,
+            question=question,
+            routing_label=label,
+            llm_intent=li,
+        )
+        if not isinstance(pack, dict) or pack.get("error"):
+            return ctx
+        checks = dict(checks)
+        checks[ee_key] = pack
+        checks["unified_domain"] = domain
+        checks["engine_version"] = str(
+            pack.get("schema_version") or f"{domain}_engine_execution_v1"
+        )
+        checks["unified_execution"] = True
+        if label:
+            checks["routing_label"] = label
+        ctx["checks"] = checks
+        sm_checks = dict(sm.get("checks") or {}) if isinstance(sm.get("checks"), dict) else {}
+        for key in (ee_key, "unified_domain", "engine_version", "unified_execution", "routing_label"):
+            if key in checks:
+                sm_checks[key] = checks[key]
+        sm["checks"] = sm_checks
+        if not sm.get("slice"):
+            sm["slice"] = f"{domain}_engine_v1"
+        ctx["slice_meta"] = sm
+    except Exception:
+        pass
+    return ctx
+
+
 def _prepare_ctx_for_observability(
     ctx: dict[str, Any],
     question_text: str = "",
@@ -577,6 +879,9 @@ def _prepare_ctx_for_observability(
     out = _inject_health_engine_execution(out, kundli)
     out = _inject_relationship_engine_execution(out, kundli)
     out = _inject_finance_engine_execution(out, kundli)
+    out = _inject_travel_engine_execution(out, kundli)
+    out = _inject_general_chart_engine_execution(out, kundli)
+    out = _inject_unified_domain_engine_execution(out, kundli)
     return out
 
 
@@ -1632,48 +1937,8 @@ def _health_dna_judge_section(
     question_text: str,
     answer_text: str,
 ) -> dict[str, Any]:
-    if not _is_health_observability_ctx(ctx, question_text):
-        return {"applies": False}
-    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
-    stored = (
-        _dig(ctx, sm, key="health_dna_judge_audit")
-        or _dig(ctx, sm, key="health_validator_audit")
-    )
-    meta = {
-        "archetype": sm.get("archetype"),
-        "checks": _merged_checks(ctx),
-    }
-    qd = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else None
-    if qd:
-        meta["question_dna"] = qd
-    for key in (
-        "normalized_question", "intent", "user_wants", "question_type",
-        "domain", "bucket", "answer_style", "answer_approach", "question_dna_item",
-    ):
-        val = sm.get(key) if isinstance(sm, dict) else None
-        if val not in (None, "") and key not in meta:
-            meta[key] = val
-    try:
-        from ask_health.dna_judge import build_health_dna_judge_display
-
-        display = build_health_dna_judge_display(
-            question_text,
-            answer_text,
-            meta,
-            stored_audit=stored if isinstance(stored, dict) else None,
-        )
-        # Legacy rows stored full validator audit — surface dna_judge sub-block if present
-        if isinstance(stored, dict) and stored.get("dna_judge") and not display.get("issues"):
-            legacy_j = stored.get("dna_judge") or {}
-            if legacy_j.get("passed") is False:
-                display["passed"] = False
-                display["issues"] = list(legacy_j.get("issues") or [])
-                hint = str((legacy_j.get("parsed") or {}).get("fix_hint") or "").strip()
-                if hint:
-                    display["fix_hint"] = hint
-        return display
-    except Exception:
-        return {"applies": True, "enabled": False, "passed": False, "issues": ["dna_judge_error"]}
+    """Removed — DNA Judge permanently disabled (no LLM, no admin panel)."""
+    return {"applies": False}
 
 
 def _health_validator_section(
@@ -1743,40 +2008,8 @@ def _relationship_dna_judge_section(
     question_text: str,
     answer_text: str,
 ) -> dict[str, Any]:
-    if not _is_relationship_observability_ctx(ctx, question_text):
-        return {"applies": False}
-    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
-    stored = _dig(ctx, sm, key="relationship_dna_judge_audit")
-    meta = {
-        "archetype": sm.get("archetype"),
-        "checks": _merged_checks(ctx),
-    }
-    qd = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else None
-    if qd:
-        meta["question_dna"] = qd
-    for key in (
-        "normalized_question", "intent", "user_wants", "question_type",
-        "domain", "bucket", "answer_style", "answer_approach", "question_dna_item",
-    ):
-        val = sm.get(key) if isinstance(sm, dict) else None
-        if val not in (None, "") and key not in meta:
-            meta[key] = val
-    try:
-        from ask_mr.dna_judge import build_relationship_dna_judge_display
-
-        return build_relationship_dna_judge_display(
-            question_text,
-            answer_text,
-            meta,
-            stored_audit=stored if isinstance(stored, dict) else None,
-        )
-    except Exception:
-        return {
-            "applies": True,
-            "enabled": False,
-            "passed": False,
-            "issues": ["dna_judge_error"],
-        }
+    """Removed — DNA Judge permanently disabled."""
+    return {"applies": False}
 
 
 def _finance_selected_blocks_section(
@@ -1837,40 +2070,213 @@ def _finance_dna_judge_section(
     question_text: str,
     answer_text: str,
 ) -> dict[str, Any]:
-    if not _is_finance_observability_ctx(ctx, question_text):
+    """Removed — DNA Judge permanently disabled."""
+    return {"applies": False}
+
+
+def _general_selected_blocks_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    if not force and not _is_general_chart_observability_ctx(ctx, question_text):
         return {"applies": False}
     sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
-    stored = _dig(ctx, sm, key="finance_dna_judge_audit")
-    meta = {
-        "archetype": sm.get("archetype"),
-        "checks": _merged_checks(ctx),
-    }
-    qd = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else None
-    if qd:
-        meta["question_dna"] = qd
-    for key in (
-        "normalized_question", "intent", "user_wants", "question_type",
-        "domain", "bucket", "answer_style", "answer_approach", "question_dna_item",
+    stored = (
+        _dig(ctx, sm, key="general_selected_blocks")
+        or _dig(ctx, sm, key="general_selected_blocks_preview")
+    )
+    if isinstance(stored, dict) and stored.get("applies") and (
+        stored.get("available_blocks") or stored.get("expected_blocks")
     ):
+        return stored
+    meta: dict[str, Any] = {"checks": _merged_checks(ctx)}
+    for key in ("user_wants", "intent", "normalized_question", "question_type", "bucket"):
         val = sm.get(key) if isinstance(sm, dict) else None
-        if val not in (None, "") and key not in meta:
+        if val not in (None, ""):
             meta[key] = val
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    for key in ("intent", "user_wants", "normalized_question", "bucket"):
+        if key not in meta and li.get(key):
+            meta[key] = li.get(key)
+    execution = _dig(ctx, sm, key="general_chart_engine_execution")
     try:
-        from ask_finance.dna_judge import build_finance_dna_judge_display
+        from ask_general_chart.selected_blocks import build_general_selected_blocks
 
-        return build_finance_dna_judge_display(
+        return build_general_selected_blocks(
             question_text,
             answer_text,
-            meta,
-            stored_audit=stored if isinstance(stored, dict) else None,
+            meta=meta,
+            execution=execution if isinstance(execution, dict) else None,
         )
-    except Exception:
+    except Exception as exc:
         return {
             "applies": True,
-            "enabled": False,
-            "passed": False,
-            "issues": ["dna_judge_error"],
+            "source": "general_chart_engine_execution",
+            "error": str(exc)[:120],
         }
+
+
+def _travel_selected_blocks_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    if not _is_travel_observability_ctx(ctx, question_text):
+        return {"applies": False}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    stored = (
+        _dig(ctx, sm, key="travel_selected_blocks")
+        or (
+            (_dig(ctx, sm, key="travel_dna_judge_audit") or {}).get("selected_blocks")
+            if isinstance(_dig(ctx, sm, key="travel_dna_judge_audit"), dict)
+            else None
+        )
+        or _dig(ctx, sm, key="travel_selected_blocks_preview")
+    )
+    if isinstance(stored, dict) and stored.get("applies") and (
+        stored.get("available_blocks") or stored.get("expected_blocks")
+    ) and stored.get("source") == "travel_engine_execution":
+        return stored
+    meta: dict[str, Any] = {"checks": _merged_checks(ctx)}
+    for key in ("user_wants", "intent", "normalized_question", "question_type"):
+        val = sm.get(key) if isinstance(sm, dict) else None
+        if val not in (None, ""):
+            meta[key] = val
+    execution = _dig(ctx, sm, key="travel_engine_execution")
+    if not isinstance(execution, dict):
+        checks = meta.get("checks") if isinstance(meta.get("checks"), dict) else {}
+        execution = checks.get("travel_engine_execution") if isinstance(checks, dict) else None
+    try:
+        from ask_travel.selected_blocks import build_travel_selected_blocks
+
+        return build_travel_selected_blocks(
+            question_text,
+            answer_text,
+            meta=meta,
+            execution=execution if isinstance(execution, dict) else None,
+        )
+    except Exception as exc:
+        return {
+            "applies": True,
+            "source": "travel_engine_execution",
+            "error": str(exc)[:120],
+        }
+
+
+def _travel_dna_judge_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    """Removed — DNA Judge permanently disabled."""
+    return {"applies": False}
+
+
+def _unified_selected_blocks_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    if _is_general_chart_observability_ctx(ctx, question_text):
+        return {"applies": False}
+    domain = _unified_observability_domain(ctx)
+    if not domain:
+        return {"applies": False}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    checks = _merged_checks(ctx)
+    stored = (
+        _dig(ctx, sm, key="unified_selected_blocks")
+        or _dig(ctx, sm, key=f"{domain}_selected_blocks")
+        or _dig(ctx, sm, key=f"{domain}_selected_blocks_preview")
+        or (
+            (_dig(ctx, sm, key="unified_dna_judge_audit") or {}).get("selected_blocks")
+            if isinstance(_dig(ctx, sm, key="unified_dna_judge_audit"), dict)
+            else None
+        )
+    )
+    if isinstance(stored, dict) and (
+        stored.get("available_blocks") or stored.get("expected_blocks")
+    ):
+        # Preview rows may omit applies — treat as applies for debugger.
+        out = dict(stored)
+        out.setdefault("applies", True)
+        out.setdefault("domain", domain)
+        return out
+    meta: dict[str, Any] = {
+        "checks": checks,
+        "routing_label": checks.get("routing_label") or sm.get("archetype"),
+        "archetype": sm.get("archetype"),
+    }
+    for key in ("user_wants", "intent", "normalized_question", "question_type"):
+        val = sm.get(key) if isinstance(sm, dict) else None
+        if val not in (None, ""):
+            meta[key] = val
+    execution = _dig(ctx, sm, key=f"{domain}_engine_execution")
+    if not isinstance(execution, dict):
+        execution = checks.get(f"{domain}_engine_execution")
+    try:
+        from ask_unified import build_domain_selected_blocks
+
+        return build_domain_selected_blocks(
+            question_text,
+            answer_text,
+            domain=domain,
+            meta=meta,
+            execution=execution if isinstance(execution, dict) else None,
+        )
+    except Exception as exc:
+        return {
+            "applies": True,
+            "source": f"{domain}_engine_execution",
+            "domain": domain,
+            "error": str(exc)[:120],
+        }
+
+
+def _unified_dna_judge_section(
+    ctx: dict[str, Any],
+    question_text: str,
+    answer_text: str,
+) -> dict[str, Any]:
+    """Removed — DNA Judge permanently disabled."""
+    return {"applies": False}
+
+
+def _dna_required_modules(ctx: dict[str, Any]) -> list[str]:
+    dna = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else {}
+    items = dna.get("questions") if isinstance(dna.get("questions"), list) else []
+    if items and isinstance(items[0], dict):
+        mods = items[0].get("required_modules")
+        if isinstance(mods, list):
+            return [str(m).strip().upper() for m in mods if str(m).strip()]
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    mods = li.get("required_modules")
+    if isinstance(mods, list):
+        return [str(m).strip().upper() for m in mods if str(m).strip()]
+    return []
+
+
+def _refresh_pack_modules_llm_used(
+    pack: dict[str, Any] | None,
+    answer_text: str,
+    required_modules: list[str] | None = None,
+) -> dict[str, Any] | None:
+    if not isinstance(pack, dict):
+        return pack
+    try:
+        from ask_engine_execution_common import attach_modules_checked
+
+        attach_modules_checked(
+            pack,
+            answer=answer_text or "",
+            required_modules=required_modules or None,
+        )
+    except Exception:
+        pass
+    return pack
 
 
 def build_observability_debug(
@@ -1985,14 +2391,187 @@ def build_observability_debug(
             "selected_blocks", finance_selected_blocks,
         )
 
+    travel_engine_execution = _dig(ctx, sm, key="travel_engine_execution")
+    if not isinstance(travel_engine_execution, dict):
+        travel_engine_execution = None
+    travel_charts_mode = bool(
+        travel_engine_execution
+        and _is_travel_observability_ctx(ctx, question_text)
+        and not health_charts_mode
+        and not relationship_charts_mode
+        and not finance_charts_mode
+    )
+    travel_dna_judge_audit = _travel_dna_judge_section(ctx, question_text, answer_text)
+    travel_selected_blocks = _travel_selected_blocks_section(
+        ctx, question_text, answer_text,
+    )
+    if (
+        isinstance(travel_dna_judge_audit, dict)
+        and isinstance(travel_dna_judge_audit.get("selected_blocks"), dict)
+        and not travel_selected_blocks.get("expected_blocks")
+    ):
+        travel_selected_blocks = travel_dna_judge_audit["selected_blocks"]
+    if (
+        isinstance(travel_dna_judge_audit, dict)
+        and travel_selected_blocks.get("applies")
+    ):
+        travel_dna_judge_audit = dict(travel_dna_judge_audit)
+        travel_dna_judge_audit.setdefault(
+            "selected_blocks", travel_selected_blocks,
+        )
+
+    general_chart_engine_execution = _dig(ctx, sm, key="general_chart_engine_execution")
+    if not isinstance(general_chart_engine_execution, dict):
+        general_chart_engine_execution = None
+    general_charts_mode = bool(
+        general_chart_engine_execution
+        and _is_general_chart_observability_ctx(ctx, question_text)
+        and not health_charts_mode
+        and not relationship_charts_mode
+        and not finance_charts_mode
+        and not travel_charts_mode
+    )
+    general_selected_blocks = _general_selected_blocks_section(
+        ctx, question_text, answer_text,
+    )
+
+    # Unified domain pack (career/education/children/…/gap) — generic D1+D9 view
+    _uni_domain = _unified_observability_domain(ctx)
+    domain_engine_execution = None
+    if _uni_domain and not general_charts_mode:
+        domain_engine_execution = _dig(ctx, sm, key=f"{_uni_domain}_engine_execution")
+        if not isinstance(domain_engine_execution, dict):
+            domain_engine_execution = None
+    domain_charts_mode = bool(
+        domain_engine_execution
+        and not health_charts_mode
+        and not relationship_charts_mode
+        and not finance_charts_mode
+        and not travel_charts_mode
+        and not general_charts_mode
+    )
+
+    unified_dna_judge_audit = {"applies": False}
+    unified_selected_blocks = {"applies": False}
+    if domain_charts_mode or _uni_domain:
+        unified_dna_judge_audit = _unified_dna_judge_section(
+            ctx, question_text, answer_text,
+        )
+        unified_selected_blocks = _unified_selected_blocks_section(
+            ctx, question_text, answer_text,
+        )
+        if (
+            isinstance(unified_dna_judge_audit, dict)
+            and isinstance(unified_dna_judge_audit.get("selected_blocks"), dict)
+            and not unified_selected_blocks.get("expected_blocks")
+        ):
+            unified_selected_blocks = unified_dna_judge_audit["selected_blocks"]
+        if (
+            isinstance(unified_dna_judge_audit, dict)
+            and unified_selected_blocks.get("applies")
+        ):
+            unified_dna_judge_audit = dict(unified_dna_judge_audit)
+            unified_dna_judge_audit.setdefault(
+                "selected_blocks", unified_selected_blocks,
+            )
+
     if health_charts_mode:
         display_mode = "health_charts"
     elif relationship_charts_mode:
         display_mode = "relationship_charts"
     elif finance_charts_mode:
         display_mode = "finance_charts"
+    elif travel_charts_mode:
+        display_mode = "travel_charts"
+    elif general_charts_mode:
+        display_mode = "general_charts"
+    elif domain_charts_mode:
+        display_mode = "domain_charts"
     else:
         display_mode = "engine_rules"
+
+    # ── UNIVERSAL GUARANTEE — DNA Judge + Selected Blocks on EVERY row ──
+    # If no domain-specific section applied (timing rows, general chart,
+    # direct-LLM, legacy rows), fall back to the general chart pack so the
+    # debugger never shows an empty "applies to …" message.
+    _any_judge_applies = any(
+        isinstance(a, dict) and a.get("applies")
+        for a in (
+            health_dna_judge_audit,
+            relationship_dna_judge_audit,
+            finance_dna_judge_audit,
+            travel_dna_judge_audit,
+            unified_dna_judge_audit,
+        )
+    )
+    _any_blocks_applies = any(
+        isinstance(b, dict) and b.get("applies")
+        for b in (
+            health_selected_blocks,
+            relationship_selected_blocks,
+            finance_selected_blocks,
+            travel_selected_blocks,
+            general_selected_blocks,
+            unified_selected_blocks,
+        )
+    )
+    if not _any_blocks_applies:
+        try:
+            ctx = _inject_general_chart_engine_execution(ctx, kundli, force=True)
+            general_selected_blocks = _general_selected_blocks_section(
+                ctx, question_text, answer_text, force=True,
+            )
+            if general_charts_mode is False and display_mode == "engine_rules":
+                _gc_pack = _dig(
+                    ctx,
+                    ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {},
+                    key="general_chart_engine_execution",
+                )
+                if isinstance(_gc_pack, dict):
+                    general_chart_engine_execution = _gc_pack
+                    display_mode = "general_charts"
+        except Exception:
+            pass
+    if not _any_judge_applies:
+        try:
+            from ask_unified import build_domain_dna_judge_display
+
+            _li_fb = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+            _fb_domain = (
+                str(_li_fb.get("routed_domain") or _li_fb.get("domain") or "").strip().lower()
+                or "general"
+            )
+            _fb_meta: dict[str, Any] = {
+                "archetype": (sm or {}).get("archetype"),
+                "checks": _merged_checks(ctx),
+            }
+            _qd_fb = ctx.get("question_dna") if isinstance(ctx.get("question_dna"), dict) else None
+            if _qd_fb:
+                _fb_meta["question_dna"] = _qd_fb
+            for key in (
+                "normalized_question", "intent", "user_wants", "question_type",
+                "domain", "bucket", "answer_style", "answer_approach", "question_dna_item",
+            ):
+                val = (sm or {}).get(key) if isinstance(sm, dict) else None
+                if val in (None, "") and isinstance(_li_fb, dict):
+                    val = _li_fb.get(key)
+                if val not in (None, "") and key not in _fb_meta:
+                    _fb_meta[key] = val
+            unified_dna_judge_audit = build_domain_dna_judge_display(
+                question_text,
+                answer_text,
+                _fb_meta,
+                domain=_fb_domain,
+                stored_audit=None,
+            )
+            if isinstance(unified_dna_judge_audit, dict):
+                unified_dna_judge_audit["fallback"] = "general_chart_universal"
+                if isinstance(general_selected_blocks, dict) and general_selected_blocks.get("applies"):
+                    unified_dna_judge_audit.setdefault(
+                        "selected_blocks", general_selected_blocks,
+                    )
+        except Exception:
+            pass
 
     trace_labels = [
         "Question",
@@ -2014,9 +2593,48 @@ def build_observability_debug(
         except (TypeError, ValueError):
             conf_display = None
 
+    dna_pipeline_raw = _question_dna_pipeline(ctx, question_text)
+    dna_follow_summary: dict[str, Any] = {}
+    dna_pipeline = dna_pipeline_raw
+    try:
+        from ask_question_dna import dna_judge_contract_from_intent
+        from ask_selected_blocks_common import enrich_dna_pipeline_followed
+
+        _li_dna = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+        _dna_contract = dna_judge_contract_from_intent(_li_dna)
+        _dna_follow = enrich_dna_pipeline_followed(
+            dna_pipeline_raw, _dna_contract, answer_text,
+        )
+        dna_pipeline = _dna_follow.get("steps") or dna_pipeline_raw
+        if isinstance(_dna_follow.get("summary"), dict):
+            dna_follow_summary = _dna_follow["summary"]
+    except Exception:
+        pass
+
+    _req_mods = _dna_required_modules(ctx)
+    health_engine_execution = _refresh_pack_modules_llm_used(
+        health_engine_execution, answer_text, _req_mods,
+    )
+    relationship_engine_execution = _refresh_pack_modules_llm_used(
+        relationship_engine_execution, answer_text, _req_mods,
+    )
+    finance_engine_execution = _refresh_pack_modules_llm_used(
+        finance_engine_execution, answer_text, _req_mods,
+    )
+    travel_engine_execution = _refresh_pack_modules_llm_used(
+        travel_engine_execution, answer_text, _req_mods,
+    )
+    general_chart_engine_execution = _refresh_pack_modules_llm_used(
+        general_chart_engine_execution, answer_text, _req_mods,
+    )
+    domain_engine_execution = _refresh_pack_modules_llm_used(
+        domain_engine_execution, answer_text, _req_mods,
+    )
+
     return {
         "user_question": _user_question_section(ctx, question_text),
-        "question_dna_pipeline": _question_dna_pipeline(ctx, question_text),
+        "question_dna_pipeline": dna_pipeline,
+        "question_dna_followed_summary": dna_follow_summary or None,
         "routing_decision": routing,
         "routing_warning": _routing_warning(question_text, archetype, _dna_engine_archetype(ctx)),
         "engine_health": engine_health,
@@ -2027,12 +2645,21 @@ def build_observability_debug(
         "relationship_selected_blocks": relationship_selected_blocks,
         "finance_dna_judge_audit": finance_dna_judge_audit,
         "finance_selected_blocks": finance_selected_blocks,
+        "travel_dna_judge_audit": travel_dna_judge_audit,
+        "travel_selected_blocks": travel_selected_blocks,
+        "general_selected_blocks": general_selected_blocks,
+        "unified_dna_judge_audit": unified_dna_judge_audit,
+        "unified_selected_blocks": unified_selected_blocks,
         "rule_decisions": decision_table,
         "engine_execution": {
             "display_mode": display_mode,
             "health_engine_execution": health_engine_execution,
             "relationship_engine_execution": relationship_engine_execution,
             "finance_engine_execution": finance_engine_execution,
+            "travel_engine_execution": travel_engine_execution,
+            "general_chart_engine_execution": general_chart_engine_execution,
+            "domain_engine_execution": domain_engine_execution,
+            "unified_domain": _uni_domain or None,
             "engine_name": archetype,
             "engine_version": _dig(ctx.get("checks") or {}, sm or {}, key="engine_version"),
             "modules": modules,

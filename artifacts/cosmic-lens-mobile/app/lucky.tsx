@@ -17,9 +17,15 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import {
+  chartSeed,
+  dashaAwareHintIndex,
+  natalLagnaSignIndex,
+} from "@/lib/chartPersonalize";
+import {
   RASHI, COLOR, METAL, ELEMENT, GEMSTONE, DAY, DEITY, DIRECTION,
   pick, type RashiKey,
 } from "@/lib/i18nVedic";
+import { computeActiveDasha, pName } from "@/lib/proInsightEngine";
 
 const F = {
   bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
@@ -144,10 +150,14 @@ export default function LuckyScreen() {
   const C = useC();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { profiles, kundli } = useUser();
+  const { kundli } = useUser();
   const rashi = deriveRashi(kundli?.moonSign, kundli?.planets);
   const baseLucky = LUCKY[rashi] ?? LUCKY.mesh;
   const now = new Date();
+  const seed = chartSeed(kundli);
+  const lagnaIdx = natalLagnaSignIndex(kundli);
+  const moonLon = (kundli?.planets ?? []).find((p: any) => p?.name === "Moon")?.longitude ?? 0;
+  const active = kundli ? computeActiveDasha(kundli, Number(moonLon)) : null;
 
   // Resolve names based on current language
   const v = t.vlang;
@@ -156,13 +166,29 @@ export default function LuckyScreen() {
 
   const dailyLucky = useMemo(() => {
     const dy = dayOfYear(now);
-    const seed = (RASHI_INDEX[rashi] ?? 0) * 13 + dy;
-    const todaysNumber = ((seed % 9) + 1);
-    const todaysHint   = DAILY_HINTS[v][now.getDay()];
-    const numbers = Array.from(new Set([todaysNumber, ...baseLucky.numbers])).slice(0, 3);
-    return { ...baseLucky, numbers, hint: todaysHint };
+    const rashiPart = (RASHI_INDEX[rashi] ?? 0) * 13;
+    const chartPart = seed % 97;
+    const lagnaPart = lagnaIdx * 7;
+    const todaysNumber = ((rashiPart + dy + chartPart + lagnaPart) % 9) + 1;
+    const hintIdx = kundli
+      ? dashaAwareHintIndex(kundli, now.getDay())
+      : now.getDay();
+    const baseHint = DAILY_HINTS[v][hintIdx % 7];
+    const dashaBit = active
+      ? (v === "hi"
+          ? ` सक्रिय दशा: ${pName(active.pdPlanet)}।`
+          : ` Active dasha: ${pName(active.pdPlanet)}.`)
+      : "";
+    const numbers = Array.from(
+      new Set([
+        todaysNumber,
+        ...baseLucky.numbers,
+        ((seed % 9) + 1),
+      ]),
+    ).slice(0, 3);
+    return { ...baseLucky, numbers, hint: `${baseHint}${dashaBit}` };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rashi, v]);
+  }, [rashi, v, seed, lagnaIdx, active?.pdPlanet, !!kundli]);
   const lucky = dailyLucky;
 
   const today = useMemo(() => {
@@ -170,6 +196,11 @@ export default function LuckyScreen() {
     const locale = v === "en" ? "en-US" : v === "hi" ? "hi-IN" : "en-IN";
     return d.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   }, [v]);
+
+  const lagnaKey = (Object.keys(RASHI_INDEX) as RashiKey[]).find(
+    (k) => RASHI_INDEX[k] === lagnaIdx,
+  ) ?? rashi;
+  const lagnaDisplay = pick(v, RASHI[lagnaKey]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -180,7 +211,10 @@ export default function LuckyScreen() {
         </Pressable>
         <View>
           <Text style={[s.title, { color: C.text }]}>{t.luckyTitle}</Text>
-          <Text style={[s.sub, { color: C.textMuted }]}>{rashiEmoji} {rashiDisplay} · {today}</Text>
+          <Text style={[s.sub, { color: C.textMuted }]}>
+            {rashiEmoji} {rashiDisplay}
+            {kundli ? ` · Lagna ${lagnaDisplay}` : ""} · {today}
+          </Text>
         </View>
         <View style={{ width: 36 }} />
       </View>

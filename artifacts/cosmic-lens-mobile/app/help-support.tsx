@@ -32,7 +32,16 @@ import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
-import { ensureBotReply } from "@/lib/supportHelpFaq";
+import {
+  ensureBotReply,
+  extractServerSupportReply,
+  lastBotText,
+  lastUserMessage,
+  mergePolledSupportMessages,
+  shouldShowAgentTyping,
+  staffAfterLastUser,
+  stripSupportBoilerplate,
+} from "@/lib/supportHelpFaq";
 
 type SupportMessage = {
   id: string;
@@ -63,20 +72,25 @@ const TEAM_AVATARS = [
   { initials: "SM", bg: "#f59e0b" },
 ];
 
-const QUICK_TOPICS = [
-  { icon: "hash" as const, label: "COSMO ID", send: "COSMO ID kya hai?" },
-  { icon: "file-text" as const, label: "Meri PDF kahan?", send: "Meri PDF / report kahan milegi?" },
-  { icon: "star" as const, label: "Pro prices", send: "Numerology, Love Reality, Milan Pro ke prices kya hain?" },
-  { icon: "compass" as const, label: "AstroVastu", send: "AstroVastu kaise use karun aur price kya hai?" },
-  { icon: "credit-card" as const, label: "Payment / Transactions", send: "Payment kahan dikhegi? Transactions kaise check karun?" },
-  { icon: "user" as const, label: "Birth details", send: "Birth details kaise change karun?" },
-  { icon: "headphones" as const, label: "Team se baat", send: "Mujhe team se baat karni hai." },
-];
-
-function mediaSrc(url?: string): string {
+function mediaSrc(
+  url?: string,
+  auth?: { userId?: number | null; apiKey?: string | null },
+): string {
   if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("data:")) return url;
-  return `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+  let full =
+    url.startsWith("http") || url.startsWith("data:")
+      ? url
+      : `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+  if (
+    auth?.userId &&
+    auth?.apiKey &&
+    full.includes("/api/support/media/") &&
+    !full.includes("api_key=")
+  ) {
+    const sep = full.includes("?") ? "&" : "?";
+    full = `${full}${sep}user_id=${encodeURIComponent(String(auth.userId))}&api_key=${encodeURIComponent(auth.apiKey)}`;
+  }
+  return full;
 }
 
 function timeLabel(ts?: string): string {
@@ -161,8 +175,11 @@ export default function HelpSupportScreen() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
-  sendingRef.current = sending;
+  const messagesRef = useRef<SupportMessage[]>([]);
+  const pinnedReplyRef = useRef<{ text: string; forUserId: string } | null>(null);
+  const [liveReply, setLiveReply] = useState<{ text: string; forUserId: string; ts: string } | null>(null);
   const [agentTyping, setAgentTyping] = useState(false);
+  const [pollMs, setPollMs] = useState(2500);
   const [loading, setLoading] = useState(true);
   const [adminTyping, setAdminTyping] = useState(false);
   const [tab, setTab] = useState<TabKey>("chat");
@@ -202,6 +219,9 @@ export default function HelpSupportScreen() {
       );
       const json = await res.json().catch(() => ({}) as any);
       if (res.status === 404 || json?.error === "not_found") {
+        // Transient empty-file / worker race must not wipe a visible bot reply
+        // or mint a second thread while a send is in flight.
+        if (sendingRef.current) return null;
         try {
           const next = await ensureThread();
           if (next && next !== sid) {
@@ -211,27 +231,68 @@ export default function HelpSupportScreen() {
               { headers: authHeaders() },
             );
             const json2 = await res2.json().catch(() => ({}) as any);
-            if (!res2.ok) {
-              setMessages([]);
-              return [];
-            }
+            if (!res2.ok) return null;
             const msgs2: SupportMessage[] = Array.isArray(json2.messages) ? json2.messages : [];
-            setMessages(ensureBotReply(msgs2, "", "", user?.cosmo_user_id || "") as SupportMessage[]);
+            const incoming2 = ensureBotReply(
+              msgs2,
+              "",
+              pinnedReplyRef.current?.text || "",
+              user?.cosmo_user_id || "",
+            ) as SupportMessage[];
+            let merged2 = incoming2;
+            setMessages((prev) => {
+              merged2 = mergePolledSupportMessages(prev, incoming2);
+              messagesRef.current = merged2;
+              return merged2;
+            });
             setAdminTyping(Boolean(json2.admin_typing));
+            setAgentTyping(
+              shouldShowAgentTyping(merged2, json2.agent_state, json2.agent_typing),
+            );
             return msgs2;
           }
         } catch {
-          /* fall through */
+          /* keep current messages */
         }
-        setMessages([]);
-        return [];
+        return null;
       }
       if (!res.ok) return null;
       const msgs: SupportMessage[] = Array.isArray(json.messages) ? json.messages : [];
-      if (sendingRef.current) return msgs;
-      setMessages(ensureBotReply(msgs, "", "", user?.cosmo_user_id || "") as SupportMessage[]);
+      const lastU = lastUserMessage(msgs);
+      const pinFor = lastU?.id || "";
+      const pinText =
+        pinnedReplyRef.current && pinnedReplyRef.current.forUserId === pinFor
+          ? pinnedReplyRef.current.text
+          : "";
+      const incoming = ensureBotReply(
+        msgs,
+        String(lastU?.text || ""),
+        pinText,
+        user?.cosmo_user_id || "",
+      ) as SupportMessage[];
+      const incomingHasStaff = staffAfterLastUser(incoming);
+      if (incomingHasStaff) {
+        const t = lastBotText(incoming);
+        if (t && pinFor) {
+          pinnedReplyRef.current = { text: t, forUserId: pinFor };
+          setLiveReply({ text: t, forUserId: pinFor, ts: new Date().toISOString() });
+        }
+      }
       setAdminTyping(Boolean(json.admin_typing));
-      setAgentTyping(Boolean(json.agent_typing) || json.agent_state === "processing");
+      // During send, still apply if the server already saved the assistant reply.
+      if (sendingRef.current && !incomingHasStaff) {
+        setAgentTyping(!staffAfterLastUser(messagesRef.current));
+        return msgs;
+      }
+      let mergedForTyping = incoming;
+      setMessages((prev) => {
+        mergedForTyping = mergePolledSupportMessages(prev, incoming);
+        messagesRef.current = mergedForTyping;
+        return mergedForTyping;
+      });
+      setAgentTyping(
+        shouldShowAgentTyping(mergedForTyping, json.agent_state, json.agent_typing),
+      );
       return msgs;
     },
     [user?.id, user?.api_key, authHeaders, ensureThread],
@@ -266,6 +327,11 @@ export default function HelpSupportScreen() {
     }, [tab, user?.id, user?.api_key, fetchTransactions]),
   );
 
+  const ensureThreadRef = useRef(ensureThread);
+  ensureThreadRef.current = ensureThread;
+  const refreshFnRef = useRef(refresh);
+  refreshFnRef.current = refresh;
+
   useEffect(() => {
     if (!user?.id || !user?.api_key) {
       setLoading(false);
@@ -275,10 +341,10 @@ export default function HelpSupportScreen() {
     (async () => {
       try {
         setLoading(true);
-        const sid = await ensureThread();
+        const sid = await ensureThreadRef.current();
         if (cancelled || !sid) return;
         setThreadId(sid);
-        await refresh(sid);
+        await refreshFnRef.current(sid);
       } catch (e) {
         Alert.alert(
           "Support unavailable",
@@ -291,21 +357,45 @@ export default function HelpSupportScreen() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, user?.api_key, ensureThread, refresh]);
+  }, [user?.id, user?.api_key]);
 
-  const lastMsg = messages.length ? messages[messages.length - 1] : null;
+  const lastUser = lastUserMessage(messages);
+  const lastUserTxt = String(lastUser?.text || "");
+  const lastUserId = lastUser?.id || "";
+
+  const displayMessages: SupportMessage[] =
+    liveReply?.text && liveReply.forUserId === lastUserId
+      ? staffAfterLastUser(messages)
+        ? messages
+        : (ensureBotReply(
+            messages,
+            lastUserTxt,
+            liveReply.text,
+            user?.cosmo_user_id || "",
+          ) as SupportMessage[])
+      : messages;
+
+  const lastMsg = displayMessages.length ? displayMessages[displayMessages.length - 1] : null;
   const waitingHelp =
-    sending || agentTyping || (!!lastMsg && lastMsg.sender === "user" && agentTyping);
+    !staffAfterLastUser(displayMessages) &&
+    (sending || agentTyping || (!!lastMsg && lastMsg.sender === "user" && agentTyping));
 
   useEffect(() => {
     if (!threadId) return;
-    const poll = setInterval(() => void refresh(threadId), waitingHelp ? 800 : 2500);
+    const poll = setInterval(() => void refresh(threadId), pollMs);
     return () => clearInterval(poll);
-  }, [threadId, refresh, waitingHelp]);
+  }, [threadId, refresh, pollMs]);
+
+  useEffect(() => {
+    setPollMs(waitingHelp ? 1200 : 3000);
+  }, [waitingHelp]);
 
   const sendText = async (forcedText?: string) => {
     const text = (forcedText ?? draft).trim();
     if (!text || !threadId || sending || !user?.id) return;
+    sendingRef.current = true;
+    pinnedReplyRef.current = null;
+    setLiveReply(null);
     setSending(true);
     setAgentTyping(true);
     setDraft("");
@@ -315,18 +405,19 @@ export default function HelpSupportScreen() {
       text,
       ts: new Date().toISOString(),
     };
-    setMessages(
-      (prev) =>
-        ensureBotReply(
-          [...prev, localUser],
-          text,
-          "",
-          user?.cosmo_user_id || "",
-        ) as SupportMessage[],
-    );
+    setMessages((prev) => {
+      const next = ensureBotReply(
+        [...prev, localUser],
+        text,
+        "",
+        user?.cosmo_user_id || "",
+      ) as SupportMessage[];
+      messagesRef.current = next;
+      return next;
+    });
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     const ac = new AbortController();
-    const kill = setTimeout(() => ac.abort(), 20000);
+    const kill = setTimeout(() => ac.abort(), 90000);
     try {
       const res = await fetch(
         `${API_BASE}/api/support/thread/${encodeURIComponent(threadId)}/message`,
@@ -366,52 +457,110 @@ export default function HelpSupportScreen() {
         if (!retryMsgs.length) {
           retryMsgs = (await refresh(sid)) || [];
         }
-        setMessages(
-          ensureBotReply(
-            retryMsgs,
-            text,
-            typeof retryJson.ai?.reply === "string" ? retryJson.ai.reply : "",
-            user?.cosmo_user_id || "",
-          ) as SupportMessage[],
-        );
+        const retryReply = extractServerSupportReply(retryJson);
+        const retryUserId = lastUserMessage(retryMsgs)?.id
+          || localUser.id;
+        if (retryReply) {
+          pinnedReplyRef.current = { text: retryReply, forUserId: retryUserId };
+          setLiveReply({ text: retryReply, forUserId: retryUserId, ts: new Date().toISOString() });
+        }
+        const retryWithBot = ensureBotReply(
+          retryMsgs,
+          text,
+          retryReply,
+          user?.cosmo_user_id || "",
+        ) as SupportMessage[];
+        messagesRef.current = retryWithBot;
+        setMessages(retryWithBot);
+        setAgentTyping(!staffAfterLastUser(retryWithBot));
         requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
         return;
       }
       if (!res.ok) {
-        Alert.alert("Send failed", String(json.error || `HTTP ${res.status}`));
-        setDraft(text);
+        if (res.status === 502 || res.status === 504 || json?.error === "busy") {
+          setAgentTyping(true);
+          Alert.alert(
+            "Please wait",
+            json?.error === "busy"
+              ? "Support is busy — your message may retry. Stay on this screen."
+              : "Server is slow. Stay here — the reply will appear when ready.",
+          );
+        } else {
+          Alert.alert("Send failed", String(json.error || `HTTP ${res.status}`));
+          setDraft(text);
+        }
         return;
+      }
+      if (__DEV__) {
+        const raw = Array.isArray(json.messages) ? json.messages : [];
+        console.log("[support] POST", {
+          http: res.status,
+          agent_state: json.agent_state,
+          agent_typing: json.agent_typing,
+          ai: json.ai,
+          senders: raw.map((m: { sender?: string }) => m.sender),
+        });
       }
       let msgs: SupportMessage[] = Array.isArray(json.messages)
         ? json.messages
         : [];
+      const serverReply = extractServerSupportReply(json);
+      const replyUserId = lastUserMessage(msgs)?.id || localUser.id;
+      if (serverReply) {
+        pinnedReplyRef.current = { text: serverReply, forUserId: replyUserId };
+        setLiveReply({ text: serverReply, forUserId: replyUserId, ts: new Date().toISOString() });
+      }
       if (!msgs.length) {
         msgs = (await refresh(threadId)) || [];
       }
       const withBot = ensureBotReply(
         msgs,
         text,
-        typeof json.ai?.reply === "string" ? json.ai.reply : "",
+        serverReply || (pinnedReplyRef.current?.forUserId === replyUserId ? pinnedReplyRef.current.text : ""),
         user?.cosmo_user_id || "",
       ) as SupportMessage[];
-      setMessages(withBot);
-      setAgentTyping(
-        json.agent_state === "processing" || Boolean(json.agent_typing),
-      );
+      if (staffAfterLastUser(withBot)) {
+        const bt = lastBotText(withBot);
+        if (bt) pinnedReplyRef.current = { text: bt, forUserId: replyUserId };
+        messagesRef.current = withBot;
+        setMessages(withBot);
+        setAgentTyping(false);
+      } else {
+        const applied = mergePolledSupportMessages(messagesRef.current, withBot);
+        messagesRef.current = applied;
+        setMessages(applied);
+        setAgentTyping(
+          shouldShowAgentTyping(applied, json.agent_state, json.agent_typing),
+        );
+      }
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     } catch (e) {
       const aborted =
         (e instanceof Error && e.name === "AbortError") ||
         String(e).toLowerCase().includes("abort");
-      if (aborted && threadId) {
-        await refresh(threadId);
+      if (aborted) {
+        Alert.alert(
+          "Still working",
+          "Reply is taking longer. Stay on this screen — Cosmic Help will show when ready.",
+        );
+        setAgentTyping(true);
       } else {
         Alert.alert("Send failed", e instanceof Error ? e.message : "Network error");
         setDraft(text);
+        setAgentTyping(false);
       }
     } finally {
       clearTimeout(kill);
       setSending(false);
+      try {
+        if (threadId && !staffAfterLastUser(messagesRef.current)) {
+          await refresh(threadId);
+        } else {
+          setAgentTyping(false);
+        }
+      } finally {
+        sendingRef.current = false;
+      }
     }
   };
 
@@ -480,11 +629,6 @@ export default function HelpSupportScreen() {
     }
   };
 
-  const pickTopic = (topic: (typeof QUICK_TOPICS)[number]) => {
-    Haptics.selectionAsync().catch(() => {});
-    void sendText(topic.send);
-  };
-
   const firstName = (user?.name || "").trim().split(/\s+/)[0] || "";
 
   // ── Login gate ──────────────────────────────────────────────────────────────
@@ -536,8 +680,6 @@ export default function HelpSupportScreen() {
       </View>
     );
   }
-
-  const hasUserMessages = messages.some((m) => m.sender === "user");
 
   return (
     <KeyboardAvoidingView
@@ -593,7 +735,7 @@ export default function HelpSupportScreen() {
         <View style={[s.trustDivider, { backgroundColor: C.border }]} />
         <View style={s.trustItem}>
           <Feather name="lock" size={13} color={C.accent} />
-          <Text style={[s.trustTxt, { color: C.textMuted }]}>100% private</Text>
+          <Text style={[s.trustTxt, { color: C.textMuted }]}>Secure chat</Text>
         </View>
       </View>
 
@@ -702,7 +844,7 @@ export default function HelpSupportScreen() {
                 <MaterialCommunityIcons name="circle-multiple" size={44} color={C.textDim} />
                 <Text style={[s.emptyTitle, { color: C.text }]}>No transactions yet</Text>
                 <Text style={[s.emptyBody, { color: C.textMuted }]}>
-                  Jab aap Cosmic Packs, V3 live, ya koi report kharidoge — yahan coin ke saath dikhega.
+                  When you buy Cosmic Packs, V3 Live, or a report, it will show here with the coin amount.
                 </Text>
               </View>
             }
@@ -760,8 +902,8 @@ export default function HelpSupportScreen() {
       ) : (
         <FlatList
           ref={listRef}
-          data={messages}
-          extraData={messages.length}
+          data={displayMessages}
+          extraData={displayMessages}
           keyExtractor={(m) => m.id}
           contentContainerStyle={s.list}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
@@ -781,38 +923,14 @@ export default function HelpSupportScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.welcomeTitle, { color: C.text }]}>
-                    {firstName ? `Namaste ${firstName} 🙏` : "Namaste 🙏"}
+                    {firstName ? `Hello ${firstName}` : "Hello"}
                   </Text>
                   <Text style={[s.welcomeBody, { color: C.textMuted }]}>
-                    App ke sawaal ka short jawab yahin. Extra baat — payment,
-                    refund, missing PDF — team join karegi.
+                    Short answers about the app right here. For payment, refunds,
+                    or a missing PDF, our team will join this chat.
                   </Text>
                 </View>
               </View>
-              {!hasUserMessages ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8, paddingTop: 12 }}
-                >
-                  {QUICK_TOPICS.map((topic) => (
-                    <Pressable
-                      key={topic.label}
-                      onPress={() => pickTopic(topic)}
-                      style={[
-                        s.topicChip,
-                        {
-                          borderColor: `${C.accent}66`,
-                          backgroundColor: `${C.accent}14`,
-                        },
-                      ]}
-                    >
-                      <Feather name={topic.icon} size={13} color={C.accent} />
-                      <Text style={[s.topicTxt, { color: C.accent }]}>{topic.label}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              ) : null}
             </View>
           }
           ListFooterComponent={
@@ -845,7 +963,7 @@ export default function HelpSupportScreen() {
               </View>
             ) : null
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const mine = item.sender === "user";
             const sys = item.sender === "system";
             if (sys) {
@@ -867,7 +985,7 @@ export default function HelpSupportScreen() {
                     {item.text ? <Text style={[s.msg, { color: "#fff" }]}>{item.text}</Text> : null}
                     {item.image_url ? (
                       <Image
-                        source={{ uri: mediaSrc(item.image_url) }}
+                        source={{ uri: mediaSrc(item.image_url, { userId: user?.id, apiKey: user?.api_key }) }}
                         style={s.img}
                         resizeMode="cover"
                       />
@@ -880,6 +998,18 @@ export default function HelpSupportScreen() {
               );
             }
             const bot = item.sender === "bot";
+            let body = item.text || "";
+            if (bot) {
+              let prevUser = "";
+              for (let i = index - 1; i >= 0; i -= 1) {
+                if (displayMessages[i]?.sender === "user") {
+                  prevUser = displayMessages[i].text || "";
+                  break;
+                }
+              }
+              body = stripSupportBoilerplate(body, prevUser);
+              if (!body && !item.image_url) return null;
+            }
             return (
               <View style={s.supportRow}>
                 <View style={[s.msgAvatar, { backgroundColor: bot ? "#0ea5e9" : "#7c3aed" }]}>
@@ -902,12 +1032,12 @@ export default function HelpSupportScreen() {
                     <Text style={[s.who, { color: bot ? "#0ea5e9" : C.accent }]}>
                       {bot ? "Cosmic Help" : "Support team"}
                     </Text>
-                    {item.text ? (
-                      <Text style={[s.msg, { color: C.text }]}>{item.text}</Text>
+                    {body ? (
+                      <Text style={[s.msg, { color: C.text }]}>{body}</Text>
                     ) : null}
                     {item.image_url ? (
                       <Image
-                        source={{ uri: mediaSrc(item.image_url) }}
+                        source={{ uri: mediaSrc(item.image_url, { userId: user?.id, apiKey: user?.api_key }) }}
                         style={s.img}
                         resizeMode="cover"
                       />
@@ -944,7 +1074,7 @@ export default function HelpSupportScreen() {
           ref={inputRef}
           value={draft}
           onChangeText={setDraft}
-          placeholder="App ke baare mein poochho…"
+          placeholder="Ask about the app…"
           placeholderTextColor={C.textMuted}
           editable={!sending && !!threadId}
           style={[
@@ -1094,16 +1224,6 @@ const s = StyleSheet.create({
   },
   welcomeTitle: { fontSize: 16, fontWeight: "800" },
   welcomeBody: { fontSize: 13, lineHeight: 19, marginTop: 3 },
-  topicChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  topicTxt: { fontSize: 12.5, fontWeight: "700" },
   sysWrap: { alignSelf: "center", marginVertical: 6, maxWidth: "90%" },
   sysText: { fontSize: 12, textAlign: "center" },
   supportRow: {

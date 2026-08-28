@@ -6,6 +6,7 @@ import {
   Nunito_500Medium,
   Nunito_600SemiBold,
   Nunito_700Bold,
+  Nunito_800ExtraBold,
   useFonts,
 } from "@expo-google-fonts/nunito";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -20,10 +21,11 @@ import {
   configureForeground,
 } from "@/lib/notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import "@/lib/unhandledRejectionLogger";
+import { applyWebDocumentHeight } from "@/lib/webDocumentHeight";
+import { AppKeyboardShell } from "@/components/AppKeyboardShell";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { WelcomeBonusHost } from "@/components/WelcomeBonusHost";
 import { ZodiacBridge } from "@/components/ZodiacBridge";
@@ -31,7 +33,13 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { UserProvider, useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 
-SplashScreen.preventAutoHideAsync();
+if (Platform.OS === "web") {
+  applyWebDocumentHeight();
+} else {
+  SplashScreen.preventAutoHideAsync();
+}
+
+const WEB_ROOT_STYLE = { flex: 1, minHeight: "100vh", width: "100%" } as const;
 
 const queryClient = new QueryClient();
 
@@ -46,6 +54,7 @@ function RootLayoutNav() {
         animationDuration: Platform.OS === "web" ? 280 : 200,
       }}
     >
+      <Stack.Screen name="index"            options={{ headerShown: false }} />
       <Stack.Screen name="login"            options={{ headerShown: false }} />
       <Stack.Screen name="welcome-reveal"   options={{ headerShown: false, animation: "fade", animationDuration: 220 }} />
       <Stack.Screen name="onboarding"       options={{ headerShown: false }} />
@@ -70,6 +79,7 @@ function RootLayoutNav() {
       <Stack.Screen name="astrovastu-pro"           options={{ headerShown: false }} />
       <Stack.Screen name="business-vastu"           options={{ headerShown: false }} />
       <Stack.Screen name="birth-time-rectification" options={{ headerShown: false }} />
+      <Stack.Screen name="instagram-answers" options={{ headerShown: false }} />
       <Stack.Screen name="my-reports"                options={{ headerShown: false }} />
       <Stack.Screen name="personalization"           options={{ headerShown: false }} />
       <Stack.Screen name="panchang"                  options={{ headerShown: false }} />
@@ -77,6 +87,7 @@ function RootLayoutNav() {
       <Stack.Screen name="help-support"              options={{ headerShown: false }} />
       <Stack.Screen name="refer-earn"                options={{ headerShown: false }} />
       <Stack.Screen name="cosmic-packs"              options={{ headerShown: false }} />
+      <Stack.Screen name="palmistry"                 options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -87,9 +98,15 @@ export default function RootLayout() {
     Nunito_500Medium,
     Nunito_600SemiBold,
     Nunito_700Bold,
+    Nunito_800ExtraBold,
   });
 
   useEffect(() => {
+    if (Platform.OS === "web") {
+      applyWebDocumentHeight();
+      SplashScreen.hideAsync().catch(() => {});
+      return;
+    }
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
@@ -116,20 +133,24 @@ export default function RootLayout() {
     };
   }, []);
 
-  if (!fontsLoaded && !fontError) return null;
+  // Native: wait for fonts. Web: never return null — Google Fonts can hang
+  // and a null tree is a blank page.
+  if (Platform.OS !== "web" && !fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={Platform.OS === "web" ? WEB_ROOT_STYLE : undefined}>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <UserProvider>
               <ZodiacBridge />
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
+              <GestureHandlerRootView
+                style={Platform.OS === "web" ? WEB_ROOT_STYLE : { flex: 1 }}
+              >
+                <AppKeyboardShell>
                   <RootLayoutNav />
                   <WelcomeBonusHost />
-                </KeyboardProvider>
+                </AppKeyboardShell>
               </GestureHandlerRootView>
             </UserProvider>
           </ThemeProvider>

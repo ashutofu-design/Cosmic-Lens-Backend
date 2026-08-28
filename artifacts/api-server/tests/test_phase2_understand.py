@@ -39,6 +39,13 @@ class TestPhase2Understand(unittest.TestCase):
         dna = admin["question_dna"]
         self.assertEqual(dna["source"], "understand_phase2")
         self.assertEqual(dna["questions"][0]["bucket"], "gemstone_remedy")
+        q0 = dna["questions"][0]
+        self.assertEqual(
+            q0["answer_approach"],
+            "User Leo lagna ke liye classical gemstone rule jaanna chahta hai.",
+        )
+        self.assertNotEqual(q0.get("answer_approach"), "phase2_understand")
+        self.assertEqual(q0["user_wants"], q0["answer_approach"])
 
     def test_answer_mode_compat_maps_to_branch(self):
         from ask_understand_phase2 import normalize_branch

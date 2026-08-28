@@ -232,7 +232,7 @@ const TE: Record<UILang, ExtTranslations> = {
     businessMuhurat: "Business Muhurat", travelMuhurat: "Travel Muhurat",
     propertyMuhurat: "Griha Pravesh", noMuhurat: "No Muhurat today",
 
-    planetTitle: "Planet Positions", retrograde: "Retrograde",
+    planetTitle: "Kundli", retrograde: "Retrograde",
     directMotion: "Direct", transitLabel: "Transit",
     planetDignity: "Dignity", exalted: "Exalted", debilitated: "Debilitated",
 
@@ -320,7 +320,7 @@ const TE: Record<UILang, ExtTranslations> = {
     businessMuhurat: "Business Muhurat", travelMuhurat: "Yatra Muhurat",
     propertyMuhurat: "Griha Pravesh", noMuhurat: "Aaj koi muhurat nahi",
 
-    planetTitle: "Grahon ki Position", retrograde: "Vakri",
+    planetTitle: "Kundli", retrograde: "Vakri",
     directMotion: "Margi", transitLabel: "Gochar",
     planetDignity: "Sthiti", exalted: "Uchch", debilitated: "Neech",
 
@@ -408,7 +408,7 @@ const TE: Record<UILang, ExtTranslations> = {
     businessMuhurat: "व्यवसाय मुहूर्त", travelMuhurat: "यात्रा मुहूर्त",
     propertyMuhurat: "गृह प्रवेश", noMuhurat: "आज कोई मुहूर्त नहीं",
 
-    planetTitle: "ग्रह स्थिति", retrograde: "वक्री",
+    planetTitle: "कुंडली", retrograde: "वक्री",
     directMotion: "मार्गी", transitLabel: "गोचर",
     planetDignity: "ग्रह बल", exalted: "उच्च", debilitated: "नीच",
 

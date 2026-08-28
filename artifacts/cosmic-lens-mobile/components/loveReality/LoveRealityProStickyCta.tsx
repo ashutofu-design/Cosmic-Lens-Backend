@@ -16,6 +16,7 @@ export function LoveRealityProStickyCta({
   totalInr,
   onUnlock,
   lang = "en",
+  isVideo = false,
 }: {
   isDark: boolean;
   canPro: boolean;
@@ -24,6 +25,7 @@ export function LoveRealityProStickyCta({
   totalInr: number;
   onUnlock: () => void;
   lang?: ProPdfLangCode;
+  isVideo?: boolean;
 }) {
   const copy = loveRealityProPurchaseCopy(coerceProPdfLang(lang));
   const insets = useSafeAreaInsets();
@@ -43,7 +45,9 @@ export function LoveRealityProStickyCta({
     >
       <View style={s.row}>
         <View style={s.priceCol}>
-          <Text style={[s.priceStrike, { color: isDark ? "rgba(226,232,240,0.45)" : "#94a3b8" }]}>₹{regularInr}</Text>
+          {isVideo ? null : (
+            <Text style={[s.priceStrike, { color: isDark ? "rgba(226,232,240,0.45)" : "#94a3b8" }]}>₹{regularInr}</Text>
+          )}
           <Text style={[s.priceVal, { color: isDark ? "#f8fafc" : "#0f172a" }]}>₹{totalInr}</Text>
         </View>
         <Pressable
@@ -64,7 +68,7 @@ export function LoveRealityProStickyCta({
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={s.ctaText} numberOfLines={2}>
-                {canPro ? copy.ctaTitle : copy.addPartnerCta}
+                {canPro ? (isVideo ? copy.ctaVideoTitle : copy.ctaTitle) : copy.addPartnerCta}
               </Text>
             )}
           </LinearGradient>

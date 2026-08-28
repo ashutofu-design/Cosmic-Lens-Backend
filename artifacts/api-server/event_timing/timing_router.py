@@ -104,6 +104,35 @@ _STOCK_TIMING_DEFER_RX = re.compile(
 )
 
 
+def _dna_locked_timing_domain(llm_intent: Optional[dict]) -> Optional[tuple[str, str]]:
+    """Trusted Question-DNA domain wins over keyword registries.
+
+    Fix: "mere d1 d9 STUDY karo wealth ke perspective se" — the word 'study'
+    hijacked the foreign_education registry even though DNA said finance.
+    Only fires when routing came from trusted DNA; love/marriage keep their
+    dedicated routing below.
+    """
+    if not isinstance(llm_intent, dict):
+        return None
+    if not (
+        llm_intent.get("dna_routing_applied")
+        or str(llm_intent.get("routing_override") or "") == "question_dna"
+        or str(llm_intent.get("intent_source") or "") == "question_dna"
+    ):
+        return None
+    dom = str(
+        llm_intent.get("routed_domain") or llm_intent.get("domain") or ""
+    ).strip().lower()
+    if not dom or dom in ("general", "love", "marriage", "relationship"):
+        return None
+    if dom not in DOMAIN_TIMING_SPECS:
+        return None
+    bucket = str(
+        llm_intent.get("bucket") or llm_intent.get("mr_bucket") or ""
+    ).strip().lower() or "general"
+    return dom, bucket
+
+
 def resolve_timing_domain(
     question: str,
     llm_intent: Optional[dict] = None,
@@ -120,6 +149,16 @@ def resolve_timing_domain(
 
     if _STOCK_TIMING_DEFER_RX.search(q):
         return "general", "general", False
+
+    # Trusted Question-DNA domain is the single source of truth — keyword
+    # registries (study/exam/visa words etc.) must not hijack the domain.
+    _dna_lock = _dna_locked_timing_domain(llm_intent)
+    if _dna_lock is not None:
+        _dna_dom, _dna_bucket = _dna_lock
+        if detect_timing_intent(q, llm_intent) or (
+            isinstance(llm_intent, dict) and llm_intent.get("is_timing")
+        ):
+            return _dna_dom, _dna_bucket, True
 
     # Narrow topic guards before broad registries (foreign/finance/career words
     # overlap heavily). These remain timing-only and fall back to the universal

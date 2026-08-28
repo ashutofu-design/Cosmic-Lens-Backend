@@ -28,6 +28,7 @@ export type RoomUploadCheckoutResult =
 export async function startAstrovastuRoomUploadCheckout(opts: {
   user: { id: number; api_key: string };
   payload: RoomUploadCheckoutPayload;
+  urgent?: boolean;
 }): Promise<RoomUploadCheckoutResult> {
   if (!opts.user?.id || !opts.user.api_key) {
     Alert.alert("Login required", "Please sign in to pay and submit your room photo.");
@@ -39,6 +40,7 @@ export async function startAstrovastuRoomUploadCheckout(opts: {
     direction: opts.payload.direction,
     data_url: opts.payload.data_url,
     base64: opts.payload.base64,
+    urgent: !!opts.urgent,
   });
 
   try {
@@ -49,6 +51,7 @@ export async function startAstrovastuRoomUploadCheckout(opts: {
         user_id: opts.user.id,
         sku: ROOM_EXPERT_UPLOAD_SKU,
         property_name: "",
+        urgent: !!opts.urgent,
       }),
     });
     const order = await orderRes.json().catch(() => ({} as Record<string, unknown>));
@@ -60,6 +63,7 @@ export async function startAstrovastuRoomUploadCheckout(opts: {
       const ok = await submitAstrovastuRoomHumanOrder({
         user: opts.user,
         purchaseId: 0,
+        urgent: !!opts.urgent,
       });
       return ok ? "submitted" : "failed";
     }

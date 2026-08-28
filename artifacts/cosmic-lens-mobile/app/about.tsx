@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   I18nManager,
   Linking,
@@ -8,6 +8,8 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import Constants from "expo-constants";
+import * as Updates from "expo-updates";
 import { router } from "expo-router";
 import LegalScreen, { Section, P } from "@/components/LegalScreen";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
@@ -21,7 +23,7 @@ const F = {
   bold:     "Nunito_700Bold",
 } as const;
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = Constants.expoConfig?.version ?? "1.0.0";
 const SUPPORT_EMAIL = LEGAL_META.supportEmail;
 const WEB_URL = LEGAL_META.website;
 
@@ -49,9 +51,40 @@ function LinkRow({
   );
 }
 
+type OtaInfo = {
+  updateId: string;
+  channel: string;
+  runtime: string;
+  createdAt: string;
+  isEmbedded: boolean;
+};
+
 export default function AboutScreen() {
   const C = useC();
   const t = useT();
+  const [ota, setOta] = useState<OtaInfo | null>(null);
+
+  useEffect(() => {
+    try {
+      const created = Updates.createdAt;
+      setOta({
+        updateId: Updates.updateId ?? "(embedded / no OTA)",
+        channel: Updates.channel ?? "(none)",
+        runtime: Updates.runtimeVersion ?? "—",
+        createdAt: created ? created.toISOString() : "—",
+        isEmbedded: !!Updates.isEmbeddedLaunch,
+      });
+    } catch {
+      setOta({
+        updateId: "(updates unavailable)",
+        channel: "(none)",
+        runtime: "—",
+        createdAt: "—",
+        isEmbedded: true,
+      });
+    }
+  }, []);
+
   const legalLinks: { label: string; path: string; icon: string }[] = [
     { label: t.ab_linkPrivacy,    path: "/privacy",        icon: "shield" },
     { label: t.ab_linkTerms,      path: "/terms",          icon: "file-text" },
@@ -127,6 +160,27 @@ export default function AboutScreen() {
       <View style={[ar.versionCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Text style={[ar.versionLabel, { color: C.textMuted }]}>{t.ab_lblAppVersion}</Text>
         <Text style={[ar.versionValue, { color: C.text }]}>v{APP_VERSION}</Text>
+        {ota ? (
+          <View style={{ marginTop: 10, gap: 4, alignSelf: "stretch" }}>
+            <Text style={[ar.metaLine, { color: C.textMuted }]}>
+              Channel: {ota.channel}
+            </Text>
+            <Text style={[ar.metaLine, { color: C.textMuted }]}>
+              Runtime: {ota.runtime}
+            </Text>
+            <Text style={[ar.metaLine, { color: C.textMuted }]} selectable>
+              Update ID: {ota.updateId}
+            </Text>
+            <Text style={[ar.metaLine, { color: C.textMuted }]}>
+              OTA time: {ota.createdAt}
+            </Text>
+            <Text style={[ar.metaLine, { color: ota.isEmbedded ? "#f59e0b" : "#22c55e" }]}>
+              {ota.isEmbedded
+                ? "Status: Embedded build (OTA not applied yet)"
+                : "Status: Running EAS Update (OTA OK)"}
+            </Text>
+          </View>
+        ) : null}
         <Text style={[ar.versionFoot, { color: C.textMuted }]}>
           {t.ab_versionFoot}
         </Text>
@@ -157,4 +211,5 @@ const ar = StyleSheet.create({
   versionLabel: { fontSize: 10.5, fontFamily: F.semibold, letterSpacing: 0.4, textTransform: "uppercase" },
   versionValue: { fontSize: 18, fontFamily: F.bold, letterSpacing: -0.3 },
   versionFoot:  { fontSize: 11, fontFamily: F.regular, marginTop: 8 },
+  metaLine:     { fontSize: 10.5, fontFamily: F.medium, textAlign: "left" },
 });

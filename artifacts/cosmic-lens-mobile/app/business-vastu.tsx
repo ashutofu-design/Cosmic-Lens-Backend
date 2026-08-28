@@ -19,7 +19,7 @@ import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, Stack } from "expo-router";
+import { router, Stack, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -38,11 +38,28 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { OrderSuccessModal } from "@/components/OrderSuccessModal";
+import { VastuDeliveryOptions } from "@/components/VastuDeliveryOptions";
 
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
+import {
+  BUSINESS_VASTU_PDF_PRICES,
+  BUSINESS_VASTU_PRIORITY_FEE_INR,
+  BUSINESS_VASTU_ROOM_PHOTO_PRICES,
+  businessVastuOrderTotalInr,
+} from "@/lib/businessVastuBilling";
+import {
+  consumeBusinessVastuPaidReady,
+  gateBusinessVastuCheckout,
+  getPendingBusinessVastuPurchaseId,
+} from "@/lib/businessVastuCheckoutFlow";
+import {
+  clearPendingBusinessVastuCheckout,
+  hydrateBusinessVastuPdfPayload,
+  type BusinessVastuSubmitPayload,
+} from "@/lib/pendingBusinessVastuCheckout";
 import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
@@ -53,14 +70,12 @@ import {
 import { NorthAt, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
 // ─────────────────────────────────────────────────────────────────────────
-// Static option lists per business type (mirrors backend BUSINESS_CRITICAL)
-// ─────────────────────────────────────────────────────────────────────────
 type BizType = "shop" | "office" | "factory";
 
-const BIZ_OPTIONS: { key: BizType; en: string; hi: string; icon: keyof typeof Feather.glyphMap; price: number; sku: string }[] = [
-  { key: "shop",    en: "Shop",    hi: "Dukaan",   icon: "shopping-bag", price: 999,  sku: "shop_999"    },
-  { key: "office",  en: "Office",  hi: "Office",   icon: "briefcase",    price: 1499, sku: "office_1499" },
-  { key: "factory", en: "Factory", hi: "Karkhana", icon: "tool",         price: 2999, sku: "factory_2999"},
+const BIZ_OPTIONS: { key: BizType; en: string; hi: string; icon: keyof typeof Feather.glyphMap; sku: string }[] = [
+  { key: "shop",    en: "Shop",    hi: "Dukaan",   icon: "shopping-bag", sku: "shop_room_pdf" },
+  { key: "office",  en: "Office",  hi: "Office",   icon: "briefcase",    sku: "office_room_pdf" },
+  { key: "factory", en: "Factory", hi: "Karkhana", icon: "tool",         sku: "factory_room_pdf" },
 ];
 
 const ROOM_BY_BIZ: Record<BizType, { key: string; en: string; hi: string; icon: keyof typeof Feather.glyphMap; critical?: boolean }[]> = {
@@ -191,12 +206,6 @@ function dirToHeadingDeg(dir: string): number | undefined {
 
 const MAX_ROOM_PHOTOS = 6;
 const MAX_PLAN_BYTES = 10 * 1024 * 1024;
-const SHOP_ROOM_PHOTO_PRICE = 399;
-const OFFICE_ROOM_PHOTO_PRICE = 499;
-const FACTORY_ROOM_PHOTO_PRICE = 999;
-const SHOP_PDF_PRICE = 2999;
-const OFFICE_PDF_PRICE = 6999;
-const FACTORY_PDF_PRICE = 14999;
 
 const DEFAULT_PLAN_FILENAME: Record<BizType, string> = {
   shop: "shop_floor_plan.pdf",
@@ -270,9 +279,12 @@ export default function BusinessVastuScreen() {
   const [roomPhotos, setRoomPhotos] = useState<RoomPhoto[]>([]);
   const [photoRoom, setPhotoRoom] = useState<string | null>(null);
   const [planUpload, setPlanUpload] = useState<SmartScanUploadValue | null>(null);
+  /** Explicit checkout mode — PDF mode shows PDF price on Pay Now even before file sticks. */
+  const [checkoutMode, setCheckoutMode] = useState<"photos" | "pdf">("photos");
   const [planPicking, setPlanPicking] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [uploadSuccessVisible, setUploadSuccessVisible] = useState(false);
+  const [priorityDelivery, setPriorityDelivery] = useState(false);
 
   const roomOpts = ROOM_BY_BIZ[bizType];
   const photosFull = roomPhotos.length >= MAX_ROOM_PHOTOS;
@@ -283,57 +295,97 @@ export default function BusinessVastuScreen() {
     setPhotoRoom(null);
     setRoomPhotos([]);
     setPlanUpload(null);
+    setCheckoutMode("photos");
     setResult(null); setError(null);
     setSubmitted(false);
   }, []);
 
   const onPickPlanPdf = useCallback(async () => {
     if (loading || planPicking) return;
-    Haptics.selectionAsync();
-    setPlanPicking(true);
     try {
+      Haptics.selectionAsync();
+    } catch {}
+    // Switch to PDF pricing immediately (Pay Now → ₹2999 etc.)
+    setCheckoutMode("pdf");
+    setRoomPhotos([]);
+    setPhotoRoom(null);
+    setSubmitted(false);
+    setPlanPicking(true);
+    setError(null);
+    try {
+      // Broader MIME types — Android often rejects application/pdf-only filters.
       const r = await DocumentPicker.getDocumentAsync({
-        type: ["application/pdf"],
+        type: ["application/pdf", "application/octet-stream", "*/*"],
         copyToCacheDirectory: true,
         multiple: false,
       });
       if (r.canceled || !r.assets?.[0]) return;
       const f = r.assets[0];
+      const name = (f.name || "").toLowerCase();
+      const mime = (f.mimeType || "").toLowerCase();
+      const isPdf =
+        mime.includes("pdf") ||
+        name.endsWith(".pdf") ||
+        mime === "" ||
+        mime === "application/octet-stream";
+      if (!isPdf) {
+        Alert.alert("PDF required", "Please select a floor plan PDF file (.pdf).");
+        return;
+      }
       if (typeof f.size === "number" && f.size > MAX_PLAN_BYTES) {
         Alert.alert("File too large", "Floor plan PDF must be under 10 MB.");
         return;
       }
-      const FileSystem = await import("expo-file-system/legacy");
-      const b64 = await FileSystem.readAsStringAsync(f.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      if (!f.uri) {
+        Alert.alert("Upload failed", "Could not open the selected file. Try another PDF.");
+        return;
+      }
+
+      // Keep only URI in state — full base64 in React state OOM / never updates Pay Now
       setPlanUpload({
         type: "pdf",
-        base64: b64,
+        uri: f.uri,
         filename: f.name || DEFAULT_PLAN_FILENAME[bizType],
         size_bytes: f.size,
         north_at: "top",
       });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCheckoutMode("pdf");
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      Alert.alert("Upload failed", msg || "Could not read the PDF.");
+      Alert.alert(
+        "Upload failed",
+        msg || "Could not read the PDF. On Android, grant file access and try again.",
+      );
     } finally {
       setPlanPicking(false);
     }
   }, [loading, planPicking, bizType]);
 
-  const appendRoomPhoto = useCallback((photo: RoomPhoto) => {
+  const clearPlanPdf = useCallback(() => {
+    try {
+      Haptics.selectionAsync();
+    } catch {}
+    setPlanUpload(null);
+    setCheckoutMode("photos");
     setSubmitted(false);
+  }, []);
+
+  const appendRoomPhoto = useCallback((photo: RoomPhoto) => {
+    if (checkoutMode === "pdf" || planUpload) return;
+    setSubmitted(false);
+    setCheckoutMode("photos");
     setRoomPhotos((prev) => {
       if (prev.length >= MAX_ROOM_PHOTOS) return prev;
       return [...prev, photo];
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, []);
+  }, [checkoutMode, planUpload]);
 
   const onPhotoCapture = useCallback((capture: SmartScanResult) => {
-    if (!photoRoom) return;
+    if (checkoutMode === "pdf" || planUpload || !photoRoom) return;
     appendRoomPhoto({
       room_type: photoRoom,
       image_data_url: capture.data_url,
@@ -341,9 +393,10 @@ export default function BusinessVastuScreen() {
         ? { heading_deg: capture.heading_deg }
         : {}),
     });
-  }, [appendRoomPhoto, photoRoom]);
+  }, [appendRoomPhoto, checkoutMode, photoRoom, planUpload]);
 
   const onGalleryPhotoSubmit = useCallback((g: GalleryScanResult) => {
+    if (checkoutMode === "pdf" || planUpload) return;
     const room = photoRoom || g.room_type;
     if (!room) return;
     const heading = dirToHeadingDeg(g.direction);
@@ -352,7 +405,7 @@ export default function BusinessVastuScreen() {
       image_data_url: g.data_url,
       ...(typeof heading === "number" ? { heading_deg: heading } : {}),
     });
-  }, [appendRoomPhoto, photoRoom]);
+  }, [appendRoomPhoto, checkoutMode, photoRoom, planUpload]);
 
   const removeRoomPhoto = useCallback((index: number) => {
     Haptics.selectionAsync();
@@ -362,85 +415,271 @@ export default function BusinessVastuScreen() {
 
   const onSubmit = useCallback(async () => {
     if (loading) return;
+    setSubmitted(false);
+    setError(null);
+
     if (!user?.id || !user?.api_key) {
+      Alert.alert("Login required", t.bv_errAuthRequired || "Please sign in first.");
       setError({ error: "auth_required", message: t.bv_errAuthRequired });
       return;
     }
-    if (roomPhotos.length < 2 && !planUpload) {
+    if (!propertyName.trim()) {
+      Alert.alert("Name required", t.bv_errValidationName || "Enter premise / shop name.");
+      setError({ error: "validation", message: t.bv_errValidationName });
+      return;
+    }
+
+    const usePdf = checkoutMode === "pdf" || !!planUpload;
+    if (usePdf) {
+      if (!planUpload?.uri && !planUpload?.base64 && !planUpload?.data_url) {
+        Alert.alert(
+          "PDF required",
+          "PDF mode on hai — pehle floor plan PDF select karo, ya ✕ se rooms mode pe jao.",
+          [
+            { text: "Pick PDF", onPress: () => { void onPickPlanPdf(); } },
+            { text: "OK" },
+          ],
+        );
+        setError({
+          error: "validation",
+          message: "Please select a floor plan PDF first (or switch to room photos).",
+        });
+        return;
+      }
+    } else if (roomPhotos.length < 1) {
+      Alert.alert(
+        "Upload required",
+        t.bv_errValidationRooms || "Add at least one room photo, or upload a floor plan PDF.",
+      );
       setError({ error: "validation", message: t.bv_errValidationRooms });
       return;
     }
-    if (!propertyName.trim()) {
-      setError({ error: "validation",
-                 message: t.bv_errValidationName });
-      return;
-    }
 
-    setError(null); setResult(null); setSubmitted(false); setLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Payment gate uses stub PDF (no base64) so Pay Now doesn't hang/OOM
+    const planFileUri = planUpload?.uri;
+    const payload: BusinessVastuSubmitPayload = {
+      business_type: bizType,
+      property_name: propertyName.trim(),
+      urgent: priorityDelivery,
+      ...(usePdf && planUpload
+        ? {
+            floor_plan_upload: {
+              type: "pdf",
+              ...(planUpload.base64 ? { base64: planUpload.base64 } : {}),
+              ...(planUpload.data_url ? { data_url: planUpload.data_url } : {}),
+              ...(planUpload.filename ? { filename: planUpload.filename } : {}),
+              north_at: planUpload.north_at || "top",
+            },
+          }
+        : {}),
+      ...(!usePdf && roomPhotos.length > 0
+        ? {
+            room_photos: roomPhotos.map((p) => ({
+              room_type: p.room_type,
+              image_data_url: p.image_data_url,
+              ...(typeof p.heading_deg === "number"
+                ? { heading_deg: p.heading_deg }
+                : {}),
+            })),
+          }
+        : {}),
+    };
 
-    try {
-      const resp = await fetch(`${API_BASE}/api/business-vastu/submit-order`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": user.api_key },
-        body:    JSON.stringify({
-          user_id:       user.id,
-          business_type: bizType,
-          property_name: propertyName.trim(),
-          ...(planUpload
-            ? {
-                floor_plan_upload: {
-                  type: planUpload.type,
-                  ...(planUpload.data_url ? { data_url: planUpload.data_url } : {}),
-                  ...(planUpload.base64   ? { base64:   planUpload.base64   } : {}),
-                  ...(planUpload.filename ? { filename: planUpload.filename } : {}),
-                  north_at: planUpload.north_at || "top",
-                },
-              }
-            : {}),
-          ...(roomPhotos.length > 0
-            ? { room_photos: roomPhotos.map(p => ({
-                  room_type:      p.room_type,
-                  image_data_url: p.image_data_url,
-                  ...(typeof p.heading_deg === "number" ? { heading_deg: p.heading_deg } : {}),
-                })) }
-            : {}),
-        }),
-      });
-      const body = await resp.json();
-      if (!resp.ok) {
-        setError({ ...(body as ErrorPayload), error: body.error || `HTTP ${resp.status}` });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      } else {
-        setSubmitted(true);
-        setRoomPhotos([]);
-        setPlanUpload(null);
-        setPhotoRoom(null);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setUploadSuccessVisible(true);
+    const postSubmit = async (purchaseId: number | undefined, bodyPayload: BusinessVastuSubmitPayload) => {
+      setError(null);
+      setResult(null);
+      setSubmitted(false);
+      setLoading(true);
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch {}
+      try {
+        const resp = await fetch(`${API_BASE}/api/business-vastu/submit-order`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": user.api_key!,
+            "X-User-Id": String(user.id),
+          },
+          body: JSON.stringify({
+            user_id: user.id,
+            purchase_id: purchaseId,
+            ...bodyPayload,
+          }),
+        });
+        const body = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          const msg =
+            (body as ErrorPayload).message ||
+            (resp.status === 402
+              ? "Payment required before submit."
+              : (body as ErrorPayload).error || `HTTP ${resp.status}`);
+          setError({
+            ...(body as ErrorPayload),
+            error: (body as ErrorPayload).error || `HTTP ${resp.status}`,
+            message: msg,
+          });
+          Alert.alert("Submit failed", msg);
+          try {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          } catch {}
+        } else {
+          clearPendingBusinessVastuCheckout();
+          setSubmitted(true);
+          setRoomPhotos([]);
+          setPlanUpload(null);
+          setCheckoutMode("photos");
+          setPhotoRoom(null);
+          try {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch {}
+          setUploadSuccessVisible(true);
+        }
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        setError({ error: "network", message: msg });
+        Alert.alert("Network error", msg);
+      } finally {
+        setLoading(false);
       }
-    } catch (e: any) {
-      setError({ error: "network", message: String(e?.message || e) });
+    };
+
+    let handedOff = false;
+    setLoading(true);
+    try {
+      await gateBusinessVastuCheckout({
+        user,
+        payload,
+        planFileUri,
+        onEntitled: (purchaseId) => {
+          handedOff = true;
+          void (async () => {
+            try {
+              const full = await hydrateBusinessVastuPdfPayload(payload, planFileUri);
+              await postSubmit(purchaseId ?? getPendingBusinessVastuPurchaseId(), full);
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : String(e);
+              setError({ error: "validation", message: msg });
+              Alert.alert("PDF error", msg);
+              setLoading(false);
+            }
+          })();
+        },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Could not start payment", msg);
     } finally {
-      setLoading(false);
+      if (!handedOff) setLoading(false);
     }
-  }, [loading, user, bizType, propertyName, planUpload, roomPhotos, t.bv_errAuthRequired, t.bv_errValidationName, t.bv_errValidationRooms]);
+  }, [
+    loading,
+    user,
+    bizType,
+    propertyName,
+    planUpload,
+    roomPhotos,
+    priorityDelivery,
+    checkoutMode,
+    onPickPlanPdf,
+    t.bv_errAuthRequired,
+    t.bv_errValidationName,
+    t.bv_errValidationRooms,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const paid = consumeBusinessVastuPaidReady();
+      if (!paid || !user?.id || !user?.api_key) return;
+      const pid = getPendingBusinessVastuPurchaseId();
+      // Re-run submit path with stored payload after Razorpay
+      (async () => {
+        setError(null);
+        setResult(null);
+        setSubmitted(false);
+        setLoading(true);
+        try {
+          const full = await hydrateBusinessVastuPdfPayload(
+            paid.payload,
+            paid.planFileUri,
+          );
+          if (full.floor_plan_upload && !full.floor_plan_upload.base64 && !full.floor_plan_upload.data_url) {
+            throw new Error("PDF could not be read after payment. Please try again.");
+          }
+          const resp = await fetch(`${API_BASE}/api/business-vastu/submit-order`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-API-Key": user.api_key!,
+              "X-User-Id": String(user.id),
+            },
+            body: JSON.stringify({
+              user_id: user.id,
+              purchase_id: pid,
+              ...full,
+            }),
+          });
+          const body = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            const msg =
+              (body as ErrorPayload).message ||
+              (resp.status === 402
+                ? "Payment required before submit."
+                : (body as ErrorPayload).error || `HTTP ${resp.status}`);
+            setError({
+              ...(body as ErrorPayload),
+              error: (body as ErrorPayload).error || `HTTP ${resp.status}`,
+              message: msg,
+            });
+            Alert.alert("Submit failed", msg);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          } else {
+            clearPendingBusinessVastuCheckout();
+            setSubmitted(true);
+            setRoomPhotos([]);
+            setPlanUpload(null);
+            setCheckoutMode("photos");
+            setPhotoRoom(null);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setUploadSuccessVisible(true);
+          }
+        } catch (e: any) {
+          const msg = String(e?.message || e);
+          setError({ error: "network", message: msg });
+          Alert.alert("Submit failed", msg);
+        } finally {
+          setLoading(false);
+        }
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, user?.api_key]),
+  );
 
   const hasUploads = roomPhotos.length > 0 || !!planUpload;
+  const isPdfCheckout = checkoutMode === "pdf" || !!planUpload;
 
-  const bizMeta = BIZ_OPTIONS.find(b => b.key === bizType)!;
+  const roomPhotoPrice = BUSINESS_VASTU_ROOM_PHOTO_PRICES[bizType];
+  const planPdfPrice = BUSINESS_VASTU_PDF_PRICES[bizType];
+  // PDF mode (tap Upload Full Shop PDF) → Pay Now = PDF price immediately
+  const orderTotalInr = isPdfCheckout
+    ? planPdfPrice + (priorityDelivery ? BUSINESS_VASTU_PRIORITY_FEE_INR : 0)
+    : businessVastuOrderTotalInr({
+        businessType: bizType,
+        priorityDelivery,
+        hasPdf: false,
+        roomCount: Math.max(1, roomPhotos.length),
+      });
+  const payNowLabel = isPdfCheckout
+    ? `${t.bv_btnSubmitReview || "Pay Now"} · PDF ₹${orderTotalInr}`
+    : `${t.bv_btnSubmitReview || "Pay Now"} · ₹${orderTotalInr}`;
   const planPdfLabel =
     bizType === "shop"
-      ? `${t.bv_btnUploadShopPdf || "Upload Full Shop PDF"} (₹${SHOP_PDF_PRICE})`
+      ? `${t.bv_btnUploadShopPdf || "Upload Full Shop PDF"} (₹${planPdfPrice})`
       : bizType === "office"
-        ? `${t.bv_btnUploadOfficePdf || "Upload Full Office PDF"} (₹${OFFICE_PDF_PRICE})`
+        ? `${t.bv_btnUploadOfficePdf || "Upload Full Office PDF"} (₹${planPdfPrice})`
         : bizType === "factory"
-          ? `${t.bv_btnUploadFactoryPdf || "Upload Full Factory PDF"} (₹${FACTORY_PDF_PRICE})`
+          ? `${t.bv_btnUploadFactoryPdf || "Upload Full Factory PDF"} (₹${planPdfPrice})`
           : "";
-  const roomPhotoPrice =
-    bizType === "office" ? OFFICE_ROOM_PHOTO_PRICE
-    : bizType === "factory" ? FACTORY_ROOM_PHOTO_PRICE
-    : SHOP_ROOM_PHOTO_PRICE;
   const galleryPhotoBase =
     bizType === "factory"
       ? (t.bv_btnUploadFactoryPhoto || "Upload Factory Photo")
@@ -449,10 +688,6 @@ export default function BusinessVastuScreen() {
         : (t.avp_btnUploadPhoto || "Upload Room Photo");
   const galleryPhotoLabel = `${galleryPhotoBase} (₹${roomPhotoPrice}/${t.avp_uploadPricePerRoom || "per room"})`;
   const accent = BIZ_ACCENT[bizType];
-  const planPdfPrice =
-    bizType === "office" ? OFFICE_PDF_PRICE
-    : bizType === "factory" ? FACTORY_PDF_PRICE
-    : SHOP_PDF_PRICE;
   const submitPulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (loading || submitted) return;
@@ -502,18 +737,30 @@ export default function BusinessVastuScreen() {
       </LinearGradient>
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
+        style={{ flex: 1, minHeight: 0 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 48, flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
         showsVerticalScrollIndicator={false}
       >
         <FadeInView delay={0}>
           <View style={[ui.priceRibbon, { borderColor: `${accent}44`, backgroundColor: `${accent}12` }]}>
             <Feather name="zap" size={14} color={accent} />
             <Text style={[ui.priceRibbonText, { color: C.text }]}>
-              {`₹${roomPhotoPrice}/${t.avp_uploadPricePerRoom || "room"} · PDF ₹${planPdfPrice}`}
+              {isPdfCheckout
+                ? `PDF · Pay ₹${orderTotalInr}${priorityDelivery ? ` (incl. ₹${BUSINESS_VASTU_PRIORITY_FEE_INR} priority)` : ""}`
+                : `₹${roomPhotoPrice}/${t.avp_uploadPricePerRoom || "room"} · PDF ₹${planPdfPrice}${
+                    hasUploads ? ` · Pay ₹${orderTotalInr}` : ""
+                  }`}
             </Text>
           </View>
         </FadeInView>
+
+        <VastuDeliveryOptions
+          isDark={C.isDark}
+          priority={priorityDelivery}
+          onPriorityChange={setPriorityDelivery}
+        />
 
         <SectionShell
           icon="layers"
@@ -552,6 +799,12 @@ export default function BusinessVastuScreen() {
                   <Text style={{ color: sel ? bAccent : C.text, fontWeight: "800", marginTop: 8, fontSize: 13 }}>
                     {bvBiz(b.key)}
                   </Text>
+                  <Text style={{ color: sel ? bAccent : C.textMid, fontWeight: "600", marginTop: 2, fontSize: 10 }}>
+                    {`₹${BUSINESS_VASTU_ROOM_PHOTO_PRICES[b.key]}/room`}
+                  </Text>
+                  <Text style={{ color: sel ? bAccent : C.textMid, fontWeight: "600", fontSize: 10 }}>
+                    {`PDF ₹${BUSINESS_VASTU_PDF_PRICES[b.key]}`}
+                  </Text>
                   {sel ? (
                     <View style={[ui.bizSelDot, { backgroundColor: bAccent }]} />
                   ) : null}
@@ -583,30 +836,52 @@ export default function BusinessVastuScreen() {
         <SectionShell
           icon="camera"
           title={t.avp_pickerLabel || "Which room is this photo for?"}
-          subtitle={photoRoom
-            ? `${t.avp_camHintPrefix || "Photographing"} ${bvRoom(photoRoom)} · ${roomPhotos.length}/${MAX_ROOM_PHOTOS}`
-            : (t.avp_pickerHint || "Pick a room below before taking or uploading a photo.")}
+          subtitle={
+            isPdfCheckout
+              ? `PDF mode · Pay ₹${orderTotalInr} — room photos locked. Remove PDF / pick a room to switch.`
+              : photoRoom
+                ? `${t.avp_camHintPrefix || "Photographing"} ${bvRoom(photoRoom)} · ${roomPhotos.length}/${MAX_ROOM_PHOTOS}`
+                : (t.avp_pickerHint || "Pick a room below before taking or uploading a photo.")
+          }
           accent={accent}
           delay={staggerDelay(3)}
         >
         <View style={styles.roomGrid}>
           {roomOpts.map((r) => {
             const sel = photoRoom === r.key;
+            const roomsLocked = isPdfCheckout;
             return (
               <Pressable
                 key={r.key}
                 onPress={() => {
+                  if (roomsLocked) {
+                    Alert.alert(
+                      "PDF mode",
+                      `Pay ₹${orderTotalInr} for full PDF, or remove the PDF / clear PDF mode to add room photos.`,
+                      [
+                        { text: "Keep PDF", style: "cancel" },
+                        {
+                          text: "Switch to rooms",
+                          onPress: () => {
+                            clearPlanPdf();
+                          },
+                        },
+                      ],
+                    );
+                    return;
+                  }
                   Haptics.selectionAsync();
+                  setCheckoutMode("photos");
                   setPhotoRoom((prev) => (prev === r.key ? null : r.key));
                 }}
-                disabled={loading}
+                disabled={loading || roomsLocked}
                 style={({ pressed }) => [
                   ui.roomChip,
                   {
                     borderColor: sel ? accent : C.border,
                     backgroundColor: sel ? `${accent}18` : C.bgCard,
                     borderWidth: sel ? 2 : 1,
-                    opacity: loading ? 0.5 : pressed ? 0.9 : 1,
+                    opacity: loading || roomsLocked ? 0.4 : pressed ? 0.9 : 1,
                     transform: [{ scale: pressed ? 0.98 : 1 }],
                   },
                 ]}
@@ -635,9 +910,15 @@ export default function BusinessVastuScreen() {
               compact
               onCapture={onPhotoCapture}
               loading={loading}
-              disabled={!photoRoom || photosFull}
-              disabledTitle={t.avp_camHintNoRoom || "Pick a room first"}
-              disabledMessage={t.avp_pickerHint || "Select which area this photo is for."}
+              disabled={isPdfCheckout || !photoRoom || photosFull}
+              disabledTitle={
+                isPdfCheckout ? "PDF mode" : (t.avp_camHintNoRoom || "Pick a room first")
+              }
+              disabledMessage={
+                isPdfCheckout
+                  ? `Remove PDF mode to take room photos. Checkout is ₹${orderTotalInr} for full plan.`
+                  : (t.avp_pickerHint || "Select which area this photo is for.")
+              }
               label={`${t.avp_btnSmartScan || "Open Camera"} (₹${roomPhotoPrice}/${t.avp_uploadPricePerRoom || "per room"})`}
             />
           </View>
@@ -647,43 +928,72 @@ export default function BusinessVastuScreen() {
               photoOnly
               onSubmit={onGalleryPhotoSubmit}
               loading={loading}
-              disabled={!photoRoom || photosFull}
+              disabled={isPdfCheckout || !photoRoom || photosFull}
               preselectedRoom={photoRoom}
-              disabledTitle={t.avp_camHintNoRoom || "Pick a room first"}
-              disabledMessage={t.avp_pickerHint || "Select which area this photo is for."}
+              disabledTitle={
+                isPdfCheckout ? "PDF mode" : (t.avp_camHintNoRoom || "Pick a room first")
+              }
+              disabledMessage={
+                isPdfCheckout
+                  ? `Remove PDF mode to upload room photos. Checkout is ₹${orderTotalInr} for full plan.`
+                  : (t.avp_pickerHint || "Select which area this photo is for.")
+              }
               label={galleryPhotoLabel}
               roomLabel={bvRoom}
               submitLabel={t.bv_addRoomPhoto || "Add Photo"}
             />
           </View>
-          {(bizType === "shop" || bizType === "office" || bizType === "factory") ? (
-            <View style={styles.scanActionCol}>
-              <Pressable
-                onPress={() => { void onPickPlanPdf(); }}
-                disabled={loading || planPicking}
-                style={({ pressed }) => [
-                  styles.compactPlanBtn,
-                  {
-                    borderColor: planUpload ? accent : C.border,
-                    backgroundColor: planUpload ? `${accent}18` : C.bgCard,
-                    opacity: loading ? 0.55 : pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                {planPicking ? (
-                  <ActivityIndicator color={accent} />
-                ) : (
-                  <>
-                    <Feather name="file-text" size={22} color={accent} />
-                    <Text style={[styles.compactPlanBtnText, { color: C.text }]}>
-                      {planPdfLabel}
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-          ) : null}
         </View>
+
+        {/* Tap PDF → Pay Now switches to PDF price immediately */}
+        <Pressable
+          onPress={() => { void onPickPlanPdf(); }}
+          disabled={loading || planPicking}
+          style={({ pressed }) => [
+            styles.fullPlanBtn,
+            {
+              borderColor: isPdfCheckout ? accent : C.border,
+              backgroundColor: isPdfCheckout ? `${accent}18` : C.bgCard,
+              opacity: loading || planPicking ? 0.55 : pressed ? 0.88 : 1,
+              marginTop: 10,
+            },
+          ]}
+        >
+          {planPicking ? (
+            <ActivityIndicator color={accent} />
+          ) : (
+            <>
+              <Feather name="file-text" size={20} color={accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fullPlanBtnTitle, { color: C.text }]} numberOfLines={2}>
+                  {planPdfLabel}
+                </Text>
+                <Text style={[styles.fullPlanBtnSub, { color: C.textMid }]}>
+                  {planUpload
+                    ? `${planUpload.filename || "PDF selected"} · Pay ₹${orderTotalInr}`
+                    : isPdfCheckout
+                      ? `PDF mode · Pay Now ₹${orderTotalInr} — tap again to choose file`
+                      : "Tap to choose floor plan PDF (max 10 MB)"}
+                </Text>
+              </View>
+              {isPdfCheckout ? (
+                <Pressable
+                  onPress={(e) => {
+                    // @ts-expect-error RN web
+                    e?.stopPropagation?.();
+                    clearPlanPdf();
+                  }}
+                  hitSlop={10}
+                  style={{ padding: 4 }}
+                >
+                  <Feather name="x-circle" size={22} color={accent} />
+                </Pressable>
+              ) : (
+                <Feather name="upload" size={18} color={accent} />
+              )}
+            </>
+          )}
+        </Pressable>
         </View>
 
         {hasUploads ? (
@@ -735,9 +1045,7 @@ export default function BusinessVastuScreen() {
                 </View>
                 <Pressable
                   onPress={() => {
-                    Haptics.selectionAsync();
-                    setPlanUpload(null);
-                    setSubmitted(false);
+                    clearPlanPdf();
                   }}
                   hitSlop={8}
                   disabled={loading}
@@ -785,11 +1093,11 @@ export default function BusinessVastuScreen() {
         <FadeInView delay={staggerDelay(4)}>
           <Animated.View style={[ui.submitGlow, { opacity: submitGlow, backgroundColor: accent }]} />
           <Pressable
-            onPress={onSubmit}
-            disabled={loading || submitted}
+            onPress={() => { void onSubmit(); }}
+            disabled={loading}
             style={({ pressed }) => [
               ui.submitOuter,
-              { opacity: loading || submitted ? 0.65 : pressed ? 0.9 : 1 },
+              { opacity: loading ? 0.65 : pressed ? 0.9 : 1 },
             ]}
           >
             <LinearGradient
@@ -803,7 +1111,9 @@ export default function BusinessVastuScreen() {
               ) : (
                 <View style={ui.submitInner}>
                   <Feather name="credit-card" size={18} color="#fff" />
-                  <Text style={styles.submitText}>{t.bv_btnSubmitReview || "Pay Now"}</Text>
+                  <Text style={styles.submitText}>
+                    {payNowLabel}
+                  </Text>
                 </View>
               )}
             </LinearGradient>
@@ -835,7 +1145,7 @@ export default function BusinessVastuScreen() {
               )}
               {(error.upgrade_required || error.error === "upgrade_required") && (
                 <Text style={{ color: C.textMid, fontSize: 12, marginTop: 8 }}>
-                  {t.bv_walletHintPrefix} {bvBiz(bizType)} {t.bv_walletHintSuffix.replace("{price}", String(bizMeta.price))}
+                  {t.bv_walletHintPrefix} {bvBiz(bizType)} {t.bv_walletHintSuffix.replace("{price}", String(orderTotalInr))}
                 </Text>
               )}
             </View>
@@ -1118,7 +1428,11 @@ export default function BusinessVastuScreen() {
         }}
         title="Order Confirmed!"
         message="Your business photos have been received. Our Vastu expert is personally reviewing them — your personalised report is on its way."
-        etaLabel="Report in My Reports within 24–48 hrs"
+        etaLabel={
+          priorityDelivery
+            ? "Report in My Reports within 12 hrs"
+            : "Report in My Reports in 4–6 business days"
+        }
       />
     </View>
   );
@@ -1168,6 +1482,18 @@ const styles = StyleSheet.create({
     minHeight: 96,
   },
   compactPlanBtnText: { fontSize: 12, fontWeight: "800", textAlign: "center", lineHeight: 16 },
+  fullPlanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 2,
+    minHeight: 64,
+  },
+  fullPlanBtnTitle: { fontSize: 13, fontWeight: "800", lineHeight: 18 },
+  fullPlanBtnSub: { fontSize: 11, fontWeight: "600", marginTop: 2, lineHeight: 15 },
   planChip: {
     flexDirection: "row",
     alignItems: "center",

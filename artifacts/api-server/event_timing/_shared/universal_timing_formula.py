@@ -112,7 +112,8 @@ def _step0_age_question_gate(
         age_delay_years = int(min_age - user_age)
         delay_note = (
             f"User abhi {user_age} saal — sawal valid hai; timing answer "
-            f"thoda delay me (~{min_age}+ saal ke practical window par)."
+            f"DELAY/PREPARE wala hai (~{min_age}+ saal practical window). "
+            f"Near dasha (6 mahine/1 saal) ko actionable job/shaadi mat bolo."
         )
         detail_parts.append(f"delay +{age_delay_years} yr to practical age")
     status = "DELAYED" if age_delay_years else "DONE"

@@ -9,6 +9,7 @@ from event_timing.career.bcp_5l_10l_ages import compute_bcp_5l_10l_ages
 from event_timing.career.govt_job_engine_v1 import (
     _dasha_lords, _house_lord, _parse_iso, _planet_house,
 )
+from event_timing._shared.timing_window_pick import clip_timing_window_for_display
 
 _CHANGE_H = frozenset({3, 5, 9, 10, 11})
 _SCORE_PD_CHG, _SCORE_AD_CHG = 6, 5
@@ -118,10 +119,22 @@ def _score_chunk(ad: str, pd: str, change: set, outcome: set) -> tuple[int, list
     return sc, det, hit
 
 
+def _display_window_labels(start: datetime, end: datetime, today: datetime) -> tuple[str, str]:
+    month_start = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    clipped = clip_timing_window_for_display({
+        "start": start.strftime("%Y-%m"),
+        "end": end.strftime("%Y-%m"),
+    }, today=today)
+    if clipped:
+        return str(clipped.get("start") or start.strftime("%Y-%m")), str(clipped.get("end") or end.strftime("%Y-%m"))
+    return start.strftime("%Y-%m"), end.strftime("%Y-%m")
+
+
 def assess_job_change_timing(kundli: dict, promise: dict) -> dict:
     change, outcome = promise["change"], promise["outcome"]
     md, ad, pd = _dasha_lords(kundli)
     today = datetime.utcnow()
+    month_start = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     cur_sc, cur_det, cur_hit = _score_chunk(ad, pd, change, outcome)
     current_supports = cur_hit and cur_sc >= _MIN_CHUNK
     ranked = []
@@ -129,9 +142,12 @@ def assess_job_change_timing(kundli: dict, promise: dict) -> dict:
         sc, det, hit = _score_chunk(c["ad"], c["pd"], change, outcome)
         if not hit:
             continue
+        if c["end"] < month_start:
+            continue
+        start_label, end_label = _display_window_labels(c["start"], c["end"], today)
         ranked.append({**c, "score": sc, "detail": det,
                        "lords": "/".join(x for x in (c["md"], c["ad"], c["pd"]) if x),
-                       "start_label": c["start"].strftime("%Y-%m"), "end_label": c["end"].strftime("%Y-%m")})
+                       "start_label": start_label, "end_label": end_label})
     ranked.sort(key=lambda w: (-w["score"], w["start"]))
     rec, src, skip = None, "none", ""
     if current_supports:
@@ -140,12 +156,12 @@ def assess_job_change_timing(kundli: dict, promise: dict) -> dict:
                 rec, src = w, "current_dasha"; break
         if not rec:
             rec = {"lords": f"{md}/{ad}/{pd}", "ad": ad, "pd": pd, "score": cur_sc, "detail": cur_det,
-                   "start_label": "current", "end_label": "current", "timing_source": "current_dasha"}
+                   "start_label": today.strftime("%Y-%m"), "end_label": "current", "timing_source": "current_dasha"}
             src = "current_dasha"
     else:
         skip = f"Current {md}/{ad}/{pd} change lords weak (score {cur_sc})."
         for w in ranked:
-            if w["end"] >= today:
+            if w["end"] >= month_start:
                 rec, src = w, "next_dasha"; break
     directive = ""
     if src == "current_dasha" and rec:

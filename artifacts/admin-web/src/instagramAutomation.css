@@ -1,0 +1,169 @@
+.ig-auto-page h2 {
+  margin-bottom: 4px;
+}
+
+.ig-auto-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 20px;
+  margin-top: 16px;
+}
+
+@media (max-width: 960px) {
+  .ig-auto-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ig-auto-form {
+  display: grid;
+  gap: 14px;
+}
+
+.ig-auto-field label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ig-auto-field small {
+  color: var(--muted, #6b7280);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ig-auto-trigger-select {
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  font-size: 14px;
+}
+
+.ig-auto-trigger-box {
+  border: 2px dashed #c13584;
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(180deg, #fdf2f8 0%, #fff 100%);
+}
+
+.ig-auto-reply-box {
+  border: 2px solid #833ab4;
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(180deg, #f5f3ff 0%, #fff 100%);
+}
+
+.ig-auto-trigger-box input,
+.ig-auto-reply-box textarea {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ig-auto-reply-box textarea {
+  min-height: 160px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.ig-auto-preview {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  background: #0b0f19;
+  color: #f9fafb;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(131, 58, 180, 0.18);
+}
+
+.ig-auto-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(90deg, #833ab4, #fd1d1d);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.ig-auto-preview-head span {
+  opacity: 0.9;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.ig-auto-preview-body {
+  padding: 16px 14px 20px;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ig-auto-preview-meta {
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.ig-auto-bubble {
+  max-width: 88%;
+  padding: 10px 12px;
+  border-radius: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.ig-auto-bubble-user {
+  align-self: flex-end;
+  background: #3797f0;
+  border-bottom-right-radius: 6px;
+}
+
+.ig-auto-bubble-bot {
+  align-self: flex-start;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-bottom-left-radius: 6px;
+}
+
+.ig-auto-bubble-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.ig-auto-bubble-placeholder {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.ig-auto-key-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  font-size: 12px;
+  color: #374151;
+}
+
+.ig-auto-list-trigger {
+  font-weight: 600;
+}
+
+.ig-auto-list-reply {
+  color: var(--muted, #6b7280);
+  font-size: 12px;
+}

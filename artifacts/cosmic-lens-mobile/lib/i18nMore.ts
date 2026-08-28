@@ -41,6 +41,8 @@ export interface MoreT {
   mdNumerologySub:    string;
   mdFaceReadingTitle: string;
   mdFaceReadingSub:   string;
+  mdPalmistryTitle:   string;
+  mdPalmistrySub:     string;
   mdRemediesTitle:    string;
   mdRemediesSub:      string;
   mdVastuTitle:       string;
@@ -330,6 +332,7 @@ export interface MoreT {
   numBasicCompareBasicLine: string;
   numBasicCompareProLine: string;
   numProTeaseBtn:     string;
+  numTryForFree:      string;
   numProfileFor:      string; // "{name}"
 
   // ── profile-edit.tsx ──────────────────────────────────────
@@ -1936,6 +1939,8 @@ const EN: MoreT = {
   mdNumerologySub:    "Deep life path & destiny analysis",
   mdFaceReadingTitle: "Face Reading Pro",
   mdFaceReadingSub:   "Vedic + Science fusion · 80+ pages",
+  mdPalmistryTitle:   "Palmistry Advanced",
+  mdPalmistrySub:     "Photo-based palm scan · Evidence-first reading",
   mdRemediesTitle:    "Planet Remedies",
   mdRemediesSub:      "Mantra, charity, gemstones",
   mdVastuTitle:       "Astrovastu Pro",
@@ -2225,6 +2230,7 @@ const EN: MoreT = {
   numBasicCompareBasicLine: "Core identity · traits · love pattern · year timing · lucky elements",
   numBasicCompareProLine: "12-section PDF · career blueprint · phone & house audit · remedies · 90-day plan",
   numProTeaseBtn:     "Get Numerology Pro Report",
+  numTryForFree:      "Try for free",
   numProfileFor:      "Numbers for {name}",
 
   // profile-edit.tsx
@@ -2955,8 +2961,8 @@ const EN: MoreT = {
   ku_whatKP: "What is KP Paddhati?",
   ku_kpSignificators: "KP Significators",
   ku_birthChartSnap: "BIRTH CHART SNAPSHOT",
-  ku_planetPosition: "Planet Position",
-  ku_planetPositionSub: "Live planetary degrees and rashi",
+  ku_planetPosition: "Kundli",
+  ku_planetPositionSub: "D1 chart, dasha & planetary degrees",
   ku_gemstones: "Gemstones",
   ku_gemstonesSub: "Navratna gems for each graha — finger, metal & benefits",
   ku_gemstonesBadge: "NAVRATNA GEMS",
@@ -3267,11 +3273,11 @@ const EN: MoreT = {
   fr_honestFoot: "Zero fake or hardcoded readings — everything comes from your actual photo.",
   fr_ctaText: "Start My Face Reading",
   fr_ctaSub: "Upload 3 selfies → 30-60 seconds and a 40-page PDF report on your device.",
-  fr_wipBadge: "Launching Soon",
-  fr_wipTitle: "Face Reading Pro — almost ready",
+  fr_wipBadge: "Coming Soon",
+  fr_wipTitle: "Coming Soon",
   fr_wipBody: "",
-  fr_wipHint: "Save Life Map — we'll have it live for you very soon.",
-  mdFaceReadingSubSoon: "Launching soon · Vedic + Science fusion",
+  fr_wipHint: "Face Reading Pro is on the way.",
+  mdFaceReadingSubSoon: "Coming soon",
   fu_introEyebrow: "STEP 1 OF 2",
   fu_introTitle: "Upload 3 selfies",
   fu_introSub: "Front + left + right profile. Use good lighting, remove glasses, push hair back from forehead.",
@@ -3586,7 +3592,7 @@ const EN: MoreT = {
   bv_room_boiler: "Boiler",
   bv_room_labour_quarter: "Labour Quarter",
   bv_errAuthRequired: "Please log in to run a Business Vastu scan.",
-  bv_errValidationRooms: "Add at least 2 room photos, or upload your full shop floor plan PDF.",
+  bv_errValidationRooms: "Add at least 1 room photo, or upload your full shop floor plan PDF.",
   bv_btnUploadShopPdf: "Upload Full Shop PDF",
   bv_btnUploadOfficePdf: "Upload Full Office PDF",
   bv_btnUploadOfficePhoto: "Upload Office Room Photo",
@@ -3596,7 +3602,7 @@ const EN: MoreT = {
   bv_secUploadedPhotos: "Uploaded Photos",
   bv_btnSubmitReview: "Pay Now",
   bv_submitSuccessTitle: "Payment received",
-  bv_submitSuccessBody: "Our Vastu expert will review your photos and prepare your report within 24–48 hours.",
+  bv_submitSuccessBody: "Our Vastu expert will review your photos and prepare your report in 4–6 business days.",
   bv_errValidationName: "Naam your premise (e.g. 'Andheri Shop') — needed to match your unlock.",
   bv_errUnlockTitle: "Unlock Required",
   bv_errProfileTitle: "Complete your profile",
@@ -3814,6 +3820,8 @@ const HN: Partial<MoreT> = {
   mdNumerologySub:    "Deep life path & destiny analysis",
   mdFaceReadingTitle: "Face Reading Pro",
   mdFaceReadingSub:   "Vedic + Science fusion · 80+ pages",
+  mdPalmistryTitle:   "Palmistry Advanced",
+  mdPalmistrySub:     "Haath ki photo se evidence-first palm reading",
   mdRemediesTitle:    "Graha Upay",
   mdRemediesSub:      "Mantra, daan, ratan",
   mdVastuTitle:       "Astrovastu Pro",
@@ -4110,6 +4118,7 @@ const HN: Partial<MoreT> = {
   numBasicCompareBasicLine: "Core identity · traits · love pattern · saal/mahina timing · lucky elements",
   numBasicCompareProLine: "12-section PDF · career blueprint · phone & ghar audit · upay · 90-day plan",
   numProTeaseBtn:     "Numerology Pro Report Lein",
+  numTryForFree:      "Try for free",
   numProfileFor:      "{name} ke numbers",
 
   km_addYourKundli:   "Apni Kundli Add karein",
@@ -4886,11 +4895,11 @@ const HN: Partial<MoreT> = {
   fr_honestFoot: "Zero fake ya hardcoded readings — sab kuch aapki actual photo se nikalta hai.",
   fr_ctaText: "Mera Face Reading Shuru Karein",
   fr_ctaSub: "3 selfies upload karein → 30-60 seconds mein 40-page PDF report aapke device pe.",
-  fr_wipBadge: "Jald launch",
-  fr_wipTitle: "Face Reading Pro — bahut jald",
+  fr_wipBadge: "Coming Soon",
+  fr_wipTitle: "Coming Soon",
   fr_wipBody: "",
-  fr_wipHint: "Life Map saved rakho — live hote hi yahan se shuru ho jayega.",
-  mdFaceReadingSubSoon: "Jald launch · Vedic + Science fusion",
+  fr_wipHint: "Face Reading Pro jald aa raha hai.",
+  mdFaceReadingSubSoon: "Coming soon",
   fu_introEyebrow: "STEP 1 OF 2",
   fu_introTitle: "3 selfies upload karein",
   fu_introSub: "Front + left + right profile. Achi roshni mein lein, chashma utar dein, baal forehead se hata lein.",
@@ -5205,7 +5214,7 @@ const HN: Partial<MoreT> = {
   bv_room_boiler: "Boiler",
   bv_room_labour_quarter: "Shramik",
   bv_errAuthRequired: "Business Vastu scan chalaane ke liye kripaya login karein.",
-  bv_errValidationRooms: "Kam se kam 2 room photos joden, ya apna full shop floor plan PDF upload karein.",
+  bv_errValidationRooms: "Kam se kam 1 room photo joden, ya apna full shop floor plan PDF upload karein.",
   bv_btnUploadShopPdf: "Full Shop PDF Upload",
   bv_btnUploadOfficePdf: "Full Office PDF Upload",
   bv_btnUploadOfficePhoto: "Office Room Photo Upload",
@@ -5215,7 +5224,7 @@ const HN: Partial<MoreT> = {
   bv_secUploadedPhotos: "Upload ki gayi Photos",
   bv_btnSubmitReview: "Pay Now",
   bv_submitSuccessTitle: "Admin ko bhej diya",
-  bv_submitSuccessBody: "Hamare Vastu expert aapki photos review karke 24–48 ghante me report taiyar karenge.",
+  bv_submitSuccessBody: "Hamare Vastu expert aapki photos review karke 4–6 business days me report taiyar karenge.",
   bv_errValidationName: "Apne sthal ka naam dein (jaise 'Andheri Shop') — unlock match karne ke liye zaroori hai.",
   bv_errUnlockTitle: "Unlock Zaroori",
   bv_errProfileTitle: "Apni profile poori karein",
@@ -5453,6 +5462,8 @@ const HI: Partial<MoreT> = {
   mdNumerologySub:    "गहरा लाइफ पाथ और भाग्य विश्लेषण",
   mdFaceReadingTitle: "फेस रीडिंग प्रो",
   mdFaceReadingSub:   "वैदिक + विज्ञान फ्यूजन · 80+ पेज",
+  mdPalmistryTitle:   "हस्तरेखा Advanced",
+  mdPalmistrySub:     "हथेली की फोटो से प्रमाण-आधारित पारंपरिक रीडिंग",
   mdRemediesTitle:    "ग्रह उपाय",
   mdRemediesSub:      "मंत्र, दान, रत्न",
   mdVastuTitle:       "एस्ट्रोवास्तु प्रो",
@@ -5729,6 +5740,7 @@ const HI: Partial<MoreT> = {
   numBasicCompareBasicLine: "मूल पहचान · लक्षण · प्रेम पैटर्न · वर्ष/माह समय · लकी तत्व",
   numBasicCompareProLine: "12-सेक्शन PDF · करियर ब्लूप्रिंट · फ़ोन/घर ऑडिट · उपाय · 90-दिन योजना",
   numProTeaseBtn:     "न्यूमरोलॉजी प्रो रिपोर्ट लें",
+  numTryForFree:      "मुफ़्त आज़माएँ",
   numProfileFor:      "{name} की संख्याएं",
 
   // profile-edit.tsx
@@ -6536,10 +6548,10 @@ const HI: Partial<MoreT> = {
   fr_honestFoot: "कोई नकली या हार्डकोड रीडिंग नहीं — सब कुछ आपकी वास्तविक फ़ोटो से निकलता है।",
   fr_ctaText: "मेरा फेस रीडिंग शुरू करें",
   fr_ctaSub: "3 सेल्फ़ी अपलोड करें → 30-60 सेकंड में आपके डिवाइस पर 40-पृष्ठीय PDF रिपोर्ट।",
-  fr_wipBadge: "जल्द लॉन्च",
-  fr_wipTitle: "फेस रीडिंग Pro — बहुत जल्द",
+  fr_wipBadge: "जल्द आ रहा है",
+  fr_wipTitle: "Coming Soon",
   fr_wipBody: "",
-  fr_wipHint: "Life Map सेव रखें — लाइव होते ही यहीं से शुरू कर पाएंगे।",
+  fr_wipHint: "Face Reading Pro jald aa raha hai.",
   mdFaceReadingSubSoon: "जल्द लॉन्च · वैदिक + विज्ञान फ्यूजन",
   fu_introEyebrow: "चरण 1 / 2",
   fu_introTitle: "3 सेल्फ़ी अपलोड करें",
@@ -6855,7 +6867,7 @@ const HI: Partial<MoreT> = {
   bv_room_boiler: "बॉयलर",
   bv_room_labour_quarter: "श्रमिक क्वार्टर",
   bv_errAuthRequired: "Business Vastu स्कैन चलाने के लिए कृपया लॉगिन करें।",
-  bv_errValidationRooms: "कम से कम 2 रूम फोटो जोड़ें, या अपना पूरा शॉप फ़्लोर प्लान PDF अपलोड करें।",
+  bv_errValidationRooms: "कम से कम 1 रूम फोटो जोड़ें, या अपना पूरा शॉप फ़्लोर प्लान PDF अपलोड करें।",
   bv_btnUploadShopPdf: "पूरा शॉप PDF अपलोड",
   bv_btnUploadOfficePdf: "पूरा ऑफिस PDF अपलोड",
   bv_btnUploadOfficePhoto: "ऑफिस रूम फ़ोटो अपलोड",
@@ -6865,7 +6877,7 @@ const HI: Partial<MoreT> = {
   bv_secUploadedPhotos: "अपलोड की गई फ़ोटो",
   bv_btnSubmitReview: "Pay Now",
   bv_submitSuccessTitle: "एडमिन को भेज दिया",
-  bv_submitSuccessBody: "हमारे वास्तु विशेषज्ञ आपकी फ़ोटो देखकर 24–48 घंटे में रिपोर्ट तैयार करेंगे।",
+  bv_submitSuccessBody: "हमारे वास्तु विशेषज्ञ आपकी फ़ोटो देखकर 4–6 कार्य दिवसों में रिपोर्ट तैयार करेंगे।",
   bv_errValidationName: "अपने स्थल का नाम दें (जैसे 'अंधेरी दुकान') — अनलॉक मिलाने के लिए आवश्यक।",
   bv_errUnlockTitle: "अनलॉक आवश्यक",
   bv_errProfileTitle: "अपनी प्रोफ़ाइल पूरी करें",

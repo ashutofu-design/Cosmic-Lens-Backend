@@ -9,16 +9,22 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
+import { PRO_PICKER_ACCENTS, ProProductPicker } from "@/components/ProProductPicker";
 import { FOUNDER_PROFILE } from "@/lib/founderProfile";
 import { milanProPurchaseCopy } from "@/lib/milanProCopyI18n";
 import {
   MILAN_PRO_UI_PRICING,
+  MILAN_PRIORITY_FEE_INR,
+  MILAN_VIDEO_PRICE_INR,
   milanFirstTimeSavingsInr,
   milanOrderTotalInr,
+  type MilanProDeliverable,
 } from "@/lib/milanProOffer";
+import { normalizeWhatsappDigits } from "@/lib/loveRealityProOffer";
 import type { ProPdfLangCode } from "@/lib/proPdfLang";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
 
@@ -28,6 +34,11 @@ export function MarriageCompatProPurchase({
   partnerName,
   priorityDelivery,
   onPriorityDeliveryChange,
+  deliverable,
+  onDeliverableChange,
+  whatsapp,
+  onWhatsappChange,
+  whatsappLocked,
   lang = "en",
 }: {
   isDark: boolean;
@@ -35,6 +46,11 @@ export function MarriageCompatProPurchase({
   partnerName?: string | null;
   priorityDelivery: boolean;
   onPriorityDeliveryChange: (value: boolean) => void;
+  deliverable: MilanProDeliverable;
+  onDeliverableChange: (value: MilanProDeliverable) => void;
+  whatsapp: string;
+  onWhatsappChange: (value: string) => void;
+  whatsappLocked?: boolean;
   lang?: ProPdfLangCode;
 }) {
   const lane = coerceProPdfLang(lang);
@@ -55,9 +71,10 @@ export function MarriageCompatProPurchase({
   const border = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
   const titleColor = isDark ? "#f8fafc" : "#0f172a";
   const bodyColor = isDark ? "rgba(226,232,240,0.72)" : "#64748b";
-  const { regularInr } = MILAN_PRO_UI_PRICING;
+  const { regularInr, todayInr } = MILAN_PRO_UI_PRICING;
   const savingsInr = milanFirstTimeSavingsInr();
-  const totalInr = milanOrderTotalInr(priorityDelivery);
+  const isVideo = deliverable === "video";
+  const totalInr = milanOrderTotalInr(priorityDelivery, deliverable);
   const savingsGreen = isDark ? "#86efac" : "#15803d";
   const standardDelivery = copy.deliveryOptions[0];
   const priorityOption = copy.deliveryOptions[1];
@@ -90,6 +107,38 @@ export function MarriageCompatProPurchase({
           </Text>
         </View>
       </View>
+
+      <ProProductPicker
+        title={copy.productPickerTitle}
+        subtitle={copy.productPickerSubtitle}
+        selectedId={deliverable}
+        onSelect={(id) => onDeliverableChange(id as MilanProDeliverable)}
+        isDark={isDark}
+        cardBg={cardBg}
+        border={border}
+        titleColor={titleColor}
+        bodyColor={bodyColor}
+        accent={isDark ? PRO_PICKER_ACCENTS.violetDark : PRO_PICKER_ACCENTS.violet}
+        options={[
+          {
+            id: "report",
+            emoji: "📄",
+            title: copy.productReportTitle,
+            hint: copy.productReportHint,
+            priceLabel: `₹${todayInr}`,
+            strikeLabel: regularInr > todayInr ? `₹${regularInr}` : undefined,
+            badge: copy.productReportBadge,
+          },
+          {
+            id: "video",
+            emoji: "🎥",
+            title: copy.productVideoTitle,
+            hint: copy.productVideoHint,
+            priceLabel: `₹${MILAN_VIDEO_PRICE_INR.toLocaleString("en-IN")}`,
+            badge: copy.productVideoBadge,
+          },
+        ]}
+      />
 
       <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Pressable
@@ -153,6 +202,7 @@ export function MarriageCompatProPurchase({
         </View>
       </View>
 
+      {!isVideo ? (
       <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Text style={[s.sectionTitle, { color: titleColor }]}>{copy.reportSectionTitle}</Text>
         <Text style={[s.reportSummary, { color: bodyColor }]}>{copy.unlockItems.length} personalized sections</Text>
@@ -167,11 +217,34 @@ export function MarriageCompatProPurchase({
           ))}
         </View>
       </View>
+      ) : (
+        <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
+          <Text style={[s.sectionTitle, { color: titleColor }]}>{copy.videoWhatsappTitle}</Text>
+          <Text style={[s.reportSummary, { color: bodyColor }]}>{copy.videoWhatsappHint}</Text>
+          <TextInput
+            value={whatsapp}
+            onChangeText={(t) => onWhatsappChange(normalizeWhatsappDigits(t))}
+            editable={!whatsappLocked}
+            keyboardType="phone-pad"
+            maxLength={10}
+            placeholder={copy.videoWhatsappPlaceholder}
+            placeholderTextColor={bodyColor}
+            style={[
+              s.waInput,
+              {
+                color: titleColor,
+                borderColor: border,
+                opacity: whatsappLocked ? 0.85 : 1,
+              },
+            ]}
+          />
+        </View>
+      )}
 
       <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Text style={[s.sectionTitle, { color: titleColor }]}>{copy.deliveryOptions[0].title}</Text>
-        <Text style={[s.deliveryStandardLine, { color: bodyColor }]} numberOfLines={1}>
-          📁 My Reports · {standardDelivery.eta.toLowerCase()} · ₹{MILAN_PRO_UI_PRICING.todayInr}
+        <Text style={[s.deliveryStandardLine, { color: bodyColor }]} numberOfLines={2}>
+          {isVideo ? copy.videoStandardLine : `📁 My Reports · ${standardDelivery.eta.toLowerCase()} · ₹${todayInr}`}
         </Text>
         <Pressable
           onPress={() => {
@@ -190,22 +263,28 @@ export function MarriageCompatProPurchase({
             {priorityDelivery ? <Feather name="check" size={10} color="#fff" /> : null}
           </View>
           <Text style={[s.deliveryPriorityTxt, { color: titleColor }]} numberOfLines={1}>
-            {priorityOption.emoji} Priority +₹{priorityOption.surchargeInr} · {priorityOption.eta.toLowerCase()}
+            {priorityOption.emoji} Priority +₹{MILAN_PRIORITY_FEE_INR} · {priorityOption.eta.toLowerCase()}
           </Text>
         </Pressable>
         <Text style={[s.deliveryRefundNote, { color: bodyColor }]} numberOfLines={2}>
           {copy.priorityRefund}
         </Text>
         <View style={[s.priceDivider, { backgroundColor: border }]} />
-        <Text style={[s.priceInline, { color: titleColor }]}>
-          <Text style={[s.priceStrikeTiny, { color: bodyColor }]}>₹{regularInr}</Text>
-          <Text style={s.priceArrow}> → </Text>
-          <Text style={s.priceTotalTiny}>₹{totalInr}</Text>
-          <Text style={[s.priceSavedTiny, { color: savingsGreen }]}> · {copy.savings(savingsInr)}</Text>
-        </Text>
+        {isVideo ? (
+          <Text style={[s.priceInline, { color: titleColor }]}>
+            <Text style={s.priceTotalTiny}>₹{totalInr}</Text>
+          </Text>
+        ) : (
+          <Text style={[s.priceInline, { color: titleColor }]}>
+            <Text style={[s.priceStrikeTiny, { color: bodyColor }]}>₹{regularInr}</Text>
+            <Text style={s.priceArrow}> → </Text>
+            <Text style={s.priceTotalTiny}>₹{totalInr}</Text>
+            <Text style={[s.priceSavedTiny, { color: savingsGreen }]}> · {copy.savings(savingsInr)}</Text>
+          </Text>
+        )}
       </View>
 
-      <Text style={[s.trustBar, { color: bodyColor }]}>{copy.trustBar}</Text>
+      <Text style={[s.trustBar, { color: bodyColor }]}>{isVideo ? copy.videoTrustBar : copy.trustBar}</Text>
     </Animated.View>
   );
 }
@@ -252,4 +331,13 @@ const s = StyleSheet.create({
   priceTotalTiny: { fontSize: 14, fontFamily: "Nunito_800ExtraBold" },
   priceSavedTiny: { fontSize: 10.5, fontFamily: "Nunito_700Bold" },
   trustBar: { fontSize: 11, fontFamily: "Nunito_600SemiBold", textAlign: "center", lineHeight: 16, paddingHorizontal: 4 },
+  waInput: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+  },
 });

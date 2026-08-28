@@ -7,15 +7,18 @@
  * Branding: "Powered by Advanced Cosmic Intelligence" — never reveal AI/LLM.
  */
 import { Feather } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { useT } from "@/hooks/useT";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   I18nManager,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -44,11 +47,13 @@ import {
   listLocalReports,
   openLocalReport,
   shareLocalReport,
+  subscribePendingReports,
   type LocalReport,
 } from "@/lib/localReports";
 import { syncServerReportsForUser } from "@/lib/serverMyReports";
 import { subscribeNewReports } from "@/lib/reportAutoSync";
 import { clearUnreadReports } from "@/lib/unreadReportsBadge";
+import { restoreMirroredPendingReports } from "@/lib/pendingReportsMirror";
 import {
   fetchV3ChatHistory,
   fetchV3ChatTranscript,
@@ -180,6 +185,7 @@ const KIND_LABEL: Record<LocalReport["kind"], string> = {
   business_vastu:  "Business Vastu",
   face_reading:    "Face Reading",
   love_reality:    "Love Reality Pro",
+  palmistry:       "Palmistry Pro",
   other:           "Report",
 };
 const KIND_ICON: Record<LocalReport["kind"], React.ComponentProps<typeof Feather>["name"]> = {
@@ -189,6 +195,7 @@ const KIND_ICON: Record<LocalReport["kind"], React.ComponentProps<typeof Feather
   business_vastu:  "briefcase",
   face_reading:    "user",
   love_reality:    "heart",
+  palmistry:       "edit-3",
   other:           "file-text",
 };
 const KIND_THEME: Record<LocalReport["kind"], { accent: string; grad: [string, string] }> = {
@@ -198,6 +205,7 @@ const KIND_THEME: Record<LocalReport["kind"], { accent: string; grad: [string, s
   business_vastu:  { accent: "#3b82f6", grad: ["#3b82f6", "#06b6d4"] },
   face_reading:    { accent: "#14b8a6", grad: ["#14b8a6", "#22c55e"] },
   love_reality:    { accent: "#f43f5e", grad: ["#f43f5e", "#ec4899"] },
+  palmistry:       { accent: "#a78bfa", grad: ["#a78bfa", "#6366f1"] },
   other:           { accent: "#64748b", grad: ["#64748b", "#475569"] },
 };
 
@@ -217,16 +225,48 @@ export default function MyReportsScreen() {
   const [openChat, setOpenChat] = useState<TalkedItem | null>(null);
   const [transcript, setTranscript] = useState<V3ChatMessage[]>([]);
   const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [copiedUserId, setCopiedUserId] = useState(false);
+
+  const displayUserId =
+    (user?.cosmo_user_id || "").trim() ||
+    (user?.id ? `COSMO${user.id}` : "");
+
+  const copyUserId = useCallback(async () => {
+    if (!displayUserId) return;
+    try {
+      await Clipboard.setStringAsync(displayUserId);
+      setCopiedUserId(true);
+      setTimeout(() => setCopiedUserId(false), 1800);
+    } catch {
+      const msg = "Could not copy User ID";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Copy failed", msg);
+    }
+  }, [displayUserId]);
 
   const loadLocal = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
+      // Always show whatever is already on device first (pending stubs).
+      const existing = await listLocalReports();
+      setLocal(existing);
+
       if (user?.id && user.api_key) {
-        await syncServerReportsForUser({ userId: user.id, apiKey: user.api_key });
+        await syncServerReportsForUser({ userId: user.id, apiKey: user.api_key, force: false });
+      } else if (user?.id) {
+        await restoreMirroredPendingReports(user.id);
       }
       setLocal(await listLocalReports());
-    } catch { setLocal([]); }
-    finally { setLoading(false); setRefresh(false); }
+    } catch {
+      try {
+        setLocal(await listLocalReports());
+      } catch {
+        /* keep previous */
+      }
+    } finally {
+      setLoading(false);
+      setRefresh(false);
+    }
   }, [user?.id, user?.api_key]);
 
   const loadChats = useCallback(async (silent = false) => {
@@ -284,6 +324,12 @@ export default function MyReportsScreen() {
     });
   }, []);
 
+  useEffect(() => {
+    return subscribePendingReports(() => {
+      void listLocalReports().then(setLocal);
+    });
+  }, []);
+
   const openTalkedChat = async (chat: TalkedItem) => {
     if (!user?.id || !user.api_key) return;
     setOpenChat(chat);
@@ -329,14 +375,17 @@ export default function MyReportsScreen() {
   };
 
   const onOpenLocal = async (r: LocalReport) => {
+    if (r.status === "pending") return;
     await openLocalReport(r);
   };
   const onShareLocal = async (r: LocalReport) => {
+    if (r.status === "pending") return;
     await shareLocalReport(r);
   };
 
   const renderLocalCard = (r: LocalReport, index: number) => {
     const theme = KIND_THEME[r.kind] ?? KIND_THEME.other;
+    const isPending = r.status === "pending";
     const created = new Date(r.createdAt);
     const date = created.toLocaleDateString("en-IN", {
       day: "numeric", month: "short", year: "numeric",
@@ -345,6 +394,7 @@ export default function MyReportsScreen() {
       hour: "numeric", minute: "2-digit", hour12: true,
     });
     const sizeLabel = formatLocalReportSize(r.bytes);
+    const orderLabel = r.publicOrderId || (r.orderId ? r.orderId.slice(0, 8) : "");
     return (
       <FadeInView delay={staggerDelay(index + 1)}>
       <View
@@ -353,25 +403,25 @@ export default function MyReportsScreen() {
           s.card,
           {
             backgroundColor: C.isDark ? "#0e1318" : "#ffffff",
-            borderColor: C.border,
+            borderColor: isPending ? "#f59e0b55" : C.border,
             marginBottom: 14,
           },
         ]}
       >
         {/* Accent edge */}
         <LinearGradient
-          colors={theme.grad}
+          colors={isPending ? ["#f59e0b", "#d97706"] : theme.grad}
           start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
           style={s.cardEdge}
         />
 
         <View style={s.cardTop}>
           <LinearGradient
-            colors={theme.grad}
+            colors={isPending ? ["#f59e0b", "#d97706"] : theme.grad}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={s.iconTile}
           >
-            <Feather name={KIND_ICON[r.kind]} size={24} color="#fff" />
+            <Feather name={isPending ? "clock" : KIND_ICON[r.kind]} size={24} color="#fff" />
           </LinearGradient>
 
           <View style={s.cardMeta}>
@@ -381,23 +431,56 @@ export default function MyReportsScreen() {
                   {KIND_LABEL[r.kind].toUpperCase()}
                 </Text>
               </View>
-              <View style={[s.pdfChip, { backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9" }]}>
-                <Feather name="file" size={9} color={C.textMuted} />
-                <Text style={[s.pdfChipText, { color: C.textMuted }]}>PDF</Text>
-              </View>
+              {isPending ? (
+                <View style={[s.pdfChip, { backgroundColor: "rgba(245,158,11,0.18)", borderColor: "rgba(245,158,11,0.45)", borderWidth: 1 }]}>
+                  <Feather name="clock" size={9} color="#f59e0b" />
+                  <Text style={[s.pdfChipText, { color: "#f59e0b" }]}>PENDING</Text>
+                </View>
+              ) : (
+                <View style={[s.pdfChip, { backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9" }]}>
+                  <Feather name="file" size={9} color={C.textMuted} />
+                  <Text style={[s.pdfChipText, { color: C.textMuted }]}>PDF</Text>
+                </View>
+              )}
             </View>
             <Text style={[s.propName, { color: C.text }]} numberOfLines={2}>
               {r.title}
             </Text>
             <View style={s.metaRow}>
               <Feather name="calendar" size={10} color={C.textMuted} />
-              <Text style={[s.subMeta, { color: C.textMuted }]} numberOfLines={1}>
-                {date} · {time}{sizeLabel ? ` · ${sizeLabel}` : ""}
+              <Text style={[s.subMeta, { color: C.textMuted }]} numberOfLines={2}>
+                {isPending
+                  ? `${orderLabel ? `Order ${orderLabel} · ` : ""}${r.etaLabel || "Preparing…"}`
+                  : `${date} · ${time}${sizeLabel ? ` · ${sizeLabel}` : ""}`}
               </Text>
             </View>
+            {isPending ? (
+              <Text style={[s.subMeta, { color: "#f59e0b", marginTop: 4 }]} numberOfLines={2}>
+                {r.deliverable === "video"
+                  ? "Video is being prepared — it will be sent on WhatsApp"
+                  : "Report pending — PDF will open here once delivered"}
+              </Text>
+            ) : null}
           </View>
         </View>
 
+        {isPending ? (
+          <View style={[s.btnRow, { opacity: 0.85 }]}>
+            <View
+              style={[
+                s.actionBtn,
+                {
+                  flex: 1,
+                  backgroundColor: C.isDark ? "#1a2330" : "#eef3fb",
+                  borderColor: C.border,
+                },
+              ]}
+            >
+              <Feather name="clock" size={15} color={C.textMuted} />
+              <Text style={[s.actionText, { color: C.textMuted }]}>Waiting for delivery</Text>
+            </View>
+          </View>
+        ) : (
         <View style={s.btnRow}>
           <View style={{ flex: 1 }}>
             <ScalePressable
@@ -423,6 +506,7 @@ export default function MyReportsScreen() {
             </ScalePressable>
           </View>
         </View>
+        )}
       </View>
       </FadeInView>
     );
@@ -453,6 +537,33 @@ export default function MyReportsScreen() {
         <Text style={[s.title, { color: C.text }]}>{t.mr_pageTitle}</Text>
         <View style={s.headerSpacer} />
       </View>
+
+      {displayUserId ? (
+        <Pressable
+          onPress={() => void copyUserId()}
+          style={[
+            s.userIdBar,
+            {
+              backgroundColor: C.isDark ? "#0e1318" : "#f8fafc",
+              borderBottomColor: C.border,
+            },
+          ]}
+        >
+          <Feather name="hash" size={13} color={C.textMuted} />
+          <Text style={[s.userIdLabel, { color: C.textMuted }]}>Your User ID</Text>
+          <Text style={[s.userIdValue, { color: C.text }]} numberOfLines={1}>
+            {displayUserId}
+          </Text>
+          <Feather
+            name={copiedUserId ? "check" : "copy"}
+            size={13}
+            color={copiedUserId ? "#22c55e" : C.textMuted}
+          />
+          <Text style={[s.userIdHint, { color: copiedUserId ? "#22c55e" : C.textMuted }]}>
+            {copiedUserId ? "Copied" : "Copy · share if any issue"}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View style={[s.segWrap, { borderBottomColor: C.border }]}>
         <Pressable
@@ -667,7 +778,19 @@ export default function MyReportsScreen() {
           </Text>
         </View>
       ) : localItems.length === 0 ? (
-        <View style={s.center}>
+        <ScrollView
+          contentContainerStyle={[s.center, { flexGrow: 1, paddingHorizontal: 24 }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefresh(true);
+                void loadLocal(true);
+              }}
+              tintColor={C.textMuted}
+            />
+          }
+        >
           <FloatY>
             <LinearGradient
               colors={C.isDark ? ["#1e293b", "#0f172a"] : ["#ede9fe", "#e0e7ff"]}
@@ -678,9 +801,22 @@ export default function MyReportsScreen() {
           </FloatY>
           <Text style={[s.empty, { color: C.text }]}>{t.mr_emptyTitle}</Text>
           <Text style={[s.muted, { color: C.textMuted, textAlign: "center", marginTop: 6 }]}>
-            Report deliver hote hi notification aayegi aur yahan auto-save hogi.
+            {!user?.id
+              ? "Login karke My Reports sync karein — pending orders yahan dikhenge."
+              : "Order place karte hi yahan PENDING card aana chahiye. Pull-to-refresh try karein. Report deliver hote hi PDF auto-save hogi."}
           </Text>
-        </View>
+          {user?.id ? (
+            <Pressable
+              onPress={() => {
+                setRefresh(true);
+                void loadLocal(true);
+              }}
+              style={{ marginTop: 16, paddingVertical: 10, paddingHorizontal: 18 }}
+            >
+              <Text style={{ color: "#a78bfa", fontWeight: "700" }}>Refresh now</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
       ) : (
         <FlatList
           data={localItems}
@@ -860,6 +996,22 @@ const s = StyleSheet.create({
   back:    { padding: 4 },
   title:   { fontSize: 17, fontWeight: "700", letterSpacing: 0.2 },
   headerSpacer: { width: 28 },
+  userIdBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  userIdLabel: { fontSize: 11, fontWeight: "600" },
+  userIdValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+    flexShrink: 1,
+  },
+  userIdHint: { fontSize: 10, fontWeight: "600", marginLeft: "auto" },
   segWrap: {
     flexDirection: "row",
     gap: 8,

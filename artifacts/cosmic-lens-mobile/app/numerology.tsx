@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as FileSystem from "expo-file-system/legacy";
 import { saveLocalReport } from "@/lib/localReports";
+import { registerPendingMyReport } from "@/lib/registerPendingMyReport";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
@@ -20,6 +21,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { OrderSuccessModal } from "@/components/OrderSuccessModal";
+import { PRO_PICKER_ACCENTS, ProProductPicker } from "@/components/ProProductPicker";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -27,9 +29,14 @@ import { getPYTheme } from "@/lib/i18nContent";
 import {
   LIFE_MASTERY_CHECKOUT_CONFIG,
   LIFE_MASTERY_UI_PRICING,
+  LIFE_MASTERY_VIDEO_PRICE_INR,
   lifeMasteryOrderTotalInr,
-  LIFE_MASTERY_PRIORITY_SURCHARGE_INR,
+  numerologyPriorityFeeInr,
+  numerologyProHidesPayment,
+  type NumerologyDeliverable,
 } from "@/lib/numerologyProOffer";
+import { normalizeWhatsappDigits } from "@/lib/loveRealityProOffer";
+import { PRIORITY_GUARANTEE, STANDARD_DELIVERY_ETA } from "@/lib/deliverySla";
 import { consumeNumerologyPaidReady, gateNumerologyReportAfterLangPick } from "@/lib/numerologyReportCheckoutFlow";
 import { submitNumerologyHumanOrder } from "@/lib/numerologyHumanOrder";
 import {
@@ -84,6 +91,7 @@ const np = StyleSheet.create({
   priceArrow: { fontSize: 12, fontFamily: "Nunito_500Medium", color: "rgba(148,163,184,0.9)" },
   priceTotalTiny: { fontSize: 14, fontFamily: "Nunito_800ExtraBold" },
   trustBar: { fontSize: 11, fontFamily: "Nunito_600SemiBold", textAlign: "center", lineHeight: 16, paddingHorizontal: 4 },
+  deliveryRefundNote: { fontSize: 10, fontFamily: "Nunito_500Medium", marginTop: 5, lineHeight: 14 },
 });
 
 // ── Calculation helpers ───────────────────────────────────────────────────────
@@ -487,16 +495,17 @@ function buildBasicInsight(name: string, nums: BasicNums, vlang: string) {
 function BasicHeroCard({ name, nums }: { name: string; nums: BasicNums }) {
   const C = useC();
   const t = useT();
+  const S = basicSurface(C.isDark);
   const lpI = getInfo(nums.lp);
   const insight = buildBasicInsight(name, nums, t.vlang);
 
   return (
     <FadeInView delay={staggerDelay(2)}>
-      <View style={[bh.card, { backgroundColor: C.bgCard, borderColor: `${lpI.color}40`, overflow: "hidden" }]}>
-        <LinearGradient colors={[`${lpI.color}14`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-        <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numBlueprintTitle}</Text>
-        <Text style={[np.heroTitle, { color: C.text, fontSize: 16, lineHeight: 22 }]}>{insight.headline}</Text>
-        <Text style={[np.heroLine, { color: C.textMuted, fontSize: 13, lineHeight: 20 }]}>{insight.sub}</Text>
+      <View style={[bh.card, { backgroundColor: S.card, borderColor: S.border, overflow: "hidden" }]}>
+        <LinearGradient colors={[`${lpI.color}18`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+        <Text style={[np.sectionLabel, { color: S.label }]}>{t.numBlueprintTitle}</Text>
+        <Text style={[np.heroTitle, { color: S.title }]}>{insight.headline}</Text>
+        <Text style={[np.heroLine, { color: S.body }]}>{insight.sub}</Text>
       </View>
     </FadeInView>
   );
@@ -508,13 +517,14 @@ const bh = StyleSheet.create({
 function BasicPatternCard({ nums }: { nums: BasicNums }) {
   const C = useC();
   const t = useT();
+  const S = basicSurface(C.isDark);
   const insight = buildBasicInsight("", nums, t.vlang);
 
   return (
     <FadeInView delay={staggerDelay(4)}>
-      <View style={[bp2.card, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}35` }]}>
-        <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numPatternTitle}</Text>
-        <Text style={[np.heroLine, { color: C.textMid, fontSize: 13, lineHeight: 20 }]}>{insight.pattern}</Text>
+      <View style={[bp2.card, { backgroundColor: S.card, borderColor: S.border }]}>
+        <Text style={[np.sectionLabel, { color: S.label }]}>{t.numPatternTitle}</Text>
+        <Text style={[np.heroLine, { color: S.body }]}>{insight.pattern}</Text>
       </View>
     </FadeInView>
   );
@@ -526,17 +536,18 @@ const bp2 = StyleSheet.create({
 function BasicLuckyRow({ lifePathNum }: { lifePathNum: number }) {
   const C = useC();
   const t = useT();
+  const S = basicSurface(C.isDark);
   const info = getInfo(lifePathNum);
 
   return (
     <FadeInView delay={staggerDelay(3)}>
-      <View style={[lk.row, { backgroundColor: C.bgCard, borderColor: `${info.color}35` }]}>
-        <View style={[lk.pill, { borderColor: `${info.color}30`, backgroundColor: `${info.color}08` }]}>
-          <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numLuckyNumbers}</Text>
+      <View style={[lk.row, { backgroundColor: "transparent", borderColor: "transparent" }]}>
+        <View style={[lk.pill, { borderColor: S.border, backgroundColor: S.card }]}>
+          <Text style={[np.sectionLabel, { color: S.label }]}>{t.numLuckyNumbers}</Text>
           <Text style={[np.bodySemi, { color: info.color }]}>{info.luckyNums}</Text>
         </View>
-        <View style={[lk.pill, { borderColor: `${info.color}30`, backgroundColor: `${info.color}08` }]}>
-          <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numLuckyColor}</Text>
+        <View style={[lk.pill, { borderColor: S.border, backgroundColor: S.card }]}>
+          <Text style={[np.sectionLabel, { color: S.label }]}>{t.numLuckyColor}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: info.luckyColorHex }} />
             <Text style={[np.bodySemi, { color: info.color }]} numberOfLines={1}>{info.luckyColor}</Text>
@@ -553,6 +564,23 @@ const lk = StyleSheet.create({
 
 const BASIC_ACCENT = "#8b5cf6";
 const PRO_ACCENT = "#f59e0b";
+
+/** Solid, high-contrast surfaces so Basic text stays readable (no purple wash). */
+function basicSurface(isDark: boolean) {
+  return {
+    page: isDark ? "#0f172a" : "#eef2ff",
+    pageGrad: (isDark
+      ? ["#312e81", "#1e293b", "#0f172a"]
+      : ["#ddd6fe", "#eef2ff", "#f8fafc"]) as [string, string, string],
+    card: isDark ? "#1e293b" : "#ffffff",
+    card2: isDark ? "#334155" : "#f1f5f9",
+    border: isDark ? "rgba(196,181,253,0.42)" : "rgba(79,70,229,0.22)",
+    title: isDark ? "#f8fafc" : "#0f172a",
+    body: isDark ? "#e2e8f0" : "#334155",
+    muted: isDark ? "#cbd5e1" : "#475569",
+    label: isDark ? "#c4b5fd" : "#5b21b6",
+  };
+}
 
 function PremiumOrb({ color }: { color: string }) {
   const pulse = useRef(new Animated.Value(0)).current;
@@ -596,6 +624,7 @@ function NumCard({
 }: { label: string; labelHindi: string; num: number; expanded: boolean; onToggle: () => void; delay?: number }) {
   const C    = useC();
   const t    = useT();
+  const S    = basicSurface(C.isDark);
   const info = getInfo(num);
 
   return (
@@ -605,14 +634,14 @@ function NumCard({
       style={({ pressed }) => [
         nc.card,
         {
-          backgroundColor: C.bgCard,
-          borderColor: `${info.color}45`,
+          backgroundColor: S.card,
+          borderColor: S.border,
           transform: [{ scale: pressed ? 0.99 : 1 }],
         },
       ]}
     >
       <LinearGradient
-        colors={[`${info.color}12`, "transparent"]}
+        colors={[`${info.color}18`, "transparent"]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -620,22 +649,22 @@ function NumCard({
       <View style={nc.topRow}>
         <NumberBadge num={num} color={info.color} />
         <View style={{ flex:1 }}>
-          <Text style={[np.sectionLabel, { color: C.textDim }]}>{label}</Text>
+          <Text style={[np.sectionLabel, { color: S.label }]}>{label}</Text>
           {labelHindi && labelHindi !== label && (
-            <Text style={[np.reportSummary, { color: C.textMuted }]}>{labelHindi}</Text>
+            <Text style={[np.reportSummary, { color: S.muted }]}>{labelHindi}</Text>
           )}
-          <Text style={[np.heroTitle, { color: info.color, fontSize: 14 }]}>{t.vlang === "hi" ? info.titleHindi : info.title}</Text>
+          <Text style={[np.heroTitle, { color: info.color }]}>{t.vlang === "hi" ? info.titleHindi : info.title}</Text>
           <View style={nc.planetRow}>
             <Text style={{ fontSize:12 }}>{info.planetEmoji}</Text>
-            <Text style={[np.reportSummary, { color: C.textMuted }]}>{info.planet}</Text>
+            <Text style={[np.reportSummary, { color: S.muted }]}>{info.planet}</Text>
           </View>
         </View>
-        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={C.textMuted} />
+        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={S.muted} />
       </View>
 
       {/* Meaning — always visible */}
       <Text
-        style={[np.heroLine, { color: C.textMuted, fontSize: 12.5, lineHeight: 19, marginTop: 2 }]}
+        style={[np.heroLine, { color: S.body, marginTop: 2 }]}
         numberOfLines={expanded ? undefined : 3}
       >
         {pickDesc(info, t.vlang)}
@@ -647,7 +676,7 @@ function NumCard({
           <View style={nc.traits}>
             {info.traits.map((tr, i) => (
               <View key={tr} style={[nc.chip, { backgroundColor:`${info.color}12`, borderColor:`${info.color}28` }]}>
-                <Text style={[np.coreQChipTxt, { color:info.color, fontSize: 10.5 }]}>{t.vlang === "hi" ? (info.traitsHindi[i] || tr) : tr}</Text>
+                <Text style={[np.coreQChipTxt, { color:info.color }]}>{t.vlang === "hi" ? (info.traitsHindi[i] || tr) : tr}</Text>
                 {t.vlang !== "hi" && t.vlang !== "en" && info.traitsHindi[i] && (
                   <Text style={[np.reportSummary, { color:info.color }]}> · {info.traitsHindi[i]}</Text>
                 )}
@@ -657,13 +686,13 @@ function NumCard({
 
           <View style={nc.quickRow}>
             <View style={[nc.quickPill, { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.25)" }]}>
-              <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numStrength}</Text>
+            <Text style={[np.sectionLabel, { color: S.label }]}>{t.numStrength}</Text>
               <Text style={[np.bodySemi, { color: "#22c55e" }]}>
                 {t.vlang === "hi" ? (info.strengthHi || info.strength) : t.vlang === "hn" ? (info.strengthHn || info.strength) : info.strength}
               </Text>
             </View>
             <View style={[nc.quickPill, { backgroundColor: "rgba(248,113,113,0.08)", borderColor: "rgba(248,113,113,0.22)" }]}>
-              <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numWeakness}</Text>
+            <Text style={[np.sectionLabel, { color: S.label }]}>{t.numWeakness}</Text>
               <Text style={[np.bodySemi, { color: "#f87171" }]}>
                 {t.vlang === "hi" ? (info.weaknessHi || info.weakness) : t.vlang === "hn" ? (info.weaknessHn || info.weakness) : info.weakness}
               </Text>
@@ -671,8 +700,8 @@ function NumCard({
           </View>
 
           <View style={nc.loveBlock}>
-            <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numLove}</Text>
-            <Text style={[np.bodyBold, { color: C.textMid }]}>{pickLove(info, t.vlang)}</Text>
+            <Text style={[np.sectionLabel, { color: S.label }]}>{t.numLove}</Text>
+            <Text style={[np.bodyBold, { color: S.body }]}>{pickLove(info, t.vlang)}</Text>
           </View>
 
           <LockedCareerRow career={pickCareer(info, t.vlang)} accent={info.color} />
@@ -702,7 +731,7 @@ function LockedCareerRow({ career, accent }: { career: string; accent: string })
     <View style={[nc.lockWrap, { borderColor: `${accent}30`, backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }]}>
       <View style={{ padding:12 }}>
         <Text style={[np.sectionLabel, { color: C.textDim, marginBottom: 6 }]}>{t.numCareer}</Text>
-        <Text style={[np.heroLine, { color: C.textMuted, fontSize: 12 }]} numberOfLines={2}>{career}</Text>
+        <Text style={[np.heroLine, { color: C.textMuted }]} numberOfLines={2}>{career}</Text>
       </View>
       {Platform.OS !== "web" ? (
         <BlurView intensity={28} tint={C.isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
@@ -720,6 +749,7 @@ function LockedCareerRow({ career, accent }: { career: string; accent: string })
 function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
   const C    = useC();
   const t    = useT();
+  const S    = basicSurface(C.isDark);
   const info = getInfo(py);
   const pmInfo = getInfo(pm);
   const year = new Date().getFullYear();
@@ -727,19 +757,19 @@ function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
 
   return (
     <FadeInView delay={staggerDelay(4)}>
-    <View style={[pyc.card, { backgroundColor: C.bgCard, borderColor: `${info.color}40`, overflow: "hidden" }]}>
-      <LinearGradient colors={[`${info.color}10`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numPersonalYM}</Text>
+    <View style={[pyc.card, { backgroundColor: S.card, borderColor: S.border, overflow: "hidden" }]}>
+      <LinearGradient colors={[`${info.color}14`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Text style={[np.sectionLabel, { color: S.label }]}>{t.numPersonalYM}</Text>
       <View style={pyc.row}>
-        <View style={[pyc.box, { borderColor:`${info.color}30`, backgroundColor:`${info.color}08` }]}>
+        <View style={[pyc.box, { borderColor: S.border, backgroundColor: S.card2 }]}>
           <Text style={[np.heroTitle, { color: info.color, fontSize: 36, lineHeight: 40 }]}>{py}</Text>
-          <Text style={[np.bodyBold, { color: C.textMuted, fontSize: 10 }]}>{t.numYearPrefix} {year}</Text>
-          <Text style={[np.heroLine, { color: C.textMuted, textAlign: "center" }]}>{getPYTheme(t.lang, py)}</Text>
+          <Text style={[np.bodyBold, { color: S.muted, fontSize: 10 }]}>{t.numYearPrefix} {year}</Text>
+          <Text style={[np.heroLine, { color: S.body, textAlign: "center" }]}>{getPYTheme(t.lang, py)}</Text>
         </View>
-        <View style={[pyc.box, { borderColor:`${pmInfo.color}30`, backgroundColor:`${pmInfo.color}08` }]}>
+        <View style={[pyc.box, { borderColor: S.border, backgroundColor: S.card2 }]}>
           <Text style={[np.heroTitle, { color: pmInfo.color, fontSize: 36, lineHeight: 40 }]}>{pm}</Text>
-          <Text style={[np.bodyBold, { color: C.textMuted, fontSize: 10 }]}>{month}</Text>
-          <Text style={[np.heroLine, { color: C.textMuted, textAlign: "center" }]}>{getPYTheme(t.lang, pm)}</Text>
+          <Text style={[np.bodyBold, { color: S.muted, fontSize: 10 }]}>{month}</Text>
+          <Text style={[np.heroLine, { color: S.body, textAlign: "center" }]}>{getPYTheme(t.lang, pm)}</Text>
         </View>
       </View>
     </View>
@@ -755,17 +785,18 @@ const pyc = StyleSheet.create({
 function CoreNumbersSummary({ items }: { items: { num: number; label: string }[] }) {
   const C = useC();
   const t = useT();
+  const S = basicSurface(C.isDark);
   return (
-    <View style={[cs.card, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}35`, overflow: "hidden" }]}>
-      <LinearGradient colors={[`${BASIC_ACCENT}10`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numCoreSummary}</Text>
+    <View style={[cs.card, { backgroundColor: S.card, borderColor: S.border, overflow: "hidden" }]}>
+      <LinearGradient colors={[`${BASIC_ACCENT}14`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Text style={[np.sectionLabel, { color: S.label }]}>{t.numCoreSummary}</Text>
       <View style={cs.row}>
         {items.map(item => {
           const info = getInfo(item.num);
           return (
-            <View key={item.label} style={[cs.item, { borderColor: `${info.color}35`, backgroundColor: `${info.color}08` }]}>
+            <View key={item.label} style={[cs.item, { borderColor: S.border, backgroundColor: S.card2 }]}>
               <Text style={[np.heroTitle, { color: info.color, fontSize: 22, lineHeight: 26 }]}>{item.num}</Text>
-              <Text style={[np.sectionLabel, { color: C.textMuted, fontSize: 8.5, letterSpacing: 0.2 }]} numberOfLines={2}>{item.label}</Text>
+              <Text style={[np.sectionLabel, { color: S.muted, fontSize: 8.5, letterSpacing: 0.2 }]} numberOfLines={2}>{item.label}</Text>
               <Text style={[np.bodyBold, { color: info.color, fontSize: 9, textAlign: "center" }]} numberOfLines={1}>
                 {pickTitle(info, t.vlang)}
               </Text>
@@ -785,18 +816,19 @@ const cs = StyleSheet.create({
 function BasicProCompare() {
   const C = useC();
   const t = useT();
+  const S = basicSurface(C.isDark);
   return (
-    <View style={[bc.card, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}30`, overflow: "hidden" }]}>
-      <LinearGradient colors={[`${PRO_ACCENT}08`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <Text style={[np.sectionLabel, { color: C.textDim }]}>{t.numBasicCompareTitle}</Text>
+    <View style={[bc.card, { backgroundColor: S.card, borderColor: S.border, overflow: "hidden" }]}>
+      <LinearGradient colors={[`${PRO_ACCENT}10`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Text style={[np.sectionLabel, { color: S.label }]}>{t.numBasicCompareTitle}</Text>
       <View style={bc.row}>
-        <View style={[bc.col, { borderColor: C.border, backgroundColor: C.bgCard2 }]}>
-          <Text style={[np.heroTitle, { color: C.text, fontSize: 13 }]}>{t.km_basic}</Text>
-          <Text style={[np.heroLine, { color: C.textMuted }]}>{t.numBasicCompareBasicLine}</Text>
+        <View style={[bc.col, { borderColor: S.border, backgroundColor: S.card2 }]}>
+          <Text style={[np.heroTitle, { color: S.title }]}>{t.km_basic}</Text>
+          <Text style={[np.heroLine, { color: S.body }]}>{t.numBasicCompareBasicLine}</Text>
         </View>
-        <View style={[bc.col, { borderColor: "rgba(245,158,11,0.35)", backgroundColor: "rgba(245,158,11,0.08)" }]}>
-          <Text style={[np.heroTitle, { color: "#f59e0b", fontSize: 13 }]}>{t.vu_tabPro}</Text>
-          <Text style={[np.heroLine, { color: C.textMuted }]}>{t.numBasicCompareProLine}</Text>
+        <View style={[bc.col, { borderColor: "rgba(245,158,11,0.45)", backgroundColor: C.isDark ? "rgba(245,158,11,0.16)" : "rgba(245,158,11,0.12)" }]}>
+          <Text style={[np.heroTitle, { color: "#f59e0b" }]}>{t.vu_tabPro}</Text>
+          <Text style={[np.heroLine, { color: S.body }]}>{t.numBasicCompareProLine}</Text>
         </View>
       </View>
     </View>
@@ -811,10 +843,12 @@ const bc = StyleSheet.create({
 function BasicProTease({ onOpenPro }: { onOpenPro: () => void }) {
   const C = useC();
   const t = useT();
+  const S = basicSurface(C.isDark);
+  const hidePay = numerologyProHidesPayment();
   const price = LIFE_MASTERY_UI_PRICING.offerInr;
   return (
     <View style={{ gap:10 }}>
-      <Text style={[np.heroLine, { color: C.isDark ? "rgba(203,213,225,0.55)" : "rgba(100,116,139,0.75)", textAlign: "center", paddingHorizontal: 8 }]}>
+      <Text style={[np.heroLine, { color: S.body, textAlign: "center", paddingHorizontal: 8 }]}>
         {t.numBasicLockedHint}
       </Text>
       <Pressable
@@ -823,11 +857,13 @@ function BasicProTease({ onOpenPro }: { onOpenPro: () => void }) {
       >
         <LinearGradient colors={["#d97706", "#f59e0b", "#fbbf24"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={bp.tease}>
           <Feather name="file-text" size={16} color="#fff" />
-          <Text style={[np.bodyBold, { color: "#fff", flex: 1, flexShrink: 1, textAlign: "center", fontSize: 12.5, lineHeight: 17 }]}>{t.numProTeaseBtn} — ₹{price}</Text>
+          <Text style={{ color: "#fff", flex: 1, flexShrink: 1, textAlign: "center", fontSize: 14, fontFamily: "Nunito_800ExtraBold" }}>
+            {hidePay ? `${t.numProTeaseBtn} · ${t.numTryForFree}` : `${t.numProTeaseBtn} — ₹${price}`}
+          </Text>
           <Feather name="chevron-right" size={16} color="#fff" />
         </LinearGradient>
       </Pressable>
-      <Text style={[np.reportSummary, { color: C.textDim, textAlign: "center", paddingHorizontal: 4, fontSize: 11, lineHeight: 17 }]}>{t.numFooterNote}</Text>
+      <Text style={[np.reportSummary, { color: S.muted, textAlign: "center", paddingHorizontal: 4 }]}>{t.numFooterNote}</Text>
     </View>
   );
 }
@@ -860,7 +896,7 @@ function ProfileSelector({
 }
 const ps = StyleSheet.create({
   chip: { paddingHorizontal:12, paddingVertical:7, borderRadius:12, borderWidth:1.5, gap:1 },
-  name: { fontSize:12, fontFamily: F.bold },
+  name: { fontSize:12, fontFamily: F.extra },
   rel:  { fontSize:9, fontFamily: F.medium },
 });
 
@@ -869,12 +905,15 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   const C = useC();
   const t = useT();
   const { user } = useUser();
+  const hidePay = numerologyProHidesPayment();
   const bd = profile.birthData;
 
   const [opening, setOpening] = useState(false);
   const [founderExpanded, setFounderExpanded] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [priorityDelivery, setPriorityDelivery] = useState(false);
+  const [deliverable, setDeliverable] = useState<NumerologyDeliverable>("report");
+  const [whatsapp, setWhatsapp] = useState("");
   const [preparingBanner, setPreparingBanner] = useState<{
     priority: boolean;
     etaHours: number;
@@ -896,19 +935,30 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     ? `${String(bd.hour).padStart(2, "0")}:${String(bd.minute).padStart(2, "0")}`
     : "12:00";
 
+  const mobileDigits = mobile.replace(/\D/g, "").slice(0, 10);
+  const waDigits = normalizeWhatsappDigits(whatsapp);
+  const isVideo = deliverable === "video";
+  const totalInr = lifeMasteryOrderTotalInr(priorityDelivery, deliverable);
+  const priorityFee = numerologyPriorityFeeInr(deliverable);
+
   // Download PDF in-app and offer Share sheet (works around localtunnel
   // interstitial that breaks Linking.openURL in Safari).
   const downloadAndShare = async (url: string, fileName: string) => {
     setErr(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setOpening(true);
+    const authHeaders: Record<string, string> = {
+      "bypass-tunnel-reminder": "true",
+      ...(user?.id ? { "X-User-Id": String(user.id) } : {}),
+      ...(user?.api_key ? { "X-API-Key": user.api_key } : {}),
+    };
     try {
       // ── Web (workspace iframe / browser) — FileSystem APIs unavailable.
       // Fetch as blob then trigger a download via anchor click. Falls back to
       // a new-tab open if blob fetch fails (e.g. CORS).
       if (Platform.OS === "web") {
         try {
-          const r = await fetch(url, { headers: { "bypass-tunnel-reminder": "true" } });
+          const r = await fetch(url, { headers: authHeaders });
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const blob = await r.blob();
           const blobUrl = URL.createObjectURL(blob);
@@ -931,7 +981,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       // ── Native (iOS / Android) — download then Share sheet.
       const dest = `${FileSystem.cacheDirectory}${fileName}`;
       const res = await FileSystem.downloadAsync(url, dest, {
-        headers: { "bypass-tunnel-reminder": "true" },
+        headers: authHeaders,
       });
       if (res.status !== 200) {
         throw new Error(`Server returned HTTP ${res.status}`);
@@ -976,15 +1026,28 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     ...(bd?.place ? { place: bd.place } : {}),
   });
 
-  /** Book founder-reviewed Numerology PDF → appears in LifeMap admin + My Reports. */
-  const placeFounderOrder = async (langCode: "en" | "hn" | "hi") => {
+  /** Book founder-reviewed Numerology PDF → My Reports or WhatsApp video. */
+  const placeFounderOrder = async (
+    langCode: "en" | "hn" | "hi",
+    opts?: {
+      deliverableOverride?: NumerologyDeliverable;
+      whatsappOverride?: string;
+      urgentOverride?: boolean;
+    },
+  ) => {
     setErr(null);
     if (!bd) {
       setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
       return;
     }
-    const mobileDigits = mobile.replace(/\D/g, "").slice(0, 10);
-    if (mobileDigits.length !== 10) {
+    const kind = opts?.deliverableOverride ?? deliverable;
+    const urgent = opts?.urgentOverride ?? priorityDelivery;
+    const wa = normalizeWhatsappDigits(opts?.whatsappOverride ?? waDigits);
+    if (kind === "video" && wa.length !== 10) {
+      setErr("Enter your 10-digit WhatsApp number to receive the video.");
+      return;
+    }
+    if (kind === "report" && mobileDigits.length !== 10) {
       setErr("Please enter a valid 10-digit mobile number.");
       return;
     }
@@ -1000,16 +1063,38 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
         apiKey: user.api_key,
         cosmoUserId: user.cosmo_user_id,
         lang: langCode,
-        urgent: priorityDelivery,
+        urgent,
         purchaseId: pending?.purchaseId,
+        deliverable: kind,
+        whatsapp: kind === "video" ? wa : undefined,
         params: {
           ...buildEntitlementParams(),
-          mobile: mobileDigits,
+          mobile: kind === "report" ? mobileDigits : mobileDigits || wa,
           lang: langCode,
           ...(pending?.params || {}),
         },
       });
       clearPendingNumerologyCheckout();
+      const displayOid = String(result.order_id || "").slice(0, 8).toUpperCase();
+      const userName = String(buildEntitlementParams().name || user?.name || "You").trim() || "You";
+      const etaLabel = urgent
+        ? "⚡ Priority — within 12 hours"
+        : `📦 Standard — ${STANDARD_DELIVERY_ETA}`;
+      try {
+        await registerPendingMyReport(user.id, {
+          kind: "numerology",
+          title: kind === "video"
+            ? `${userName} — Video (WhatsApp)`
+            : `${userName} — Numerology Report`,
+          subtitle: displayOid ? `Order ${displayOid}` : "Preparing…",
+          orderId: result.order_id || undefined,
+          publicOrderId: displayOid || undefined,
+          etaLabel,
+          deliverable: kind,
+        });
+      } catch {
+        /* ignore — success modal still shows */
+      }
       setPreparingBanner({
         priority: priorityDelivery,
         etaHours: Number(result.eta_hours) || (priorityDelivery ? 12 : 24),
@@ -1023,7 +1108,28 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
 
   useEffect(() => {
     if (consumeNumerologyPaidReady()) {
-      void placeFounderOrder(pdfLang);
+      const pending = getPendingNumerologyCheckout();
+      if (pending?.lang) {
+        setPdfLang(
+          pending.lang === "hi" ? "hi" : pending.lang === "hn" ? "hn" : "en",
+        );
+      }
+      if (pending?.urgent != null) setPriorityDelivery(pending.urgent);
+      if (pending?.deliverable === "video" || pending?.contactMethod === "whatsapp") {
+        setDeliverable("video");
+        if (pending?.contactValue) setWhatsapp(normalizeWhatsappDigits(pending.contactValue));
+      }
+      void placeFounderOrder(
+        (pending?.lang === "hi" ? "hi" : pending?.lang === "hn" ? "hn" : "en") as "en" | "hn" | "hi",
+        {
+          deliverableOverride:
+            pending?.deliverable === "video" || pending?.contactMethod === "whatsapp"
+              ? "video"
+              : "report",
+          whatsappOverride: pending?.contactValue,
+          urgentOverride: pending?.urgent,
+        },
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1034,7 +1140,12 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
       return;
     }
-    if (mobile.replace(/\D/g, "").length !== 10) {
+    if (isVideo) {
+      if (waDigits.length !== 10) {
+        setErr("Enter your 10-digit WhatsApp number to receive the video.");
+        return;
+      }
+    } else if (mobileDigits.length !== 10) {
       setErr("Please enter a valid 10-digit mobile number.");
       return;
     }
@@ -1045,18 +1156,16 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     setLangOpen(false);
     const entitlementParams = buildEntitlementParams();
 
-    if (LIFE_MASTERY_CHECKOUT_CONFIG.bypassCheckoutForTesting) {
-      await placeFounderOrder(pdfLang);
-      return;
-    }
-
     await gateNumerologyReportAfterLangPick({
       user,
       params: entitlementParams,
       lang: pdfLang,
-      label: "Numerology Pro Report",
-      amountInr: lifeMasteryOrderTotalInr(priorityDelivery),
-      bypassCheckout: false,
+      label: isVideo ? "Personalized Video Explanation" : "Numerology Pro Report",
+      amountInr: totalInr,
+      bypassCheckout: LIFE_MASTERY_CHECKOUT_CONFIG.bypassCheckoutForTesting,
+      urgent: priorityDelivery,
+      contactMethod: isVideo ? "whatsapp" : undefined,
+      contactValue: isVideo ? waDigits : undefined,
       onEntitled: () => {
         void placeFounderOrder(pdfLang);
       },
@@ -1102,6 +1211,43 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       </FadeInView>
 
       <FadeInView delay={staggerDelay(1)}>
+      <ProProductPicker
+        title="Choose how you want it"
+        subtitle="Most people start with the PDF report. Video is a personal WhatsApp explanation."
+        selectedId={deliverable}
+        onSelect={(id) => setDeliverable(id as NumerologyDeliverable)}
+        isDark={C.isDark}
+        cardBg={cardBg}
+        border={border}
+        titleColor={titleColor}
+        bodyColor={bodyColor}
+        accent={C.isDark ? PRO_PICKER_ACCENTS.violetDark : PRO_PICKER_ACCENTS.violet}
+        options={[
+          {
+            id: "report",
+            emoji: "📄",
+            title: "Numerology Pro Report",
+            hint: "Full PDF · saved in My Reports · re-read anytime",
+            priceLabel: `₹${LIFE_MASTERY_UI_PRICING.offerInr}`,
+            strikeLabel:
+              LIFE_MASTERY_UI_PRICING.originalInr > LIFE_MASTERY_UI_PRICING.offerInr
+                ? `₹${LIFE_MASTERY_UI_PRICING.originalInr}`
+                : undefined,
+            badge: "MOST POPULAR",
+          },
+          {
+            id: "video",
+            emoji: "🎥",
+            title: "Personalized Video Explanation",
+            hint: "Founder explains on WhatsApp · no PDF included",
+            priceLabel: `₹${LIFE_MASTERY_VIDEO_PRICE_INR}`,
+            badge: "1:1 VIDEO",
+          },
+        ]}
+      />
+      </FadeInView>
+
+      <FadeInView delay={staggerDelay(2)}>
       <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Pressable
           onPress={() => { setFounderExpanded(v => !v); Haptics.selectionAsync(); }}
@@ -1123,7 +1269,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
           <Feather name={founderExpanded ? "chevron-up" : "chevron-down"} size={18} color={C.isDark ? "#a78bfa" : "#7c3aed"} />
         </Pressable>
         <View style={np.founderChipRow}>
-          {["Founder-reviewed", "Saved in My Reports", "Secure payment"].map(b => (
+          { (hidePay ? ["Founder-reviewed", "Saved in My Reports", "Try for free"] : ["Founder-reviewed", "Saved in My Reports", "Secure payment"]).map(b => (
             <View key={b} style={[np.founderBulletChip, { borderColor: border }]}>
               <Feather name="check" size={10} color="#22c55e" />
               <Text style={[np.founderBulletTxt, { color: titleColor }]} numberOfLines={1}>{b}</Text>
@@ -1133,7 +1279,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       </View>
       </FadeInView>
 
-      <FadeInView delay={staggerDelay(2)}>
+      <FadeInView delay={staggerDelay(3)}>
       <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Text style={[np.sectionTitle, { color: titleColor }]}>Your Report Answers These 3 Questions</Text>
         <View style={np.coreQChipRow}>
@@ -1147,7 +1293,8 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       </View>
       </FadeInView>
 
-      <FadeInView delay={staggerDelay(3)}>
+      {!isVideo ? (
+      <FadeInView delay={staggerDelay(4)}>
       <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Text style={[np.sectionTitle, { color: titleColor }]}>What's Inside Your Report</Text>
         <Text style={[np.reportSummary, { color: bodyColor }]}>{toolSections.length} things</Text>
@@ -1161,12 +1308,24 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
         </View>
       </View>
       </FadeInView>
+      ) : null}
 
-      <FadeInView delay={staggerDelay(4)}>
+      <FadeInView delay={staggerDelay(isVideo ? 4 : 5)}>
       <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
+        {hidePay ? (
+          <>
+            <Text style={[np.sectionTitle, { color: titleColor }]}>Try for free</Text>
+            <Text style={[np.deliveryStandardLine, { color: bodyColor }]} numberOfLines={2}>
+              10 phases, check ke baad ek PDF · no payment
+            </Text>
+          </>
+        ) : (
+          <>
         <Text style={[np.sectionTitle, { color: titleColor }]}>Standard Delivery</Text>
-        <Text style={[np.deliveryStandardLine, { color: bodyColor }]} numberOfLines={1}>
-          📁 My Reports · within 24 hours · ₹{LIFE_MASTERY_UI_PRICING.offerInr}
+        <Text style={[np.deliveryStandardLine, { color: bodyColor }]} numberOfLines={2}>
+          {isVideo
+            ? `📱 WhatsApp · ${STANDARD_DELIVERY_ETA.toLowerCase()} · no PDF/report`
+            : `📁 My Reports · ${STANDARD_DELIVERY_ETA.toLowerCase()}`}
         </Text>
         <Pressable
           onPress={() => { setPriorityDelivery(!priorityDelivery); Haptics.selectionAsync(); }}
@@ -1182,28 +1341,61 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
             {priorityDelivery ? <Feather name="check" size={10} color="#fff" /> : null}
           </View>
           <Text style={[np.deliveryPriorityTxt, { color: titleColor }]} numberOfLines={1}>
-            ⚡ Priority +₹{LIFE_MASTERY_PRIORITY_SURCHARGE_INR} · within 12 hours
+            ⚡ Priority +₹{priorityFee} · within 12 hours
           </Text>
         </Pressable>
+        <Text style={[np.deliveryRefundNote, { color: bodyColor }]} numberOfLines={2}>
+          {PRIORITY_GUARANTEE}
+        </Text>
         <View style={[np.priceDivider, { backgroundColor: border }]} />
+        {isVideo ? (
+          <Text style={[np.priceInline, { color: titleColor }]}>
+            <Text style={np.priceTotalTiny}>₹{totalInr}</Text>
+          </Text>
+        ) : (
         <Text style={[np.priceInline, { color: titleColor }]}>
           <Text style={[np.priceStrikeTiny, { color: bodyColor }]}>₹{LIFE_MASTERY_UI_PRICING.originalInr}</Text>
           <Text style={np.priceArrow}> → </Text>
-          <Text style={np.priceTotalTiny}>₹{lifeMasteryOrderTotalInr(priorityDelivery)}</Text>
+          <Text style={np.priceTotalTiny}>₹{totalInr}</Text>
         </Text>
+        )}
+          </>
+        )}
       </View>
       </FadeInView>
 
-      <FadeInView delay={staggerDelay(5)}>
+      <FadeInView delay={staggerDelay(isVideo ? 5 : 6)}>
       <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
-        <Text style={[np.sectionTitle, { color: titleColor }]}>Your numbers</Text>
-        <Text style={[np.reportSummary, { color: bodyColor }]}>Mobile number required for your PDF report.</Text>
+        <Text style={[np.sectionTitle, { color: titleColor }]}>
+          {isVideo ? "WhatsApp number" : "Your numbers"}
+        </Text>
+        <Text style={[np.reportSummary, { color: bodyColor }]}>
+          {isVideo
+            ? "We'll send your Personalized Video Explanation here."
+            : hidePay
+              ? "Optional — used for phone numerology in the PDF."
+              : "Mobile number required for your PDF report."}
+        </Text>
         <View style={{ gap: 10, marginTop: 10 }}>
+          {isVideo ? (
+            <View style={pp.inputBlock}>
+              <Text style={[pp.inputLabel, { color: C.textDim }]}>📱 WhatsApp Number</Text>
+              <TextInput
+                value={whatsapp}
+                onChangeText={(v) => setWhatsapp(normalizeWhatsappDigits(v))}
+                placeholder="10-digit WhatsApp number"
+                placeholderTextColor={C.textMuted}
+                keyboardType="number-pad"
+                maxLength={10}
+                style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
+              />
+            </View>
+          ) : (
           <View style={pp.inputBlock}>
             <Text style={[pp.inputLabel, { color: C.textDim }]}>📱 Mobile Number</Text>
             <TextInput
               value={mobile}
-              onChangeText={(t) => setMobile(t.replace(/\D/g, "").slice(0, 10))}
+              onChangeText={(v) => setMobile(v.replace(/\D/g, "").slice(0, 10))}
               placeholder="9876543210"
               placeholderTextColor={C.textMuted}
               keyboardType="number-pad"
@@ -1211,6 +1403,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
               style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
             />
           </View>
+          )}
         </View>
         {err ? (
           <View style={[pp.errBox, { marginTop: 12 }]}>
@@ -1221,7 +1414,11 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       </View>
       </FadeInView>
 
-      <Text style={[np.trustBar, { color: bodyColor }]}>🔒 Secure Payment • Founder Reviewed • Delivered in My Reports</Text>
+      <Text style={[np.trustBar, { color: bodyColor }]}>
+        {isVideo
+          ? "🔒 Secure Payment · Founder reviewed · Delivered on WhatsApp"
+          : "🔒 Secure Payment • Founder Reviewed • Delivered in My Reports"}
+      </Text>
 
       <Pressable
         onPress={startUnlock}
@@ -1236,7 +1433,11 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
         }]}
       >
         <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Nunito_800ExtraBold", textAlign: "center" }}>
-          {opening ? "Opening…" : "Get My Report"}
+          {opening
+            ? "Placing order…"
+            : isVideo
+              ? "Get Personalized Video Explanation"
+              : "Get My Report"}
         </Text>
       </Pressable>
 
@@ -1259,7 +1460,10 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                 gap: 10,
               }}>
                 <Text style={{ color: C.text, fontFamily: F.extra, fontSize: 16 }}>
-                  Choose PDF Language
+                  Report ki language
+                </Text>
+                <Text style={{ color: C.textMuted, fontFamily: F.medium, fontSize: 12, lineHeight: 17 }}>
+                  English, Hinglish, ya Hindi — jo select karoge, poori 10-phase report usi mein likhegi.
                 </Text>
                 <View style={{ flexDirection: "row", gap: 10 }}>
                   {([
@@ -1314,7 +1518,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: "#fff", fontFamily: F.extra }}>Continue</Text>
+                    <Text style={{ color: "#fff", fontFamily: F.extra }}>{hidePay ? t.numTryForFree : "Continue"}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -1328,11 +1532,19 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
           router.push("/my-reports" as any);
         }}
         title="Order Confirmed!"
-        message="Your order has been received. Our expert is personally preparing your Numerology Pro report — it's on its way."
+        message={
+          isVideo
+            ? "Your Personalized Video Explanation is being prepared. It will be sent to your WhatsApp. No PDF/report is included."
+            : "Your order has been received. Our expert is personally preparing your Numerology Pro report — it's on its way."
+        }
         etaLabel={
-          preparingBanner?.priority
-            ? "Report in My Reports within 12 hrs"
-            : "Report in My Reports within 24 hrs"
+          isVideo
+            ? preparingBanner?.priority
+              ? "Video on WhatsApp within 12 hrs"
+              : `Video on WhatsApp · ${STANDARD_DELIVERY_ETA.toLowerCase()}`
+            : preparingBanner?.priority
+              ? "Report in My Reports within 12 hrs"
+              : `Report in My Reports · ${STANDARD_DELIVERY_ETA.toLowerCase()}`
         }
       />
     </View>
@@ -1445,43 +1657,56 @@ export default function NumerologyScreen() {
     : null;
 
   const accent = tab === "free" ? BASIC_ACCENT : PRO_ACCENT;
+  const isBasic = tab === "free";
+  const S = basicSurface(C.isDark);
 
   return (
-    <View style={[s.root, { backgroundColor: C.bg }]}>
+    <View style={[s.root, { backgroundColor: isBasic ? S.page : C.bg }]}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <LinearGradient colors={[`${accent}14`, C.bg, C.bg]} style={StyleSheet.absoluteFill} />
-        <PremiumOrb color={accent} />
+        {isBasic ? (
+          <LinearGradient colors={S.pageGrad} style={StyleSheet.absoluteFill} />
+        ) : (
+          <>
+            <LinearGradient colors={[`${accent}14`, C.bg, C.bg]} style={StyleSheet.absoluteFill} />
+            <PremiumOrb color={accent} />
+          </>
+        )}
       </View>
 
       <LinearGradient
-        colors={[`${accent}24`, `${accent}08`, "transparent"]}
-        style={[s.header, { paddingTop: topPad + 8, borderBottomColor: `${accent}22` }]}
+        colors={isBasic
+          ? (C.isDark ? ["#4338ca", "#312e81", "transparent"] : ["#c4b5fd", "#ddd6fe", "transparent"])
+          : [`${accent}24`, `${accent}08`, "transparent"]}
+        style={[s.header, { paddingTop: topPad + 8, borderBottomColor: isBasic ? S.border : `${accent}22` }]}
       >
-        <Pressable onPress={() => router.back()} style={({ pressed }) => [ui.glassBtn, { opacity: pressed ? 0.75 : 1 }]}>
-          <Feather name="arrow-left" size={20} color={C.textMuted} />
+        <Pressable onPress={() => router.back()} style={({ pressed }) => [ui.glassBtn, { opacity: pressed ? 0.75 : 1, backgroundColor: isBasic ? (C.isDark ? "rgba(15,23,42,0.55)" : "rgba(255,255,255,0.7)") : undefined }]}>
+          <Feather name="arrow-left" size={20} color={isBasic ? S.title : C.textMuted} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[ui.headerBadge, { color: accent }]}>
+          <Text style={[ui.headerBadge, { color: isBasic ? (C.isDark ? "#c4b5fd" : "#5b21b6") : accent }]}>
             {tab === "free" ? "NUMEROLOGY BASIC" : "NUMEROLOGY PRO"}
           </Text>
-          <Text style={[s.title, { color: C.text }]}>{t.numerologyTitle}</Text>
-          <Text style={[s.sub, { color: C.textMuted }]}>{t.numSubtitle}</Text>
+          <Text style={[s.title, { color: isBasic ? S.title : C.text }]}>{t.numerologyTitle}</Text>
+          <Text style={[s.sub, { color: isBasic ? S.body : C.textMuted }]}>{t.numSubtitle}</Text>
         </View>
         <View style={{ width: 40 }} />
       </LinearGradient>
 
       <ScrollView
+        style={{ flex: 1, minHeight: 0 }}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: botPad + 40 }]}
+        contentContainerStyle={[s.content, { paddingBottom: botPad + 40, flexGrow: 1 }]}
       >
         {!bd && (
           <FadeInView delay={0}>
-          <View style={[ui.emptyPremium, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}35` }]}>
-            <View style={[ui.heroIconRing, { backgroundColor: `${BASIC_ACCENT}22`, borderColor: `${BASIC_ACCENT}55` }]}>
+          <View style={[ui.emptyPremium, { backgroundColor: S.card, borderColor: S.border }]}>
+            <View style={[ui.heroIconRing, { backgroundColor: C.isDark ? "rgba(196,181,253,0.18)" : "rgba(109,40,217,0.12)", borderColor: S.border }]}>
               <Text style={{ fontSize: 28 }}>🔢</Text>
             </View>
-            <Text style={[s.emptyTitle, { color: C.text }]}>{t.numNoProfileTitle}</Text>
-            <Text style={[s.emptyBody, { color: C.textMuted }]}>
+            <Text style={[s.emptyTitle, { color: S.title }]}>{t.numNoProfileTitle}</Text>
+            <Text style={[s.emptyBody, { color: S.body }]}>
               {t.numNoProfileBody}
             </Text>
             <Pressable
@@ -1498,12 +1723,13 @@ export default function NumerologyScreen() {
 
         {bd && (
           <FadeInView delay={staggerDelay(1)} resetKey={tab}>
-          <View style={[ui.tabBarPremium, { backgroundColor: C.bgCard2, borderColor: `${accent}33` }]}>
+          <View style={[ui.tabBarPremium, { backgroundColor: isBasic ? S.card : C.bgCard2, borderColor: isBasic ? S.border : `${accent}33` }]}>
             {([
               { key: "free" as const, icon: "hash" as const, label: t.km_basic, tabAccent: BASIC_ACCENT },
               { key: "pro" as const, icon: "file-text" as const, label: t.vu_tabPro, tabAccent: PRO_ACCENT },
             ]).map((m) => {
               const sel = tab === m.key;
+              const idle = isBasic ? S.body : C.textMuted;
               return (
                 <Pressable
                   key={m.key}
@@ -1524,8 +1750,8 @@ export default function NumerologyScreen() {
                       end={{ x: 1, y: 0 }}
                     />
                   ) : null}
-                  <Feather name={m.icon} size={13} color={sel ? "#fff" : C.textMuted} />
-                  <Text style={[s.tabTxt, { color: sel ? "#fff" : C.textMuted }]}>{m.label}</Text>
+                  <Feather name={m.icon} size={13} color={sel ? "#fff" : idle} />
+                  <Text style={[s.tabTxt, { color: sel ? "#fff" : idle }]}>{m.label}</Text>
                 </Pressable>
               );
             })}
@@ -1540,12 +1766,12 @@ export default function NumerologyScreen() {
         {nums && tab === "free" && (
           <>
             <FadeInView delay={staggerDelay(2)} resetKey="basic">
-              <View style={[ui.priceRibbon, { borderColor: `${BASIC_ACCENT}44`, backgroundColor: `${BASIC_ACCENT}12`, marginBottom: 4 }]}>
+              <View style={[ui.priceRibbon, { borderColor: S.border, backgroundColor: S.card, marginBottom: 4 }]}>
                 <Feather name="hash" size={14} color={BASIC_ACCENT} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[np.bodyBold, { color: C.text, fontSize: 12 }]}>{t.numFreeSection}</Text>
+                  <Text style={[np.sectionTitle, { color: S.title }]}>{t.numFreeSection}</Text>
                   {profile?.name ? (
-                    <Text style={[np.reportSummary, { color: C.textMuted, marginTop: 2 }]}>
+                    <Text style={[np.reportSummary, { color: S.muted, marginTop: 2 }]}>
                       {t.numProfileFor.replace("{name}", profile.name)}
                     </Text>
                   ) : null}
@@ -1573,7 +1799,7 @@ export default function NumerologyScreen() {
 
             <PersonalYearCard py={nums.py} pm={nums.pm} />
 
-            <Text style={[np.reportSummary, { color: C.textMuted, marginTop: 2 }]}>{t.numTapHint}</Text>
+            <Text style={[np.reportSummary, { color: S.muted, marginTop: 2 }]}>{t.numTapHint}</Text>
 
             <NumCard
               label={t.numLifePathLbl} labelHindi={t.numLifePathHi}
@@ -1614,11 +1840,11 @@ export default function NumerologyScreen() {
 }
 
 const s = StyleSheet.create({
-  root:        { flex:1 },
+  root:        { flex:1, minHeight: 0 },
   header:      { flexDirection:"row", alignItems:"center", gap:12, paddingHorizontal:16, paddingBottom:14, borderBottomWidth:1 },
   back:        { width:36, height:36, alignItems:"center", justifyContent:"center" },
-  title:       { fontSize:17, fontFamily:F.bold, letterSpacing:-0.2 },
-  sub:         { fontSize:11, fontFamily:F.medium, marginTop:1, letterSpacing:0.1 },
+  title:       { fontSize:17, fontFamily:F.extra, letterSpacing:-0.2 },
+  sub:         { fontSize:11.5, fontFamily:F.medium, marginTop:1, letterSpacing:0.1, lineHeight:16 },
   content:     { paddingHorizontal:16, gap:12, paddingTop:14 },
   sectionLabel:{ fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase", marginBottom:-4 },
   sectionSub:  { fontSize:11, fontFamily:F.medium, marginTop:-8 },

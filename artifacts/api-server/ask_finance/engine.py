@@ -56,6 +56,18 @@ def _attach_finance_engine_execution(
                 "chart": "D2",
             }
             pack["charts_used"] = ["D1", "D9"]
+        # Attach current + upcoming dasha when the question is timing OR
+        # explicitly asks for dasha ("dasha bhi dekho"). Gives the narrator the
+        # REAL running MD/AD/PD so it never invents a fake/past-month dasha.
+        try:
+            from ask_finance.dasha_compact import maybe_attach_dasha_compact
+
+            maybe_attach_dasha_compact(
+                pack, kundli if isinstance(kundli, dict) else {},
+                question or "", llm_intent=llm_intent,
+            )
+        except Exception:
+            pass
         checks = dict(result.checks or {})
         checks["finance_engine_execution"] = pack
         checks["d1_finance_facts"] = pack.get("d1") or {}

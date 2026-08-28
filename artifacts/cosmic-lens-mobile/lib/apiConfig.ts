@@ -105,6 +105,10 @@ function isRawVpsIpUrl(url: string): boolean {
   return /187\.127\.174\.55|:8080(\/|$)/.test(url) && !/coosmic\.icu/i.test(url);
 }
 
+function isLaptopGunicornUrl(url: string): boolean {
+  return /^http:\/\/(127\.0\.0\.1|localhost):8080$/i.test(url.replace(/\/$/, ""));
+}
+
 function resolveApiBase(): string {
   const fullUrl = configuredApiUrl();
   const hostOnly = process.env.EXPO_PUBLIC_DOMAIN;
@@ -113,7 +117,19 @@ function resolveApiBase(): string {
     // localtunnel interstitial breaks web iframe — fall through
   } else {
     const normalized = normalizeApiUrl(fullUrl);
-    if (normalized) return normalized;
+    if (normalized) {
+      // Laptop web often inherits EXPO_PUBLIC_API_URL=:8080 from a local
+      // Flask session. That port is not running, so palm-scan Failed to fetch.
+      // Keep :8080 only when the user explicitly asked for a local API.
+      if (isWeb() && isLaptopGunicornUrl(normalized) && !useLocalBackend()) {
+        console.warn(
+          "[CosmicLens] Ignoring local :8080 (set EXPO_PUBLIC_USE_LOCAL_API=1 to keep it). Using",
+          PRODUCTION_HTTPS_API,
+        );
+        return PRODUCTION_HTTPS_API;
+      }
+      return normalized;
+    }
   }
 
   if (useLocalBackend()) {
@@ -213,7 +229,14 @@ function installDevFetchInterceptor(): void {
       return res;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("[CosmicLens][dev] fetch failed:", method, urlStr, msg);
+      const isAbort =
+        (e instanceof Error && e.name === "AbortError") ||
+        /signal is aborted|aborted without reason/i.test(msg);
+      if (isAbort) {
+        if (verbose) console.debug("[CosmicLens][dev] fetch timed out:", method, urlStr);
+      } else {
+        console.error("[CosmicLens][dev] fetch failed:", method, urlStr, msg);
+      }
       throw e;
     }
   }) as typeof fetch;

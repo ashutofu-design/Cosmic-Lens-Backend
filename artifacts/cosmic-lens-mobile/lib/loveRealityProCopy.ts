@@ -91,20 +91,20 @@ export const LOVE_REALITY_DELIVERY_OPTIONS = [
   {
     emoji: "📦",
     title: "Standard Delivery",
-    eta: "Within 24 hours",
+    eta: "4–6 business days",
     surchargeInr: 0,
   },
   {
     emoji: "⚡",
     title: "Priority Delivery",
     eta: "Within 12 hours",
-    surchargeInr: 300,
+    surchargeInr: 299,
   },
 ] as const;
 
-/** Shown under Priority toggle — 12h SLA refund for the +₹300 surcharge only. */
+/** Shown under Priority toggle — 12h SLA refunds the Priority fee only. */
 export const LOVE_REALITY_PRIORITY_REFUND_GUARANTEE =
-  "Not in My Reports within 12 hours? ₹300 priority fee refunded." as const;
+  "12-hour Priority Guarantee — If we miss the 12-hour delivery window, your Priority fee is 100% refunded." as const;
 
 /** A/B Version A — swap with LOVE_REALITY_PRO_CTA_TITLE to test */
 export const LOVE_REALITY_PRO_CTA_TITLE_ALT_A = "Unlock My Founder-Verified Report" as const;

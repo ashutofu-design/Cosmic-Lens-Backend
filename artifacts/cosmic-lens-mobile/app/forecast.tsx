@@ -19,6 +19,15 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import {
+  buildNatalTransitPayload,
+  chartSeed,
+  natalLagnaSignIndex,
+  natalMoonSignIndex,
+  parseTransitDayList,
+  scorePersonalizedDay,
+  type TransitDayEntry,
+} from "@/lib/chartPersonalize";
 
 import { computeRisk, DayForecast, fmtDate } from "@/components/RiskRadarCard";
 
@@ -362,7 +371,7 @@ export default function ForecastScreen() {
   const insets   = useSafeAreaInsets();
   const C = useC();
   const t = useT();
-  const { kundli, moonData } = useUser();
+  const { kundli, moonData, birthData } = useUser();
   const topPad   = Platform.OS === "web" ? 67 : insets.top;
   const botPad   = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
@@ -404,45 +413,71 @@ export default function ForecastScreen() {
     }
 
     setLoading(true);
+    const natal = buildNatalTransitPayload(kundli);
+    const seed = chartSeed(kundli, birthData);
+    const natalHints = {
+      moonSign: natalMoonSignIndex(kundli),
+      lagnaSign: natalLagnaSignIndex(kundli),
+    };
+    const moonLon = moonData?.longitude ?? 0;
+
+    const buildFromList = (list: TransitDayEntry[]) =>
+      list.map((item, i) => {
+        const dayOffset   = i + 1;
+        const transitMoon = Number(item.positions?.Moon ?? (moonLon + dayOffset * 13.2));
+        const { score } = scorePersonalizedDay(item, kundli, dayOffset);
+        const dt    = new Date(item.date + "T00:00:00");
+        return {
+          date:     dt,
+          score,
+          moonLon:  transitMoon,
+          moonSign: moonSign(transitMoon),
+          phase:    moonPhase(dt),
+          summary:  SCORE_SUMMARIES[scoreToTrend(score)],
+          ...computeRisk(score, i, dt, t.lang, seed, natalHints),
+        };
+      });
+
+    const buildLocal = () =>
+      dates.map((ds, i) => {
+        const dayOffset = i + 1;
+        const transitMoon = moonLon + dayOffset * 13.2;
+        const { score } = scorePersonalizedDay(
+          { date: ds, positions: { Moon: transitMoon } },
+          kundli,
+          dayOffset,
+        );
+        const dt = new Date(ds + "T00:00:00");
+        return {
+          date: dt,
+          score,
+          moonLon: transitMoon,
+          moonSign: moonSign(transitMoon),
+          phase: moonPhase(dt),
+          summary: SCORE_SUMMARIES[scoreToTrend(score)],
+          ...computeRisk(score, i, dt, t.lang, seed, natalHints),
+        };
+      });
+
     apiFetch(`${API_BASE}/api/transits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dates }),
+      body: JSON.stringify({ dates, natal }),
     })
-      .then(r => r.json())
-      .then((data: { date: string; positions: Record<string,number> }[]) => {
-        const moonLon = moonData?.longitude ?? 0;
-        // Use a stable mid-range baseline so projected scores aren't pinned to today's
-        // specific value (this page is forward-looking trends, not today's reading).
-        const baseScore = 60;
-
-        const built = data.map((item, i) => {
-          // Forecast index: i=0 → tomorrow, i=6 → today + 7. Offset by +1 day for moon estimate.
-          const dayOffset   = i + 1;
-          const transitMoon = item.positions?.Moon ?? (moonLon + dayOffset * 13.2);
-          const variation   = Math.sin(dayOffset * 1.3) * 12 + (item.positions?.Jupiter ? 5 : 0)
-            - (item.positions?.Saturn ? 6 : 0);
-          const score = Math.max(10, Math.min(90, Math.round(baseScore + variation)));
-          const dt    = new Date(item.date + "T00:00:00");
-          return {
-            date:     dt,
-            score,
-            moonLon:  transitMoon,
-            moonSign: moonSign(transitMoon),
-            phase:    moonPhase(dt),
-            summary:  SCORE_SUMMARIES[scoreToTrend(score)],
-            ...computeRisk(score, i, dt, t.lang),
-          };
-        });
-        setDays(built);
+      .then(async r => {
+        const data = await r.json().catch(() => null);
+        const list = parseTransitDayList(data);
+        if (!r.ok || list.length === 0) throw new Error("transits_empty");
+        return list;
+      })
+      .then((list: TransitDayEntry[]) => {
+        setDays(buildFromList(list));
       })
       .catch(() => {
-        // API failed — clear days so UI shows the empty/error state
-        // (avoid fake scores that would mislead user into thinking it's real data)
-        setDays([]);
+        setDays(buildLocal());
       })
       .finally(() => setLoading(false));
-  }, [kundli, moonData, showDemo, t.lang]);
+  }, [kundli, moonData, birthData, showDemo, t.lang]);
 
   const sel = days[selected];
   const scoreColor = sel

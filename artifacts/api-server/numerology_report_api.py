@@ -132,7 +132,16 @@ def register_numerology_report_routes(app) -> None:
         if not cp:
             return jsonify({"error": "missing_fields"}), 400
 
-        payload, perr = billing.create_purchase_intent(user.id, cp, lang or cp.get("lang", "hinglish"))
+        deliverable = billing.normalize_deliverable(data.get("deliverable"))
+        urgent = bool(data.get("urgent"))
+
+        payload, perr = billing.create_purchase_intent(
+            user.id,
+            cp,
+            lang or cp.get("lang", "hinglish"),
+            deliverable=deliverable,
+            urgent=urgent,
+        )
         if perr:
             return jsonify({"error": perr}), 400
         if payload.get("already_entitled"):

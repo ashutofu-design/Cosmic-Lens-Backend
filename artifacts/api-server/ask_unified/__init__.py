@@ -436,6 +436,22 @@ def build_domain_dna_judge_display(
         if contract.get(k)
     } if isinstance(contract, dict) else {}
 
+    judge_version = judge_audit.get("judge") or f"{domain}_dna_v1"
+    det_notes: list[str] = []
+    if passed is None and answer:
+        # LLM judge OFF / no stored verdict — free deterministic check so the
+        # debugger never shows "—" for the verdict.
+        try:
+            from ask_selected_blocks_common import deterministic_dna_judge
+
+            det = deterministic_dna_judge(question or "", answer or "", contract_summary)
+            passed = det.get("passed")
+            issues = list(det.get("issues") or [])
+            det_notes = list(det.get("notes") or [])
+            judge_version = "deterministic_v1 (no LLM)"
+        except Exception:
+            pass
+
     return {
         "applies": True,
         "enabled": bool(enabled),
@@ -443,7 +459,8 @@ def build_domain_dna_judge_display(
         "issues": issues,
         "fix_hint": fix_hint,
         "contract": contract_summary or audit.get("contract") or {},
-        "judge_version": judge_audit.get("judge") or f"{domain}_dna_v1",
+        "judge_version": judge_version,
+        "judge_notes": det_notes,
         "contract_keys": list((audit.get("contract") or contract_summary or {}).keys()),
         "skipped": judge_audit.get("skipped"),
         "error": judge_audit.get("error"),

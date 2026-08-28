@@ -125,12 +125,12 @@ def enrich_timing_prompt_block(
     birth: Any = None,
     kundli: Any = None,
     user_age: Optional[int] = None,
+    window: str = "",
+    predicted_age: Optional[int] = None,
 ) -> str:
-    """Append PMF lock to an already-built marriage/career/UTF block."""
+    """Append PMF + AGE LOCK to an already-built marriage/career/UTF block."""
     text = (block or "").strip()
     if not text:
-        return text
-    if "PRACTICAL MANIFESTATION FILTER" in text:
         return text
     elig = assess_timing_eligibility(
         domain,
@@ -139,5 +139,31 @@ def enrich_timing_prompt_block(
         kundli=kundli,
         user_age=user_age,
     )
-    lock = format_eligibility_lock_lines(elig)
-    return (text + "\n\n" + lock).strip() if lock else text
+    parts = [text]
+    if "PRACTICAL MANIFESTATION FILTER" not in text:
+        lock = format_eligibility_lock_lines(elig)
+        if lock:
+            parts.append(lock)
+    try:
+        from event_timing._shared.age_aware_timing_reply import (
+            lock_lines_for_prompt,
+            resolve_user_age_for_timing,
+        )
+
+        ua = elig.get("user_age")
+        if ua is None:
+            ua = resolve_user_age_for_timing(
+                question=question, birth=birth, kundli=kundli, user_age=user_age,
+            )
+        age_lock = lock_lines_for_prompt(
+            domain,
+            user_age=int(ua) if ua is not None else None,
+            window=window or "",
+            question=question,
+            predicted_age=predicted_age,
+        )
+        if age_lock and "AGE LOCK (MANDATORY" not in text:
+            parts.append(age_lock)
+    except Exception:
+        pass
+    return "\n\n".join(p for p in parts if p).strip()

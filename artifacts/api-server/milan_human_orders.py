@@ -125,6 +125,47 @@ def _save_order(record: dict) -> str:
     return oid
 
 
+def get_order(order_id: str) -> dict[str, Any] | None:
+    oid = (order_id or "").strip()
+    if not oid:
+        return None
+    path = os.path.join(_BASE, f"{oid}.json")
+    if os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                rec = json.load(fh)
+            return rec if isinstance(rec, dict) else None
+        except Exception:
+            return None
+    _ensure_dir()
+    try:
+        names = os.listdir(_BASE)
+    except OSError:
+        return None
+    matches = [
+        n for n in names if n.endswith(".json") and n.replace(".json", "").startswith(oid)
+    ]
+    if len(matches) != 1:
+        return None
+    try:
+        with open(os.path.join(_BASE, matches[0]), encoding="utf-8") as fh:
+            rec = json.load(fh)
+        return rec if isinstance(rec, dict) else None
+    except Exception:
+        return None
+
+
+def save_order_record(record: dict[str, Any]) -> str:
+    _ensure_dir()
+    oid = record.get("order_id") or str(uuid.uuid4())
+    record["order_id"] = oid
+    path = os.path.join(_BASE, f"{oid}.json")
+    with _lock:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, ensure_ascii=False, indent=2)
+    return oid
+
+
 def list_milan_human_orders(*, page: int = 1, per_page: int = 50, status: str | None = None) -> dict[str, Any]:
     _ensure_dir()
     rows: list[dict[str, Any]] = []
@@ -165,6 +206,11 @@ def list_milan_human_orders(*, page: int = 1, per_page: int = 50, status: str | 
                 "status": rec.get("status") or "pending",
                 "lang": rec.get("lang") or "en",
                 "urgent": bool(rec.get("urgent")),
+                "deliverable": rec.get("deliverable") or "report",
+                "amount_inr": rec.get("amount_inr"),
+                "priority_fee_inr": rec.get("priority_fee_inr"),
+                "eta_hours": rec.get("eta_hours"),
+                "eta_label": rec.get("eta_label"),
                 "contact_method": rec.get("contact_method"),
                 "contact_value": rec.get("contact_value"),
                 "user_id": uid,
@@ -173,6 +219,10 @@ def list_milan_human_orders(*, page: int = 1, per_page: int = 50, status: str | 
                 "p2_name": snap.get("p2_name") or p2.get("name") or "—",
                 "couple_score": snap.get("couple_score"),
                 "couple_band": snap.get("couple_band"),
+                "p1": p1 or None,
+                "p2": p2 or None,
+                "engine_snapshot": snap or None,
+                "admin_accepted_at": rec.get("admin_accepted_at"),
             }
         )
     rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
@@ -188,6 +238,60 @@ def list_milan_human_orders(*, page: int = 1, per_page: int = 50, status: str | 
         "per_page": per_page,
         "pages": max(1, (total + per_page - 1) // per_page),
     }
+
+
+def list_pending_for_user(user_id: int) -> list[dict[str, Any]]:
+    """Pending Kundli Milan Pro orders for My Reports (before PDF ready)."""
+    try:
+        uid = int(user_id or 0)
+    except (TypeError, ValueError):
+        uid = 0
+    if uid <= 0:
+        return []
+    out: list[dict[str, Any]] = []
+    try:
+        page_num = 1
+        pages = 1
+        while page_num <= pages:
+            page = list_milan_human_orders(page=page_num, per_page=100, status=None)
+            pages = max(1, int(page.get("pages") or 1))
+            for row in page.get("orders") or []:
+                if int(row.get("user_id") or 0) != uid:
+                    continue
+                st = str(row.get("status") or "pending").lower()
+                if st in ("delivered", "cancelled", "canceled", "deleted"):
+                    continue
+                is_video = str(row.get("deliverable") or "").lower() == "video"
+                oid = str(row.get("order_id") or "").strip()
+                pub = str(row.get("public_order_id") or "").strip() or (oid[:8].upper() if oid else "")
+                p1 = str(row.get("p1_name") or "You").strip() or "You"
+                p2 = str(row.get("p2_name") or "Partner").strip() or "Partner"
+                couple = f"{p1} & {p2}"
+                out.append({
+                    "id": pub or oid,
+                    "order_id": oid,
+                    "public_order_id": pub,
+                    "kind": "milan_pro",
+                    "status": "pending",
+                    "deliverable": "video" if is_video else "report",
+                    "report_type": (
+                        "Kundli Milan Video Explanation"
+                        if is_video
+                        else "Kundli Milan Pro Report"
+                    ),
+                    "name": couple,
+                    "eta_label": row.get("eta_label") or "",
+                    "date": row.get("created_at"),
+                    "title": (
+                        f"{couple} — Video (WhatsApp)"
+                        if is_video
+                        else f"{couple} — Kundli Milan Report"
+                    ),
+                })
+            page_num += 1
+    except Exception:
+        return out
+    return out
 
 
 def register_milan_human_order_routes(flask_app) -> None:
@@ -220,6 +324,9 @@ def register_milan_human_order_routes(flask_app) -> None:
 
         lang = str(data.get("lang") or "en").strip().lower() or "en"
         urgent = bool(data.get("urgent"))
+        deliverable = str(data.get("deliverable") or "report").strip().lower()
+        if deliverable not in ("report", "video"):
+            deliverable = "report"
 
         user_id = 0
         uid_hdr = (request.headers.get("X-User-Id") or "").strip()
@@ -230,8 +337,13 @@ def register_milan_human_order_routes(flask_app) -> None:
                 user_id = 0
 
         method = str(data.get("contact_method") or "my_reports").strip().lower()
-        raw_contact = str(data.get("contact_value") or "").strip()
-        if raw_contact:
+        raw_contact = str(data.get("contact_value") or data.get("whatsapp") or "").strip()
+        if deliverable == "video":
+            method = "whatsapp"
+            contact, err = _normalize_contact(method, raw_contact)
+            if err:
+                return jsonify({"error": err}), 400
+        elif raw_contact:
             contact, err = _normalize_contact(method, raw_contact)
             if err:
                 return jsonify({"error": err}), 400
@@ -272,20 +384,34 @@ def register_milan_human_order_routes(flask_app) -> None:
             "p2": data["p2"],
             "engine_snapshot": snap,
             "status": "pending",
-            "delivery": "founder_manual_pdf",
-            "product": "milan_pro",
+            "deliverable": deliverable,
+            "delivery": "whatsapp_video_explanation" if deliverable == "video" else "founder_manual_pdf",
+            "product": "milan_pro_video" if deliverable == "video" else "milan_pro",
+            "amount_inr": int(data.get("amount_inr") or 0) or None,
+            "priority_fee_inr": int(data.get("priority_fee_inr") or 0) or (299 if urgent else 0),
+            "eta_hours": 12 if urgent else 144,
+            "eta_label": (
+                "⚡ Priority — deliver within 12 hours"
+                if urgent
+                else "📦 Standard — 4–6 business days"
+            ),
         }
         _save_order(record)
 
-        eta_hours = 12 if urgent else 48
+        eta_hours = 12 if urgent else 144
+        video_msg = (
+            "Order received. Personalized Video Explanation will be delivered on WhatsApp. "
+            "No PDF/report is included."
+        )
+        pdf_msg = (
+            "Order received. Our astrologer will prepare your Marriage Compatibility PDF "
+            "and save it in My Reports."
+        )
         return jsonify({
             "ok": True,
             "order_id": order_id,
             "eta_hours": eta_hours,
-            "message": (
-                "Order received. Our astrologer will prepare your Marriage Compatibility PDF "
-                "and save it in My Reports."
-            ),
+            "message": video_msg if deliverable == "video" else pdf_msg,
         }), 200
 
     try:

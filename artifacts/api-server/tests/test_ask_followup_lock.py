@@ -96,6 +96,52 @@ class FollowupLockTests(unittest.TestCase):
         self.assertTrue(result["is_followup"])
         self.assertEqual(result["admin"].get("domain"), "health")
 
+    def test_topic_shift_skips_finance_lock_for_partner(self):
+        history = [
+            {"role": "user", "text": "Mera life me paisa kab aayega?"},
+            {
+                "role": "assistant",
+                "text": "Wealth window…",
+                "domain": "finance",
+                "bucket": "general_finance",
+                "archetype": "general_finance",
+            },
+        ]
+        result = apply_followup_lock(
+            "Mere life me partner kab aayega?",
+            history,
+            phase2={
+                "turn_type": "followup",
+                "domain": "love",
+                "question_summary": "User wants to know when partner will come.",
+                "timing": True,
+            },
+            admin={"domain": "love", "answer_style": "short_2_3_lines"},
+        )
+        self.assertFalse(result["is_followup"])
+        self.assertEqual(result.get("reason"), "topic_shift")
+
+    def test_lock_answer_plan_not_followup_lock_placeholder(self):
+        history = [
+            {"role": "user", "text": "Meri shaadi kab hogi?"},
+            {"role": "assistant", "text": "2027…", "domain": "marriage", "bucket": "marriage_timing"},
+        ]
+        result = apply_followup_lock(
+            "exact month batao",
+            history,
+            phase2={
+                "turn_type": "followup",
+                "timing": True,
+                "question_summary": "User wants exact month for marriage timing.",
+                "answer_style": "short_2_3_lines",
+            },
+            admin={},
+        )
+        dna = (result["admin"].get("question_dna") or {}).get("questions") or []
+        item = dna[0] if dna else {}
+        self.assertNotEqual(str(item.get("answer_approach") or "").lower(), "followup_lock")
+        self.assertIn("exact month", str(item.get("answer_approach") or "").lower())
+
     def test_bucket_chips_loyalty(self):
         chips = derive_follow_up_chips(
             domain="love",

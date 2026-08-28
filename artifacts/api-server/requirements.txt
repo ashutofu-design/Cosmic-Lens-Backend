@@ -25,5 +25,6 @@ celery>=5.3,<6
 flask-sock>=0.7,<1
 simple-websocket>=1.0,<2
 razorpay>=1.4,<2
+pywebpush>=2.0
 # Razorpay SDK imports pkg_resources (removed from setuptools 81+)
 setuptools>=65.0,<81

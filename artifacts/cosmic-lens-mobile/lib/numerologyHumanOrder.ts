@@ -16,7 +16,7 @@ function authHeaders(userId: number, apiKey?: string | null): Record<string, str
   };
 }
 
-/** Submit Numerology Pro booking for founder PDF → My Reports. */
+/** Submit Numerology Pro booking for founder PDF → My Reports or WhatsApp video. */
 export async function submitNumerologyHumanOrder(opts: {
   userId: number;
   apiKey?: string | null;
@@ -24,8 +24,11 @@ export async function submitNumerologyHumanOrder(opts: {
   lang: ProPdfLangCode | string;
   urgent?: boolean;
   purchaseId?: number | null;
+  deliverable?: "report" | "video";
+  whatsapp?: string;
   params: Record<string, unknown>;
 }): Promise<NumerologyHumanOrderResult> {
+  const deliverable = opts.deliverable === "video" ? "video" : "report";
   const name = String(opts.params.name || "").trim();
   const dob = String(opts.params.dob || "").trim();
   const resp = await fetch(`${API_BASE}/api/numerology/human-order`, {
@@ -41,8 +44,16 @@ export async function submitNumerologyHumanOrder(opts: {
       lang: opts.lang,
       urgent: !!opts.urgent,
       purchase_id: opts.purchaseId || undefined,
+      deliverable,
       params: opts.params,
       ...(opts.cosmoUserId ? { cosmo_user_id: opts.cosmoUserId } : {}),
+      ...(deliverable === "video"
+        ? {
+            contact_method: "whatsapp",
+            contact_value: opts.whatsapp || "",
+            whatsapp: opts.whatsapp || "",
+          }
+        : {}),
     }),
   });
   const json = await resp.json().catch(() => ({}));

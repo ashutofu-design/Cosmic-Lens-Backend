@@ -1,15 +1,33 @@
 /**
  * Kundli Milan — Marriage Compatibility Pro offer & checkout (client).
  */
+import type { DeliveryDeliverable } from "@/lib/deliverySla";
+
 export const MILAN_PRO_UI_PRICING = {
   regularInr: 999,
   todayInr: 699,
 } as const;
 
-export const MILAN_URGENT_SURCHARGE_INR = 300 as const;
+export const MILAN_VIDEO_PRICE_INR = 1299 as const;
+export type MilanProDeliverable = DeliveryDeliverable;
 
-export function milanOrderTotalInr(priorityDelivery: boolean): number {
-  return MILAN_PRO_UI_PRICING.todayInr + (priorityDelivery ? MILAN_URGENT_SURCHARGE_INR : 0);
+/** Priority fee for Kundli Milan Pro — report and video both use ₹299. */
+export const MILAN_PRIORITY_FEE_INR = 299 as const;
+
+/** @deprecated Use MILAN_PRIORITY_FEE_INR */
+export const MILAN_URGENT_SURCHARGE_INR = MILAN_PRIORITY_FEE_INR;
+
+export function milanPriorityFeeInr(_deliverable?: MilanProDeliverable): number {
+  return MILAN_PRIORITY_FEE_INR;
+}
+
+export function milanOrderTotalInr(
+  priorityDelivery: boolean,
+  deliverable: MilanProDeliverable = "report",
+): number {
+  const base =
+    deliverable === "video" ? MILAN_VIDEO_PRICE_INR : MILAN_PRO_UI_PRICING.todayInr;
+  return base + (priorityDelivery ? milanPriorityFeeInr(deliverable) : 0);
 }
 
 export function milanFirstTimeSavingsInr(): number {
@@ -17,8 +35,8 @@ export function milanFirstTimeSavingsInr(): number {
 }
 
 export const MILAN_PRO_CHECKOUT_CONFIG = {
-  /** Language pick → human order (same as Love Pro). Set false for Razorpay. */
-  bypassCheckoutForTesting: true,
+  /** Set true only for local QA — skips Razorpay. */
+  bypassCheckoutForTesting: false,
 } as const;
 
 export function runMilanProUnlockCta(opts: { continueProExperience: () => void }): void {

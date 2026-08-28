@@ -1,5 +1,6 @@
 /**
  * Laptop web: local API proxy + Expo web (one command).
+ * Always proxies to hosted API (https://admin.coosmic.icu) unless forced.
  */
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -9,11 +10,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PROXY_PORT = process.env.DEV_API_PROXY_PORT || "18081";
 // HTTPS required — HTTP redirects break POSTs (login shows "Not found").
-let UPSTREAM =
-  process.env.DEV_API_PROXY_UPSTREAM?.trim() || "https://admin.coosmic.icu";
-if (/^http:\/\/admin\.coosmic\.icu/i.test(UPSTREAM)) {
-  UPSTREAM = UPSTREAM.replace(/^http:/i, "https:");
+const PRODUCTION_UPSTREAM = "https://admin.coosmic.icu";
+
+async function pickUpstream() {
+  const forced = process.env.DEV_API_PROXY_UPSTREAM?.trim();
+  if (forced) {
+    let upstream = forced.replace(/\/$/, "");
+    if (/^http:\/\/admin\.coosmic\.icu/i.test(upstream)) {
+      upstream = upstream.replace(/^http:/i, "https:");
+    }
+    console.log("[dev:web] Using forced upstream:", upstream);
+    return upstream;
+  }
+  console.log("[dev:web] Proxy → hosted API", PRODUCTION_UPSTREAM);
+  return PRODUCTION_UPSTREAM;
 }
+
+let UPSTREAM = await pickUpstream();
 const useClear = process.argv.includes("--clear");
 const apiUrl = `http://127.0.0.1:${PROXY_PORT}`;
 

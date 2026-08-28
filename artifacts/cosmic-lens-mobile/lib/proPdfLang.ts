@@ -51,7 +51,7 @@ export function proPdfLangPickerUi(uiLang: ProPdfLangCode) {
       deliveryHead: "डिलीवरी",
       deliveryLine: "My Reports में सेव · More से खोलें",
       priorityRefund:
-        "12 घंटे में रिपोर्ट नहीं मिली? ₹300 प्राथमिकता शुल्क वापस।",
+        "१२-घंटे प्राथमिकता गारंटी — १२ घंटे की डिलीवरी छूटने पर केवल प्राथमिकता शुल्क १००% वापस।",
       cancel: "रद्द करें",
       continue: "ऑर्डर करें",
     };
@@ -61,8 +61,8 @@ export function proPdfLangPickerUi(uiLang: ProPdfLangCode) {
       title: "Report Language Chunein",
       subtitle: "English, Hinglish ya Hindi",
       deliveryHead: "Delivery",
-      deliveryLine: "My Reports mein save · More se kholo",
-      priorityRefund: "12 ghante mein report nahi mili? ₹300 wapas refund.",
+      deliveryLine: "My Reports · 4–6 business days",
+      priorityRefund: "12-hour Priority Guarantee — 12 ghante miss hue to Priority fee 100% refund.",
       cancel: "Cancel",
       continue: "Order karo",
     };
@@ -71,8 +71,8 @@ export function proPdfLangPickerUi(uiLang: ProPdfLangCode) {
     title: "Report Language",
     subtitle: "English, Hinglish, or Hindi",
     deliveryHead: "Delivery",
-    deliveryLine: "Saved in My Reports · open from More menu",
-    priorityRefund: "Not in My Reports within 12 hours? ₹300 priority fee refunded.",
+      deliveryLine: "My Reports · 4–6 business days",
+      priorityRefund: "12-hour Priority Guarantee — If we miss the 12-hour delivery window, your Priority fee is 100% refunded.",
     cancel: "Cancel",
     continue: "Place order",
   };

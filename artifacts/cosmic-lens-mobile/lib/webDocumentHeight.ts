@@ -8,11 +8,16 @@ export function applyWebDocumentHeight(): void {
     if (!el) continue;
     el.style.width = "100%";
     el.style.height = "100%";
+    el.style.minHeight = "100vh";
     el.style.margin = "0";
     el.style.padding = "0";
   }
   if (body) {
     body.style.backgroundColor = "#0B1220";
     body.style.overflow = "auto";
+  }
+  if (root) {
+    (root as HTMLElement).style.display = "flex";
+    (root as HTMLElement).style.flexDirection = "column";
   }
 }

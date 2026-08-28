@@ -71,6 +71,9 @@ export default function LifeMapScreen() {
         style={s.root}
         contentContainerStyle={[s.content, { paddingTop: topPad + 12, paddingBottom: botPad + 100 }]}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        bounces
       >
         <Animated.View style={[s.headerWrap, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
           <View style={s.headerBadge}>
@@ -123,8 +126,8 @@ export default function LifeMapScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1 },
-  content: { paddingHorizontal: 16, gap: 12 },
+  root: { flex: 1, minHeight: 0 },
+  content: { paddingHorizontal: 16, gap: 12, flexGrow: 1 },
   headerWrap: { gap: 4, marginBottom: 2 },
   headerBadge: { alignSelf: "flex-start", marginBottom: 6 },
   headerBadgeGrad: {

@@ -81,11 +81,15 @@ def _chart_from_profile_row(prof) -> tuple[dict | None, dict | None]:
 
 
 def _pick_native_profile_from_rows(rows) -> Any | None:
-    """Prefer is_primary; else newest profile that is not a partner slot."""
+    """Prefer is_primary non-partner; else newest non-partner with chart."""
     if not rows:
         return None
     for prof in rows:
-        if getattr(prof, "is_primary", False) and getattr(prof, "chart_data", None):
+        if (
+            getattr(prof, "is_primary", False)
+            and getattr(prof, "chart_data", None)
+            and not _is_partner_relation(getattr(prof, "relation", None))
+        ):
             return prof
     ordered = sorted(
         rows,
@@ -169,19 +173,27 @@ def _mirror_to_legacy_kundli(user, chart: dict, birth: dict | None = None) -> No
             pass
 
 
+def has_valid_chart_payload(payload: Any) -> bool:
+    """True when request body or stored chart has a usable planet list."""
+    return _valid_chart(payload) is not None
+
+
 def resolve_kundli_for_user(
     user,
     client_kundli: Any = None,
     birth: Any = None,
 ):
     """
-    Returns (kundli_dict, None) on success.
-    Returns (None, (flask_response, status_code)) on failure.
+    Returns (kundli_dict, None, merged_birth) on success.
+    Returns (None, (flask_response, status_code), None) on failure.
 
     Native chart priority (Ask always uses primary / self chart):
       1) Primary or non-partner Profile chart
       2) Legacy kundlis row
       3) Client payload (anonymous or missing server chart)
+
+    merged_birth = profile DOB/TOB merged over client birth — MUST be passed
+    into timing engines so age (9 vs 25) is never unknown.
     """
     from flask import jsonify
 
@@ -221,6 +233,15 @@ def resolve_kundli_for_user(
             kundli_source = "client_payload"
 
     if chart is None:
+        log.warning(
+            "[ask] kundli_missing user_id=%s client_has_planets=%s",
+            getattr(user, "id", None) if user is not None else None,
+            bool(
+                isinstance(client_kundli, dict)
+                and isinstance(client_kundli.get("planets"), list)
+                and len(client_kundli.get("planets") or []) > 0
+            ),
+        )
         return None, (
             jsonify(
                 {
@@ -232,7 +253,7 @@ def resolve_kundli_for_user(
                 }
             ),
             412,
-        )
+        ), None
 
     if user is not None:
         log.info("[ask] kundli_source=%s user_id=%s", kundli_source, user.id)
@@ -263,4 +284,4 @@ def resolve_kundli_for_user(
             user, chart, merged_birth if isinstance(merged_birth, dict) else None,
         )
 
-    return chart, None
+    return chart, None, merged_birth

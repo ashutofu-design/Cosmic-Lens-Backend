@@ -35,7 +35,7 @@ if (
 }
 
 const defaultApiUrl =
-  process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:18081";
+  process.env.EXPO_PUBLIC_API_URL || "https://api.coosmic.icu";
 
 module.exports = {
   ...appJson,

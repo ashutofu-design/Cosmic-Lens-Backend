@@ -1,0 +1,4 @@
+# Optional offline dependencies. Do not install in the production Flask image.
+torch>=2.1
+onnx>=1.14
+onnxscript

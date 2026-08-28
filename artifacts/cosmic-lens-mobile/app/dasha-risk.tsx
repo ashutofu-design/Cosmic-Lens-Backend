@@ -28,6 +28,21 @@ import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import type { UILang } from "@/lib/i18n";
 import { rashiAt } from "@/lib/i18nVedic";
+import {
+  buildNatalTransitPayload,
+  chartSeed,
+  natalLagnaSignIndex,
+  natalMoonSignIndex,
+  parseTransitDayList,
+  scorePersonalizedDay,
+  type TransitDayEntry,
+} from "@/lib/chartPersonalize";
+import {
+  fetchRiskRadar,
+  isRiskRadarOk,
+  type PerDayRisk,
+  type RiskRadarResponse,
+} from "@/lib/riskTextAPI";
 
 function moonSign(lon: number, lang: UILang): string {
   return rashiAt(Math.floor(lon / 30) % 12, lang);
@@ -56,11 +71,75 @@ function scoreToTrend(s: number): "UP" | "MIXED" | "DOWN" {
   return s >= 65 ? "UP" : s <= 40 ? "DOWN" : "MIXED";
 }
 
+/** Overlay kundli-personalised /api/risk-radar text onto local day cards. */
+function mergeRadarIntoDays(
+  base: DayForecast[],
+  radar: RiskRadarResponse,
+  scoreSummary: (trend: "UP" | "MIXED" | "DOWN") => string,
+): DayForecast[] {
+  const per = Array.isArray(radar.per_day) ? radar.per_day : [];
+  const applyOne = (d: DayForecast, pd: PerDayRisk | undefined, i: number): DayForecast => {
+    if (!pd && !(i === 0 && radar.top_risk)) return d;
+    const top = radar.top_risk;
+    const riskDetail = pd?.kya_risk_hai || top?.kya_risk_hai || d.riskDetail;
+    const riskAvoid = pd?.kya_avoid_karna_hai || top?.kya_avoid_karna_hai || d.riskAvoid;
+    const riskKarna = pd?.kya_karna_hai || top?.kya_karna_hai || d.riskKarna;
+    const riskRemedy = pd?.upay || top?.upay || d.riskRemedy;
+    const riskLevel = (pd?.risk_level || d.riskLevel) as DayForecast["riskLevel"];
+    const riskScore = typeof pd?.risk_score === "number" ? pd.risk_score : d.riskScore;
+    const riskShort =
+      (pd?.summary || "").trim() ||
+      riskDetail.slice(0, 96) ||
+      d.riskShort;
+    const bestTime = pd?.best_time?.window || (i === 0 ? radar.best_time?.window : undefined) || d.bestTime;
+    const avoidTime = pd?.avoid_time?.window || (i === 0 ? radar.avoid_time?.window : undefined) || d.avoidTime;
+    let luckyColor = d.luckyColor;
+    if (pd?.shubh_rang_name && pd?.shubh_rang_hex) {
+      luckyColor = {
+        name: pd.shubh_rang_name,
+        emoji: d.luckyColor.emoji,
+        hex: pd.shubh_rang_hex,
+      };
+    }
+    const luckyNumbers =
+      pd?.shubh_ank != null
+        ? [pd.shubh_ank, ...d.luckyNumbers.filter((n) => n !== pd.shubh_ank)].slice(0, 3)
+        : d.luckyNumbers;
+    const energyLike =
+      riskLevel === "low" ? 72 : riskLevel === "high" ? 38 : 55;
+    return {
+      ...d,
+      // Keep transit energy when present; still personalise risk readout from API
+      summary: scoreSummary(scoreToTrend(d.score || energyLike)),
+      riskLevel,
+      riskScore,
+      riskShort,
+      riskCategory: pd?.category || top?.category || d.riskCategory,
+      riskDetail,
+      riskAvoid,
+      riskKarna,
+      riskRemedy,
+      bestTime,
+      avoidTime,
+      luckyColor,
+      luckyNumbers,
+    };
+  };
+
+  if (per.length > 0) {
+    return base.map((d, i) => applyOne(d, per[i], i));
+  }
+  if (radar.top_risk && base[0]) {
+    return base.map((d, i) => applyOne(d, undefined, i));
+  }
+  return base;
+}
+
 export default function DashaRiskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
   const t = useT();
-  const { kundli, moonData } = useUser();
+  const { kundli, moonData, birthData, user } = useUser();
   const scoreSummary = (trend: "UP" | "MIXED" | "DOWN") =>
     trend === "UP" ? t.rrScoreUp : trend === "DOWN" ? t.rrScoreDown : t.rrScoreMixed;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -101,37 +180,90 @@ export default function DashaRiskScreen() {
     }
 
     setLoading(true);
+    const natal = buildNatalTransitPayload(kundli);
+    const seed = chartSeed(kundli, birthData);
+    const natalHints = {
+      moonSign: natalMoonSignIndex(kundli),
+      lagnaSign: natalLagnaSignIndex(kundli),
+    };
+    const moonLon = moonData?.longitude ?? 0;
+
+    const buildFromList = (list: TransitDayEntry[]) =>
+      list.map((item, i) => {
+        const dayOffset   = i;
+        const transitMoon = Number(item.positions?.Moon ?? (moonLon + dayOffset * 13.2));
+        const { score } = scorePersonalizedDay(item, kundli, dayOffset);
+        const dt    = new Date(item.date + "T00:00:00");
+        return {
+          date:     dt,
+          score,
+          moonLon:  transitMoon,
+          moonSign: moonSign(transitMoon, t.lang),
+          phase:    moonPhase(dt, t.lang),
+          summary:  scoreSummary(scoreToTrend(score)),
+          ...computeRisk(score, i, dt, t.lang, seed, natalHints),
+        };
+      });
+
+    const buildLocal = () =>
+      dates.map((ds, i) => {
+        const transitMoon = moonLon + i * 13.2;
+        const { score } = scorePersonalizedDay(
+          { date: ds, positions: { Moon: transitMoon } },
+          kundli,
+          i,
+        );
+        const dt = new Date(ds + "T00:00:00");
+        return {
+          date: dt,
+          score,
+          moonLon: transitMoon,
+          moonSign: moonSign(transitMoon, t.lang),
+          phase: moonPhase(dt, t.lang),
+          summary: scoreSummary(scoreToTrend(score)),
+          ...computeRisk(score, i, dt, t.lang, seed, natalHints),
+        };
+      });
+
+    const personalizeWithRadar = async (base: DayForecast[]) => {
+      const radar = await fetchRiskRadar({
+        kundli: kundli as Record<string, unknown>,
+        birthData: (birthData as Record<string, unknown>) || undefined,
+        userId: user?.id ?? null,
+        apiKey: user?.api_key ?? null,
+        lang: t.lang,
+      });
+      if (!isRiskRadarOk(radar) || radar.enriched === false) {
+        return base;
+      }
+      return mergeRadarIntoDays(base, radar, scoreSummary);
+    };
+
     apiFetch(`${API_BASE}/api/transits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dates }),
+      body: JSON.stringify({ dates, natal }),
     })
-      .then(r => r.json())
-      .then((data: { date: string; positions: Record<string, number> }[]) => {
-        const moonLon = moonData?.longitude ?? 0;
-        const baseScore = 60;
-        const built = data.map((item, i) => {
-          const dayOffset   = i;
-          const transitMoon = item.positions?.Moon ?? (moonLon + dayOffset * 13.2);
-          const variation   = Math.sin(dayOffset * 1.3) * 12 + (item.positions?.Jupiter ? 5 : 0)
-            - (item.positions?.Saturn ? 6 : 0);
-          const score = Math.max(10, Math.min(90, Math.round(baseScore + variation)));
-          const dt    = new Date(item.date + "T00:00:00");
-          return {
-            date:     dt,
-            score,
-            moonLon:  transitMoon,
-            moonSign: moonSign(transitMoon, t.lang),
-            phase:    moonPhase(dt, t.lang),
-            summary:  scoreSummary(scoreToTrend(score)),
-            ...computeRisk(score, i, dt, t.lang),
-          };
-        });
-        setDays(built);
+      .then(async r => {
+        const data = await r.json().catch(() => null);
+        const list = parseTransitDayList(data);
+        if (!r.ok || list.length === 0) throw new Error("transits_empty");
+        return list;
       })
-      .catch(() => setDays([]))
+      .then(async (list: TransitDayEntry[]) => {
+        const base = buildFromList(list);
+        setDays(await personalizeWithRadar(base));
+      })
+      .catch(async () => {
+        const base = buildLocal();
+        try {
+          setDays(await personalizeWithRadar(base));
+        } catch {
+          setDays(base);
+        }
+      })
       .finally(() => setLoading(false));
-  }, [kundli, moonData, showDemo, t.lang]);
+  }, [kundli, moonData, birthData, user?.id, user?.api_key, showDemo, t.lang]);
 
   const back = () => {
     if (router.canGoBack()) router.back();

@@ -361,6 +361,361 @@ def coverage_check_selected_blocks(
     }
 
 
+# ── Deterministic DNA judge (no LLM — runs on EVERY question) ────────────────
+# LLM judge default OFF hai (cost/latency). Yeh free checker contract se answer
+# verify karta hai taaki debugger me verdict kabhi "—" na aaye:
+#   timing pucha → answer me period/date hai?   multi-part → har part covered?
+#   answer_style → length match?   Observability only — kabhi block nahi karta.
+
+_TIME_REF_RX = re.compile(
+    r"(?ix)\b("
+    r"20\d\d|19\d\d|"
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+    r"jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|"
+    r"mahin[ae]|mahino|saal|varsh|hafte|hafta|din(?:on)?|"
+    r"month|year|week|window|period|phase|"
+    r"dasha|antardasha|mahadasha|pratyantar|transit|gochar|"
+    r"abhi\s*se|tak|ke\s*(?:beech|baad|andar)|jald|soon|currently|running"
+    r")\b|(?:दशा|महीन|साल|वर्ष)"
+)
+
+_PART_SPLIT_RX = re.compile(r"(?i)\s+(?:and|aur|या|&)\s+|\?|;|।")
+
+_SENT_SPLIT_RX = re.compile(r"[.!?।]+")
+
+
+def _content_words(text: str) -> list[str]:
+    return [
+        w for w in re.findall(r"[a-z]+", (text or "").lower())
+        if len(w) >= 4 and w not in _SIGNAL_STOPWORDS
+    ]
+
+
+def _answer_mostly_devanagari(answer: str) -> bool:
+    body = (answer or "").strip()
+    if not body:
+        return False
+    dev = sum(1 for ch in body if "\u0900" <= ch <= "\u097F")
+    return dev > len(body) * 0.35
+
+
+def deterministic_dna_judge(
+    question: str,
+    answer: str,
+    contract: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Free (no-LLM) verdict: did the answer honour the DNA contract?
+
+    Returns {passed, issues, notes, checks_run} — observability only.
+    """
+    contract = contract if isinstance(contract, dict) else {}
+    ans = (answer or "").strip()
+    issues: list[str] = []
+    notes: list[str] = []
+    checks_run: list[str] = []
+
+    if not ans:
+        return {
+            "passed": False,
+            "issues": ["answer_empty — koi final answer record nahi hua"],
+            "notes": [],
+            "checks_run": ["answer_present"],
+        }
+    checks_run.append("answer_present")
+
+    qtype = str(contract.get("question_type") or "").strip().lower()
+    timing_flag = bool(contract.get("timing"))
+    norm_q = str(contract.get("normalized_question") or question or "").strip()
+    user_wants = str(contract.get("user_wants") or contract.get("intent") or "").strip()
+
+    # 1) Timing contract — WHEN pucha to answer me time reference hona chahiye.
+    if qtype == "timing" or timing_flag or re.search(
+        r"(?i)\b(kab|when\s+will|kis\s+(saal|year|month|mahine))\b", norm_q
+    ):
+        checks_run.append("timing_reference")
+        if _TIME_REF_RX.search(ans):
+            notes.append("timing reference present (period/date/dasha in answer)")
+        else:
+            issues.append(
+                "timing_missing — user ne WHEN pucha, par answer me koi "
+                "period/date/dasha window nahi mila"
+            )
+
+    # 2) Multi-part coverage — "X and Y" pucha to dono parts ka jawab ho.
+    if _answer_mostly_devanagari(ans):
+        notes.append("answer Devanagari me — part-coverage word check skipped")
+    else:
+        src = user_wants or norm_q
+        parts = [p.strip() for p in _PART_SPLIT_RX.split(src) if p and p.strip()]
+        strong_parts = [p for p in parts if len(_content_words(p)) >= 2]
+        if len(strong_parts) >= 2:
+            checks_run.append("multi_part_coverage")
+            ans_low = ans.lower()
+            for p in strong_parts:
+                words = _content_words(p)
+                if words and not any(w in ans_low for w in words):
+                    issues.append(
+                        f"part_missed — is hisse ka jawab answer me nahi mila: “{p[:70]}”"
+                    )
+            if "part_missed" not in " ".join(issues):
+                notes.append(f"all {len(strong_parts)} question parts covered in answer")
+
+    # 3) Style contract — DNA ke answer_style ke against length check.
+    style = str(contract.get("answer_style") or "").strip().lower()
+    if style:
+        checks_run.append("answer_style_length")
+        sentences = [s for s in _SENT_SPLIT_RX.split(ans) if s.strip()]
+        n = len(sentences)
+        if style in ("short_paragraph",) and n < 2:
+            issues.append(
+                f"style_short — DNA ne short_paragraph (4-6 lines) bola, answer sirf {n} sentence ka hai"
+            )
+        elif style in ("detailed_explain", "detailed") and n < 3:
+            issues.append(
+                f"style_short — DNA ne detailed explain bola, answer sirf {n} sentence ka hai"
+            )
+        elif style in ("short_2_3_lines",) and n > 8:
+            notes.append(f"style note — short_2_3_lines expected, answer {n} sentences ka hai")
+        else:
+            notes.append(f"style ok — {style} vs {n} sentences")
+
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "notes": notes,
+        "checks_run": checks_run,
+    }
+
+
+_DOMAIN_ANSWER_RX: dict[str, re.Pattern[str]] = {
+    "finance": re.compile(
+        r"(?ix)\b(paisa|paise|money|wealth|dhan|dhhan|income|profit|loss|invest|"
+        r"saving|loan|debt|finance|salary|kamai|business|garib|amiri|paisa)\b"
+    ),
+    "health": re.compile(
+        r"(?ix)\b(health|swasthya|sehat|bimari|disease|body|treatment|doctor|"
+        r"pain|energy|vitality|mental|hospital|illness)\b"
+    ),
+    "love": re.compile(
+        r"(?ix)\b(love|pyar|prem|rishta|relationship|partner|bf|gf|dil|feelings|"
+        r"mohabbat|affair|crush)\b"
+    ),
+    "marriage": re.compile(
+        r"(?ix)\b(shaadi|shadi|marriage|vivah|wedding|husband|wife|pati|patni|spouse)\b"
+    ),
+    "career": re.compile(
+        r"(?ix)\b(career|job|naukri|promotion|office|work|profession|business|salary)\b"
+    ),
+    "education": re.compile(
+        r"(?ix)\b(education|padhai|study|exam|degree|college|school|learning)\b"
+    ),
+    "travel": re.compile(
+        r"(?ix)\b(travel|abroad|visa|foreign|yatra|trip|migration|settle)\b"
+    ),
+    "children": re.compile(
+        r"(?ix)\b(child|children|baby|pregnancy|conceive|baccha|santaan|putra|putri)\b"
+    ),
+    "property": re.compile(
+        r"(?ix)\b(property|ghar|house|land|real\s*estate|flat|home|makaan)\b"
+    ),
+    "spiritual": re.compile(
+        r"(?ix)\b(spiritual|adhyatm|meditation|moksha|guru|bhakti|dharma)\b"
+    ),
+}
+
+_SUBJECT_ANSWER_RX: dict[str, re.Pattern[str]] = {
+    "partner": re.compile(
+        r"(?ix)\b(partner|bf|gf|spouse|husband|wife|pati|patni|rishta|relationship|woh|unke|unki)\b"
+    ),
+    "self": re.compile(r"(?ix)\b(aap|tum|aapka|mera|meri|main|mai|you|your|aapke|mujhe)\b"),
+    "family": re.compile(r"(?ix)\b(family|parivar|maa|papa|parent|bhai|behen|sibling)\b"),
+}
+
+_EMOTION_REASSURING_RX = re.compile(
+    r"(?ix)\b(support|calm|reassur|gentle|hope|positive|better|manage|care|"
+    r"sambhal|thik|theek|fikar|chinta\s*mat|don't\s*worry|samjho)\b"
+)
+
+
+def _dna_value_present(value: Any) -> bool:
+    s = str(value or "").strip()
+    return bool(s and s not in ("—", "-", "unknown", "unspecified"))
+
+
+def _word_hits(words: list[str], answer_low: str, *, min_ratio: float = 0.25) -> tuple[bool, str]:
+    if not words:
+        return True, "seen in DNA"
+    hits = [w for w in words if w in answer_low]
+    ok = len(hits) >= max(1, int(len(words) * min_ratio))
+    detail = f"{len(hits)}/{len(words)} keywords in answer"
+    return ok, detail if ok else f"weak — {detail}"
+
+
+def _dna_field_followed(
+    label: str,
+    value: Any,
+    contract: dict[str, Any],
+    answer: str,
+) -> tuple[bool, str]:
+    val = str(value or "").strip()
+    if not _dna_value_present(val):
+        return False, "DNA value missing"
+    ans = (answer or "").strip()
+    if not ans:
+        return False, "no final answer"
+    ans_low = ans.lower()
+    key = label.strip().lower()
+
+    if key == "normalized":
+        words = _content_words(val)[:8]
+        if _answer_mostly_devanagari(ans):
+            return True, "Devanagari answer — keyword check skipped"
+        return _word_hits(words, ans_low, min_ratio=0.2)
+
+    if key == "domain":
+        dom = str(contract.get("domain") or "").strip().lower()
+        m = re.search(r"\(([^)]+)\)\s*$", val)
+        if m:
+            dom = m.group(1).strip().lower()
+        pat = _DOMAIN_ANSWER_RX.get(dom)
+        if pat and pat.search(ans):
+            return True, f"{dom} theme in answer"
+        if pat:
+            return False, f"{dom} theme not detected in answer"
+        return True, "domain seen in DNA"
+
+    if key in ("intent", "llm understand question"):
+        words = _content_words(val)[:10]
+        if not words:
+            return True, "seen in DNA"
+        return _word_hits(words, ans_low, min_ratio=0.2)
+
+    if key == "llm answer plan":
+        words = _content_words(val)[:12]
+        return _word_hits(words, ans_low, min_ratio=0.15)
+
+    if key == "bucket":
+        bucket = str(contract.get("bucket") or "").strip().lower()
+        m = re.search(r"\(([^)]+)\)", val)
+        if m:
+            bucket = m.group(1).strip().lower()
+        parts = [p for p in re.split(r"[_\s]+", bucket) if len(p) >= 3]
+        if parts and any(p in ans_low for p in parts):
+            return True, "bucket theme in answer"
+        return False, "bucket theme weak in answer"
+
+    if key == "subject":
+        subj = str(contract.get("subject") or "").strip().lower()
+        pat = _SUBJECT_ANSWER_RX.get(subj)
+        if pat and pat.search(ans):
+            return True, f"subject={subj} addressed"
+        if pat:
+            return False, f"subject={subj} not clear in answer"
+        return True, "subject seen in DNA"
+
+    if key == "target":
+        return True, "target seen in DNA"
+
+    if key == "question type":
+        qtype = str(contract.get("question_type") or val).strip().lower()
+        if qtype == "timing" or contract.get("timing"):
+            ok = bool(_TIME_REF_RX.search(ans))
+            return ok, "timing type honored" if ok else "timing answer missing"
+        if qtype == "decision":
+            ok = bool(re.search(
+                r"(?ix)\b(yes|no|maybe|haan|nahi|shayad|possible|unlikely|better|avoid|"
+                r"kar\s*sak|na\s*kar)\b",
+                ans,
+            ))
+            return ok, "decision tone present" if ok else "decision unclear"
+        return True, f"type={qtype}"
+
+    if key == "timing required":
+        if val.lower() in ("yes", "true"):
+            ok = bool(_TIME_REF_RX.search(ans))
+            return ok, "WHEN answered" if ok else "WHEN missing in answer"
+        return True, "timing not required"
+
+    if key == "time context":
+        tense = str(contract.get("tense") or "").strip().lower()
+        if tense == "present":
+            ok = bool(re.search(r"(?ix)\b(abhi|currently|now|chal\s*raha|present|running)\b", ans))
+            return ok or True, "present context" if ok else "present tense soft"
+        if tense == "future":
+            ok = bool(re.search(r"(?ix)\b(aage|future|hoga|hogi|milega|coming|next)\b", ans))
+            return ok or True, "future context" if ok else "future tense soft"
+        if tense == "past":
+            ok = bool(re.search(r"(?ix)\b(past|pehle|tha|thi|hua|hui|already)\b", ans))
+            return ok or True, "past context" if ok else "past tense soft"
+        return True, "time context seen"
+
+    if key == "answer style":
+        style = str(contract.get("answer_style") or "").strip().lower()
+        if not style:
+            return True, "style seen"
+        sentences = [s for s in _SENT_SPLIT_RX.split(ans) if s.strip()]
+        n = len(sentences)
+        if style in ("short_paragraph",) and n < 2:
+            return False, f"too short ({n} sentences)"
+        if style in ("detailed_explain", "detailed") and n < 3:
+            return False, f"not detailed enough ({n} sentences)"
+        return True, f"style ok ({n} sentences)"
+
+    if key == "emotion":
+        emo = str(contract.get("emotion") or "").strip().lower()
+        if emo in ("fear", "anxiety", "sadness", "anger"):
+            ok = bool(_EMOTION_REASSURING_RX.search(ans))
+            return ok, "gentle tone" if ok else "emotion tone not reassuring"
+        return True, "emotion seen"
+
+    if key == "risk":
+        if str(contract.get("risk") or "").strip().lower() == "high":
+            harsh = bool(re.search(r"(?ix)\b(guaranteed|certain|pakka\s*100|definitely\s*fail|doom)\b", ans))
+            return not harsh, "high-risk wording ok" if not harsh else "too harsh for high risk"
+        return True, "risk seen"
+
+    if key in (
+        "confidence", "bucket match", "understanding confidence",
+        "engine archetype", "modules", "follow-up", "multiple questions",
+    ):
+        return True, "seen in DNA contract"
+
+    return True, "seen in DNA"
+
+
+def enrich_dna_pipeline_followed(
+    pipeline: list[dict[str, Any]],
+    contract: dict[str, Any] | None,
+    answer: str,
+) -> dict[str, Any]:
+    """Add followed ✅/❌ per DNA row for admin debugger."""
+    contract = contract if isinstance(contract, dict) else {}
+    steps: list[dict[str, Any]] = []
+    followed_count = 0
+    for row in pipeline or []:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get("label") or "").strip()
+        value = row.get("value")
+        ok, reason = _dna_field_followed(label, value, contract, answer)
+        if ok:
+            followed_count += 1
+        steps.append({
+            **row,
+            "followed": ok,
+            "follow_reason": reason,
+        })
+    total = len(steps)
+    return {
+        "steps": steps,
+        "summary": {
+            "total": total,
+            "followed_count": followed_count,
+            "pct": int(round(100 * followed_count / total)) if total else 0,
+        },
+    }
+
+
 def coverage_note_lines(coverage: dict[str, Any]) -> list[str]:
     """Human-readable lines for overlap_notes (renders in existing debugger UI)."""
     if not isinstance(coverage, dict) or not coverage.get("applies"):

@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -32,13 +32,17 @@ import {
   getPendingCoupleCheckout,
 } from "@/lib/pendingCoupleCheckout";
 import { submitMilanHumanOrder } from "@/lib/milanHumanOrder";
-import { milanProScreenCopy } from "@/lib/milanProCopyI18n";
+import { registerPendingMyReport } from "@/lib/registerPendingMyReport";
+import { STANDARD_DELIVERY_ETA } from "@/lib/deliverySla";
+import { milanProPurchaseCopy, milanProScreenCopy } from "@/lib/milanProCopyI18n";
 import {
   MILAN_PRO_CHECKOUT_CONFIG,
   MILAN_PRO_UI_PRICING,
   milanOrderTotalInr,
   runMilanProUnlockCta,
+  type MilanProDeliverable,
 } from "@/lib/milanProOffer";
+import { normalizeWhatsappDigits } from "@/lib/loveRealityProOffer";
 import { packLovePerson } from "@/lib/loveRealityPack";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
 
@@ -69,10 +73,15 @@ export default function KundliMilanProScreen() {
   const canPro = (hasSelfKundli && hasPartnerKundli) || hasPendingCouple;
 
   const [priorityDelivery, setPriorityDelivery] = useState(false);
+  const [deliverable, setDeliverable] = useState<MilanProDeliverable>("report");
+  const [whatsapp, setWhatsapp] = useState("");
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [selectedPdfLang, setSelectedPdfLang] = useState(coerceProPdfLang(language || t.lang));
   const displayLang = coerceProPdfLang(selectedPdfLang);
   const proCopy = milanProScreenCopy(displayLang);
+  const purchaseCopy = milanProPurchaseCopy(displayLang);
+  const waDigits = normalizeWhatsappDigits(whatsapp || user?.phone || "");
+  const whatsappLocked = !!(user?.personal_phone_locked || normalizeWhatsappDigits(user?.phone || "").length === 10);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [preparingBanner, setPreparingBanner] = useState<{
@@ -80,15 +89,26 @@ export default function KundliMilanProScreen() {
     etaHours: number;
   } | null>(null);
 
+  useEffect(() => {
+    const fromProfile = normalizeWhatsappDigits(user?.phone || "");
+    if (fromProfile.length === 10) setWhatsapp(fromProfile);
+  }, [user?.phone]);
+
   useFocusEffect(
     useCallback(() => {
       if (consumeCouplePaidReady()) {
         const pending = getPendingCoupleCheckout();
         if (pending?.lang) setSelectedPdfLang(coerceProPdfLang(pending.lang));
         if (pending?.urgent != null) setPriorityDelivery(pending.urgent);
+        if (pending?.contactMethod === "whatsapp") {
+          setDeliverable("video");
+          if (pending.contactValue) setWhatsapp(normalizeWhatsappDigits(pending.contactValue));
+        }
         void placeVerifiedPdfOrder({
           langOverride: pending?.lang,
           urgentOverride: pending?.urgent,
+          deliverableOverride: pending?.contactMethod === "whatsapp" ? "video" : "report",
+          whatsappOverride: pending?.contactValue,
         });
       }
     }, []),
@@ -119,6 +139,8 @@ export default function KundliMilanProScreen() {
   async function placeVerifiedPdfOrder(opts?: {
     langOverride?: string;
     urgentOverride?: boolean;
+    deliverableOverride?: MilanProDeliverable;
+    whatsappOverride?: string;
   }) {
     if (!user?.id) {
       Alert.alert("Login required", proCopy.loginRequired, [{ text: "OK" }]);
@@ -127,6 +149,8 @@ export default function KundliMilanProScreen() {
 
     const lang = coerceProPdfLang(opts?.langOverride ?? selectedPdfLang);
     const urgent = opts?.urgentOverride ?? priorityDelivery;
+    const kind = opts?.deliverableOverride ?? deliverable;
+    const wa = normalizeWhatsappDigits(opts?.whatsappOverride ?? waDigits);
 
     let p1: Record<string, unknown> | null = null;
     let p2: Record<string, unknown> | null = null;
@@ -154,11 +178,36 @@ export default function KundliMilanProScreen() {
         userId: user.id,
         cosmoUserId: user.cosmo_user_id,
         apiKey: user.api_key,
+        deliverable: kind,
+        whatsapp: wa,
+        amountInr: milanOrderTotalInr(urgent, kind),
+        priorityFeeInr: urgent ? 299 : 0,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const displayOid = String(result.order_id || "").slice(0, 8).toUpperCase();
+      const n1 = (primaryProfile?.name || p1?.name || "You").toString().trim() || "You";
+      const n2 = (partnerProfile?.name || p2?.name || "Partner").toString().trim() || "Partner";
+      const couple = `${n1} & ${n2}`;
+      try {
+        await registerPendingMyReport(user.id, {
+          kind: "milan",
+          title: kind === "video"
+            ? `${couple} — Video (WhatsApp)`
+            : `${couple} — Kundli Milan Report`,
+          subtitle: displayOid ? `Order ${displayOid}` : "Preparing…",
+          orderId: result.order_id || undefined,
+          publicOrderId: displayOid || undefined,
+          etaLabel: urgent
+            ? "⚡ Priority — within 12 hours"
+            : `📦 Standard — ${STANDARD_DELIVERY_ETA}`,
+          deliverable: kind,
+        });
+      } catch {
+        /* ignore */
+      }
       setPreparingBanner({
         priority: urgent,
-        etaHours: Number(result.eta_hours) || (urgent ? 12 : 24),
+        etaHours: Number(result.eta_hours) || (urgent ? 12 : 144),
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Order failed";
@@ -172,6 +221,10 @@ export default function KundliMilanProScreen() {
     if (!canPro) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       showKundliRequired();
+      return;
+    }
+    if (deliverable === "video" && waDigits.length !== 10) {
+      Alert.alert("WhatsApp number", purchaseCopy.whatsappRequired, [{ text: "OK" }]);
       return;
     }
     runMilanProUnlockCta({
@@ -228,10 +281,12 @@ export default function KundliMilanProScreen() {
         p1,
         p2,
         lang,
-        label: "Marriage Compatibility Pro",
-        amountInr: milanOrderTotalInr(priorityDelivery),
+        label: deliverable === "video" ? "Personalized Video Explanation" : "Kundli Milan Pro Report",
+        amountInr: milanOrderTotalInr(priorityDelivery, deliverable),
         bypassCheckout: false,
         urgent: priorityDelivery,
+        contactMethod: deliverable === "video" ? "whatsapp" : undefined,
+        contactValue: deliverable === "video" ? waDigits : undefined,
         onEntitled: () => {
           void placeVerifiedPdfOrder();
         },
@@ -268,11 +323,13 @@ export default function KundliMilanProScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minHeight: 0 }}>
           <ScrollView
             style={s.scroll}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: botPad + 88, gap: 12 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: botPad + 88, gap: 12, flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
           >
             {!canPro && (
               <FadeInView delay={staggerDelay(0)}>
@@ -295,6 +352,11 @@ export default function KundliMilanProScreen() {
                 partnerName={partnerProfile?.name}
                 priorityDelivery={priorityDelivery}
                 onPriorityDeliveryChange={setPriorityDelivery}
+                deliverable={deliverable}
+                onDeliverableChange={setDeliverable}
+                whatsapp={whatsapp}
+                onWhatsappChange={setWhatsapp}
+                whatsappLocked={whatsappLocked}
                 lang={displayLang}
               />
             </FadeInView>
@@ -305,9 +367,10 @@ export default function KundliMilanProScreen() {
             canPro={canPro}
             loading={ctaLoading}
             regularInr={MILAN_PRO_UI_PRICING.regularInr}
-            totalInr={milanOrderTotalInr(priorityDelivery)}
+            totalInr={milanOrderTotalInr(priorityDelivery, deliverable)}
             onUnlock={startProUnlock}
             lang={displayLang}
+            isVideo={deliverable === "video"}
           />
         </View>
       </View>
@@ -331,11 +394,19 @@ export default function KundliMilanProScreen() {
           router.push("/my-reports" as any);
         }}
         title="Order Confirmed!"
-        message="Your order has been received. Our expert is personally preparing your Marriage Compatibility Pro report — it's on its way."
+        message={
+          deliverable === "video"
+            ? "Your Personalized Video Explanation is being prepared. It will be sent to your WhatsApp. No PDF/report is included."
+            : "Your order has been received. Our expert is personally preparing your Marriage Compatibility Pro report — it's on its way."
+        }
         etaLabel={
-          preparingBanner?.priority
-            ? "Report in My Reports within 12 hrs"
-            : "Report in My Reports within 24 hrs"
+          deliverable === "video"
+            ? preparingBanner?.priority
+              ? "Video on WhatsApp within 12 hrs"
+              : "Video on WhatsApp within 24 hrs"
+            : preparingBanner?.priority
+              ? "Report in My Reports within 12 hrs"
+              : "Report in My Reports within 24 hrs"
         }
       />
     </CosmicBg>
@@ -343,8 +414,8 @@ export default function KundliMilanProScreen() {
 }
 
 const s = StyleSheet.create({
-  shell: { flex: 1 },
-  scroll: { flex: 1 },
+  shell: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
   headerRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
   headerTitle: { fontSize: 17, fontFamily: "Nunito_800ExtraBold", letterSpacing: -0.3 },
   headerSub: { fontSize: 11, fontFamily: "Nunito_500Medium", marginTop: 2 },

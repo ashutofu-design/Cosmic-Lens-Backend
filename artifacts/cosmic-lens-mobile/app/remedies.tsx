@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   I18nManager,
   Pressable,
@@ -15,8 +15,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
+import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
+import { findWeakPlanets } from "@/lib/chartPersonalize";
 import { PLANET, DAY, GEMSTONE, DEITY, pick, type PlanetKey, type DayKey } from "@/lib/i18nVedic";
+import { pName } from "@/lib/proInsightEngine";
 
 const F = {
   bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
@@ -420,14 +423,36 @@ export default function RemediesScreen() {
   const C = useC();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const [selected, setSelected] = useState<string>("surya");
-  const planet = PLANETS.find(p => p.id === selected)!;
+  const { kundli } = useUser();
+  const weak = useMemo(() => findWeakPlanets(kundli), [kundli]);
+  const orderedPlanets = useMemo(() => {
+    if (!weak.length) return PLANETS;
+    const weakIds = new Set(weak.map((w) => w.remedyId));
+    const first = PLANETS.filter((p) => weakIds.has(p.id));
+    const rest = PLANETS.filter((p) => !weakIds.has(p.id));
+    // Keep weak order by severity
+    first.sort((a, b) => {
+      const sa = weak.find((w) => w.remedyId === a.id)?.score ?? 0;
+      const sb = weak.find((w) => w.remedyId === b.id)?.score ?? 0;
+      return sb - sa;
+    });
+    return [...first, ...rest];
+  }, [weak]);
+
+  const defaultId = weak[0]?.remedyId ?? "surya";
+  const [selected, setSelected] = useState<string>(defaultId);
+  useEffect(() => {
+    if (weak[0]?.remedyId) setSelected(weak[0].remedyId);
+  }, [weak]);
+
+  const planet = orderedPlanets.find(p => p.id === selected) ?? PLANETS[0];
   const v = t.vlang;
   const content = planet.content[v];
   const planetName = pick(v, PLANET[planet.key]);
   const dayName = pick(v, DAY[planet.day]);
   const gemstoneName = pick(v, GEMSTONE[planet.gemstone]);
   const deityName = pick(v, DEITY[planet.deity]);
+  const focusReason = weak.find((w) => w.remedyId === selected)?.reason;
 
   return (
     <View style={{ flex: 1 }}>
@@ -438,20 +463,25 @@ export default function RemediesScreen() {
         </Pressable>
         <View>
           <Text style={[s.title, { color: C.text }]}>{t.remediesTitle}</Text>
-          <Text style={[s.sub, { color: C.textMuted }]}>{t.remSubtitle}</Text>
+          <Text style={[s.sub, { color: C.textMuted }]}>
+            {weak.length
+              ? `Focus: ${weak.slice(0, 2).map((w) => pName(w.planet)).join(", ")}`
+              : t.remSubtitle}
+          </Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Planet pills */}
+      {/* Planet pills — weak grahas first for THIS kundli */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={{ flexGrow: 0 }}
         contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 14 }}
       >
-        {PLANETS.map(p => {
-          const pName = pick(v, PLANET[p.key]);
+        {orderedPlanets.map(p => {
+          const pNameLoc = pick(v, PLANET[p.key]);
+          const isWeak = weak.some((w) => w.remedyId === p.id);
           return (
             <Pressable
               key={p.id}
@@ -460,10 +490,13 @@ export default function RemediesScreen() {
                 s.pill,
                 { backgroundColor: C.bgCard, borderColor: C.border },
                 selected === p.id && { backgroundColor: `${p.color}18`, borderColor: `${p.color}60` },
+                isWeak && selected !== p.id && { borderColor: `${p.color}40` },
               ]}
             >
               <Text style={{ fontSize: 16 }}>{p.emoji}</Text>
-              <Text style={[s.pillText, { color: selected === p.id ? p.color : C.textMuted }]}>{pName}</Text>
+              <Text style={[s.pillText, { color: selected === p.id ? p.color : C.textMuted }]}>
+                {pNameLoc}{isWeak ? " ·" : ""}
+              </Text>
             </Pressable>
           );
         })}
@@ -471,6 +504,21 @@ export default function RemediesScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100 }}>
         <FadeInView key={selected} resetKey={selected} style={{ gap: 14 }}>
+          {focusReason ? (
+            <FadeInView delay={staggerDelay(0)}>
+              <View style={[s.hero, { backgroundColor: `${planet.color}10`, borderColor: `${planet.color}30`, paddingVertical: 12 }]}>
+                <Feather name="alert-circle" size={18} color={planet.color} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.heroTitle, { color: planet.color, fontSize: 13 }]}>
+                    Aapki kundli me priority upay
+                  </Text>
+                  <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, marginTop: 2 }}>
+                    {planetName}: {focusReason}
+                  </Text>
+                </View>
+              </View>
+            </FadeInView>
+          ) : null}
           {/* Hero */}
           <FadeInView delay={staggerDelay(0)}>
             <View style={[s.hero, { backgroundColor: `${planet.color}10`, borderColor: `${planet.color}30` }]}>

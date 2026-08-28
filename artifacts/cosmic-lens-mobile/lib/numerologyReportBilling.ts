@@ -43,6 +43,7 @@ export async function createNumerologyReportOrder(
   user: { id: number; api_key?: string | null },
   params: Record<string, unknown>,
   lang: string,
+  opts?: { deliverable?: "report" | "video"; urgent?: boolean },
 ): Promise<{
   already_entitled?: boolean;
   purchase_id?: number;
@@ -50,12 +51,22 @@ export async function createNumerologyReportOrder(
   payment_link?: string;
   order_id?: string;
   amount?: number;
+  amount_paise?: number;
   label?: string;
+  razorpay_key_id?: string;
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
 }> {
   const resp = await fetch(`${API_BASE}/api/numerology-report/create-order`, {
     method: "POST",
     headers: authHeaders(user),
-    body: JSON.stringify({ params, lang }),
+    body: JSON.stringify({
+      params,
+      lang,
+      deliverable: opts?.deliverable || "report",
+      urgent: !!opts?.urgent,
+    }),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
@@ -68,7 +79,12 @@ export async function createNumerologyReportOrder(
     payment_link?: string;
     order_id?: string;
     amount?: number;
+    amount_paise?: number;
     label?: string;
+    razorpay_key_id?: string;
+    customer_name?: string;
+    customer_email?: string;
+    customer_phone?: string;
   };
 }
 

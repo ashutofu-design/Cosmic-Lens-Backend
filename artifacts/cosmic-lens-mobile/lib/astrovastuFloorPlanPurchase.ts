@@ -15,6 +15,7 @@ export async function purchaseFloorPlanSku(opts: {
   propertyName?: string;
   catalog?: Record<string, { price?: number; label?: string }> | null;
   returnTo?: string;
+  urgent?: boolean;
 }): Promise<void> {
   const sku: FloorPlanSku = PLAN_KIND_TO_FLOOR_SKU[opts.planKind];
   const spec = priceForPlanKind(opts.planKind, opts.catalog);
@@ -27,6 +28,7 @@ export async function purchaseFloorPlanSku(opts: {
         user_id: opts.user.id,
         sku,
         property_name: opts.propertyName || "",
+        urgent: !!opts.urgent,
       }),
     });
     const order = await orderRes.json();

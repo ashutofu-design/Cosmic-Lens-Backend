@@ -33,8 +33,8 @@ async function tick(): Promise<void> {
       userId: activeUserId,
       apiKey: activeApiKey,
     });
-    if (result.added > 0) {
-      emit(result.added);
+    if (result.added > 0 || (result.pendingSynced || 0) > 0) {
+      emit(Math.max(result.added, result.pendingSynced || 0));
     }
   } finally {
     syncing = false;

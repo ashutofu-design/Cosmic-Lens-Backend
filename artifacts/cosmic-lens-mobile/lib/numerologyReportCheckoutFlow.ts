@@ -42,6 +42,9 @@ export async function gateNumerologyReportAfterLangPick(opts: {
   label: string;
   amountInr: number;
   bypassCheckout: boolean;
+  urgent?: boolean;
+  contactMethod?: "whatsapp";
+  contactValue?: string;
   onEntitled: () => void;
 }): Promise<void> {
   if (opts.bypassCheckout) {
@@ -63,7 +66,10 @@ export async function gateNumerologyReportAfterLangPick(opts: {
       return;
     }
 
-    const order = await createNumerologyReportOrder(opts.user, opts.params, opts.lang);
+    const order = await createNumerologyReportOrder(opts.user, opts.params, opts.lang, {
+      deliverable: opts.contactMethod === "whatsapp" ? "video" : "report",
+      urgent: !!opts.urgent,
+    });
     if (order.already_entitled) {
       opts.onEntitled();
       return;
@@ -77,6 +83,10 @@ export async function gateNumerologyReportAfterLangPick(opts: {
       params: opts.params,
       lang: opts.lang,
       purchaseId: order.purchase_id,
+      urgent: opts.urgent,
+      deliverable: opts.contactMethod === "whatsapp" ? "video" : "report",
+      contactMethod: opts.contactMethod,
+      contactValue: opts.contactValue,
     });
 
     router.push({

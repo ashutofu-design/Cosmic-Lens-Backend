@@ -1,6 +1,8 @@
 import { Alert, Platform } from "react-native";
 
 import { API_BASE } from "@/lib/apiConfig";
+import { STANDARD_DELIVERY_ETA } from "@/lib/deliverySla";
+import { registerPendingMyReport } from "@/lib/registerPendingMyReport";
 import {
   clearPendingAstrovastuRoomUpload,
   getPendingAstrovastuRoomUpload,
@@ -22,6 +24,7 @@ function notify(title: string, message: string): void {
 export async function submitAstrovastuRoomHumanOrder(opts: {
   user: { id: number; api_key: string };
   purchaseId: number;
+  urgent?: boolean;
 }): Promise<boolean> {
   const pending = getPendingAstrovastuRoomUpload();
   if (!pending) {
@@ -47,6 +50,7 @@ export async function submitAstrovastuRoomHumanOrder(opts: {
         direction: pending.direction,
         data_url: pending.data_url,
         payment_bypassed: opts.purchaseId <= 0,
+        urgent: !!opts.urgent,
       }),
     });
     if (resp.status === 413) {
@@ -67,6 +71,25 @@ export async function submitAstrovastuRoomHumanOrder(opts: {
         ) + ` (HTTP ${resp.status})`,
       );
       return false;
+    }
+
+    const orderId = String((body as { order_id?: string }).order_id || "").trim();
+    const displayOid = orderId.slice(0, 8).toUpperCase();
+    const room = String(pending.room_type || "Room").trim() || "Room";
+    try {
+      await registerPendingMyReport(opts.user.id, {
+        kind: "astrovastu_pro",
+        title: `${room} — AstroVastu Report`,
+        subtitle: displayOid ? `Order ${displayOid}` : "Preparing…",
+        orderId: orderId || undefined,
+        publicOrderId: displayOid || undefined,
+        etaLabel: opts.urgent
+          ? "⚡ Priority — within 12 hours"
+          : `📦 Standard — ${STANDARD_DELIVERY_ETA}`,
+        deliverable: "report",
+      });
+    } catch {
+      /* ignore */
     }
 
     clearPendingAstrovastuRoomUpload();

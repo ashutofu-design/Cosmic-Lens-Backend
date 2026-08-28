@@ -21,10 +21,8 @@ ScopeReason = Literal[
 ]
 
 SCOPE_REFUSAL_TEXT = (
-    "Cosmic Ask sirf jyotish / cosmic life sawaal leta hai — kundli, shaadi, "
-    "career, health, paisa, gemstone, remedy, timing, etc. "
-    "Coding, recipes, news, sports scores yahan nahi. "
-    "Kripya astrology ya apni life se juda sawaal puchiye."
+    "Yeh sawaal astrology se related nahi lagta. "
+    "Apni kundli ya life se juda koi sawaal puchiye — main chart ke hisaab se jawab dunga."
 )
 
 # Hard off-topic — only these are refused (no per-question allowlist).
@@ -147,9 +145,32 @@ def _looks_cosmic_or_life(question: str) -> bool:
     return False
 
 
-def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
-    """Allow all cosmic asks; hard-block only clear off-topic."""
+def _chart_present(kundli: Any = None) -> bool:
+    if kundli is None:
+        return False
+    try:
+        from ask_kundli_resolver import has_valid_chart_payload
+
+        return has_valid_chart_payload(kundli)
+    except Exception:
+        return False
+
+
+def assess_ask_scope(
+    question: str,
+    history: Any = None,
+    kundli: Any = None,
+) -> AskScopeVerdict:
+    """Allow all cosmic asks; hard-block only clear off-topic.
+
+    When the user has a valid chart, always try to answer in kundli context —
+    do not refuse with a scope message.
+    """
     from ask_question_normalize import prepare_ask_question
+
+    if _chart_present(kundli):
+        q = prepare_ask_question((question or "").strip())
+        return AskScopeVerdict(allowed=True, reason="ok", normalized_question=q or None)
 
     q = prepare_ask_question((question or "").strip())
     if not q:
@@ -223,10 +244,18 @@ def scope_refusal_payload(
     }
 
 
-def astro_scope_refusal(question: str, lang: str = "en", user=None, history: Any = None):
+def astro_scope_refusal(
+    question: str,
+    lang: str = "en",
+    user=None,
+    history: Any = None,
+    kundli: Any = None,
+):
     """Compatibility shim for flask_app (returns None if allowed)."""
     _ = lang, user
-    v = assess_ask_scope(question, history)
+    if _chart_present(kundli):
+        return None
+    v = assess_ask_scope(question, history, kundli=kundli)
     if v.allowed:
         return None
     return (v.reason, SCOPE_REFUSAL_TEXT)

@@ -374,4 +374,6 @@ def compute_domain_engine_execution(
         pack["intent_domain"] = str(
             llm_intent.get("routed_domain") or llm_intent.get("domain") or ""
         ).strip().lower()
-    return pack
+    from ask_engine_execution_common import attach_modules_checked
+
+    return attach_modules_checked(pack)

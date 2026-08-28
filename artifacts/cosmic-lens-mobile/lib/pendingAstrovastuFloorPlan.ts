@@ -7,6 +7,7 @@ export type PendingAstrovastuFloorPlan = {
   purchase_id?: number;
   /** Set after Cashfree success — parent auto-runs scan */
   paidReady?: boolean;
+  urgent?: boolean;
 };
 
 let _pending: PendingAstrovastuFloorPlan | null = null;

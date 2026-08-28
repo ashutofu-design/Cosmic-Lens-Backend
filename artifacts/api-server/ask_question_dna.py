@@ -475,7 +475,9 @@ def derive_required_modules(
         MD/AD, a natal-only read is incomplete (e.g. "affair abhi chal raha?").
       • ASHTAKAVARGA for house-strength domains (career/property/finance timing).
     """
-    mods: list[str] = list(_DOMAIN_BASE_MODULES.get(domain, ("D1",)))
+    mods: list[str] = list(_DOMAIN_BASE_MODULES.get(domain, ("D1", "D9")))
+    if "D1" in mods and "D9" not in mods:
+        mods.insert(mods.index("D1") + 1, "D9")
     if timing:
         for m in ("DASHA", "TRANSIT"):
             if m not in mods:
@@ -817,13 +819,168 @@ def format_understanding_confidence(value: Any) -> str:
     return f"{pct}% ({level} — question understood clearly)"
 
 
+def dna_judge_contract_from_item(item: dict[str, Any] | None) -> dict[str, Any]:
+    """Flat contract dict for deterministic DNA compliance checks (no LLM judge)."""
+    if not isinstance(item, dict) or not item:
+        return {}
+    return {
+        "normalized_question": str(item.get("normalized_question") or "").strip(),
+        "domain": str(item.get("domain") or "").strip().lower(),
+        "bucket": str(item.get("bucket") or "").strip().lower(),
+        "intent": str(item.get("intent") or "").strip(),
+        "subject": str(item.get("subject") or "").strip().lower(),
+        "target": str(item.get("target") or "").strip().lower(),
+        "question_type": str(item.get("question_type") or "").strip().lower(),
+        "timing": bool(item.get("timing")),
+        "tense": str(item.get("tense") or "").strip().lower(),
+        "emotion": str(item.get("emotion") or "").strip().lower(),
+        "risk": str(item.get("risk") or "").strip().lower(),
+        "is_followup": bool(item.get("is_followup")),
+        "followup_of": str(item.get("followup_of") or "").strip(),
+        "user_wants": str(item.get("user_wants") or "").strip(),
+        "answer_style": str(item.get("answer_style") or "").strip().lower(),
+        "answer_approach": str(item.get("answer_approach") or "").strip(),
+    }
+
+
+def dna_judge_contract_from_intent(llm_intent: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(llm_intent, dict):
+        return {}
+    return dna_judge_contract_from_item(
+        dna_primary_item(llm_intent.get("question_dna"))
+    )
+
+
+def _dna_field_binding_hints(item: dict[str, Any]) -> list[str]:
+    """Per-field narrator bindings — bucket, intent, target, type, time, emotion, follow-up."""
+    hints: list[str] = []
+    qtype = str(item.get("question_type") or "").strip().lower()
+    timing = bool(item.get("timing"))
+    tense = str(item.get("tense") or "").strip().lower()
+    emotion = str(item.get("emotion") or "").strip().lower()
+    risk = str(item.get("risk") or "").strip().lower()
+    bucket = str(item.get("bucket") or "").strip()
+    intent = str(item.get("intent") or "").strip()
+    target = str(item.get("target") or "").strip().lower()
+    norm_q = str(item.get("normalized_question") or "").strip()
+
+    hints.append(
+        "WORKFLOW (mandatory): (1) Read every DNA field below. "
+        "(2) Internalize LLM Answer Plan structure. "
+        "(3) Write ONLY the final user answer — same tone/length/plan, no meta."
+    )
+    if norm_q:
+        hints.append(f"Normalized question: {norm_q}")
+    if bucket:
+        hints.append(
+            f"Bucket={bucket} — stay on this theme; do not drift to unrelated life areas."
+        )
+    if intent:
+        hints.append(f"Intent lock: {intent} — every sentence must serve this intent.")
+    if target and target not in ("", "unknown"):
+        hints.append(f"Target={target} — address the correct person/relationship in focus.")
+    if qtype in ("timing",) or timing:
+        hints.append(
+            "Timing=true — MUST lead with a concrete period/window "
+            "(dasha/transit/month-year range); MD only as brief background."
+        )
+    elif qtype == "decision":
+        hints.append(
+            "Question type=decision — balanced yes/no/maybe; no absolute certainty unless chart is very clear."
+        )
+    elif qtype == "current_state":
+        hints.append(
+            "Question type=current_state — answer what is happening NOW, not distant future only."
+        )
+    elif qtype == "risk":
+        hints.append(
+            "Question type=risk — cautious wording; acknowledge emotional sensitivity."
+        )
+    elif qtype in ("explanation", "cause"):
+        hints.append(
+            "Question type=explanation/cause — explain WHY/HOW with 2–4 supporting chart factors."
+        )
+    elif qtype == "prediction":
+        hints.append(
+            "Question type=prediction — forward outlook aligned to chart; avoid vague filler."
+        )
+    if tense == "present":
+        hints.append("Time context=present — focus on current situation.")
+    elif tense == "past":
+        hints.append("Time context=past — address what happened/was.")
+    elif tense == "future":
+        hints.append("Time context=future — forward-looking answer for upcoming period.")
+    if emotion in ("fear", "anxiety", "sadness", "anger"):
+        hints.append(
+            f"Emotion={emotion} — gentle, reassuring tone; never alarmist or dismissive."
+        )
+    elif emotion == "hope":
+        hints.append(
+            "Emotion=hope — honest but not crushing; grounded optimism only if chart supports."
+        )
+    elif emotion and emotion not in ("neutral", "unspecified", ""):
+        hints.append(f"Emotion={emotion} — match tone to user's emotional state.")
+    if risk == "high":
+        hints.append("Risk=high — extra care with wording; no harsh certainty.")
+    if bool(item.get("is_followup")):
+        fu = str(item.get("followup_of") or "").strip()
+        line = (
+            "Follow-up=true — continue from prior turn; do NOT re-introduce basics or repeat full context."
+        )
+        if fu:
+            line += f" Prior topic: {fu[:200]}."
+        hints.append(line)
+    return hints
+
+
+def build_dna_compliance_retry_user_message(
+    issues: list[str],
+    item: dict[str, Any] | None,
+) -> str:
+    """One-shot rewrite instruction when deterministic DNA check fails (no LLM judge)."""
+    issue_block = "\n".join(f"- {i}" for i in issues if i) or "- DNA contract mismatch"
+    contract = dna_judge_contract_from_item(item if isinstance(item, dict) else {})
+    plan = contract.get("answer_approach") or ""
+    style = contract.get("answer_style") or ""
+    wants = contract.get("user_wants") or contract.get("intent") or ""
+    lines = [
+        "Your previous answer did NOT follow the Question DNA contract. Rewrite the FULL answer.",
+        "",
+        "Issues found:",
+        issue_block,
+        "",
+        "Question DNA (MUST follow exactly):",
+    ]
+    for key in (
+        "normalized_question", "domain", "bucket", "intent", "target",
+        "question_type", "timing", "tense", "emotion", "is_followup",
+    ):
+        val = contract.get(key)
+        if val in (None, "", False):
+            continue
+        lines.append(f"  {key}: {val}")
+    if wants:
+        lines.append(f"  user_wants: {wants}")
+    if style:
+        lines.append(f"  answer_style: {style}")
+    if plan:
+        lines.append(f"  LLM Answer Plan: {plan}")
+    lines.extend([
+        "",
+        "Rewrite rules: match answer_style length, follow LLM Answer Plan structure, "
+        "honour bucket/intent/target/time/emotion/follow-up. Plain user-facing text only — "
+        "complete sentences; end with । or . or ?",
+    ])
+    return "\n".join(lines)
+
+
 def build_question_dna_narrator_rules(
     llm_intent: dict[str, Any] | None,
     *,
     question: str = "",
     health_validator: bool = False,
 ) -> str:
-    """Narrator extra_rules from Question DNA — answer_style + answer_approach every ask."""
+    """Narrator extra_rules from Question DNA — full contract + answer plan every ask."""
     if not question_dna_enabled():
         return ""
     item = dna_primary_item(
@@ -862,14 +1019,45 @@ def build_question_dna_narrator_rules(
 
     if health_validator:
         header = (
-            "=== QUESTION DNA (MUST follow every time — DNA Judge checks alignment; "
-            "validator will reject mismatch) ==="
+            "=== QUESTION DNA CONTRACT (STRICT — read ALL fields, then follow LLM Answer Plan; "
+            "validator rejects mismatch) ==="
         )
     else:
         header = (
-            "=== QUESTION DNA (MUST follow every time — overrides default length/style rules) ==="
+            "=== QUESTION DNA CONTRACT (STRICT — read ALL fields, then follow LLM Answer Plan; "
+            "overrides default length/style rules) ==="
         )
     lines: list[str] = [f"\n\n{header}"]
+
+    contract_rows: list[tuple[str, Any]] = [
+        ("domain", item.get("domain")),
+        ("bucket", item.get("bucket")),
+        ("intent", item.get("intent")),
+        ("subject", item.get("subject")),
+        ("target", item.get("target")),
+        ("question_type", item.get("question_type")),
+        ("timing", item.get("timing")),
+        ("tense", item.get("tense")),
+        ("emotion", item.get("emotion")),
+        ("risk", item.get("risk")),
+        ("is_followup", item.get("is_followup")),
+    ]
+    followup_of = str(item.get("followup_of") or "").strip()
+    if followup_of:
+        contract_rows.append(("followup_of", followup_of))
+    norm_q = str(item.get("normalized_question") or "").strip()
+    if norm_q:
+        contract_rows.append(("normalized_question", norm_q))
+
+    lines.append("DNA fields (check each before writing):")
+    for key, val in contract_rows:
+        if val in (None, "", False):
+            continue
+        lines.append(f"  • {key}: {val}")
+
+    for hint in _dna_field_binding_hints(item):
+        lines.append(f"  → {hint}")
+
     if wants:
         lines.append(f"User wants: {wants}")
     if style:
@@ -880,7 +1068,7 @@ def build_question_dna_narrator_rules(
         if hint:
             lines.append(f"Length lock: {hint}")
     if plan:
-        lines.append(f"LLM Answer Plan: {plan}")
+        lines.append(f"LLM Answer Plan (what user wants — follow this): {plan}")
     if plan and _OVERVIEW_PLAN_RX.search(plan):
         lines.append(
             "GENERAL OVERVIEW MODE (strict): soft paragraph only — overall health foundation, "
@@ -896,9 +1084,9 @@ def build_question_dna_narrator_rules(
             "clearance advice and say this is not medical diagnosis."
         )
     lines.append(
-        "BINDING: Final answer MUST match Answer Style length AND follow LLM Answer Plan "
-        "structure. Prefer a SHORT COMPLETE answer over a LONG CUT answer — never stop "
-        "mid-sentence or mid-mantra; last character must be । or . or ?"
+        "BINDING: Final answer MUST honour every DNA field above, match Answer Style length, "
+        "AND follow LLM Answer Plan structure exactly. Prefer a SHORT COMPLETE answer over "
+        "a LONG CUT answer — never stop mid-sentence or mid-mantra; last character must be । or . or ?"
     )
     return "\n".join(lines) + "\n"
 
@@ -935,6 +1123,9 @@ def _derive_user_wants(item: dict[str, Any], *, intent: str, normalized_question
     return "User question could not be fully decoded."
 
 
+_PLACEHOLDER_ANSWER_PLANS = frozenset({"phase2_understand", "phase2", "dna_fallback", "followup_lock"})
+
+
 def _derive_answer_approach(
     item: dict[str, Any],
     *,
@@ -945,8 +1136,16 @@ def _derive_answer_approach(
     risk: str,
 ) -> str:
     raw = str(item.get("answer_approach") or "").strip()[:400]
+    if raw.lower() in _PLACEHOLDER_ANSWER_PLANS:
+        raw = ""
     if raw:
         return raw
+    # User-wants text (2–3 lines) is the primary LLM Answer Plan when present.
+    user_wants = str(item.get("user_wants") or "").strip()[:400]
+    if user_wants and len(user_wants) >= 12:
+        return user_wants
+    if intent and len(intent.strip()) >= 12:
+        return intent.strip()[:400]
     parts: list[str] = []
     if domain == "health":
         parts.append(

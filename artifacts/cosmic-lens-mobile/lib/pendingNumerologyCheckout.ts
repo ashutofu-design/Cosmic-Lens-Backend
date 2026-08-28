@@ -8,6 +8,10 @@ export type PendingNumerologyCheckout = {
   purchaseId?: number;
   /** Set true after Cashfree success — parent screen resumes founder-order flow */
   paidReady?: boolean;
+  urgent?: boolean;
+  deliverable?: "report" | "video";
+  contactMethod?: "whatsapp";
+  contactValue?: string;
 };
 
 let _pending: PendingNumerologyCheckout | null = null;

@@ -144,12 +144,55 @@ def _merge_effective(prior_q: str, current_q: str, *, phase2_eff: str = "") -> s
         return f"{prior} — user refine: {cur}"
 
 
+def _topic_shifted(
+    prior: dict[str, Any],
+    current_q: str,
+    *,
+    phase2: dict[str, Any] | None = None,
+) -> bool:
+    """True when the new turn is a different life area (e.g. paisa → partner)."""
+    cur = _norm_text(current_q)
+    prior_q = _norm_text(prior.get("prior_question") or "")
+    prior_dom = str(prior.get("domain") or "").strip().lower()
+    if not cur:
+        return False
+    phase2_dom = ""
+    if isinstance(phase2, dict):
+        phase2_dom = str(phase2.get("domain") or "").strip().lower()
+        if phase2_dom == "relationship":
+            phase2_dom = "love"
+    if phase2_dom and prior_dom and phase2_dom != prior_dom:
+        if phase2_dom not in ("general", "") and prior_dom not in ("general", ""):
+            return True
+    try:
+        from ask_intent_fidelity import infer_primary_domain
+
+        cur_dom = str(infer_primary_domain(cur) or "").strip().lower()
+        if cur_dom and prior_dom and cur_dom != prior_dom:
+            if cur_dom not in ("general", "") and prior_dom not in ("general", ""):
+                return True
+    except Exception:
+        pass
+    finance_rx = re.compile(r"(?ix)\b(paisa|paise|money|wealth|dhan|finance|kamai|income)\b")
+    love_rx = re.compile(
+        r"(?ix)\b(partner|shaadi|shadi|love|bf|gf|rishta|boyfriend|girlfriend|vivah)\b"
+    )
+    if prior_dom == "finance" and love_rx.search(cur):
+        return True
+    if prior_dom in ("love", "marriage") and finance_rx.search(cur) and not love_rx.search(cur):
+        return True
+    if finance_rx.search(prior_q) and love_rx.search(cur) and not finance_rx.search(cur):
+        return True
+    return False
+
+
 def lock_admin_to_prior_dna(
     admin: dict[str, Any] | None,
     prior: dict[str, Any],
     *,
     question: str = "",
     is_timing: bool | None = None,
+    phase2: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Force admin Question DNA onto prior domain/bucket so engine match stays put."""
     out = admin if isinstance(admin, dict) else {}
@@ -174,6 +217,29 @@ def lock_admin_to_prior_dna(
     if is_timing is not None:
         timing = bool(is_timing)
 
+    phase2_summary = ""
+    phase2_style = ""
+    if isinstance(phase2, dict):
+        phase2_summary = str(phase2.get("question_summary") or "").strip()[:400]
+        phase2_style = str(phase2.get("answer_style") or "").strip().lower()
+    admin_style = str(out.get("answer_style") or "").strip().lower()
+    answer_style = (
+        admin_style
+        or phase2_style
+        or ("short_2_3_lines" if timing else "short_paragraph")
+    )
+    answer_approach = (
+        phase2_summary
+        or str(out.get("answer_approach") or "").strip()
+        or str(out.get("user_wants") or "").strip()
+        or (intent or f"Continue prior {domain} thread — keep same topic, direct answer.")
+    )
+    if answer_approach.lower() in ("followup_lock", "phase2_understand", "phase2"):
+        answer_approach = (
+            phase2_summary
+            or (intent or f"Continue prior {domain} thread — direct answer on same topic.")
+        )
+
     if not domain or domain == "general":
         return out
 
@@ -193,10 +259,10 @@ def lock_admin_to_prior_dna(
         "is_followup": True,
         "followup_of": str(prior.get("prior_question") or "")[:300],
         "confidence": float(out.get("confidence") or 0.85),
-        "user_wants": intent or f"Continue prior {domain} thread",
+        "user_wants": phase2_summary or intent or f"Continue prior {domain} thread",
         "understanding_confidence": float(out.get("confidence") or 0.85),
-        "answer_style": "short_paragraph",
-        "answer_approach": "followup_lock",
+        "answer_style": answer_style,
+        "answer_approach": answer_approach[:400],
         "bucket_match_confidence": "high",
     }
     try:
@@ -283,6 +349,23 @@ def apply_followup_lock(
             "reason": "followup_no_prior_meta",
         }
 
+    if _topic_shifted(prior, q, phase2=phase2):
+        eff = q
+        if isinstance(phase2, dict):
+            eff = str(phase2.get("effective_question") or q).strip() or q
+        print(
+            f"[followup_lock] TOPIC_SHIFT skip lock "
+            f"prior_domain={prior.get('domain')!r} cur={q[:72]!r}",
+            flush=True,
+        )
+        return {
+            "is_followup": False,
+            "effective_question": eff,
+            "admin": admin_out,
+            "prior": prior,
+            "reason": "topic_shift",
+        }
+
     # Infer domain from prior question text when history lacks DNA fields.
     if not prior.get("domain") and prior.get("prior_question"):
         try:
@@ -328,6 +411,7 @@ def apply_followup_lock(
         prior,
         question=effective,
         is_timing=timing_hint,
+        phase2=phase2,
     )
     admin_locked["effective_question"] = effective
     admin_locked["is_followup"] = True

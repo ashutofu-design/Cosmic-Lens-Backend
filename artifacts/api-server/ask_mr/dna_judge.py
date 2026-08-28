@@ -27,7 +27,7 @@ _QUESTION_TYPE_HINTS: dict[str, str] = {
 
 
 def relationship_dna_judge_enabled() -> bool:
-    return (os.environ.get("ASK_MR_DNA_JUDGE") or "1").strip() != "0"
+    return (os.environ.get("ASK_MR_DNA_JUDGE") or "0").strip() != "0"
 
 
 def relationship_dna_judge_model(default: str = "gpt-4.1-mini") -> str:
@@ -236,6 +236,21 @@ def build_relationship_dna_judge_display(
             if contract.get(k)
         }
 
+    judge_version = judge_audit.get("judge") or "relationship_dna_v1"
+    judge_notes: list[str] = []
+    if passed is None and answer:
+        # No stored LLM verdict — free deterministic check so verdict is never "—".
+        try:
+            from ask_selected_blocks_common import deterministic_dna_judge
+
+            det = deterministic_dna_judge(question or "", answer or "", contract_summary)
+            passed = det.get("passed")
+            issues = list(det.get("issues") or [])
+            judge_notes = list(det.get("notes") or [])
+            judge_version = "deterministic_v1 (no LLM)"
+        except Exception:
+            pass
+
     return {
         "applies": True,
         "enabled": enabled,
@@ -243,7 +258,8 @@ def build_relationship_dna_judge_display(
         "issues": issues,
         "fix_hint": fix_hint or None,
         "contract": contract_summary,
-        "judge_version": judge_audit.get("judge") or "relationship_dna_v1",
+        "judge_version": judge_version,
+        "judge_notes": judge_notes,
         "contract_keys": list(judge_audit.get("contract_keys") or contract_summary.keys()),
         "skipped": judge_audit.get("skipped"),
         "error": judge_audit.get("error"),

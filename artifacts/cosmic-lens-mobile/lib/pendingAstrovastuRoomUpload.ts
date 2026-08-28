@@ -8,6 +8,7 @@ export type PendingAstrovastuRoomUpload = {
   purchase_id?: number;
   /** Set after Cashfree success — parent submits to founder queue */
   paidReady?: boolean;
+  urgent?: boolean;
 };
 
 let _pending: PendingAstrovastuRoomUpload | null = null;

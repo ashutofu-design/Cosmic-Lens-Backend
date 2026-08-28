@@ -14,6 +14,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.coosmic.icu",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCszzLxjDjdePJFe1dVa6Hktr1wMHjCE50",
@@ -30,7 +31,10 @@
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
+      "credentialsSource": "local",
       "env": {
+        "EAS_NO_FROZEN_LOCKFILE": "1",
         "EXPO_PUBLIC_API_URL": "https://api.coosmic.icu",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCszzLxjDjdePJFe1dVa6Hktr1wMHjCE50",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "cosmic-lens-42b49.firebaseapp.com",
@@ -48,7 +52,7 @@
   "submit": {
     "production": {
       "android": {
-        "track": "internal"
+        "track": "production"
       }
     }
   }

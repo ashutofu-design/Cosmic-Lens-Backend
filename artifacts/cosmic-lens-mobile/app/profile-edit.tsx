@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces } from "@/lib/kundliAPI";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
-import { useUser, type AuthUser, type ProfileEntry } from "@/context/UserContext";
+import { useUser, isPartnerProfile, type AuthUser, type ProfileEntry } from "@/context/UserContext";
 import { updatePersonalDetails } from "@/lib/personalDetailsAPI";
 import { useScreenLayout } from "@/lib/screenLayout";
 import { BirthTimeRectificationLink } from "@/components/BirthTimeRectificationLink";
@@ -46,47 +46,18 @@ const MINS_L   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padSta
 
 const C_SUCCESS = "#16A34A";
 
-const RELATIONS = [
-  { key: "Self",       emoji: "🧘" },
-  { key: "Husband",    emoji: "👨" },
-  { key: "Wife",       emoji: "👩" },
-  { key: "Boyfriend",  emoji: "💑" },
-  { key: "Girlfriend", emoji: "💑" },
-  { key: "Fiance",     emoji: "💍" },
-  { key: "Partner",    emoji: "🤝" },
-  { key: "Son",        emoji: "👦" },
-  { key: "Daughter",   emoji: "👧" },
-  { key: "Father",     emoji: "👴" },
-  { key: "Mother",     emoji: "👵" },
-  { key: "Brother",    emoji: "🧑" },
-  { key: "Sister",     emoji: "👱‍♀️" },
-  { key: "Friend",     emoji: "🤝" },
-  { key: "Other",      emoji: "👥" },
-];
+/** Valid relation keys for deep-link prefill only — no relation picker in UI. */
+const RELATION_KEYS = new Set([
+  "Self", "Husband", "Wife", "Boyfriend", "Girlfriend", "Fiance", "Partner",
+  "Son", "Daughter", "Father", "Mother", "Brother", "Sister", "Friend", "Other",
+]);
 
-// Map a stored relation key (English, used as DB value) → localized display label
-export function relationLabel(rel: string | null | undefined, t: ReturnType<typeof useT>): string {
-  switch (rel) {
-    case "Self":     return t.pe_relSelf;
-    case "Husband":  return t.pe_relHusband;
-    case "Wife":     return t.pe_relWife;
-    case "Son":      return t.pe_relSon;
-    case "Daughter": return t.pe_relDaughter;
-    case "Father":   return t.pe_relFather;
-    case "Mother":   return t.pe_relMother;
-    case "Brother":  return t.pe_relBrother;
-    case "Sister":   return t.pe_relSister;
-    case "Friend":   return t.pe_relFriend;
-    case "Other":    return t.pe_relOther;
-    default:         return rel || "";
-  }
-}
-
-function buildRelationItems(t: ReturnType<typeof useT>) {
-  return RELATIONS.map(r => ({
-    label: `${r.emoji}  ${relationLabel(r.key, t)}`,
-    value: r.key,
-  }));
+function normalizeRelationKey(raw?: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (RELATION_KEYS.has(trimmed)) return trimmed;
+  const titled = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  return RELATION_KEYS.has(titled) ? titled : null;
 }
 
 type FormState = {
@@ -371,7 +342,7 @@ function HeroCard({ profile, onView, onEdit }: {
 
 function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
   profile: ProfileEntry; onView: () => void; onEdit: () => void;
-  onDelete: () => void; onMakePrimary: () => void;
+  onDelete: () => void; onMakePrimary?: () => void;
 }) {
   const C = useC();
   const t = useT();
@@ -408,11 +379,6 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
             <View style={card.body}>
               <View style={card.nameRow}>
                 <Text style={[card.name, { color: C.text, fontSize: L.rs(16), flex: 1 }]} numberOfLines={2}>{profile.name}</Text>
-                {profile.relation && profile.relation !== "Self" && (
-                  <Text style={[card.relTag, { color: C.textDim, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", fontSize: L.rs(10) }]}>
-                    {relationLabel(profile.relation, t)}
-                  </Text>
-                )}
               </View>
               <Text style={[card.astro, { color: C.textMuted, fontSize: L.rs(13), lineHeight: L.rs(18) }]} numberOfLines={2}>
                 {astroLine}
@@ -433,11 +399,15 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
               borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
               shadowColor: "#000",
             }]}>
-              <Pressable onPress={() => { setMenuOpen(false); onMakePrimary(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
-                <Feather name="star" size={13} color="#f59e0b" />
-                <Text style={[card.menuTxt, { color: C.text }]}>{t.pe_setAsPrimary}</Text>
-              </Pressable>
-              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
+              {onMakePrimary ? (
+                <>
+                  <Pressable onPress={() => { setMenuOpen(false); onMakePrimary(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
+                    <Feather name="star" size={13} color="#f59e0b" />
+                    <Text style={[card.menuTxt, { color: C.text }]}>{t.pe_setAsPrimary}</Text>
+                  </Pressable>
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
+                </>
+              ) : null}
               <Pressable onPress={() => { setMenuOpen(false); onEdit(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="edit-3" size={13} color={ac} />
                 <Text style={[card.menuTxt, { color: C.text }]}>{t.pe_editProfile}</Text>
@@ -474,7 +444,8 @@ export default function ProfileEditScreen() {
   const [fmEditId, setFmEditId]   = useState<string | null>(null);
   const [fmIsPrimary, setFmIsPrimary] = useState(false);
   const [fmForm, setFmForm]       = useState<FormState>(blank);
-  const [fmRelation, setFmRelation] = useState("Father");
+  /** Silent default / deep-link only — relation picker removed from UI. */
+  const [fmRelation, setFmRelation] = useState("Other");
   const [fmPlaceQuery, setFmPlaceQuery] = useState("");
   const [fmGeoResults, setFmGeoResults] = useState<GeoResult[]>([]);
   const [fmSearching,  setFmSearching]  = useState(false);
@@ -491,7 +462,6 @@ export default function ProfileEditScreen() {
   const [fmYearOpen,  setFmYearOpen]  = useState(false);
   const [fmHourOpen,  setFmHourOpen]  = useState(false);
   const [fmMinOpen,   setFmMinOpen]   = useState(false);
-  const [fmRelOpen,   setFmRelOpen]   = useState(false);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -503,27 +473,24 @@ export default function ProfileEditScreen() {
     setFmEditId(null);
     setFmIsPrimary(isFirstEver);
     setFmForm(blank());
-    const _valid = prefillRelation && RELATIONS.some(r => r.key === prefillRelation)
-      ? prefillRelation : null;
-    setFmRelation(_valid ?? (isFirstEver ? "Self" : "Father"));
+    setFmRelation(normalizeRelationKey(prefillRelation) ?? (isFirstEver ? "Self" : "Other"));
     setFmPlaceQuery("");
     setFmGeoResults([]);
     setFmError("");
     setFmVisible(true);
   }
 
-  // Phase 2.5.11.6 — when launched from the chat partner-CTA card with
-  // ?relation=Boyfriend (etc.), auto-open the Add-profile modal with
-  // the right relation slot preselected so the user lands directly on
-  // the form and can start entering DOB/TOB/place.
+  // Deep-link from partner CTA: /profile-edit?relation=Boyfriend — open add form
+  // with silent relation default (no relation picker shown).
   const _params = useLocalSearchParams<{ relation?: string }>();
   const _relParam = typeof _params?.relation === "string" ? _params.relation : "";
   const _autoOpenedRef = useRef(false);
   useEffect(() => {
     if (_autoOpenedRef.current) return;
-    if (_relParam && RELATIONS.some(r => r.key === _relParam)) {
+    const normalized = normalizeRelationKey(_relParam);
+    if (normalized) {
       _autoOpenedRef.current = true;
-      openFmAdd(_relParam);
+      openFmAdd(normalized);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_relParam]);
@@ -771,10 +738,14 @@ export default function ProfileEditScreen() {
                     <SecondaryCard
                       key={p.id}
                       profile={p}
-                      onView={() => { setPrimaryProfile(p.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
+                      onView={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
                       onEdit={() => openFmEdit(p)}
                       onDelete={() => handleFmDelete(p.id)}
-                      onMakePrimary={() => { setPrimaryProfile(p.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }}
+                      onMakePrimary={
+                        isPartnerProfile(p)
+                          ? undefined
+                          : () => { setPrimaryProfile(p.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+                      }
                     />
                   ))}
                 </View>
@@ -889,13 +860,6 @@ export default function ProfileEditScreen() {
                     })}
                   </View>
                 </View>
-
-                {!fmIsPrimary && (
-                  <View style={s.fieldWrap}>
-                    <Lbl text={t.pe_lblRelation} />
-                    <PickerBtn value={fmRelation} placeholder={t.pe_phSelect} onPress={() => setFmRelOpen(true)} />
-                  </View>
-                )}
 
                 <View style={s.fieldWrap}>
                   <Lbl text={t.pe_lblDOB} />
@@ -1043,7 +1007,6 @@ export default function ProfileEditScreen() {
         <PickerModal visible={fmYearOpen}  title={t.pe_pickYear}     items={YEARS_L}       selected={fmForm.year}   onSelect={v => { fmSet("year")(v);   setFmYearOpen(false);  }} onClose={() => setFmYearOpen(false)}  />
         <PickerModal visible={fmHourOpen}  title={t.pe_pickHour}     items={HOURS_L}       selected={fmForm.hour}   onSelect={v => { fmSet("hour")(v);   setFmHourOpen(false);  }} onClose={() => setFmHourOpen(false)}  />
         <PickerModal visible={fmMinOpen}   title={t.pe_pickMinute}   items={MINS_L}        selected={fmForm.minute} onSelect={v => { fmSet("minute")(v); setFmMinOpen(false);   }} onClose={() => setFmMinOpen(false)}   />
-        <PickerModal visible={fmRelOpen}   title={t.pe_pickRelation} items={buildRelationItems(t)} selected={fmRelation} onSelect={v => { setFmRelation(v); setFmRelOpen(false); }} onClose={() => setFmRelOpen(false)} />
       </Modal>
 
       {/* Delete Confirm */}
@@ -1229,16 +1192,6 @@ const card = StyleSheet.create({
   },
   badgeTxt: { fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5 },
   sectionLbl: { fontFamily: F.bold, letterSpacing: 1.6, marginBottom: 2 },
-  relTag: {
-    fontSize: 10,
-    fontFamily: F.bold,
-    letterSpacing: 0.4,
-    borderWidth: 0.75,
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    flexShrink: 0,
-  },
   astro: { fontFamily: F.medium, marginTop: 0 },
   menuBtn: {
     width: 36,

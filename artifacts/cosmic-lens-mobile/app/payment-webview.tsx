@@ -20,6 +20,9 @@ import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { finalizeCoupleReportPayment } from "@/lib/coupleReportCheckoutFlow";
 import { finalizeNumerologyReportPayment } from "@/lib/numerologyReportCheckoutFlow";
+import { finalizePalmistryReportPayment } from "@/lib/palmistryReportCheckoutFlow";
+import { finalizeBirthTimeRectificationPayment } from "@/lib/birthTimeRectificationCheckoutFlow";
+import { finalizeBusinessVastuPayment } from "@/lib/businessVastuCheckoutFlow";
 import { buildRazorpayCheckoutHtml, openRazorpayCheckoutWeb } from "@/lib/razorpayCheckout";
 import {
   getPendingAstrovastuRoomUpload,
@@ -103,15 +106,21 @@ export default function PaymentWebviewScreen() {
   const isGemstone = params.kind === "gemstone" || plan === "gemstone";
   const isNumerologyReport =
     params.kind === "numerology_report" || plan === "numerology_report";
+  const isPalmistryReport =
+    params.kind === "palmistry_report" || plan === "palmistry_report";
+  const isBirthTimeRectification =
+    params.kind === "birth_time_rectification" || plan === "birth_time_rectification";
+  const isBusinessVastu =
+    params.kind === "business_vastu" || plan === "business_vastu";
   const isAskV1Pack = params.kind === "ask_v1_pack" || plan === "ask_v1";
   const isAskV3Live = params.kind === "ask_v3_live" || plan === "ask_v3";
   const avPurchaseId  = params.purchaseId ? Number(params.purchaseId) : 0;
-  const avLabel       = params.label || (isAskV1Pack ? "V1 Question Pack" : isGemstone ? "Gemstone" : isCoupleReport ? "Love Reality Pro" : "AstroVastu Unlock");
+  const avLabel       = params.label || (isAskV1Pack ? "V1 Question Pack" : isGemstone ? "Gemstone" : isCoupleReport ? "Love Reality Pro" : isPalmistryReport ? "Palmistry Pro" : isBirthTimeRectification ? "Birth Time Rectification" : isBusinessVastu ? "Business Vastu" : "AstroVastu Unlock");
   const avPropName    = params.propertyName || "";
   const avAmount      = params.amount ? Number(params.amount) : 0;
   const isRoomUploadPay = params.sku === "room_expert_199";
   const isFloorPlanPay = isAstroVastu && String(params.sku || "").includes("_floor_");
-  const price = (isAstroVastu || isCoupleReport || isGemstone || isAskV1Pack || isAskV3Live || isNumerologyReport)
+  const price = (isAstroVastu || isCoupleReport || isGemstone || isAskV1Pack || isAskV3Live || isNumerologyReport || isPalmistryReport || isBirthTimeRectification || isBusinessVastu)
     ? avAmount
     : (PLAN_PRICES[`${plan}_${cycle}`] ?? 0);
 
@@ -381,7 +390,7 @@ export default function PaymentWebviewScreen() {
   }
 
   async function _verifyPayment(oid: string) {
-    if (!oid && !isAstroVastu && !isGemstone && !isCoupleReport && !isNumerologyReport && !isAskV1Pack && !isAskV3Live) {
+    if (!oid && !isAstroVastu && !isGemstone && !isCoupleReport && !isNumerologyReport && !isPalmistryReport && !isBirthTimeRectification && !isBusinessVastu && !isAskV1Pack && !isAskV3Live) {
       setPhase("cancelled");
       return;
     }
@@ -464,6 +473,96 @@ export default function PaymentWebviewScreen() {
           const data = await resp.json();
           if (data?.status === "paid" && data?.entitled) {
             finalizeNumerologyReportPayment();
+            await refreshUser().catch(() => {});
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPhase("success");
+            return;
+          }
+        } catch { /* retry */ }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      setPhase("pending_verify");
+      return;
+    }
+
+    // ── Palmistry Pro: poll purchase-status ─────────────────────────
+    if (isPalmistryReport) {
+      if (!avPurchaseId) { setPhase("cancelled"); return; }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      if (user?.id) headers["X-User-Id"] = String(user.id);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const ctrl  = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp  = await fetch(
+            `${API_BASE}/api/palmistry-report/purchase-status/${avPurchaseId}`,
+            { signal: ctrl.signal, headers },
+          );
+          clearTimeout(timer);
+          const data = await resp.json();
+          if (data?.status === "paid" && data?.entitled) {
+            finalizePalmistryReportPayment();
+            await refreshUser().catch(() => {});
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPhase("success");
+            return;
+          }
+        } catch { /* retry */ }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      setPhase("pending_verify");
+      return;
+    }
+
+    // ── Birth Time Rectification: poll purchase-status ──────────────
+    if (isBirthTimeRectification) {
+      if (!avPurchaseId) { setPhase("cancelled"); return; }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      if (user?.id) headers["X-User-Id"] = String(user.id);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const ctrl  = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp  = await fetch(
+            `${API_BASE}/api/birth-time-rectification/purchase-status/${avPurchaseId}`,
+            { signal: ctrl.signal, headers },
+          );
+          clearTimeout(timer);
+          const data = await resp.json();
+          if (data?.status === "paid" && data?.entitled) {
+            finalizeBirthTimeRectificationPayment();
+            await refreshUser().catch(() => {});
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPhase("success");
+            return;
+          }
+        } catch { /* retry */ }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      setPhase("pending_verify");
+      return;
+    }
+
+    // ── Business Vastu: poll purchase-status ─────────────────────────
+    if (isBusinessVastu) {
+      if (!avPurchaseId) { setPhase("cancelled"); return; }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      if (user?.id) headers["X-User-Id"] = String(user.id);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const ctrl  = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp  = await fetch(
+            `${API_BASE}/api/business-vastu/purchase-status/${avPurchaseId}`,
+            { signal: ctrl.signal, headers },
+          );
+          clearTimeout(timer);
+          const data = await resp.json();
+          if (data?.status === "paid" && data?.entitled) {
+            finalizeBusinessVastuPayment();
             await refreshUser().catch(() => {});
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setPhase("success");

@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import React from "react";
+import React, { useMemo } from "react";
 import { Platform, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
@@ -7,63 +7,7 @@ import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
-
-interface Notice {
-  dot: string;
-  icon: keyof typeof Feather.glyphMap;
-  title: string;
-  desc: string;
-  time: string;
-}
-
-const DEMO_NOTICES: Notice[] = [
-  {
-    dot: "#ef4444",
-    icon: "alert-triangle",
-    title: "Phase change aane wali hai",
-    desc: "Aapka Shani-Rahu phase 3 din mein khatam ho raha hai. Ek noticeable energy shift aayega — taiyaar rahein.",
-    time: "2h pehle",
-  },
-  {
-    dot: "#fbbf24",
-    icon: "calendar",
-    title: "Tomorrow looks strong",
-    desc: "Sun-Jupiter alignment is favorable for career moves. Schedule important meetings.",
-    time: "5h ago",
-  },
-  {
-    dot: "#ef4444",
-    icon: "moon",
-    title: "Emotional dip likely",
-    desc: "Moon is transiting the 8th house. Avoid major relationship conversations today.",
-    time: "8h ago",
-  },
-  {
-    dot: "#4ade80",
-    icon: "zap",
-    title: "Weekly insight ready",
-    desc: "Your personalized weekly breakdown is now available in the Insights tab.",
-    time: "1 day ago",
-  },
-  {
-    dot: "#fbbf24",
-    icon: "trending-up",
-    title: "Finance window opening",
-    desc: "Venus enters your 2nd house next week — a good period for investments.",
-    time: "2 days ago",
-  },
-  {
-    dot: "#a78bfa",
-    icon: "star",
-    title: "Jupiter transit update",
-    desc: "Jupiter moves from your 9th to 10th house — new heights possible in career.",
-    time: "3 days ago",
-  },
-];
-
-function buildNoticesFromKundli(): Notice[] {
-  return DEMO_NOTICES;
-}
+import { buildNoticesFromKundli } from "@/lib/chartPersonalize";
 
 export default function NoticeScreen() {
   const insets  = useSafeAreaInsets();
@@ -73,8 +17,13 @@ export default function NoticeScreen() {
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad  = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad  = Platform.OS === "web" ? 34 : insets.bottom;
-  const notices = DEMO_NOTICES;
-  const unread  = notices.filter((_, i) => i < 2).length;
+
+  const noticeLang = language === "hi" ? "hi" : language === "en" ? "en" : "hn";
+  const notices = useMemo(
+    () => buildNoticesFromKundli(kundli, noticeLang),
+    [kundli, noticeLang],
+  );
+  const unread  = Math.min(2, notices.length);
 
   return (
     <CosmicBg>
@@ -83,11 +32,10 @@ export default function NoticeScreen() {
       contentContainerStyle={[s.content, { paddingTop: topPad + 16, paddingBottom: botPad + 110 }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
       <FadeInView delay={staggerDelay(0)}>
         <View style={s.headerRow}>
           <Text style={[s.heading,{ color: C.text }]}>{t.noticeTitle}</Text>
-          {unread > 0 && (
+          {unread > 0 && kundli && (
             <View style={s.badge}>
               <Text style={s.badgeText}>{unread} new</Text>
             </View>
@@ -95,10 +43,9 @@ export default function NoticeScreen() {
         </View>
       </FadeInView>
 
-      {/* List */}
       <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any]}>
         {notices.map((n, i) => (
-          <FadeInView key={i} delay={staggerDelay(i + 1)}>
+          <FadeInView key={`${n.title}-${i}`} delay={staggerDelay(i + 1)}>
             <View style={[s.row, i < notices.length - 1 && [s.rowBorder, { borderBottomColor: C.border }]]}>
               <View style={[s.dotWrap, { backgroundColor: `${n.dot}15` }]}>
                 <Feather name={n.icon} size={14} color={n.dot} />
@@ -106,7 +53,7 @@ export default function NoticeScreen() {
               <View style={s.body}>
                 <View style={s.titleRow}>
                   <Text style={[s.title, { color: C.text }]}>{n.title}</Text>
-                  {i < unread && <View style={s.newDot} />}
+                  {i < unread && kundli ? <View style={s.newDot} /> : null}
                 </View>
                 <Text style={[s.desc, { color: C.textMuted }]}>{n.desc}</Text>
                 <Text style={[s.time, { color: C.textMuted }]}>{n.time}</Text>
@@ -116,13 +63,12 @@ export default function NoticeScreen() {
         ))}
       </View>
 
-      {/* Footer */}
       <FadeInView delay={staggerDelay(notices.length + 1)}>
         <View style={s.footer}>
           <Feather name="bell-off" size={12} color={C.textDim} />
           <Text style={[s.footerText,{ color: C.textDim }]}>
             {kundli
-              ? "Aur notifications kundli update hone par aayenge"
+              ? "Yeh alerts aapki kundli se bane hain — har profile alag dikhega"
               : "Kundli banao — personalized alerts milenge"}
           </Text>
         </View>

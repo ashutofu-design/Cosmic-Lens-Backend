@@ -147,9 +147,7 @@ export default function FaceReadingScreen() {
           <Text style={[s.headerTitle, { color: C.text }]}>{t.fr_headerTitle}</Text>
           <View style={{ width: 26 }} />
         </View>
-        <FadeInView delay={staggerDelay(0)}>
         <FaceReadingProBuilding />
-        </FadeInView>
       </CosmicBg>
     );
   }
@@ -166,7 +164,10 @@ export default function FaceReadingScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 32 }]}
+        style={{ flex: 1, minHeight: 0 }}
+        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 32, flexGrow: 1 }]}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {/* ───── HERO ───── */}

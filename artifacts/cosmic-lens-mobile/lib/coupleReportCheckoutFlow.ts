@@ -82,6 +82,10 @@ export async function gateCoupleReportAfterLangPick(opts: {
       opts.p1,
       opts.p2,
       opts.lang,
+      {
+        deliverable: opts.contactMethod === "whatsapp" ? "video" : "report",
+        urgent: !!opts.urgent,
+      },
     );
     if (order.already_entitled) {
       opts.onEntitled();

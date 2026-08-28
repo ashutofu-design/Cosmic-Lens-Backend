@@ -72,19 +72,19 @@ export const MILAN_DELIVERY_OPTIONS = [
   {
     emoji: "📦",
     title: "Standard Delivery",
-    eta: "Within 24 hours",
+    eta: "4–6 business days",
     surchargeInr: 0,
   },
   {
     emoji: "⚡",
     title: "Priority Delivery",
     eta: "Within 12 hours",
-    surchargeInr: 300,
+    surchargeInr: 299,
   },
 ] as const;
 
 export const MILAN_PRIORITY_REFUND_GUARANTEE =
-  "Not in My Reports within 12 hours? ₹300 priority fee refunded." as const;
+  "12-hour Priority Guarantee — If we miss the 12-hour delivery window, your Priority fee is 100% refunded." as const;
 
 export const MILAN_PRO_CTA_TITLE = "Get My Personalized Marriage Compatibility Report" as const;
 

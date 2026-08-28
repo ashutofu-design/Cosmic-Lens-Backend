@@ -19,13 +19,26 @@ from sqlalchemy import update
 from database import db
 
 
+def _quota_bypass_allowed() -> bool:
+    """Quota killswitches are dev/staging tools — never honoured in production."""
+    try:
+        from billing_security import is_production
+    except Exception:
+        return False
+    return not is_production()
+
+
 def ask_quota_bypass() -> bool:
-    """Testing/dev: unlimited Ask questions (no daily cap). Prod: set ASK_QUOTA_BYPASS=0."""
+    """Testing/dev: unlimited Ask questions (no daily cap). Always off in production."""
+    if not _quota_bypass_allowed():
+        return False
     return os.environ.get("ASK_QUOTA_BYPASS", "0") != "0"
 
 
 def kundli_quota_bypass() -> bool:
-    """Testing/dev: unlimited kundli generation. Prod: set KUNDLI_QUOTA_BYPASS=0 (default)."""
+    """Testing/dev: unlimited kundli generation. Always off in production."""
+    if not _quota_bypass_allowed():
+        return False
     return os.environ.get("KUNDLI_QUOTA_BYPASS", "0") != "0"
 
 

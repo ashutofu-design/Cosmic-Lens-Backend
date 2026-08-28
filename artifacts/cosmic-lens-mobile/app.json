@@ -68,11 +68,15 @@
           },
           "android": {
             "minSdkVersion": 24,
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": false,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],
       "./plugins/withPlayConsoleAndroidFixes",
+      "./plugins/withAndroidProguardRules",
+      "./plugins/withAndroidSecurityHardening",
       [
         "expo-router",
         {

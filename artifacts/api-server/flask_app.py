@@ -39,7 +39,7 @@ import urllib.parse
 from datetime import datetime, timedelta
 from datetime import timezone as _UTC_TZ
 
-from flask import Flask, Response, current_app, jsonify, request
+from flask import Flask, Response, current_app, jsonify, redirect, request
 from flask_cors import CORS
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -51,6 +51,7 @@ from energy_engine import calculate_energy
 from kp_engine import calculate_kp
 from kundli_engine import calculate_kundli
 from models import Kundli, Profile, User, LoginActivity
+from api_auth import assert_route_user_id, authed_user_from_request, get_authed_user, require_authed_user
 from openai_helper import ai_ask, ai_ask_stream, ai_ask_v2
 from openai_helper import is_available as openai_available
 from openai_helper import vastu_scan
@@ -183,7 +184,96 @@ if not app.logger.handlers:
     _h.setLevel(_logging.INFO)
     _h.setFormatter(_logging.Formatter("[%(levelname)s] %(message)s"))
     app.logger.addHandler(_h)
-CORS(app)
+PRODUCTION_CORS_ORIGINS = [
+    "https://admin.coosmic.icu",
+    "https://coosmic.icu",
+    "https://www.coosmic.icu",
+]
+
+
+def _cors_allowed_origins() -> list[str]:
+    prod = (os.environ.get("PROD") or "").strip().lower() in ("1", "true", "yes", "on")
+    prod = prod or (os.environ.get("FLASK_ENV") or "").strip().lower() == "production"
+    raw = (os.environ.get("CORS_ORIGINS") or "").strip()
+    if raw:
+        origins = [o.strip() for o in raw.split(",") if o.strip()]
+        if not prod:
+            return origins
+        # Production never reflects a wildcard or a plain-HTTP origin, even if
+        # one is configured. startup_security also refuses to boot on these.
+        safe = [
+            o for o in origins if o != "*" and o.lower().startswith("https://")
+        ]
+        if safe:
+            return safe
+        app.logger.error(
+            "[cors] CORS_ORIGINS had no usable https origin — "
+            "falling back to the built-in production allowlist"
+        )
+        return list(PRODUCTION_CORS_ORIGINS)
+    if prod:
+        return list(PRODUCTION_CORS_ORIGINS)
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+        "http://localhost:19006",
+        "http://127.0.0.1:19006",
+    ]
+
+
+CORS(
+    app,
+    origins=_cors_allowed_origins(),
+    supports_credentials=True,
+)
+
+# TLS terminates at nginx, so these paths must stay reachable for the edge and
+# for container health probes that talk to gunicorn directly.
+_HTTPS_EXEMPT_PREFIXES = ("/api/healthz", "/api/health")
+
+
+@app.before_request
+def _require_https_in_production():
+    """Reject/redirect plain-HTTP API traffic in production.
+
+    The edge sets X-Forwarded-Proto. When that header says the client spoke
+    plain HTTP we refuse: GET/HEAD are redirected to https, anything that can
+    carry credentials or a body is rejected outright rather than silently
+    replayed over an insecure hop.
+    """
+    from billing_security import is_production
+
+    if not is_production():
+        return None
+    path = request.path or ""
+    if path.startswith(_HTTPS_EXEMPT_PREFIXES):
+        return None
+
+    forwarded = (
+        (request.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
+    )
+    if not forwarded:
+        # No edge header: this is a direct hit on the app port (nginx upstream,
+        # health probe). TLS is enforced one layer up, nothing to decide here.
+        return None
+    if forwarded == "https" or request.is_secure:
+        return None
+
+    if request.method in ("GET", "HEAD"):
+        secure_url = request.url.replace("http://", "https://", 1)
+        return redirect(secure_url, code=308)
+    return (
+        jsonify(
+            {
+                "error": "https_required",
+                "message": "This API only accepts https:// requests.",
+            }
+        ),
+        403,
+    )
+
 
 # ── Structured request logging (dev + production) ─────────────────────────────
 @app.before_request
@@ -202,7 +292,55 @@ def _cl_req_log(resp):
             "dur_ms": dur_ms,
             "ip": request.headers.get("X-Forwarded-For", request.remote_addr),
         }
+        try:
+            from client_integrity import current_summary
+
+            payload["client_integrity"] = current_summary()
+        except Exception:
+            pass
         app.logger.info(_json.dumps(payload, ensure_ascii=False))
+    except Exception:
+        pass
+    return resp
+
+
+try:
+    from app_attestation import install_attestation_guard as _install_attestation
+
+    _install_attestation(app)
+except Exception as _att_exc:  # pragma: no cover - optional dependency path
+    app.logger.warning("[attestation] guard not installed: %s", _att_exc)
+
+try:
+    from client_integrity import install_client_integrity_telemetry
+
+    install_client_integrity_telemetry(app)
+except Exception as _ci_exc:  # pragma: no cover
+    app.logger.warning("[client_integrity] telemetry not installed: %s", _ci_exc)
+
+
+@app.after_request
+def _cl_security_headers(resp):
+    """Baseline transport/content security headers on every response."""
+    try:
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        # self, not () — the web build uses the camera for palm/face scans
+        # and geolocation for the Vastu compass.
+        resp.headers.setdefault(
+            "Permissions-Policy", "geolocation=(self), microphone=(self), camera=(self)"
+        )
+        from billing_security import is_production as _is_prod
+
+        # HSTS only when the edge already terminated TLS — sending it over
+        # plain HTTP would pin users to a scheme nginx may not serve yet.
+        forwarded_proto = (request.headers.get("X-Forwarded-Proto") or "").lower()
+        if _is_prod() and (request.is_secure or forwarded_proto == "https"):
+            resp.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
     except Exception:
         pass
     return resp
@@ -326,18 +464,61 @@ try:
     from flask_limiter import Limiter
     from flask_limiter.util import get_remote_address
 
+    _redis_url = (
+        os.environ.get("RATELIMIT_STORAGE_URI") or os.environ.get("REDIS_URL") or ""
+    ).strip()
+    _limiter_storage = _redis_url if _redis_url else "memory://"
+
+    def _rate_limit_key() -> str:
+        """Per-authenticated-user when possible, else per-IP.
+
+        Shared IPs (carrier NAT) must not throttle each other, and a single
+        account must not multiply its quota by rotating source addresses.
+        """
+        try:
+            uid = (request.headers.get("X-User-Id") or "").strip()
+            if uid:
+                return f"u:{uid}|{get_remote_address()}"
+        except Exception:
+            pass
+        return f"ip:{get_remote_address()}"
+
+    rate_limit_key = _rate_limit_key
     limiter = Limiter(
-        key_func=get_remote_address,
+        key_func=_rate_limit_key,
         app=app,
         default_limits=["1000 per hour", "60 per minute"],
-        storage_uri="memory://",
+        storage_uri=_limiter_storage,
     )
+    if _redis_url:
+        app.logger.info("[limiter] using shared storage at %s", _redis_url.split("@")[-1])
+    else:
+        from billing_security import is_production as _rl_is_production
+
+        if _rl_is_production():
+            raise SystemExit(
+                "Production startup blocked — rate limiting would use per-process "
+                "memory storage. Set REDIS_URL (or RATELIMIT_STORAGE_URI)."
+            )
+        app.logger.warning(
+            "[limiter] no REDIS_URL — per-process memory storage only "
+            "(limits are NOT shared across gunicorn workers)"
+        )
 except Exception as _e:
     limiter = None
+    rate_limit_key = None
     app.logger.warning(f"flask_limiter unavailable: {_e}")
+    from billing_security import is_production as _rl_is_production
+
+    if _rl_is_production():
+        raise SystemExit(
+            f"Production startup blocked — flask_limiter unavailable ({_e}). "
+            "Every @_rate_limit would silently become a no-op."
+        )
 
 
-# Helper that gracefully degrades if limiter not available
+# Degrades to a no-op only outside production; production refuses to boot above
+# rather than serve expensive endpoints with rate limiting silently disabled.
 def _rate_limit(spec):
     def deco(fn):
         if limiter is None:
@@ -346,6 +527,8 @@ def _rate_limit(spec):
 
     return deco
 
+
+app._rate_limit_fn = _rate_limit
 
 # Isolated Phase 1 scanners and JSON-only Phase 2 interpretation engines.
 # Register independently: a missing optional package (or OpenCV) must not
@@ -358,7 +541,9 @@ _OPTIONAL_SCAN_STATUS = {}
 def _register_optional_scan_blueprint(module_path, factory_name):
     try:
         factory = getattr(importlib.import_module(module_path), factory_name)
-        app.register_blueprint(factory(rate_limit=_rate_limit))
+        app.register_blueprint(
+            factory(rate_limit=_rate_limit, require_user=require_authed_user)
+        )
         _OPTIONAL_SCAN_STATUS[module_path] = {"ok": True}
     except Exception as exc:
         _OPTIONAL_SCAN_STATUS[module_path] = {
@@ -440,8 +625,9 @@ ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "").strip()
 def require_admin():
     """Check admin token from header. Returns None if valid, error response if not."""
     from admin_dashboard import admin_no_auth
+    from billing_security import is_production
 
-    if admin_no_auth():
+    if not is_production() and admin_no_auth():
         return None
     admin_secret = os.environ.get("ADMIN_SECRET", "").strip() or ADMIN_SECRET
     if not admin_secret:
@@ -744,6 +930,22 @@ def api_telemetry_translator_lock():
 
 
 # ───────────────────────── Face Reading (Step 0: foundation) ─────────────────
+def _face_reading_auth_payload() -> dict:
+    """Build JSON-like payload for authed_user_from_request (form + JSON)."""
+    data = request.get_json(silent=True) or {}
+    payload = dict(data) if isinstance(data, dict) else {}
+    if request.values.get("user_id") is not None:
+        payload["user_id"] = request.values.get("user_id")
+    return payload
+
+
+def _require_face_reading_user():
+    user, err = authed_user_from_request(_face_reading_auth_payload())
+    if err:
+        return None, err
+    return user, None
+
+
 @app.route("/api/face_reading/extract", methods=["POST"])
 @_rate_limit("20 per minute")
 def face_reading_extract():
@@ -761,6 +963,10 @@ def face_reading_extract():
     Returns the per-angle foundation analysis + a session_id which downstream
     engine endpoints can reuse to avoid re-processing the image.
     """
+    auth_user, auth_err = _require_face_reading_user()
+    if auth_err:
+        return auth_err
+
     try:
         from vedic.face_reading import session_cache
         from vedic.face_reading.landmarks import extract_landmarks, landmark_set_to_dict
@@ -777,7 +983,20 @@ def face_reading_extract():
     include_points = request.values.get("include_points", "0") in ("1", "true", "yes")
     mirror = request.values.get("mirror", "False").lower() in ("1", "true", "yes")
     gender = normalize_gender(request.values.get("gender"))
-    session_id = request.values.get("session_id") or session_cache.new_session_id()
+    requested_sid = (request.values.get("session_id") or "").strip()
+    if requested_sid:
+        from vedic.face_reading.flask_pdf_handlers import assert_face_session_owner
+
+        existing = session_cache.get(requested_sid)
+        if existing is not None:
+            _cached, owner_err = assert_face_session_owner(
+                session_cache, requested_sid, auth_user
+            )
+            if owner_err:
+                return owner_err
+        session_id = requested_sid
+    else:
+        session_id = session_cache.new_session_id()
 
     angles_to_check = ("front", "left", "right")
     results = {}
@@ -849,6 +1068,7 @@ def face_reading_extract():
             "mirror": mirror,
             "gender": gender,
             "front_image_bytes": cached_front_bytes,
+            "owner_user_id": int(auth_user.id),
         },
     )
 
@@ -914,14 +1134,22 @@ def face_reading_extract():
 @app.route("/api/face_reading/session/<session_id>", methods=["GET"])
 def face_reading_session(session_id: str):
     """Inspect a cached foundation session (debug + engine status check)."""
+    _auth_user, auth_err = _require_face_reading_user()
+    if auth_err:
+        return auth_err
+
     try:
         from vedic.face_reading import session_cache
         from vedic.face_reading.landmarks import landmark_set_to_dict
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
-    payload = session_cache.get(session_id)
-    if payload is None:
-        return jsonify({"ok": False, "error": "session_not_found_or_expired"}), 404
+    from vedic.face_reading.flask_pdf_handlers import assert_face_session_owner
+
+    payload, owner_err = assert_face_session_owner(
+        session_cache, session_id, _auth_user
+    )
+    if owner_err:
+        return owner_err
     summaries = {
         a: landmark_set_to_dict(ls) for a, ls in payload["landmark_sets"].items()
     }
@@ -960,6 +1188,10 @@ def face_reading_analyze():
         ✓ Engine 1: Anthropometry  (32-point measurements + ratios)
         ✓ Engine 2: Symmetry       (pose-corrected 3D + naadi)
     """
+    auth_user, auth_err = _require_face_reading_user()
+    if auth_err:
+        return auth_err
+
     try:
         from vedic.face_reading import anthropometry as eng1
         from vedic.face_reading import first_impression as eng7
@@ -995,23 +1227,23 @@ def face_reading_analyze():
     cached = None
     # ── Try cached session first (free re-runs) ────────────────────────────
     if session_id:
+        from vedic.face_reading.flask_pdf_handlers import face_session_owner_error
+
         cached = session_cache.get(session_id)
-        if cached and "front" in cached.get("landmark_sets", {}):
-            front_ls = cached["landmark_sets"]["front"]
-            # Inherit cached gender if caller didn't override
-            if (request.values.get("gender") is None) and cached.get("gender"):
-                gender = cached["gender"]
+        if cached:
+            owner_err = face_session_owner_error(cached, auth_user)
+            if owner_err:
+                return owner_err
+            if "front" in cached.get("landmark_sets", {}):
+                front_ls = cached["landmark_sets"]["front"]
+                # Inherit cached gender if caller didn't override
+                if (request.values.get("gender") is None) and cached.get("gender"):
+                    gender = cached["gender"]
 
     # ── Fall back to uploaded file ─────────────────────────────────────────
     front_bytes = None
     image_sha256 = None
-    user_id_for_dedup = None
-    try:
-        _uid_raw = request.values.get("user_id")
-        if _uid_raw:
-            user_id_for_dedup = int(_uid_raw)
-    except (TypeError, ValueError):
-        user_id_for_dedup = None
+    user_id_for_dedup = int(auth_user.id) if auth_user else None
 
     if front_ls is None:
         front_file = request.files.get("front")
@@ -1036,6 +1268,13 @@ def face_reading_analyze():
             cached_sid = dedup_index.lookup(image_sha256, user_id_for_dedup)
             if cached_sid:
                 cached_entry = session_cache.get(cached_sid)
+                if cached_entry and "report_payload" in cached_entry:
+                    from vedic.face_reading.flask_pdf_handlers import (
+                        face_session_owner_error as _dedup_owner_err,
+                    )
+
+                    if _dedup_owner_err(cached_entry, auth_user):
+                        cached_entry = None
                 if cached_entry and "report_payload" in cached_entry:
                     rp = cached_entry["report_payload"]
                     return (
@@ -1090,6 +1329,7 @@ def face_reading_analyze():
                             "gender": gender,
                             "analysis_id": _dedup_aid,
                             "report_payload": _rp_session,
+                            "owner_user_id": int(auth_user.id),
                         },
                     )
                     dedup_index.remember(
@@ -1138,6 +1378,7 @@ def face_reading_analyze():
             "front_image_bytes": front_bytes,
             "mirror": mirror,
             "gender": gender,
+            "owner_user_id": int(auth_user.id),
         }
         session_cache.put(session_id, cached)
 
@@ -1473,6 +1714,7 @@ def face_reading_analyze():
                 "front_points_norm": _front_pts,
                 "person": _person,
             }
+            _existing["owner_user_id"] = int(auth_user.id)
             session_cache.put(session_id, _existing)
             _face_cache.put_analysis(
                 _analysis_id,
@@ -1591,14 +1833,6 @@ def face_reading_report_pdf():
         session_id : reuse cached analyze() result (preferred)
         name       : optional name override for the cover page
     """
-    try:
-        from vedic.face_reading import session_cache
-        from vedic.face_reading.narrator import assemble_report
-        from vedic.face_reading.pdf_report import render_pdf
-        import report_cache as _rc
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"pdf_unavailable: {e}"}), 500
-
     session_id = request.values.get("session_id")
     if not session_id:
         return (
@@ -1611,53 +1845,48 @@ def face_reading_report_pdf():
             400,
         )
 
-    auth_user = None
-    user_id_header = request.headers.get("X-User-Id", "").strip()
-    if user_id_header:
-        try:
-            auth_user, _err = get_authed_user(int(user_id_header))
-        except Exception:
-            auth_user = None
-        if auth_user is None:
-            return (
-                jsonify(
-                    {
-                        "ok": False,
-                        "error": "unauthorized — invalid X-User-Id / X-API-Key",
-                    }
-                ),
-                401,
+    auth_user, auth_err = _require_face_reading_user()
+    if auth_err:
+        return auth_err
+
+    try:
+        from vedic.face_reading import session_cache
+        from vedic.face_reading.narrator import assemble_report
+        from vedic.face_reading.pdf_report import render_pdf
+        import report_cache as _rc
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"pdf_unavailable: {e}"}), 500
+
+    try:
+        import face_reading_report_billing as _fr_billing
+        from face_reading_report_api import pdf_access_gate as _fr_pdf_gate
+
+        if _fr_billing.payment_required():
+            lang = (request.values.get("language") or "hinglish").strip()
+            cp = _fr_billing.face_cache_params(
+                session_id=session_id,
+                lang=lang,
             )
-        try:
-            import face_reading_report_billing as _fr_billing
-            from face_reading_report_api import pdf_access_gate as _fr_pdf_gate
-
-            if _fr_billing.payment_required():
-                lang = (request.values.get("language") or "hinglish").strip()
-                cp = _fr_billing.face_cache_params(
-                    session_id=session_id,
-                    lang=lang,
+            _cached, gate_resp = _fr_pdf_gate(auth_user.id, cp)
+            if gate_resp:
+                app.logger.warning(
+                    "[REPORT_GEN] face_reading payment_required user=%s session=%s",
+                    auth_user.id,
+                    (session_id or "")[:8],
                 )
-                _cached, gate_resp = _fr_pdf_gate(auth_user.id, cp)
-                if gate_resp:
-                    app.logger.warning(
-                        "[REPORT_GEN] face_reading payment_required user=%s session=%s",
-                        auth_user.id,
-                        (session_id or "")[:8],
-                    )
-                    return gate_resp
-                if _cached:
-                    from flask import send_file
-                    import io
+                return gate_resp
+            if _cached:
+                from flask import send_file
+                import io
 
-                    return send_file(
-                        io.BytesIO(_cached),
-                        mimetype="application/pdf",
-                        as_attachment=True,
-                        download_name=f"face_reading_{session_id[:8]}.pdf",
-                    )
-        except Exception as _fr_gate_exc:
-            app.logger.exception("[face_reading] billing gate failed: %s", _fr_gate_exc)
+                return send_file(
+                    io.BytesIO(_cached),
+                    mimetype="application/pdf",
+                    as_attachment=True,
+                    download_name=f"face_reading_{session_id[:8]}.pdf",
+                )
+    except Exception as _fr_gate_exc:
+        app.logger.exception("[face_reading] billing gate failed: %s", _fr_gate_exc)
 
     try:
         return _face_reading_report_pdf_inner(
@@ -1710,6 +1939,9 @@ def _face_reading_report_pdf_inner(
 @app.route("/api/face_reading/report/status", methods=["GET"])
 def face_reading_report_status():
     """Poll async PDF job progress."""
+    _user, auth_err = _require_face_reading_user()
+    if auth_err is not None:
+        return auth_err
     try:
         from vedic.face_reading.flask_pdf_handlers import handle_report_status
         from vedic.face_reading.report_async import normalize_lang
@@ -1718,12 +1950,15 @@ def face_reading_report_status():
 
     session_id = request.values.get("session_id") or ""
     lang = normalize_lang(request.values.get("language") or "hinglish")
-    return handle_report_status(session_id, lang)
+    return handle_report_status(session_id, lang, auth_user=_user)
 
 
 @app.route("/api/face_reading/report/cost", methods=["GET"])
 def face_reading_report_cost():
     """Per-report OpenAI cost breakdown (admin/debug)."""
+    err = require_admin()
+    if err:
+        return err
     try:
         from vedic.face_reading.token_analytics import get_report_cost
     except Exception as e:
@@ -1737,6 +1972,9 @@ def face_reading_report_cost():
 @app.route("/api/face_reading/report/events", methods=["GET"])
 def face_reading_report_events():
     """Server-Sent Events stream for PDF job progress."""
+    _user, auth_err = _require_face_reading_user()
+    if auth_err is not None:
+        return auth_err
     try:
         from vedic.face_reading.flask_pdf_handlers import handle_report_events_sse
         from vedic.face_reading.report_async import normalize_lang
@@ -1747,7 +1985,7 @@ def face_reading_report_events():
     if not session_id:
         return jsonify({"ok": False, "error": "missing_session_id"}), 400
     lang = normalize_lang(request.values.get("language") or "hinglish")
-    return handle_report_events_sse(session_id, lang)
+    return handle_report_events_sse(session_id, lang, auth_user=_user)
 
 
 # ── FIX 2: My Reports — list + re-download ────────────────────────────────
@@ -1820,19 +2058,9 @@ def my_reports_download(report_id: str):
     """Re-download a previously generated PDF by id. Owner-only."""
     import report_cache as _rc
 
-    user_id_header = request.headers.get(
-        "X-User-Id", request.args.get("user_id", "")
-    ).strip()
-    api_key = request.headers.get("X-API-Key", request.args.get("api_key", "")).strip()
-    if not user_id_header or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    try:
-        uid = int(user_id_header)
-    except ValueError:
-        return jsonify({"error": "invalid_user_id"}), 400
-    user = User.query.get(uid)
-    if not user or user.api_key != api_key:
-        return jsonify({"error": "unauthorized"}), 401
+    user, err = require_authed_user()
+    if err:
+        return err
 
     pdf_bytes = _rc.get_pdf_bytes(report_id, user.id)
     if not pdf_bytes:
@@ -2766,21 +2994,24 @@ def _legacy_auth_gone():
 @app.route("/api/subscription/status", methods=["GET"])
 def subscription_status_route():
     """Returns the user's effective plan, trial state, daily quota, prices.
-    Anonymous (no user_id) → returns DEFAULT free-plan shape.
-    Authenticated → requires matching X-API-Key for that user_id (prevents IDOR)."""
+    Anonymous (no X-User-Id) → returns DEFAULT free-plan shape.
+    Authenticated → X-User-Id + X-API-Key only (query user_id must match header)."""
     from subscription_helper import subscription_status
 
-    user_id = request.args.get("user_id", type=int)
-    if not user_id:
+    uid_hdr = (request.headers.get("X-User-Id") or "").strip()
+    if not uid_hdr:
+        q_uid = request.args.get("user_id", type=int)
+        if q_uid:
+            return jsonify({"error": "auth_required", "message": "X-User-Id required"}), 401
         return jsonify(subscription_status(None))
 
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+    user, err = require_authed_user()
+    if err:
+        return err
 
-    api_key = request.headers.get("X-API-Key", "").strip()
-    if not api_key or user.api_key != api_key:
-        return jsonify({"error": "Unauthorized"}), 401
+    q_uid = request.args.get("user_id", type=int)
+    if q_uid is not None and int(q_uid) != int(user.id):
+        return jsonify({"error": "forbidden", "message": "user_id does not match X-User-Id"}), 403
 
     return jsonify(subscription_status(user))
 
@@ -2788,19 +3019,18 @@ def subscription_status_route():
 @app.route("/api/subscription/start-trial", methods=["POST"])
 def start_trial_route():
     """Begin the 7-day free trial for a user (one-time)."""
+    from billing_security import is_production
     from subscription_helper import start_trial, subscription_status
 
+    if is_production():
+        return jsonify(
+            {"ok": False, "error": "trial_requires_payment", "message": "Use paid checkout in production."}
+        ), 403
+
     data = request.get_json(force=True, silent=True) or {}
-    user_id = data.get("user_id")
-
-    user = User.query.get(user_id) if user_id else None
-    if not user:
-        return jsonify({"ok": False, "error": "User not found"}), 404
-
-    # Mandatory api-key check (prevents trial fraud / IDOR)
-    api_key = request.headers.get("X-API-Key", "").strip()
-    if not api_key or user.api_key != api_key:
-        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     res = start_trial(user)
     if not res.get("ok"):
@@ -2918,21 +3148,10 @@ def _log_question_history(user, question_text: str, result):
         print(f"[ask] question_history save failed (non-fatal): {exc}")
 
 
-def get_authed_user(user_id: int):
-    """Validate X-API-Key header for a given user_id. Returns (user, error_response)."""
-    api_key = request.headers.get("X-API-Key", "").strip()
-    user = User.query.get(user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found"}), 404)
-    if not api_key or user.api_key != api_key:
-        return None, (jsonify({"error": "Unauthorized — invalid API key"}), 401)
-    return user, None
-
-
 @app.route("/api/user/<int:user_id>/app-usage", methods=["POST"])
 def record_app_usage(user_id: int):
     """Accumulate authenticated foreground time in an IST daily bucket."""
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
 
@@ -2989,7 +3208,7 @@ def user_language_pref(user_id):
     PUT  → body { preferred_language: "en"|"hi"|"hn"|null }
            Setting null reverts to per-question auto-detection.
     """
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
     if request.method == "GET":
@@ -3028,7 +3247,7 @@ def update_user_personal(user_id):
     except Exception as mig_exc:
         app.logger.warning("[personal] schema migration note: %s", mig_exc)
 
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
 
@@ -3106,7 +3325,7 @@ def update_user_personal(user_id):
 @app.route("/api/user/<int:user_id>/kundli", methods=["GET"])
 def get_user_kundli(user_id):
     """Get saved kundli + user profile (including subscription plan) for a user."""
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
     kundli_data = None
@@ -3132,7 +3351,7 @@ def get_user_kundli(user_id):
 @app.route("/api/user/<int:user_id>/kundli", methods=["POST"])
 def save_user_kundli(user_id):
     """Save or update kundli for a user."""
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
 
@@ -3200,7 +3419,6 @@ def delete_user_account(user_id):
     # an X-API-Key header as already-deleted (200) so retries after network
     # ambiguity succeed. Wrong/missing key on a NON-existent user is also
     # treated as success — no data is leaked either way.
-    api_key = request.headers.get("X-API-Key", "").strip()
     user = User.query.get(user_id)
     if not user:
         return (
@@ -3213,8 +3431,9 @@ def delete_user_account(user_id):
             ),
             200,
         )
-    if not api_key or user.api_key != api_key:
-        return jsonify({"error": "Unauthorized — invalid API key"}), 401
+    user, err = assert_route_user_id(user_id)
+    if err:
+        return err
 
     # Confirmation phrase required (mobile sends "DELETE")
     body = request.get_json(silent=True) or {}
@@ -3279,7 +3498,7 @@ def _purge_expired_deleted(user_id: int) -> None:
 @app.route("/api/user/<int:user_id>/profiles", methods=["GET"])
 def list_user_profiles(user_id):
     """Return every ACTIVE profile saved by this user (excludes Recently Deleted)."""
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
 
@@ -3305,7 +3524,7 @@ def list_user_profiles(user_id):
 @app.route("/api/user/<int:user_id>/purchases", methods=["GET"])
 def list_user_purchases(user_id):
     """Paid purchase history — subscriptions, PDFs, AstroVastu, career unlock."""
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
 
@@ -3317,7 +3536,7 @@ def list_user_purchases(user_id):
 @app.route("/api/user/<int:user_id>/profiles/deleted", methods=["GET"])
 def list_deleted_profiles(user_id):
     """Recently Deleted (last 24 hrs) — restorable without quota cost."""
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
 
@@ -3336,7 +3555,7 @@ def restore_user_profile(user_id, client_id):
     """Restore a soft-deleted profile (within 24 hrs)."""
     from datetime import timedelta as _td
 
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
 
@@ -3366,7 +3585,7 @@ def sync_user_profiles(user_id):
     Removed-from-list profiles are permanently deleted.
     Body: { profiles: [{id, name, gender, relation, birthData, kundli}], primaryProfileId: str }
     """
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
     import json as _json
@@ -3838,17 +4057,26 @@ def admin_instagram_answer_status_route(answer_id: int):
 @app.route("/api/instagram-answers/match", methods=["POST"])
 def instagram_answer_match_route():
     """Mobile app exact-match lookup (authenticated users only)."""
+    if (os.environ.get("INSTAGRAM_ANSWERS_ENABLED") or "0").strip().lower() not in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        return jsonify(
+            {
+                "error": "feature_disabled",
+                "message": "Instagram Answers is not available yet.",
+            }
+        ), 503
+
     from instagram_answers import _parse_video_number, match_for_user
     from models import User
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     video_number = _parse_video_number(data.get("video_number") or data.get("videoNumber"))
     question = (data.get("question") or "").strip()
@@ -4352,13 +4580,9 @@ def birth_time_rectification_submit_route():
     from models import User
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     full_name = (data.get("full_name") or "").strip()
     gender = (data.get("gender") or "").strip()
@@ -4499,13 +4723,9 @@ def cosmic_intelligence_v3_request_route():
     from models import User
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     pack_id = str(data.get("pack_id") or "").strip()
     preferred_language = str(
@@ -4639,13 +4859,9 @@ def cosmic_intelligence_v3_session_status_route(session_id: str):
     from cosmic_intelligence_v3_sessions import get_v3_session, session_public_view
     from models import User
 
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    user_id = request.args.get("user_id", type=int)
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request()
+    if err:
+        return err
 
     rec = get_v3_session((session_id or "").strip())
     if not rec or int(rec.get("user_id") or 0) != int(user.id):
@@ -4665,13 +4881,9 @@ def cosmic_intelligence_v3_messages_get_route(session_id: str):
     from cosmic_intelligence_v3_sessions import get_v3_messages
     from models import User
 
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    user_id = request.args.get("user_id", type=int)
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request()
+    if err:
+        return err
 
     from cosmic_intelligence_v3_sessions import get_v3_session
 
@@ -4694,13 +4906,9 @@ def cosmic_intelligence_v3_message_post_route(session_id: str):
     from models import User
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     rec = get_v3_session((session_id or "").strip())
     if not rec or int(rec.get("user_id") or 0) != int(user.id):
@@ -4709,7 +4917,7 @@ def cosmic_intelligence_v3_message_post_route(session_id: str):
     image_url = str(data.get("image_url") or "").strip()
     data_url = str(data.get("data_url") or data.get("image_data_url") or "").strip()
     if data_url and not image_url:
-        saved = save_v3_image_data_url(data_url)
+        saved = save_v3_image_data_url(data_url, owner_user_id=int(user.id))
         if not saved:
             return jsonify({"error": "image_invalid"}), 400
         image_url = saved
@@ -4738,13 +4946,9 @@ def cosmic_intelligence_v3_user_accept_route(session_id: str):
     from models import User
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     result = user_accept_v3_session((session_id or "").strip(), user_id=int(user.id))
     if not result.get("ok"):
@@ -4780,13 +4984,9 @@ def cosmic_intelligence_v3_cancel_waitlist_route(session_id: str):
     from models import User
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     result = cancel_v3_waitlist(
         (session_id or "").strip(),
@@ -4817,13 +5017,9 @@ def cosmic_intelligence_v3_end_route(session_id: str):
     from models import User
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     rec = get_v3_session((session_id or "").strip())
     if not rec or int(rec.get("user_id") or 0) != int(user.id):
@@ -4847,13 +5043,9 @@ def cosmic_intelligence_v3_active_route():
     from cosmic_intelligence_v3_sessions import find_active_v3_session_for_user
     from models import User
 
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    user_id = request.args.get("user_id", type=int)
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request()
+    if err:
+        return err
 
     return jsonify({"ok": True, "session": find_active_v3_session_for_user(int(user.id))})
 
@@ -4870,13 +5062,9 @@ def cosmic_intelligence_v3_history_route():
     from cosmic_intelligence_v3_sessions import list_v3_chat_history_for_user
     from models import User
 
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    user_id = request.args.get("user_id", type=int)
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request()
+    if err:
+        return err
     limit = request.args.get("limit", type=int) or 40
     chats = list_v3_chat_history_for_user(int(user.id), limit=limit)
     return jsonify({"ok": True, "chats": chats, "total": len(chats)})
@@ -4887,8 +5075,17 @@ def cosmic_intelligence_v3_history_route():
     methods=["GET"],
     strict_slashes=False,
 )
+@_rate_limit("60 per minute")
 def cosmic_intelligence_v3_media_route(filename: str):
-    from cosmic_intelligence_v3_sessions import read_v3_media
+    from cosmic_intelligence_v3_sessions import read_v3_media, user_owns_v3_media
+
+    user, user_err = require_authed_user()
+    if user_err:
+        admin_err = require_admin()
+        if admin_err:
+            return user_err
+    elif not user_owns_v3_media(int(user.id), filename):
+        return jsonify({"error": "forbidden"}), 403
 
     got = read_v3_media(filename)
     if not got:
@@ -5078,7 +5275,13 @@ def admin_cosmic_intelligence_v3_message_post_route(session_id: str):
     image_url = str(data.get("image_url") or "").strip()
     data_url = str(data.get("data_url") or data.get("image_data_url") or "").strip()
     if data_url and not image_url:
-        saved = save_v3_image_data_url(data_url)
+        from cosmic_intelligence_v3_sessions import get_v3_session
+
+        rec = get_v3_session((session_id or "").strip())
+        owner_uid = int(rec.get("user_id") or 0) if rec else 0
+        saved = save_v3_image_data_url(
+            data_url, owner_user_id=owner_uid if owner_uid else None
+        )
         if not saved:
             return jsonify({"error": "image_invalid"}), 400
         image_url = saved
@@ -5209,19 +5412,10 @@ def admin_cosmic_intelligence_v3_end_route(session_id: str):
 
 def _support_auth_user():
     """Return (user, error_response). error_response is set on failure."""
-    from models import User
-
     data = request.get_json(silent=True) if request.method in ("POST", "PUT", "PATCH") else {}
     if not isinstance(data, dict):
         data = {}
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    user_id = data.get("user_id") or request.args.get("user_id", type=int)
-    if not user_id or not api_key:
-        return None, (jsonify({"error": "auth_required"}), 401)
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return None, (jsonify({"error": "invalid_credentials"}), 401)
-    return user, None
+    return authed_user_from_request(data)
 
 
 @app.route("/api/support/thread", methods=["GET", "POST", "OPTIONS"], strict_slashes=False)
@@ -5442,19 +5636,9 @@ def support_media_route(filename: str):
     from flask import Response
     from support_chat import read_support_media, user_owns_support_media
 
-    api_key = (request.headers.get("X-API-Key") or request.args.get("api_key") or "").strip()
-    uid_raw = request.headers.get("X-User-Id") or request.args.get("user_id") or ""
-    try:
-        user_id = int(uid_raw)
-    except (TypeError, ValueError):
-        return jsonify({"error": "auth_required"}), 401
-    if not api_key or not user_id:
-        return jsonify({"error": "auth_required"}), 401
-    from models import User
-
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = require_authed_user()
+    if err:
+        return err
     if not user_owns_support_media(int(user.id), filename):
         return jsonify({"error": "forbidden"}), 403
     got = read_support_media(filename)
@@ -5665,9 +5849,11 @@ def admin_panel_login_route():
     gate_token = str(
         data.get("gate_token") or request.headers.get("X-Admin-Gate") or ""
     ).strip()
-    expected_user = os.environ.get("ADMIN_LOGIN_USER", "IMFSR@58225")
-    expected_pass = os.environ.get("ADMIN_LOGIN_PASS", "Scorpio@2031")
-    expected_mpin = os.environ.get("ADMIN_LOGIN_MPIN", "5239")
+    expected_user = os.environ.get("ADMIN_LOGIN_USER", "").strip()
+    expected_pass = os.environ.get("ADMIN_LOGIN_PASS", "")
+    expected_mpin = os.environ.get("ADMIN_LOGIN_MPIN", "").strip()
+    if not expected_user or not expected_pass or not expected_mpin:
+        return jsonify({"error": "admin_login_not_configured"}), 503
 
     ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[
         0
@@ -6300,121 +6486,103 @@ def kundli():
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
 
-    user_id = data.get("user_id")
-    user = None
-    if user_id:
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key or user.api_key != api_key:
-            return jsonify({"error": "Unauthorized"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
-        # ── Per-user dedup: same DOB/time/place → return cached chart, NO quota cost ──
-        birth_key = compute_birth_key(data)
-        if birth_key:
-            cached = (
+    # ── Per-user dedup: same DOB/time/place → return cached chart, NO quota cost ──
+    birth_key = compute_birth_key(data)
+    if birth_key:
+        cached = (
+            Profile.query.filter_by(
+                user_id=user.id, birth_key=birth_key, deleted_at=None
+            )
+            .filter(Profile.chart_data.isnot(None))
+            .first()
+        )
+        if not cached:
+            legacy = (
                 Profile.query.filter_by(
-                    user_id=user.id, birth_key=birth_key, deleted_at=None
+                    user_id=user.id, birth_key=None, deleted_at=None
                 )
-                .filter(Profile.chart_data.isnot(None))
-                .first()
+                .filter(Profile.birth_data.isnot(None))
+                .all()
             )
-            if not cached:
-                # Backfill legacy profiles (rows that have chart_data but null birth_key
-                # because they predate the dedup feature). Cheap one-time scan per user.
-                legacy = (
+            if legacy:
+                for r in legacy:
+                    try:
+                        bd = _json.loads(r.birth_data)
+                        r.birth_key = compute_birth_key(bd)
+                    except Exception:
+                        r.birth_key = ""
+                db.session.commit()
+                cached = (
                     Profile.query.filter_by(
-                        user_id=user.id, birth_key=None, deleted_at=None
+                        user_id=user.id, birth_key=birth_key, deleted_at=None
                     )
-                    .filter(Profile.birth_data.isnot(None))
-                    .all()
+                    .filter(Profile.chart_data.isnot(None))
+                    .first()
                 )
-                if legacy:
-                    for r in legacy:
-                        try:
-                            bd = _json.loads(r.birth_data)
-                            r.birth_key = compute_birth_key(bd)
-                        except Exception:
-                            r.birth_key = ""
-                    db.session.commit()
-                    cached = (
-                        Profile.query.filter_by(
-                            user_id=user.id, birth_key=birth_key, deleted_at=None
+        if cached:
+            try:
+                chart = _json.loads(cached.chart_data)
+                if isinstance(chart, dict):
+                    try:
+                        from kundli_engine import KUNDLI_CALC_VERSION as _CUR_CV
+                    except Exception:
+                        _CUR_CV = None
+                    _cached_cv = int(chart.get("calcVersion") or 0)
+                    if _CUR_CV is not None and _cached_cv != _CUR_CV:
+                        print(
+                            f"[kundli.profile_cache] stale calcVersion {_cached_cv} != {_CUR_CV} for profile.id={cached.id}, recomputing"
                         )
-                        .filter(Profile.chart_data.isnot(None))
-                        .first()
-                    )
-            if cached:
-                try:
-                    chart = _json.loads(cached.chart_data)
-                    if isinstance(chart, dict):
-                        # Phase 2.8.61: respect engine calcVersion. If the cached
-                        # chart was computed by an older engine (e.g. before the
-                        # timezonefinder fix that corrected tz=5.0→5.5 for India),
-                        # skip the cache and recompute fresh. Stale rows will be
-                        # overwritten by the fresh-compute persist path below.
+                        raise ValueError("stale_calc_version")
+                    if "kp" not in chart:
                         try:
-                            from kundli_engine import KUNDLI_CALC_VERSION as _CUR_CV
-                        except Exception:
-                            _CUR_CV = None
-                        _cached_cv = int(chart.get("calcVersion") or 0)
-                        if _CUR_CV is not None and _cached_cv != _CUR_CV:
-                            print(
-                                f"[kundli.profile_cache] stale calcVersion {_cached_cv} != {_CUR_CV} for profile.id={cached.id}, recomputing"
+                            from kp_engine import calculate_kp as _calc_kp_lazy
+
+                            chart["kp"] = _calc_kp_lazy(
+                                {
+                                    "day": data["day"],
+                                    "month": data["month"],
+                                    "year": data["year"],
+                                    "hour": data["hour"],
+                                    "minute": data["minute"],
+                                    "ampm": data["ampm"],
+                                    "lat": data["lat"],
+                                    "lon": data["lon"],
+                                    "tz": data["tz"],
+                                }
                             )
-                            raise ValueError("stale_calc_version")
-                        # Lazy-repair (Phase 2.8.57): if cached row predates KP-cache
-                        # rollout (or KP failed during initial compute), backfill it
-                        # ONCE on read so downstream callers always get kundli["kp"].
-                        if "kp" not in chart:
-                            try:
-                                from kp_engine import calculate_kp as _calc_kp_lazy
+                            cached.chart_data = _json.dumps(chart)
+                            db.session.commit()
+                            print(
+                                f"[kundli.cache] lazy-repaired KP for profile.id={cached.id}"
+                            )
+                        except Exception as _kp_exc:
+                            print(
+                                f"[kundli.cache] lazy KP repair failed (non-fatal): {_kp_exc}"
+                            )
+                    chart["cached"] = True
+                    chart["cached_id"] = cached.client_id
+                    return jsonify(chart)
+            except Exception:
+                pass
 
-                                chart["kp"] = _calc_kp_lazy(
-                                    {
-                                        "day": data["day"],
-                                        "month": data["month"],
-                                        "year": data["year"],
-                                        "hour": data["hour"],
-                                        "minute": data["minute"],
-                                        "ampm": data["ampm"],
-                                        "lat": data["lat"],
-                                        "lon": data["lon"],
-                                        "tz": data["tz"],
-                                    }
-                                )
-                                # Persist the repair so we don't recompute every request.
-                                cached.chart_data = _json.dumps(chart)
-                                db.session.commit()
-                                print(
-                                    f"[kundli.cache] lazy-repaired KP for profile.id={cached.id}"
-                                )
-                            except Exception as _kp_exc:
-                                print(
-                                    f"[kundli.cache] lazy KP repair failed (non-fatal): {_kp_exc}"
-                                )
-                        chart["cached"] = True
-                        chart["cached_id"] = cached.client_id
-                        return jsonify(chart)
-                except Exception:
-                    pass  # corrupt cache → fall through to fresh compute
-
-        # ── Quota check (only when no cache hit) ──
-        check = can_generate_kundli(user)
-        if not check["allowed"]:
-            return (
-                jsonify(
-                    {
-                        "error": "daily_kundli_limit_reached",
-                        "message": f"Aaj ka {check['limit']} kundli ka limit poora ho gaya. Pro upgrade karein for unlimited.",
-                        "quota": {"used": check["used"], "limit": check["limit"]},
-                        "plan": effective_plan(user),
-                        "upgrade_required": True,
-                    }
-                ),
-                402,
-            )
+    check = can_generate_kundli(user)
+    if not check["allowed"]:
+        return (
+            jsonify(
+                {
+                    "error": "daily_kundli_limit_reached",
+                    "message": f"Aaj ka {check['limit']} kundli ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                    "quota": {"used": check["used"], "limit": check["limit"]},
+                    "plan": effective_plan(user),
+                    "upgrade_required": True,
+                }
+            ),
+            402,
+        )
 
     try:
         # Phase-3: route through global cache (read-through; falls back
@@ -6426,49 +6594,41 @@ def kundli():
         # consume can still fail under heavy concurrency (another request used
         # the last slot between our pre-check and now) — in that case we must
         # honor the hard limit and reject this response.
-        if user:
-            quota = consume_kundli(user)
-            if not quota.get("allowed"):
-                return (
-                    jsonify(
-                        {
-                            "error": "daily_kundli_limit_reached",
-                            "message": f"Aaj ka {quota['limit']} kundli ka limit poora ho gaya. Pro upgrade karein for unlimited.",
-                            "quota": {"used": quota["used"], "limit": quota["limit"]},
-                            "plan": effective_plan(user),
-                            "upgrade_required": True,
-                        }
-                    ),
-                    402,
-                )
-            result["quota"] = {"used": quota["used"], "limit": quota["limit"]}
-            result["cached"] = False
-            # Phase 2.8.61: backfill fresh result into Profile.chart_data so
-            # the next request hits the per-user cache instead of recomputing
-            # (e.g. after calcVersion bump invalidated the stale row).
+        quota = consume_kundli(user)
+        if not quota.get("allowed"):
+            return (
+                jsonify(
+                    {
+                        "error": "daily_kundli_limit_reached",
+                        "message": f"Aaj ka {quota['limit']} kundli ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                        "quota": {"used": quota["used"], "limit": quota["limit"]},
+                        "plan": effective_plan(user),
+                        "upgrade_required": True,
+                    }
+                ),
+                402,
+            )
+        result["quota"] = {"used": quota["used"], "limit": quota["limit"]}
+        result["cached"] = False
+        try:
+            if birth_key:
+                prof = Profile.query.filter_by(
+                    user_id=user.id, birth_key=birth_key, deleted_at=None
+                ).first()
+                if prof is not None:
+                    _persist = {
+                        k: v
+                        for k, v in result.items()
+                        if k not in ("quota", "cached", "_cache")
+                    }
+                    prof.chart_data = _json.dumps(_persist)
+                    db.session.commit()
+        except Exception as _bf_exc:
+            print(f"[kundli.profile_cache] backfill failed (non-fatal): {_bf_exc}")
             try:
-                if birth_key:
-                    prof = Profile.query.filter_by(
-                        user_id=user.id, birth_key=birth_key, deleted_at=None
-                    ).first()
-                    if prof is not None:
-                        # Strip transient response metadata so the persisted
-                        # blob contains only canonical chart fields. This keeps
-                        # the cache row clean of per-request flags like
-                        # quota/cached/_cache that don't belong in storage.
-                        _persist = {
-                            k: v
-                            for k, v in result.items()
-                            if k not in ("quota", "cached", "_cache")
-                        }
-                        prof.chart_data = _json.dumps(_persist)
-                        db.session.commit()
-            except Exception as _bf_exc:
-                print(f"[kundli.profile_cache] backfill failed (non-fatal): {_bf_exc}")
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
+                db.session.rollback()
+            except Exception:
+                pass
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -6519,12 +6679,7 @@ def energy_today():
                 jsonify({"error": "Provide user_id (with X-API-Key) or kundli body"}),
                 400,
             )
-        try:
-            user_id = int(uid_raw)
-        except (TypeError, ValueError):
-            return jsonify({"error": "user_id must be an integer"}), 400
-
-        user, err = get_authed_user(user_id)
+        user, err = authed_user_from_request({**body, "user_id": uid_raw})
         if err:
             return err
         if not user.kundli or not user.kundli.chart_data:
@@ -6694,12 +6849,7 @@ def lucky_today():
                 jsonify({"error": "Provide user_id (with X-API-Key) or kundli body"}),
                 400,
             )
-        try:
-            user_id = int(uid_raw)
-        except (TypeError, ValueError):
-            return jsonify({"error": "user_id must be an integer"}), 400
-
-        user, err = get_authed_user(user_id)
+        user, err = authed_user_from_request({**body, "user_id": uid_raw})
         if err:
             return err
         if not user.kundli or not user.kundli.chart_data:
@@ -6797,7 +6947,7 @@ def risk_radar():
             user_id = int(uid_raw)
         except (TypeError, ValueError):
             return jsonify({"error": "user_id must be an integer"}), 400
-        user, err = get_authed_user(user_id)
+        user, err = assert_route_user_id(user_id)
         if err:
             return err
         if not user.kundli or not user.kundli.chart_data:
@@ -7542,15 +7692,11 @@ def career_analysis():
         return jsonify({}), 200
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    kundli = data.get("kundli") or {}
-
-    if not user_id:
-        return jsonify({"error": "user_id required"}), 400
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
 
+    kundli = data.get("kundli") or {}
     planets = kundli.get("planets") or []
     if not planets:
         return (
@@ -7697,15 +7843,11 @@ def health_analysis():
     import swisseph as swe
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    kundli = data.get("kundli") or {}
-
-    if not user_id:
-        return jsonify({"error": "user_id required"}), 400
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
 
+    kundli = data.get("kundli") or {}
     planets = kundli.get("planets") or []
     if not planets:
         return (
@@ -7910,15 +8052,11 @@ def finance_analysis():
     import swisseph as swe
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    kundli = data.get("kundli") or {}
-
-    if not user_id:
-        return jsonify({"error": "user_id required"}), 400
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
 
+    kundli = data.get("kundli") or {}
     planets = kundli.get("planets") or []
     if not planets:
         return (
@@ -8118,6 +8256,7 @@ def current_transits():
 
 
 @app.route("/api/kp_kundli", methods=["POST"])
+@_rate_limit("30 per minute")
 def kp_kundli():
     """
     KP (Krishnamurti Paddhati) calculation.
@@ -8125,6 +8264,10 @@ def kp_kundli():
     (day, month, year, hour, minute, ampm, lat, lon, tz, name, place)
     Returns: cusps, planets, significations, ayanamsa
     """
+    _user, err = require_authed_user()
+    if err:
+        return err
+
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "Invalid or missing JSON body"}), 400
@@ -8145,6 +8288,7 @@ def kp_kundli():
 
 
 @app.route("/api/dosh-analysis", methods=["POST"])
+@_rate_limit("30 per minute")
 def dosh_analysis():
     """
     Full 9-dosh Vedic analysis.
@@ -8152,6 +8296,10 @@ def dosh_analysis():
     planets: [{ name, house, longitude, sign, retrograde }, ...]
     Returns: { total_dosh, active_count, mild_count, none_count, dosh_list }
     """
+    _user, err = require_authed_user()
+    if err:
+        return err
+
     data = request.get_json(force=True, silent=True) or {}
     planets = data.get("planets")
     nakshatra = data.get("nakshatra", "")
@@ -8256,27 +8404,10 @@ def astrovastu_basic_route():
         )
 
     # ── Item 18: auth (mandatory when user_id provided) ────────────────────
-    user_id = data.get("user_id")
-    user = None
-    plan = "free"
-    if user_id:
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key or user.api_key != api_key:
-            return jsonify({"error": "Unauthorized — invalid API key"}), 401
-        plan = effective_plan(user)
-    else:
-        return (
-            jsonify(
-                {
-                    "error": "auth_required",
-                    "message": "Login zaroori hai personalized check ke liye.",
-                }
-            ),
-            401,
-        )
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
+    plan = effective_plan(user)
 
     # ── Item 19: profile completeness (same resolver as PRO / business) ───
     chart, missing, _chart_name = _resolve_user_chart(user)
@@ -8591,12 +8722,7 @@ def floor_plan_preview_route():
     Headers: X-API-Key
     """
     data = request.get_json(force=True, silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = request.headers.get("X-API-Key", "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required", "message": "Login required."}), 401
-
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
 
@@ -8612,7 +8738,7 @@ def floor_plan_preview_route():
     try:
         from vision_layer import check_floor_plan_preview_rate, preview_floor_plan_from_upload
 
-        allowed, rate_msg = check_floor_plan_preview_rate(int(user_id), lang=lang)
+        allowed, rate_msg = check_floor_plan_preview_rate(int(user.id), lang=lang)
         if not allowed:
             return (
                 jsonify(
@@ -8655,12 +8781,7 @@ def room_photo_classify_route():
     Headers: X-API-Key
     """
     data = request.get_json(force=True, silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = request.headers.get("X-API-Key", "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required", "message": "Login required."}), 401
-
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
 
@@ -8678,7 +8799,7 @@ def room_photo_classify_route():
     try:
         from vision_layer import check_floor_plan_preview_rate, classify_room_photo_upload
 
-        allowed, rate_msg = check_floor_plan_preview_rate(int(user_id), lang=lang)
+        allowed, rate_msg = check_floor_plan_preview_rate(int(user.id), lang=lang)
         if not allowed:
             return jsonify({
                 "ok": False,
@@ -8832,29 +8953,9 @@ def astrovastu_pro_route():
             )
 
     # ── Auth (X-API-Key + user_id) ────────────────────────────────────────
-    user_id = data.get("user_id")
-    api_key = request.headers.get("X-API-Key", "")
-    if not user_id or not api_key:
-        return (
-            jsonify(
-                {
-                    "error": "auth_required",
-                    "message": "Login zaroori hai PRO deep-scan ke liye.",
-                }
-            ),
-            401,
-        )
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return (
-            jsonify(
-                {
-                    "error": "invalid_credentials",
-                    "message": "Session invalid — please log out and log in again.",
-                }
-            ),
-            401,
-        )
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     plan = effective_plan(user)
 
@@ -9203,21 +9304,9 @@ def business_vastu_route():
             )
 
     # ── Auth ──────────────────────────────────────────────────────────────
-    user_id = data.get("user_id")
-    api_key = request.headers.get("X-API-Key", "")
-    if not user_id or not api_key:
-        return (
-            jsonify(
-                {
-                    "error": "auth_required",
-                    "message": "Login zaroori hai Business Vastu ke liye.",
-                }
-            ),
-            401,
-        )
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
 
     plan = effective_plan(user)
 
@@ -9676,9 +9765,14 @@ def astrovastu_pro_pdf(log_id: int):
 # returns a multi-page PDF. No DB log (numerology has no chart-payload state).
 # ─────────────────────────────────────────────────────────────────────────────
 @app.route("/api/numerology/pdf", methods=["GET", "POST"])
+@_rate_limit("20 per minute")
 def numerology_pdf():
     # Accept both POST JSON body and GET query parameters
     # (GET allows mobile clients to open the PDF via Linking.openURL).
+    _user, err = require_authed_user()
+    if err:
+        return err
+
     if request.method == "GET":
         body = request.args.to_dict() or {}
     else:
@@ -9918,7 +10012,7 @@ def reports_history_route(user_id):
     """
     from models import AstroVastuProLog, BusinessVastuLog
 
-    user, err = get_authed_user(user_id)
+    user, err = assert_route_user_id(user_id)
     if err:
         return err
 
@@ -10003,24 +10097,18 @@ def astrovastu_status_route():
     from sqlalchemy.exc import OperationalError
 
     data = request.get_json(force=True, silent=True) or {}
-    user_id = data.get("user_id") or request.args.get("user_id")
-    api_key = request.headers.get("X-API-Key", "").strip()
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-
-    def _load_user():
-        return User.query.filter_by(id=user_id, api_key=api_key).first()
+    user, err = authed_user_from_request(data if data else None)
+    if err:
+        return err
 
     try:
-        user = _load_user()
+        plan = effective_plan(user)
     except OperationalError as exc:
         app.logger.warning("[astrovastu/status] schema mismatch — running migrations: %s", exc)
         run_schema_migrations()
-        user = _load_user()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
+        db.session.refresh(user)
+        plan = effective_plan(user)
 
-    plan = effective_plan(user)
     return jsonify(
         {
             "plan": plan,
@@ -10049,16 +10137,11 @@ def astrovastu_purchase_intent_route():
     from subscription_helper import SKU_CATALOG, effective_plan
 
     data = request.get_json(force=True, silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = request.headers.get("X-API-Key", "").strip()
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
     sku = (data.get("sku") or "").strip()
     pname = (data.get("property_name") or "").strip()
-
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
 
     spec = SKU_CATALOG.get(sku)
     if not spec:
@@ -10132,20 +10215,15 @@ def astrovastu_create_order_route():
         return jsonify(body), code
 
     data = request.get_json(force=True, silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = request.headers.get("X-API-Key", "").strip()
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
     sku = (data.get("sku") or "").strip()
     pname = (data.get("property_name") or "").strip()
     pid_in = data.get("purchase_id")
     urgent = bool(data.get("urgent"))
     # Optional Priority add-on — does not change SKU catalog prices.
     priority_fee = 149 if urgent else 0
-
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
 
     spec = SKU_CATALOG.get(sku)
     if not spec:
@@ -10250,21 +10328,20 @@ def astrovastu_purchase_status_route(purchase_id):
     from models import AstroVastuPurchase
     from subscription_helper import grant_purchase_idempotent
 
-    api_key = request.headers.get("X-API-Key", "").strip()
-    if not api_key:
-        return jsonify({"error": "auth_required"}), 401
+    user, err = require_authed_user()
+    if err:
+        return err
 
     purchase = AstroVastuPurchase.query.get(purchase_id)
-    if not purchase:
+    if not purchase or purchase.user_id != user.id:
         return jsonify({"error": "purchase_not_found"}), 404
-
-    user = User.query.filter_by(id=purchase.user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
 
     if purchase.status == "created" and purchase.order_id and pg.configured():
         try:
-            if pg.is_receipt_paid(purchase.order_id):
+            if pg.is_receipt_paid(
+                purchase.order_id,
+                min_amount_inr=int(purchase.amount or 0) or None,
+            ):
                 purchase.status = "paid"
                 purchase.paid_at = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
                 db.session.commit()
@@ -10316,18 +10393,16 @@ def astrovastu_dev_grant_route():
             ),
             403,
         )
-    if (_os.environ.get("FLASK_ENV") or "").lower() == "production":
+    from billing_security import is_production
+
+    if is_production():
         return jsonify({"error": "disabled_in_production"}), 403
 
     data = request.get_json(force=True, silent=True) or {}
-    user_id = data.get("user_id")
-    api_key = request.headers.get("X-API-Key", "").strip()
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
     pid = data.get("purchase_id")
-    if not user_id or not api_key:
-        return jsonify({"error": "auth_required"}), 401
-    user = User.query.filter_by(id=user_id, api_key=api_key).first()
-    if not user:
-        return jsonify({"error": "invalid_credentials"}), 401
 
     purchase = AstroVastuPurchase.query.get(pid)
     if not purchase or purchase.user_id != user.id:
@@ -10455,6 +10530,7 @@ def history_search_route():
 
 
 @app.route("/api/ask", methods=["POST"])
+@_rate_limit("30 per minute")
 def ask_route():
     """
     Ask engine — rule-based astrology question analysis.
@@ -10475,6 +10551,11 @@ def ask_route():
 
     if not question:
         return jsonify({"error": "question is required"}), 400
+
+    user, auth_err = authed_user_from_request(data)
+    if auth_err:
+        return auth_err
+    user_id = user.id
 
     # GLOBAL: answer language = question language (picker only if undetectable).
     try:
@@ -11409,9 +11490,14 @@ def ask_route():
 # Uses OpenAI Whisper (whisper-1) — handles Hindi, Hinglish, English natively.
 # ─────────────────────────────────────────────────────────────────────────────
 @app.route("/api/stt", methods=["POST"])
+@_rate_limit("20 per minute;300 per day")
 def stt_route():
     import os
     import tempfile
+
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
 
     if "audio" not in request.files:
         return jsonify({"error": "audio file required"}), 400
@@ -11477,8 +11563,13 @@ def stt_route():
 # Hinglish/Hindi-friendly voice. No streaming — small files (<1MB typical).
 # ─────────────────────────────────────────────────────────────────────────────
 @app.route("/api/tts", methods=["POST"])
+@_rate_limit("30 per minute;500 per day")
 def tts_route():
     import os
+
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
 
     data = request.get_json(force=True, silent=True) or {}
     text = (data.get("text") or "").strip()
@@ -11521,6 +11612,7 @@ def tts_route():
 
 
 @app.route("/api/ask/stream", methods=["POST"])
+@_rate_limit("20 per minute")
 def ask_stream_route():
     import itertools
 
@@ -11535,6 +11627,11 @@ def ask_stream_route():
 
     if not question:
         return jsonify({"error": "question is required"}), 400
+
+    user, auth_err = authed_user_from_request(data)
+    if auth_err:
+        return auth_err
+    user_id = user.id
 
     try:
         from ask_question_normalize import prepare_ask_question
@@ -12571,39 +12668,28 @@ def _parse_batch_ask_request(data: dict):
     if not questions:
         return None, (jsonify({"error": "questions is required (non-empty)"}), 400)
 
-    user = None
-    quota = None
-    if user_id or api_key:
-        from question_history import resolve_user_for_ask_request
+    user, auth_err = authed_user_from_request(data)
+    if auth_err:
+        return None, auth_err
+    from subscription_helper import consume_question, effective_plan
 
-        user = resolve_user_for_ask_request(user_id, api_key)
-        if user_id and not user:
-            return None, (jsonify({"error": "User not found"}), 404)
-        if not user:
-            return None, (jsonify({"error": "Unauthorized"}), 401)
-        from subscription_helper import consume_question, effective_plan
-
-        quota = consume_question(user)
-        if not quota.get("allowed"):
-            return None, (
-                jsonify(
-                    {
-                        "error": "daily_limit_reached",
-                        "message": f"Aaj ka {quota.get('limit',0)} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
-                        "quota": {
-                            "used": quota.get("used", 0),
-                            "limit": quota.get("limit", 0),
-                        },
-                        "plan": effective_plan(user),
-                        "upgrade_required": True,
-                    }
-                ),
-                402,
-            )
-    else:
-        return None, (jsonify({"error": "Unauthorized"}), 401)
-
-    from subscription_helper import effective_plan
+    quota = consume_question(user)
+    if not quota.get("allowed"):
+        return None, (
+            jsonify(
+                {
+                    "error": "daily_limit_reached",
+                    "message": f"Aaj ka {quota.get('limit',0)} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                    "quota": {
+                        "used": quota.get("used", 0),
+                        "limit": quota.get("limit", 0),
+                    },
+                    "plan": effective_plan(user),
+                    "upgrade_required": True,
+                }
+            ),
+            402,
+        )
     from ask_kundli_resolver import resolve_kundli_for_user
 
     quota_payload = {
@@ -12810,17 +12896,9 @@ def ask_batch_stream_route():
 
 def _parse_dna_auth(data: dict):
     """Require logged-in user for DNA lab (prevents anonymous OpenAI burn)."""
-    api_key = (request.headers.get("X-API-Key") or "").strip()
-    user_id = data.get("user_id")
-    if not user_id and not api_key:
-        return None, (jsonify({"error": "Unauthorized"}), 401)
-    from question_history import resolve_user_for_ask_request
-
-    user = resolve_user_for_ask_request(user_id, api_key)
-    if user_id and not user:
-        return None, (jsonify({"error": "User not found"}), 404)
-    if not user:
-        return None, (jsonify({"error": "Unauthorized"}), 401)
+    user, err = authed_user_from_request(data)
+    if err:
+        return None, err
     return user, None
 
 
@@ -12935,32 +13013,28 @@ def prashna_ask_route():
     if not question:
         return jsonify({"error": "question is required"}), 400
 
-    # ── Optional auth + daily quota (mirrors /api/ask) ───────────────────────
-    if user_id:
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key or user.api_key != api_key:
-            return jsonify({"error": "Unauthorized"}), 401
+    # ── Auth + daily quota (mirrors /api/ask) ────────────────────────────────
+    user, auth_err = authed_user_from_request(data)
+    if auth_err:
+        return auth_err
 
-        quota = consume_question(user)
-        if not quota["allowed"]:
-            return (
-                jsonify(
-                    {
-                        "error": "daily_limit_reached",
-                        "message": (
-                            f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
-                            "Pro upgrade karein for unlimited."
-                        ),
-                        "quota": {"used": quota["used"], "limit": quota["limit"]},
-                        "plan": effective_plan(user),
-                        "upgrade_required": True,
-                    }
-                ),
-                402,
-            )
+    quota = consume_question(user)
+    if not quota["allowed"]:
+        return (
+            jsonify(
+                {
+                    "error": "daily_limit_reached",
+                    "message": (
+                        f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
+                        "Pro upgrade karein for unlimited."
+                    ),
+                    "quota": {"used": quota["used"], "limit": quota["limit"]},
+                    "plan": effective_plan(user),
+                    "upgrade_required": True,
+                }
+            ),
+            402,
+        )
 
     try:
         result = ask_prashna(question=question, category=category)
@@ -13014,31 +13088,27 @@ def prashna_number_ask_route():
     if number < 1 or number > KP_249_COUNT:
         return jsonify({"error": f"number must be 1..{KP_249_COUNT}"}), 400
 
-    if user_id:
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key or user.api_key != api_key:
-            return jsonify({"error": "Unauthorized"}), 401
+    user, auth_err = authed_user_from_request(data)
+    if auth_err:
+        return auth_err
 
-        quota = consume_question(user)
-        if not quota["allowed"]:
-            return (
-                jsonify(
-                    {
-                        "error": "daily_limit_reached",
-                        "message": (
-                            f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
-                            "Pro upgrade karein for unlimited."
-                        ),
-                        "quota": {"used": quota["used"], "limit": quota["limit"]},
-                        "plan": effective_plan(user),
-                        "upgrade_required": True,
-                    }
-                ),
-                402,
-            )
+    quota = consume_question(user)
+    if not quota["allowed"]:
+        return (
+            jsonify(
+                {
+                    "error": "daily_limit_reached",
+                    "message": (
+                        f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
+                        "Pro upgrade karein for unlimited."
+                    ),
+                    "quota": {"used": quota["used"], "limit": quota["limit"]},
+                    "plan": effective_plan(user),
+                    "upgrade_required": True,
+                }
+            ),
+            402,
+        )
 
     try:
         result = ask_number_prashna(number=number, question=question, category=category)
@@ -13116,24 +13186,9 @@ def vastu_scan_route():
         )
 
     # ── PRO-tier gate (Photo Engine API costs ~₹2-3/scan; PRO+ only) ────────
-    if not user_id:
-        return (
-            jsonify(
-                {
-                    "error": "login_required",
-                    "message": "AstroVastu PRO unlock karne ke liye login zaroori hai.",
-                    "upgrade_required": True,
-                }
-            ),
-            401,
-        )
-
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    api_key = request.headers.get("X-API-Key", "").strip()
-    if not api_key or user.api_key != api_key:
-        return jsonify({"error": "Unauthorized"}), 401
+    user, auth_err = authed_user_from_request(data)
+    if auth_err:
+        return auth_err
 
     plan = effective_plan(user)
     if plan not in ("pro", "trial"):
@@ -13278,24 +13333,9 @@ def vastu_deep_scan_route():
         )
 
     # ── PRO-tier gate (Photo Engine multi-photo deep scan; PRO+ only) ───────
-    if not user_id:
-        return (
-            jsonify(
-                {
-                    "error": "login_required",
-                    "message": "Deep Scan ke liye login zaroori hai — yeh AstroVastu PRO ka advanced feature hai.",
-                    "upgrade_required": True,
-                }
-            ),
-            401,
-        )
-
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    api_key = request.headers.get("X-API-Key", "").strip()
-    if not api_key or user.api_key != api_key:
-        return jsonify({"error": "Unauthorized"}), 401
+    user, auth_err = authed_user_from_request(data)
+    if auth_err:
+        return auth_err
 
     plan = effective_plan(user)
     if plan not in ("pro", "trial"):
@@ -13613,7 +13653,11 @@ PERSONAL_YEAR_THEME = {
 
 
 @app.route("/api/numerology/basic", methods=["POST"])
+@_rate_limit("30 per minute")
 def numerology_basic():
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
     data = request.get_json(force=True, silent=True) or {}
     name = (data.get("name") or "").strip()
     day = int(data.get("day", 0))
@@ -13644,7 +13688,11 @@ def numerology_basic():
 
 
 @app.route("/api/numerology/advanced", methods=["POST"])
+@_rate_limit("30 per minute")
 def numerology_advanced():
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
     data = request.get_json(force=True, silent=True) or {}
     name = (data.get("name") or "").strip()
     day = int(data.get("day", 0))
@@ -13736,6 +13784,7 @@ def _driver_conductor_from_dob(dob_str: str):
 
 
 @app.route("/api/numerology/number_check", methods=["POST"])
+@_rate_limit("30 per minute")
 def numerology_number_check():
     """Analyze a mobile / vehicle / house number against a person's DOB.
 
@@ -13745,6 +13794,9 @@ def numerology_number_check():
         "dob": "1990-05-15"   (yyyy-mm-dd, used to derive Driver/Conductor)
     }
     """
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
     data = request.get_json(force=True, silent=True) or {}
     value = (data.get("value") or "").strip()
     kind = (data.get("kind") or "mobile").lower()
@@ -13763,6 +13815,7 @@ def numerology_number_check():
 
 
 @app.route("/api/numerology/compatibility", methods=["POST"])
+@_rate_limit("30 per minute")
 def numerology_compatibility():
     """Calculate love or business compatibility between two DOBs.
 
@@ -13772,6 +13825,9 @@ def numerology_compatibility():
         "kind": "love" | "business"   (default love)
     }
     """
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
     data = request.get_json(force=True, silent=True) or {}
     p1 = (data.get("person1_dob") or "").strip()
     p2 = (data.get("person2_dob") or "").strip()
@@ -13785,11 +13841,15 @@ def numerology_compatibility():
 
 
 @app.route("/api/numerology/karmic_lessons", methods=["POST"])
+@_rate_limit("30 per minute")
 def numerology_karmic_lessons():
     """Karmic Lessons + Hidden Passion + Maturity Number — name-based deep analysis.
 
     POST body: { "name": "Albert Einstein", "dob": "1879-03-14" (optional, for maturity) }
     """
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
     data = request.get_json(force=True, silent=True) or {}
     name = (data.get("name") or "").strip()
     dob = (data.get("dob") or "").strip()
@@ -13830,11 +13890,15 @@ def numerology_karmic_lessons():
 
 
 @app.route("/api/numerology/name_correction", methods=["POST"])
+@_rate_limit("30 per minute")
 def numerology_name_correction():
     """Suggest spelling variants for better Driver/Conductor harmony.
 
     POST body: { "name": "...", "dob": "yyyy-mm-dd" }
     """
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
     data = request.get_json(force=True, silent=True) or {}
     name = (data.get("name") or "").strip()
     dob = (data.get("dob") or "").strip()
@@ -14078,11 +14142,15 @@ def numerology_pdf_pro():
 
 
 @app.route("/api/numerology/chaldean", methods=["POST"])
+@_rate_limit("30 per minute")
 def numerology_chaldean():
     """Strict Chaldean name numerology (no 9, Cheiro standard).
 
     POST body: { "name": "Mukesh Ambani" }
     """
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
     data = request.get_json(force=True, silent=True) or {}
     name = (data.get("name") or "").strip()
     if not name:
@@ -14100,6 +14168,7 @@ _DIST = os.path.join(
 
 
 @app.route("/api/daily_alerts", methods=["POST"])
+@_rate_limit("30 per minute")
 def daily_alerts():
     """
     Generate personalized 4-day daily alert cards for the Cosmic Lens app.
@@ -14119,6 +14188,10 @@ def daily_alerts():
     from datetime import datetime, timedelta
 
     import swisseph as swe
+
+    _user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
 
     data = request.get_json(force=True, silent=True) or {}
     lagna_deg = float(data.get("lagna_deg", 0))
@@ -14887,6 +14960,7 @@ _KUNDLI_MILAN_CHART_OBSERVATIONS_TEMPLATE = {
 
 
 @app.route("/api/kundli-milan", methods=["POST"])
+@_rate_limit("30 per minute")
 def kundli_milan():
     """
     Accurate Ashtakoot Guna Milan using pyswisseph.
@@ -14898,6 +14972,10 @@ def kundli_milan():
       p1: { name, day, month, year, hour, minute, ampm, lat, lon, tz }
       p2: { name, day, month, year, hour, minute, ampm, lat, lon, tz }
     """
+    _user, err = require_authed_user()
+    if err:
+        return err
+
     import math
 
     import swisseph as swe
@@ -15594,7 +15672,7 @@ def kundli_milan():
 try:
     from milan_human_orders import register_milan_human_order_routes
 
-    register_milan_human_order_routes(app)
+    register_milan_human_order_routes(app, rate_limit=_rate_limit)
 except Exception as _mho_exc:
     try:
         print(f"[milan_human_orders] route register failed: {_mho_exc}", flush=True)
@@ -15646,6 +15724,7 @@ except Exception as _btr_exc:
 # ── /api/kundli-milan/pdf — Phase 2.5.11.21 (PDF download) ────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 @app.route("/api/kundli-milan/pdf", methods=["POST"])
+@_rate_limit("20 per minute")
 def kundli_milan_pdf():
     """Render a Kundli Milan compatibility PDF.
 
@@ -15656,6 +15735,10 @@ def kundli_milan_pdf():
     via L1 LRU + L2 DB) and post the result back. This avoids paying
     Swiss Ephemeris + LLM polish costs twice for the same chart.
     """
+    _user, err = require_authed_user()
+    if err:
+        return err
+
     data = request.get_json(silent=True) or {}
     if not isinstance(data, dict) or "p1" not in data or "p2" not in data:
         return jsonify({"error": "expected_milan_payload"}), 400
@@ -15691,6 +15774,7 @@ def kundli_milan_pdf():
 # ── /api/kundli-milan/pro-pdf — Premium Pro PDF ───────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 @app.route("/api/kundli-milan/pro-pdf", methods=["POST"])
+@_rate_limit("10 per minute")
 def kundli_milan_pro_pdf():
     """Render the Premium "Cosmic Relationship Blueprint Pro" PDF.
 
@@ -15709,6 +15793,10 @@ def kundli_milan_pro_pdf():
     (gpt-4o, gated by COMPAT_PREMIUM_POLISH; always-safe fallback) → Pro PDF.
     Always returns valid PDF bytes on success or JSON error otherwise.
     """
+    _auth_user, _auth_err = require_authed_user()
+    if _auth_err:
+        return _auth_err
+
     data = request.get_json(silent=True) or {}
     from vedic.compat.premium_chapters import normalize_pro_pdf_lang
 
@@ -15768,15 +15856,7 @@ def kundli_milan_pro_pdf():
     import couple_report_billing as _crb
     from couple_report_api import pdf_access_gate
 
-    user_id_for_cache = 0
-    _uid_hdr = (request.headers.get("X-User-Id") or "").strip()
-    if _uid_hdr:
-        try:
-            _auth_user, _auth_err = get_authed_user(int(_uid_hdr))
-            if _auth_user is not None:
-                user_id_for_cache = int(_auth_user.id)
-        except Exception:
-            pass
+    user_id_for_cache = int(_auth_user.id)
 
     if _crb.payment_required() and not user_id_for_cache:
         return jsonify(
@@ -16097,19 +16177,19 @@ def create_payment_order():
         body, code = pg.not_configured_error()
         return jsonify(body), code
 
+    from play_integrity import check_play_integrity_request
+
+    ok, ierr = check_play_integrity_request()
+    if not ok:
+        return ierr
+
     data = request.get_json() or {}
-    user_id = data.get("user_id")
+    user, err = require_authed_user()
+    if err:
+        return err
+
     plan = data.get("plan")  # "trial" / "basic" / "pro" / "elite"
     cycle = data.get("cycle")  # "weekly" / "monthly" / "yearly"
-
-    # Auth: require X-API-Key tied to this user_id
-    if user_id:
-        try:
-            _user, _err = get_authed_user(int(user_id))
-            if _err:
-                return _err
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid user_id"}), 400
 
     valid_combos = {
         ("trial", "weekly"),
@@ -16118,12 +16198,10 @@ def create_payment_order():
         ("pro", "monthly"),
         ("elite", "monthly"),
     }
-    if not user_id or (plan, cycle) not in valid_combos:
+    if (plan, cycle) not in valid_combos:
         return jsonify({"error": "Invalid request: need user_id, plan, cycle"}), 400
 
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+    user_id = user.id
 
     if plan == "trial" and user.trial_used:
         return (
@@ -16189,7 +16267,21 @@ def payment_status(order_id):
     except (IndexError, ValueError):
         return jsonify({"error": "Invalid order_id"}), 400
 
-    paid = pg.is_receipt_paid(order_id)
+    expected_inr = None
+    try:
+        parts = order_id.split("_")
+        if len(parts) >= 2 and parts[0].upper().startswith("CL"):
+            code = parts[1]
+            plan_map = {"T": "trial", "B": "basic", "P": "pro", "E": "elite"}
+            cycle_map = {"W": "weekly", "M": "monthly", "Y": "yearly"}
+            plan = plan_map.get(code[0])
+            cycle = cycle_map.get(code[1])
+            if plan and cycle:
+                expected_inr = PLAN_PRICES.get(f"{plan}_{cycle}")
+    except Exception:
+        expected_inr = None
+
+    paid = pg.is_receipt_paid(order_id, min_amount_inr=expected_inr)
 
     if paid:
         try:
@@ -16261,14 +16353,18 @@ def payment_webhook():
             except (IndexError, ValueError):
                 pass
         if purchase:
-            if purchase.status != "paid":
-                purchase.status = "paid"
-                purchase.paid_at = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
-                db.session.commit()
-            grant_purchase_idempotent(purchase)
-            app.logger.info(
-                f"[RZ-AV] webhook granted purchase id={purchase.id} sku={purchase.sku}"
-            )
+            min_inr = int(purchase.amount or 0) or None
+            if not pg.webhook_payment_satisfies(payload, order_id, min_inr):
+                app.logger.warning("[RZ-AV] webhook amount rejected order=%s", order_id)
+            else:
+                if purchase.status != "paid":
+                    purchase.status = "paid"
+                    purchase.paid_at = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
+                    db.session.commit()
+                grant_purchase_idempotent(purchase)
+                app.logger.info(
+                    f"[RZ-AV] webhook granted purchase id={purchase.id} sku={purchase.sku}"
+                )
         else:
             app.logger.warning(
                 f"[RZ-AV] webhook: no AstroVastuPurchase for order={order_id} pid={pid}"
@@ -16375,7 +16471,15 @@ def payment_webhook():
     plan = tags.get("plan", "")
     cycle = tags.get("cycle", "monthly")
     if uid and plan and order_id:
-        _activate_plan(int(uid), plan, cycle, order_id)
+        expected = PLAN_PRICES.get(f"{plan}_{cycle}")
+        if pg.webhook_payment_satisfies(payload, order_id, expected):
+            _activate_plan(int(uid), plan, cycle, order_id)
+        else:
+            app.logger.warning(
+                "[RZ] subscription webhook amount rejected order=%s plan=%s",
+                order_id,
+                plan,
+            )
 
     return jsonify({"status": "ok"}), 200
 
@@ -16465,6 +16569,7 @@ def payment_return():
 # aspects, dashas, real-time transits. Output AI-consumable strict JSON.
 # ─────────────────────────────────────────────────────────────────────────────
 @app.route("/api/love-compatibility", methods=["POST"])
+@_rate_limit("20 per minute")
 def love_compatibility():
     """
     Strict structure:
@@ -16475,6 +16580,10 @@ def love_compatibility():
       }
     Input body: { "p1": <birth_data>, "p2": <birth_data> }
     """
+    user, err = require_authed_user()
+    if err:
+        return err
+
     from datetime import datetime as _dt
 
     import swisseph as swe
@@ -17469,6 +17578,7 @@ def love_compatibility():
 
 
 @app.route("/api/breakup-chances", methods=["POST"])
+@_rate_limit("20 per minute")
 def breakup_chances():
     """
     Vedic + KP breakup-probability engine.
@@ -17484,6 +17594,10 @@ def breakup_chances():
     Weighting:
       Dasha 60 • Houses/Affliction 25 • Venus-Moon 10 • KP 5 • Transit ±10 adjustment
     """
+    user, err = require_authed_user()
+    if err:
+        return err
+
     from datetime import datetime as _dt
 
     import swisseph as swe
@@ -18075,6 +18189,7 @@ def breakup_chances():
 
 
 @app.route("/api/loyalty-check", methods=["POST"])
+@_rate_limit("20 per minute")
 def loyalty_check():
     """
     Ultra-advanced Vedic + KP Loyalty Engine — BOTH kundlis required.
@@ -18090,6 +18205,10 @@ def loyalty_check():
       }
     Scoring: start 50 · Venus ±20 · Moon ±15 · 7th ±15 · Rahu -20 · Cross -10 · Dasha ±10 · KP -10
     """
+    user, err = require_authed_user()
+    if err:
+        return err
+
     data = request.get_json(force=True, silent=True) or {}
     if "p1" not in data or "p2" not in data:
         return jsonify({"error": "Missing p1 or p2"}), 400
@@ -18882,6 +19001,7 @@ def loyalty_check():
 
 
 @app.route("/api/will-return", methods=["POST"])
+@_rate_limit("20 per minute")
 def will_return():
     """
     Will X Return — Vedic (Parashari) + KP reunion-prediction engine.
@@ -18899,6 +19019,10 @@ def will_return():
       }
     Scoring: start 50 · Dasha ±30 · Transit ±20 · Love houses +15 · Separation -25 · KP ±10
     """
+    user, err = require_authed_user()
+    if err:
+        return err
+
     from datetime import datetime as _dt
 
     import swisseph as swe
@@ -19607,15 +19731,11 @@ def notifications_register():
     if request.method == "OPTIONS":
         return jsonify({}), 200
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    token = (data.get("push_token") or "").strip()
-    enabled = bool(data.get("enabled", True))
-
-    if not user_id:
-        return jsonify({"error": "user_id required"}), 400
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
+    token = (data.get("push_token") or "").strip()
+    enabled = bool(data.get("enabled", True))
 
     if token and not (
         token.startswith("ExponentPushToken[") or token.startswith("ExpoPushToken[")
@@ -19635,13 +19755,10 @@ def notifications_preferences():
     if request.method == "OPTIONS":
         return jsonify({}), 200
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    enabled = bool(data.get("enabled", True))
-    if not user_id:
-        return jsonify({"error": "user_id required"}), 400
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
+    enabled = bool(data.get("enabled", True))
     user.push_enabled = enabled
     db.session.commit()
     return jsonify({"ok": True, "enabled": enabled})
@@ -19653,10 +19770,7 @@ def notifications_test():
     if request.method == "OPTIONS":
         return jsonify({}), 200
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    if not user_id:
-        return jsonify({"error": "user_id required"}), 400
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
 
@@ -19674,10 +19788,7 @@ def notifications_broadcast():
     if request.method == "OPTIONS":
         return jsonify({}), 200
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    if not user_id:
-        return jsonify({"error": "user_id required"}), 400
-    user, err = get_authed_user(int(user_id))
+    user, err = authed_user_from_request(data)
     if err:
         return err
     if not user.is_admin:
@@ -19712,15 +19823,14 @@ def future_six_months():
         return jsonify({}), 200
 
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
+    user, err = authed_user_from_request(data)
+    if err:
+        return err
     kundli = data.get("kundli") or {}
 
     # If no kundli in body, try loading from user
-    if not kundli and user_id:
+    if not kundli:
         try:
-            user, err = get_authed_user(int(user_id))
-            if err:
-                return err
             if user and getattr(user, "kundli_data", None):
                 kundli = (
                     user.kundli_data
@@ -19749,11 +19859,12 @@ def future_six_months():
             return jsonify(result), 200
         return jsonify(result), 200
     except Exception as exc:
-        app.logger.warning("[FUTURE_6M] failed user=%s err=%s", user_id, exc)
+        app.logger.warning("[FUTURE_6M] failed user=%s err=%s", user.id, exc)
         return jsonify({"available": False, "error": str(exc)}), 200
 
 
 @app.route("/api/future-outcome", methods=["POST"])
+@_rate_limit("20 per minute")
 def future_outcome():
     """
     Future Relationship Outcome — live, real-time personalized engine.
@@ -19762,6 +19873,10 @@ def future_outcome():
               timeline_flow (Now→1m, 1-3m, 3-6m), factors{}, reasons[].
     Every output is deterministic from current Dasha + live transits + D1 + D9.
     """
+    user, err = require_authed_user()
+    if err:
+        return err
+
     from datetime import datetime as _dt
     from datetime import timedelta as _td
 
@@ -20471,6 +20586,18 @@ except Exception as _na_reg_exc:
     except Exception:
         pass
 
+try:
+    from startup_security import enforce_production_config
+
+    enforce_production_config()
+except SystemExit:
+    raise
+except Exception as _prod_cfg_exc:
+    print(f"[startup] production config check skipped: {_prod_cfg_exc}", flush=True)
+
 if __name__ == "__main__":
+    from startup_security import enforce_production_config
+
+    enforce_production_config()
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

@@ -92,9 +92,9 @@ function normalizeApiUrl(raw?: string): string | null {
   if (/^http:\/\/admin\.coosmic\.icu/i.test(normalized)) {
     normalized = normalized.replace(/^http:/i, "https:");
   }
-  const allowHttpRelease =
-    (process.env.EXPO_PUBLIC_ALLOW_HTTP_API || "").trim() === "1";
-  if (!__DEV__ && !normalized.startsWith("https://") && !allowHttpRelease) {
+  // Release builds are HTTPS-only. EXPO_PUBLIC_ALLOW_HTTP_API is a dev-server
+  // convenience and must never relax transport security in a shipped build.
+  if (!__DEV__ && !normalized.startsWith("https://")) {
     console.warn("[CosmicLens] Ignoring non-HTTPS API URL in production build.");
     return null;
   }
@@ -150,6 +150,17 @@ function resolveApiBase(): string {
 }
 
 export const API_BASE = resolveApiBase();
+
+/** Authenticated API headers for endpoints that require X-User-Id + X-API-Key. */
+export function userAuthHeaders(
+  user: { id: number; api_key?: string | null } | null | undefined,
+): Record<string, string> {
+  if (!user?.id || !user?.api_key) return {};
+  return {
+    "X-User-Id": String(user.id),
+    "X-API-Key": user.api_key,
+  };
+}
 
 function installDevFetchInterceptor(): void {
   if (!__DEV__ || !isWeb()) return;
@@ -272,17 +283,18 @@ export function demoLoginApiBases(): string[] {
   // Prefer HTTPS domains first — raw :8080 IP is flaky on mobile data.
   add(PRODUCTION_HTTPS_API);
   add("https://admin.coosmic.icu"); // same Flask API behind nginx — fallback only
-  if (!__DEV__ || !isWeb()) {
-    add(VPS_API_NGINX);
-    // :8080 last — often times out on cellular (makes app feel randomly slow).
-    add(DEFAULT_DEV_VPS_API);
-  }
-  if (__DEV__ && !isWeb()) {
-    add(DEFAULT_DEV_VPS_API);
-    if (useLocalBackend()) {
-      add("http://127.0.0.1:8080");
-      const lan = expoDevMachineHost();
-      if (lan) add(`http://${lan}:8080`);
+  if (__DEV__) {
+    if (!isWeb()) {
+      add(VPS_API_NGINX);
+      add(DEFAULT_DEV_VPS_API);
+    }
+    if (!isWeb()) {
+      add(DEFAULT_DEV_VPS_API);
+      if (useLocalBackend()) {
+        add("http://127.0.0.1:8080");
+        const lan = expoDevMachineHost();
+        if (lan) add(`http://${lan}:8080`);
+      }
     }
   }
   return out;
@@ -297,6 +309,56 @@ export const API_HEADERS: Record<string, string> = {
   "bypass-tunnel-reminder": "true",
   "User-Agent": "CosmicLensMobile/1.0",
 };
+
+/**
+ * Attach Play Integrity / App Check tokens and the advisory runtime-integrity
+ * signal to calls that reach our API. Patched globally so screens using bare
+ * `fetch` are covered too; the backend is still the party that verifies the
+ * tokens, and it treats the integrity signal as telemetry only.
+ */
+function installAttestationInterceptor(): void {
+  const g = globalThis as { __cosmic_attest_wrapped?: boolean };
+  if (g.__cosmic_attest_wrapped) return;
+  const orig = globalThis.fetch?.bind(globalThis);
+  if (!orig) return;
+  g.__cosmic_attest_wrapped = true;
+
+  const isOurApi = (url: string) =>
+    /coosmic\.icu|cosmiclens\.app/i.test(url) ||
+    (!!API_BASE && url.startsWith(API_BASE));
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const urlStr =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : String((input as Request)?.url ?? "");
+
+    if (!urlStr || !isOurApi(urlStr)) return orig(input, init);
+
+    try {
+      const [attestMod, integrityMod] = await Promise.all([
+        import("@/lib/appAttestation"),
+        import("@/lib/deviceIntegrity"),
+      ]);
+      const [attest, integrity] = await Promise.all([
+        attestMod.attestationHeaders(),
+        integrityMod.integrityHeaders(),
+      ]);
+      const extra = { ...attest, ...integrity };
+      if (!Object.keys(extra).length) return orig(input, init);
+      return orig(input, {
+        ...init,
+        headers: { ...(init?.headers as Record<string, string> | undefined), ...extra },
+      });
+    } catch {
+      return orig(input, init);
+    }
+  }) as typeof fetch;
+}
+
+installAttestationInterceptor();
 
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const merged: RequestInit = {

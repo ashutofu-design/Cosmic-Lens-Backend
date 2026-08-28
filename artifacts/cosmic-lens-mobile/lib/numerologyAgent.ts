@@ -80,7 +80,14 @@ export async function generateNumerologyAgentReport(opts: {
     place: opts.place,
     ...(opts.d1 ? { d1: opts.d1 } : {}),
     ...(opts.userId ? { user_id: opts.userId } : {}),
-    ...(!opts.d1 && opts.apiKey ? { api_key: opts.apiKey } : {}),
+  };
+  // The api_key travels as a header, never in the JSON body: bodies end up in
+  // proxy buffers and request-logging middleware, headers do not.
+  const startHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    ...(opts.userId ? { "X-User-Id": String(opts.userId) } : {}),
+    ...(!opts.d1 && opts.apiKey ? { "X-API-Key": opts.apiKey } : {}),
   };
   let displayed = 1;
   let target = 2;
@@ -115,7 +122,7 @@ export async function generateNumerologyAgentReport(opts: {
     try {
       const resp = await fetch(`${base}/api/numerology-agent/report/generate/start`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: startHeaders,
         body: JSON.stringify(body),
       });
       if (resp.status === 404) {
@@ -337,6 +344,9 @@ export async function generateAndSaveNumerologyEnginePdf(opts: {
   apiKey?: string;
   onProgress?: (percent: number, stage: string) => void;
 }): Promise<{ fileName: string; saved: boolean }> {
+  if (!opts.userId || !opts.apiKey) {
+    throw new Error("Sign in required to generate numerology PDF.");
+  }
   opts.onProgress?.(12, "engine");
   const fileName = `Numerology_${(opts.name || "report").replace(/[^\w\- ]+/g, "").replace(/\s+/g, "_")}.pdf`;
   const body = {

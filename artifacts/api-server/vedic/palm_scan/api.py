@@ -1,6 +1,7 @@
 """Small Flask Blueprint for the Phase 1 palm scanner."""
 from __future__ import annotations
 
+import hmac
 import os
 from collections import OrderedDict
 import logging
@@ -11,6 +12,7 @@ import cv2
 import numpy as np
 from flask import Blueprint, Response, jsonify, request
 
+from api_auth import auth_error_response
 from .engine import PalmScanEngine
 from .master_layer import attach_master_extraction, compose_bilateral_comparison
 from . import store as palm_store
@@ -24,13 +26,26 @@ _LOG = logging.getLogger(__name__)
 
 
 def _admin_error():
-    if (os.environ.get("ADMIN_NO_AUTH") or "0").strip().lower() in {"1", "true", "yes", "on"}:
+    """Admin gate for the palm-scan debug/artifact endpoints.
+
+    ADMIN_NO_AUTH is a local-development convenience and is ignored in
+    production, where a missing ADMIN_SECRET fails closed with 503.
+    """
+    try:
+        from billing_security import is_production
+
+        production = is_production()
+    except Exception:
+        production = True
+
+    relaxed = (os.environ.get("ADMIN_NO_AUTH") or "0").strip().lower() in {"1", "true", "yes", "on"}
+    if relaxed and not production:
         return None
     admin_secret = os.environ.get("ADMIN_SECRET", "").strip()
     if not admin_secret:
         return jsonify({"error": "Admin auth is not configured"}), 503
     token = request.headers.get("X-Admin-Token", "")
-    if not token or token != admin_secret:
+    if not token or not hmac.compare_digest(token, admin_secret):
         return jsonify({"error": "Unauthorized"}), 401
     return None
 
@@ -98,6 +113,7 @@ def create_palm_scan_blueprint(
     *,
     engine: PalmScanEngine | None = None,
     rate_limit: Callable[[str], Callable] | None = None,
+    require_user: Callable[[], tuple] | None = None,
 ) -> Blueprint:
     scanner = engine or PalmScanEngine()
     blueprint = Blueprint("palm_scan", __name__)
@@ -108,6 +124,9 @@ def create_palm_scan_blueprint(
     @blueprint.post("/api/palm-scan")
     @limit("10 per minute")
     def scan_palm():
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
         upload = request.files.get("image")
         if upload is None:
             return jsonify({
@@ -189,6 +208,17 @@ def create_palm_scan_blueprint(
     @blueprint.post("/api/palm-scan/session")
     @limit("10 per minute")
     def save_palm_session():
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
+        auth_user, _auth_err = require_user() if require_user else (None, None)
+        if not auth_user:
+            return jsonify({
+                "error": {
+                    "code": "auth_required",
+                    "message": "Login required for Palmistry checkout.",
+                },
+            }), 401
         payload = request.get_json(silent=True) or {}
         session_id = str(payload.get("session_id") or "").strip()
         writing_hand = str(payload.get("writing_hand") or "").strip().lower()
@@ -199,12 +229,7 @@ def create_palm_scan_blueprint(
                     "message": "session_id and writing_hand=left|right are required.",
                 }
             }), 400
-        # Body preferred; X-User-Id fallback (same as numerology / Love Reality).
-        resolved_user_id = (
-            str(payload.get("user_id") or "").strip()
-            or str(request.headers.get("X-User-Id") or "").strip()
-            or None
-        )
+        resolved_user_id = str(auth_user.id)
         resolved_cosmo = (
             str(payload.get("cosmo_user_id") or "").strip()
             or str(request.headers.get("X-Cosmo-User-Id") or "").strip()
@@ -494,6 +519,9 @@ def create_palm_scan_blueprint(
     @blueprint.get("/api/palm-scan/<scan_id>/annotated")
     @limit("30 per minute")
     def palm_annotation(scan_id: str):
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
         with _ANNOTATIONS_LOCK:
             encoded = _ARTIFACTS.get(scan_id, {}).get("annotated")
         if encoded is None:
@@ -505,6 +533,9 @@ def create_palm_scan_blueprint(
     @blueprint.get("/api/palm-scan/<scan_id>/artifacts/<artifact_name>")
     @limit("30 per minute")
     def palm_artifact(scan_id: str, artifact_name: str):
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
         allowed = {
             "original", "processed", "crease-enhanced", "foreground-mask",
             "segmentation-hand_boundary", "segmentation-palm_region",

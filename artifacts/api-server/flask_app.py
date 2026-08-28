@@ -39,7 +39,7 @@ import urllib.parse
 from datetime import datetime, timedelta
 from datetime import timezone as _UTC_TZ
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, current_app, jsonify, request
 from flask_cors import CORS
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -59,6 +59,7 @@ from question_history import (
     extract_verdict_summary,
     get_recent_questions,
     persist_ask_question_result,
+    schedule_persist_ask_question_result,
     save_user_question,
     search_questions,
     token_fields_from_result,
@@ -206,6 +207,28 @@ def _cl_req_log(resp):
         pass
     return resp
 
+
+@app.after_request
+def _strip_admin_pii_response(resp):
+    """Never expose user phone / WhatsApp numbers in admin JSON responses."""
+    try:
+        path = request.path or ""
+        if not path.startswith("/api/admin/") or path == "/api/admin/login":
+            return resp
+        ctype = (resp.content_type or "").lower()
+        if "json" not in ctype or resp.status_code >= 500:
+            return resp
+        raw = resp.get_data(as_text=True)
+        if not raw:
+            return resp
+        from admin_privacy import strip_admin_pii_deep
+
+        cleaned = strip_admin_pii_deep(_json.loads(raw))
+        resp.set_data(_json.dumps(cleaned, ensure_ascii=False))
+    except Exception:
+        pass
+    return resp
+
 # ── Error handling (JSON) ─────────────────────────────────────────────────────
 try:
     from werkzeug.exceptions import HTTPException as _HTTPException
@@ -324,6 +347,47 @@ def _rate_limit(spec):
     return deco
 
 
+# Isolated Phase 1 scanners and JSON-only Phase 2 interpretation engines.
+# Register independently: a missing optional package (or OpenCV) must not
+# take the rest of the API down.
+import importlib
+
+_OPTIONAL_SCAN_STATUS = {}
+
+
+def _register_optional_scan_blueprint(module_path, factory_name):
+    try:
+        factory = getattr(importlib.import_module(module_path), factory_name)
+        app.register_blueprint(factory(rate_limit=_rate_limit))
+        _OPTIONAL_SCAN_STATUS[module_path] = {"ok": True}
+    except Exception as exc:
+        _OPTIONAL_SCAN_STATUS[module_path] = {
+            "ok": False,
+            "error": str(exc)[:240],
+        }
+        app.logger.exception(
+            "Optional blueprint %s.%s unavailable: %s",
+            module_path,
+            factory_name,
+            exc,
+        )
+
+
+_register_optional_scan_blueprint(
+    "vedic.palm_scan.api", "create_palm_scan_blueprint"
+)
+_register_optional_scan_blueprint(
+    "vedic.face_scan.api", "create_face_scan_blueprint"
+)
+_register_optional_scan_blueprint(
+    "vedic.face_reading_phase2.api",
+    "create_face_reading_phase2_blueprint",
+)
+_register_optional_scan_blueprint(
+    "vedic.palmistry_phase2.api", "create_palmistry_phase2_blueprint"
+)
+
+
 # ── Database init ──────────────────────────────────────────────────────────────
 init_db(app)
 
@@ -382,7 +446,34 @@ def require_admin():
     admin_secret = os.environ.get("ADMIN_SECRET", "").strip() or ADMIN_SECRET
     if not admin_secret:
         return jsonify({"error": "Admin auth is not configured"}), 503
+
+    device_id = (
+        request.headers.get("X-Admin-Device-Id")
+        or request.headers.get("X-Admin-Device")
+        or ""
+    ).strip()
     token = request.headers.get("X-Admin-Token", "")
+
+    try:
+        from admin_security import (
+            admin_security_enabled,
+            is_device_allowed,
+            touch_device,
+            verify_session_token,
+        )
+
+        if admin_security_enabled():
+            if not device_id:
+                return jsonify({"error": "device_required"}), 401
+            if not is_device_allowed(device_id):
+                return jsonify({"error": "device_not_allowed"}), 403
+            if not verify_session_token(token, device_id):
+                return jsonify({"error": "Unauthorized"}), 401
+            touch_device(device_id)
+            return None
+    except Exception as exc:
+        app.logger.exception("[require_admin] admin_security check failed: %s", exc)
+
     if not token or token != admin_secret:
         return jsonify({"error": "Unauthorized"}), 401
     return None
@@ -589,8 +680,27 @@ def auth_config():
 
 @app.route("/api/healthz", methods=["GET"])
 def healthz():
+    fate_line_pipeline = "unknown"
+    fate_line_pipeline_revision = "unknown"
+    try:
+        from vedic.palm_scan.fate_line_detector import FateLineDetector
+
+        fate_line_pipeline = FateLineDetector.detection_method
+        fate_line_pipeline_revision = getattr(
+            FateLineDetector, "pipeline_revision", "unknown",
+        )
+    except Exception:
+        pass
+    palm_scan_ok = any(
+        getattr(rule, "rule", "") == "/api/palm-scan" for rule in app.url_map.iter_rules()
+    )
+    palm_status = _OPTIONAL_SCAN_STATUS.get("vedic.palm_scan.api") or {}
     return jsonify({
         "status": "ok",
+        "fate_line_pipeline": fate_line_pipeline,
+        "fate_line_pipeline_revision": fate_line_pipeline_revision,
+        "palm_scan": palm_scan_ok,
+        "palm_scan_error": None if palm_scan_ok else (palm_status.get("error") or "route_missing"),
         "love_reality_pro_pdf": "love_reality_pro_pdf" in app.view_functions,
         "admin_pdf_generations": "admin_pdf_generations_route" in app.view_functions,
         "love_reality_premium_page1": _love_reality_premium_page1_available(),
@@ -1669,7 +1779,40 @@ def my_reports_list():
         limit = max(1, min(int(request.args.get("limit", 50)), 200))
     except (TypeError, ValueError):
         limit = 50
-    return jsonify({"reports": _rc.list_for_user(user.id, limit)})
+    reports = _rc.list_for_user(user.id, limit)
+    pending: list = []
+    pending_sources = (
+        ("palmistry", "palmistry_human_orders"),
+        ("numerology", "numerology_human_orders"),
+        ("love_reality", "love_reality_human_orders"),
+        ("milan", "milan_human_orders"),
+        ("astrovastu", "astrovastu_human_orders"),
+        ("business_vastu", "business_vastu_human_orders"),
+    )
+    for label, mod_name in pending_sources:
+        try:
+            mod = __import__(mod_name)
+            pending.extend(mod.list_pending_for_user(user.id))
+        except Exception as exc:
+            print(f"[my-reports] pending {label} list failed: {exc}", flush=True)
+    try:
+        from palmistry_human_orders import find_order_ids_for_report as _palm_ids
+
+        for row in reports:
+            if not isinstance(row, dict):
+                continue
+            if row.get("order_id") and row.get("public_order_id"):
+                continue
+            if str(row.get("kind") or "") not in ("palmistry_pro", "palmistry"):
+                continue
+            oid, pub = _palm_ids(str(row.get("id") or ""))
+            if oid and not row.get("order_id"):
+                row["order_id"] = oid
+            if pub and not row.get("public_order_id"):
+                row["public_order_id"] = pub
+    except Exception as exc:
+        print(f"[my-reports] palmistry order id attach failed: {exc}", flush=True)
+    return jsonify({"reports": reports, "pending": pending})
 
 
 @app.route("/api/my-reports/<report_id>", methods=["GET"])
@@ -2323,8 +2466,8 @@ def panchang_vivah_muhurat():
 # AUTH — Phone OTP via Firebase Phone Authentication.
 # OTP send + confirm happens entirely on the client (Firebase SDK).
 # Backend only verifies the resulting Firebase ID token below.
-# Legacy email/password, MSG91 OTP, and Firebase phone OTP login have been removed.
-# Client + /api/auth/firebase-verify accept Google Sign-In only.
+# Legacy email/password and MSG91 OTP login have been removed.
+# Client + /api/auth/firebase-verify accept Google Sign-In and Firebase phone OTP.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -2332,11 +2475,9 @@ def panchang_vivah_muhurat():
 @app.route("/api/auth/firebase_verify", methods=["POST", "OPTIONS"], strict_slashes=False)
 def firebase_verify_route():
     """
-    Firebase Authentication login — Google Sign-In only.
+    Firebase Authentication login — Google Sign-In or Firebase phone OTP.
 
     Body: { "id_token": "<Firebase ID token from client SDK>", "name?": "..." }
-
-    Phone OTP is not accepted; token must be from Google (verified email).
 
     On success: 200 (existing user) or 201 (new user).
     On failure: 401 with { ok: False, error: "..." }.
@@ -2402,19 +2543,12 @@ def firebase_verify_route():
         )
 
     if sign_in_provider == "phone" or (phone_e164 and phone_e164.startswith("+")):
-        _record_login_activity(
-            success=False,
-            provider="firebase",
-            error="phone_login_disabled",
-        )
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "Phone OTP login is disabled. Please sign in with Google.",
-                }
-            ),
-            403,
+        return _firebase_verify_phone_user(
+            phone_e164=phone_e164,
+            firebase_uid=firebase_uid,
+            name=display_name,
+            auto_start_trial_on_signup=auto_start_trial_on_signup,
+            subscription_status=subscription_status,
         )
 
     if email and "@" in email:
@@ -2436,7 +2570,14 @@ def firebase_verify_route():
     return jsonify({"ok": False, "error": "Token has no verified phone or email"}), 401
 
 
-def _firebase_verify_phone_user(*, phone_e164, name, auto_start_trial_on_signup, subscription_status):
+def _firebase_verify_phone_user(
+    *,
+    phone_e164,
+    firebase_uid=None,
+    name,
+    auto_start_trial_on_signup,
+    subscription_status,
+):
     from sqlalchemy.exc import IntegrityError
 
     if not phone_e164.startswith("+91"):
@@ -2501,10 +2642,10 @@ def _firebase_verify_phone_user(*, phone_e164, name, auto_start_trial_on_signup,
     db.session.commit()
     _record_login_activity(
         success=True,
-        provider="firebase",
+        provider="phone",
         user=user,
         email=(getattr(user, "email", None) or None),
-        firebase_uid=(getattr(user, "google_id", None) or None),
+        firebase_uid=(firebase_uid or getattr(user, "google_id", None) or None),
     )
 
     payload = user.to_dict()
@@ -3017,6 +3158,29 @@ def save_user_kundli(user_id):
     k.updated_at = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
 
     db.session.commit()
+
+    # Mirror legacy kundli → native (non-partner) profile so Ask resolver reads it.
+    try:
+        from ask_kundli_resolver import _pick_native_profile_from_rows
+
+        rows = Profile.query.filter_by(user_id=user_id, deleted_at=None).all()
+        target = _pick_native_profile_from_rows(rows)
+        if target is None:
+            target = Profile.query.filter_by(
+                user_id=user_id, deleted_at=None, is_primary=True
+            ).first()
+        if target is not None and data.get("chart_data"):
+            target.chart_data = json.dumps(data.get("chart_data"))
+            if data.get("name"):
+                target.name = str(data.get("name"))[:200]
+            db.session.commit()
+    except Exception as _prof_mirror_exc:
+        db.session.rollback()
+        print(
+            f"[save_user_kundli] profile mirror failed (non-fatal): {_prof_mirror_exc}",
+            flush=True,
+        )
+
     return jsonify({"success": True})
 
 
@@ -3259,19 +3423,25 @@ def sync_user_profiles(user_id):
         new_primary = Profile.query.filter_by(
             user_id=user_id, deleted_at=None, is_primary=True
         ).first()
-        if new_primary and new_primary.chart_data:
+        from ask_kundli_resolver import _is_partner_relation, _pick_native_profile_from_rows
+
+        all_rows = Profile.query.filter_by(user_id=user_id, deleted_at=None).all()
+        mirror_src = new_primary
+        if mirror_src is None or _is_partner_relation(getattr(mirror_src, "relation", None)):
+            mirror_src = _pick_native_profile_from_rows(all_rows)
+        if mirror_src and mirror_src.chart_data:
             user_row = User.query.get(user_id)
             if user_row:
                 kun = user_row.kundli
                 if not kun:
                     kun = Kundli(user_id=user_id)
                     db.session.add(kun)
-                kun.name = new_primary.name or kun.name
-                kun.chart_data = new_primary.chart_data
+                kun.name = mirror_src.name or kun.name
+                kun.chart_data = mirror_src.chart_data
                 bd_p = None
-                if new_primary.birth_data:
+                if mirror_src.birth_data:
                     try:
-                        bd_p = _json.loads(new_primary.birth_data)
+                        bd_p = _json.loads(mirror_src.birth_data)
                     except Exception:
                         bd_p = None
                 if isinstance(bd_p, dict):
@@ -3340,21 +3510,16 @@ def admin_stats():
     if err:
         return err
 
-    from datetime import timedelta
     from admin_dashboard import build_dashboard
 
     dash = build_dashboard(db.session)
-    today = datetime.now(_UTC_TZ.utc).replace(tzinfo=None) - timedelta(hours=24)
-    pro_users = User.query.filter_by(is_pro=True).count()
-    active_today = User.query.filter(User.last_active >= today).count()
-    total_kundli = Kundli.query.count()
 
     return jsonify(
         {
             "total_users": dash["total_users"],
-            "pro_users": pro_users,
-            "active_today": active_today,
-            "total_kundli": total_kundli,
+            "pro_users": dash.get("pro_users", 0),
+            "active_today": dash.get("active_today", 0),
+            "total_kundli": dash.get("total_kundli", 0),
             "payments": dash["payments"],
         }
     )
@@ -3405,6 +3570,25 @@ def admin_user_lookup():
     from admin_dashboard import build_user_detail
 
     return jsonify(build_user_detail(user.id))
+
+
+@app.route("/api/admin/order-lookup", methods=["GET"])
+def admin_order_lookup():
+    """Resolve Order ID / PALM-#### / UUID prefix → pending | successful | cancelled."""
+    err = require_admin()
+    if err:
+        return err
+
+    raw = (request.args.get("id") or "").strip()
+    if not raw:
+        return jsonify({"ok": False, "found": False, "error": "Order ID is required"}), 400
+
+    from lifemap_admin_deliver import lookup_order_by_any_id
+
+    result = lookup_order_by_any_id(raw)
+    if not result.get("found"):
+        return jsonify(result), 404
+    return jsonify(result)
 
 
 @app.route("/api/admin/transactions", methods=["GET"])
@@ -3494,7 +3678,21 @@ def admin_ask_question_detail_route(question_id: str):
     try:
         from question_history import get_admin_ask_question
 
-        row = get_admin_ask_question(question_id)
+        refresh = (request.args.get("refresh") or "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        recompute = (request.args.get("recompute") or "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        row = get_admin_ask_question(
+            question_id,
+            refresh_understanding=refresh,
+            recompute_engines=recompute,
+        )
         if not row:
             return jsonify({"error": "Not found"}), 404
         return jsonify(row)
@@ -3504,6 +3702,167 @@ def admin_ask_question_detail_route(question_id: str):
         traceback.print_exc()
         app.logger.exception("admin ask-question detail failed")
         return jsonify({"error": str(exc)[:500]}), 500
+
+
+# ── Instagram Answers (admin CRUD) ───────────────────────────────────────────
+
+@app.route("/api/admin/instagram-answers", methods=["GET"])
+def admin_instagram_answers_list_route():
+    err = require_admin()
+    if err:
+        return err
+    from instagram_answers import list_instagram_answers, _parse_video_number
+
+    page = request.args.get("page", type=int) or 1
+    per_page = request.args.get("per_page", type=int) or 50
+    status = (request.args.get("status") or "").strip().lower() or None
+    if status not in ("active", "inactive"):
+        status = None
+    video_raw = (request.args.get("video_number") or request.args.get("videoNumber") or "").strip()
+    video_number = _parse_video_number(video_raw) if video_raw else None
+    question_search = (request.args.get("question") or "").strip() or None
+    return jsonify(
+        list_instagram_answers(
+            page=page,
+            per_page=per_page,
+            video_number=video_number,
+            question_search=question_search,
+            status=status,
+        )
+    )
+
+
+@app.route("/api/admin/instagram-answers/<int:answer_id>", methods=["GET"])
+def admin_instagram_answer_detail_route(answer_id: int):
+    err = require_admin()
+    if err:
+        return err
+    from instagram_answers import get_instagram_answer
+
+    row = get_instagram_answer(answer_id)
+    if not row:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(row.to_dict(include_answer=True))
+
+
+@app.route("/api/admin/instagram-answers", methods=["POST"])
+def admin_instagram_answer_create_route():
+    err = require_admin()
+    if err:
+        return err
+    from instagram_answers import create_instagram_answer, validate_create_payload
+
+    data = request.get_json(silent=True) or {}
+    validation_err, video_number, question, answer, status = validate_create_payload(data)
+    if validation_err:
+        return jsonify(validation_err), 400
+    result = create_instagram_answer(video_number, question, answer, status=status)
+    if not result.get("ok"):
+        code = 409 if result.get("code") == "duplicate_video_question" else 400
+        return jsonify(result), code
+    return jsonify(result["item"]), 201
+
+
+@app.route("/api/admin/instagram-answers/<int:answer_id>", methods=["PUT"])
+def admin_instagram_answer_update_route(answer_id: int):
+    err = require_admin()
+    if err:
+        return err
+    from instagram_answers import _parse_status, _parse_video_number, update_instagram_answer
+
+    data = request.get_json(silent=True) or {}
+    video_number = None
+    if "video_number" in data or "videoNumber" in data:
+        video_number = _parse_video_number(data.get("video_number") or data.get("videoNumber"))
+        if video_number is None:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "video_number_invalid",
+                    "message": "Video number must be a positive integer.",
+                }
+            ), 400
+    question = data.get("question")
+    answer = data.get("answer")
+    status = data.get("status")
+    if status is not None:
+        status = _parse_status(status, default="active")
+        if status not in ("active", "inactive"):
+            return jsonify({"error": "status_invalid"}), 400
+
+    result = update_instagram_answer(
+        answer_id,
+        video_number=video_number,
+        question=question,
+        answer=answer,
+        status=status,
+    )
+    if not result.get("ok"):
+        if result.get("error") == "not_found":
+            return jsonify(result), 404
+        code = 409 if result.get("code") == "duplicate_video_question" else 400
+        return jsonify(result), code
+    return jsonify(result["item"])
+
+
+@app.route("/api/admin/instagram-answers/<int:answer_id>", methods=["DELETE"])
+def admin_instagram_answer_delete_route(answer_id: int):
+    err = require_admin()
+    if err:
+        return err
+    from instagram_answers import delete_instagram_answer
+
+    result = delete_instagram_answer(answer_id)
+    if not result.get("ok"):
+        return jsonify(result), 404
+    return jsonify(result)
+
+
+@app.route("/api/admin/instagram-answers/<int:answer_id>/status", methods=["PATCH"])
+def admin_instagram_answer_status_route(answer_id: int):
+    err = require_admin()
+    if err:
+        return err
+    from instagram_answers import _parse_status, set_instagram_answer_status
+
+    data = request.get_json(silent=True) or {}
+    status = _parse_status(data.get("status"), default="")
+    if status not in ("active", "inactive"):
+        return jsonify({"error": "status_invalid", "message": "Status must be active or inactive."}), 400
+    result = set_instagram_answer_status(answer_id, status)
+    if not result.get("ok"):
+        return jsonify(result), 404
+    return jsonify(result["item"])
+
+
+@app.route("/api/instagram-answers/match", methods=["POST"])
+def instagram_answer_match_route():
+    """Mobile app exact-match lookup (authenticated users only)."""
+    from instagram_answers import _parse_video_number, match_for_user
+    from models import User
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    video_number = _parse_video_number(data.get("video_number") or data.get("videoNumber"))
+    question = (data.get("question") or "").strip()
+    if video_number is None:
+        return jsonify(
+            {
+                "error": "video_number_invalid",
+                "message": "Video number must be a positive integer.",
+            }
+        ), 400
+    if not question:
+        return jsonify({"error": "question_required", "message": "Question is required."}), 400
+
+    return jsonify(match_for_user(video_number, question))
 
 
 @app.route("/api/admin/love-reality-orders", methods=["GET"])
@@ -3531,6 +3890,11 @@ def admin_lifemap_orders_route():
     status = (request.args.get("status") or "pending").strip() or None
     if status and status.lower() in ("all", "*"):
         status = None
+    summary_only = (request.args.get("summary") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     limit = 80
 
     from lifemap_admin_deliver import (
@@ -3548,7 +3912,9 @@ def admin_lifemap_orders_route():
         for row in list_human_orders(page=1, per_page=limit, status=status).get(
             "orders"
         ) or []:
-            love_rows.append(enrich_love_row(row))
+            love_rows.append(
+                row if summary_only else enrich_love_row(row)
+            )
     except Exception as exc:
         print(f"[admin/lifemap] love reality list failed: {exc}", flush=True)
 
@@ -3559,7 +3925,9 @@ def admin_lifemap_orders_route():
         for row in list_milan_human_orders(page=1, per_page=limit, status=status).get(
             "orders"
         ) or []:
-            milan_rows.append(enrich_milan_row(row))
+            milan_rows.append(
+                row if summary_only else enrich_milan_row(row)
+            )
     except Exception as exc:
         print(f"[admin/lifemap] milan list failed: {exc}", flush=True)
 
@@ -3570,7 +3938,9 @@ def admin_lifemap_orders_route():
         for row in list_num_orders(page=1, per_page=limit, status=status).get(
             "orders"
         ) or []:
-            numerology_rows.append(enrich_numerology_row(row))
+            numerology_rows.append(
+                row if summary_only else enrich_numerology_row(row)
+            )
     except Exception as exc:
         print(f"[admin/lifemap] numerology list failed: {exc}", flush=True)
 
@@ -3581,7 +3951,9 @@ def admin_lifemap_orders_route():
         for row in list_av_orders(page=1, per_page=limit, status=status).get(
             "items"
         ) or []:
-            astro_rows.append(enrich_astrovastu_row(row))
+            astro_rows.append(
+                row if summary_only else enrich_astrovastu_row(row)
+            )
     except Exception as exc:
         print(f"[admin/lifemap] astrovastu list failed: {exc}", flush=True)
 
@@ -3592,9 +3964,21 @@ def admin_lifemap_orders_route():
         for row in list_business_vastu_orders(
             page=1, per_page=limit, status=status
         ).get("orders") or []:
-            business_rows.append(enrich_business_vastu_row(row))
+            business_rows.append(
+                row if summary_only else enrich_business_vastu_row(row)
+            )
     except Exception as exc:
         print(f"[admin/lifemap] business vastu list failed: {exc}", flush=True)
+
+    palm_rows: list[dict] = []
+    try:
+        from palmistry_human_orders import list_human_orders as list_palm_orders
+
+        palm_rows = list_palm_orders(page=1, per_page=limit, status=status).get(
+            "orders"
+        ) or []
+    except Exception as exc:
+        print(f"[admin/lifemap] palmistry list failed: {exc}", flush=True)
 
     def _pack(title: str, key: str, rows: list[dict]) -> dict:
         return {
@@ -3610,6 +3994,7 @@ def admin_lifemap_orders_route():
         _pack("Numerology Pro Report", "numerology_pro", numerology_rows),
         _pack("AstroVastu Pro Report", "astrovastu_pro", astro_rows),
         _pack("Business Vastu", "business_vastu_pro", business_rows),
+        _pack("Palmistry", "palmistry", palm_rows),
     ]
     unaccepted = sum(
         1
@@ -3617,6 +4002,22 @@ def admin_lifemap_orders_route():
         for row in (s.get("orders") or [])
         if not row.get("admin_accepted_at")
     )
+    if summary_only:
+        pending_ids = [
+            f"{sec.get('key')}:{row.get('order_id')}"
+            for sec in sections
+            for row in (sec.get("orders") or [])
+            if not row.get("admin_accepted_at") and row.get("order_id")
+        ]
+        return jsonify(
+            {
+                "summary": True,
+                "sections": [],
+                "total": sum(s["total"] for s in sections),
+                "unaccepted_count": unaccepted,
+                "pending_ids": pending_ids,
+            }
+        )
     return jsonify(
         {
             "sections": sections,
@@ -3722,10 +4123,34 @@ def admin_lifemap_deliver_route():
     kind = str(data.get("kind") or "").strip()
     order_id = str(data.get("order_id") or data.get("order_prefix") or "").strip()
     body = str(data.get("body") or data.get("text") or data.get("report") or "")
+    pages_raw = data.get("pages")
+    pages = None
+    if isinstance(pages_raw, list):
+        pages = [str(p or "") for p in pages_raw]
+    images_raw = data.get("page_images") or data.get("images")
+    page_images = None
+    if isinstance(images_raw, list):
+        page_images = []
+        for item in images_raw:
+            if item is None or item == "":
+                page_images.append(None)
+            else:
+                page_images.append(str(item))
+    attach_raw = data.get("attach_user_id") or data.get("user_id")
+    attach_user_id = None
+    if attach_raw is not None and str(attach_raw).strip():
+        attach_user_id = str(attach_raw).strip()
 
     from lifemap_admin_deliver import deliver_lifemap_order
 
-    result = deliver_lifemap_order(kind, order_id, body)
+    result = deliver_lifemap_order(
+        kind,
+        order_id,
+        body,
+        attach_user_id=attach_user_id,
+        pages=pages,
+        page_images=page_images,
+    )
     if not result.get("ok"):
         code = str(result.get("error") or "deliver_failed")
         status_code = 400
@@ -3811,6 +4236,31 @@ def admin_lifemap_accept_route():
     return jsonify(result), 200
 
 
+@app.route("/api/admin/lifemap-orders/unaccept", methods=["POST"])
+def admin_lifemap_unaccept_route():
+    """Clear Accept so Approve is required again."""
+    err = require_admin()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    kind = str(data.get("kind") or "").strip()
+    order_id = str(data.get("order_id") or data.get("order_prefix") or "").strip()
+
+    from lifemap_admin_deliver import unaccept_lifemap_order
+
+    result = unaccept_lifemap_order(kind, order_id)
+    if not result.get("ok"):
+        code = str(result.get("error") or "unaccept_failed")
+        status_code = 400
+        if code in ("order_not_found",):
+            status_code = 404
+        elif code in ("order_already_delivered", "order_cancelled"):
+            status_code = 409
+        return jsonify(result), status_code
+    return jsonify(result), 200
+
+
 @app.route("/api/admin/astrovastu-room-orders", methods=["GET"])
 def admin_astrovastu_room_orders_route():
     """Paid room photo uploads awaiting founder Vastu report."""
@@ -3877,10 +4327,12 @@ def admin_birth_time_rectification_order_detail_route(order_id: str):
         return err
     from birth_time_rectification_orders import get_birth_time_rectification_order
 
+    from admin_privacy import strip_phone_fields
+
     rec = get_birth_time_rectification_order((order_id or "").strip())
     if not rec:
         return jsonify({"error": "not_found"}), 404
-    return jsonify(rec)
+    return jsonify(strip_phone_fields(rec))
 
 
 @app.route(
@@ -3967,6 +4419,20 @@ def birth_time_rectification_submit_route():
             }
         ), 400
 
+    import birth_time_rectification_billing as _btr_bill
+
+    cp = _btr_bill.cache_params(full_name, gender, dob, approx_tob, birth_place)
+    raw_pid = data.get("purchase_id")
+    purchase_id = None
+    try:
+        if raw_pid is not None and str(raw_pid).strip() != "":
+            purchase_id = int(raw_pid)
+    except (TypeError, ValueError):
+        purchase_id = None
+    paid_ok, pay_err = _btr_bill.require_paid_for_submit(user.id, cp, purchase_id)
+    if not paid_ok:
+        return jsonify(pay_err or {"error": "payment_required"}), 402
+
     cosmo_user_id = ""
     try:
         from cosmo_user_id import cosmo_display_id_for_user_id
@@ -3977,6 +4443,9 @@ def birth_time_rectification_submit_route():
 
     order_id = str(_uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    amount_inr = (_btr_bill.catalog_for(_btr_bill.PRODUCT_BIRTH_TIME) or {}).get(
+        "amount_inr", 999
+    )
     record = {
         "order_id": order_id,
         "created_at": now,
@@ -3993,6 +4462,9 @@ def birth_time_rectification_submit_route():
         "last_15y_events_text": last_15y[:8000],
         "status": "pending",
         "delivery": "founder_manual_birth_time_rectification",
+        "purchase_id": purchase_id,
+        "amount_inr": amount_inr if not _btr_bill.payment_bypass() else 0,
+        "params_hash": _btr_bill.params_hash(cp),
     }
     _save_order(record)
     return jsonify(
@@ -4806,6 +5278,7 @@ def support_messages_route(thread_id: str):
     methods=["POST", "OPTIONS"],
     strict_slashes=False,
 )
+@_rate_limit("12 per minute")
 def support_message_post_route(thread_id: str):
     if request.method == "OPTIONS":
         return "", 204
@@ -4874,7 +5347,26 @@ def support_message_post_route(thread_id: str):
         msgs_now = rec_now.get("messages") if isinstance(rec_now.get("messages"), list) else []
         from support_ai import human_is_handling
 
-        if not human_is_handling(msgs_now):
+        last_staff = None
+        for m in reversed(msgs_now):
+            if isinstance(m, dict) and str(m.get("sender") or "") in ("bot", "admin"):
+                last_staff = str(m.get("sender") or "")
+                break
+        # Agent already saved a reply — do not append a second fallback.
+        if last_staff == "bot":
+            bot_text = ""
+            for m in reversed(msgs_now):
+                if isinstance(m, dict) and str(m.get("sender") or "") == "bot":
+                    bot_text = str(m.get("text") or "")
+                    break
+            auto = {
+                "handled": True,
+                "escalate": False,
+                "reply": bot_text,
+                "source": "already_answered",
+                "agent_state": "answered",
+            }
+        elif not human_is_handling(msgs_now):
             from support_ai import wait_for_support_reply
 
             lang = str(getattr(user, "preferred_language", None) or "")
@@ -4901,12 +5393,17 @@ def support_message_post_route(thread_id: str):
             from support_chat import mark_escalated
 
             tid = (thread_id or "").strip()
-            marked = mark_escalated(tid)
-            rec2 = get_thread(tid) or rec
-            if marked.get("ok") and isinstance(marked.get("thread"), dict):
-                rec2 = {**rec2, **marked["thread"], "escalated": True}
+            if not rec.get("escalated"):
+                marked = mark_escalated(tid)
+                rec2 = get_thread(tid) or rec
+                if marked.get("ok") and isinstance(marked.get("thread"), dict):
+                    rec2 = {**rec2, **marked["thread"], "escalated": True}
+            else:
+                rec2 = get_thread(tid) or rec
             rec2["escalated"] = True
-            notify_admin_new_support_message(rec2, result.get("message") or {})
+            # Ping admin on new escalate OR follow-up while waiting
+            if auto.get("source") != "human_live":
+                notify_admin_new_support_message(rec2, result.get("message") or {})
         except Exception:
             pass
     # AI handled with no escalate → do not ping admin or Telegram.
@@ -4937,11 +5434,29 @@ def support_message_post_route(thread_id: str):
     return jsonify(out)
 
 
-@app.route("/api/support/media/<filename>", methods=["GET"])
+@app.route("/api/support/media/<filename>", methods=["GET", "OPTIONS"])
 def support_media_route(filename: str):
+    """Authenticated media — X-API-Key + X-User-Id headers, or query user_id + api_key (for Image)."""
+    if request.method == "OPTIONS":
+        return "", 204
     from flask import Response
-    from support_chat import read_support_media
+    from support_chat import read_support_media, user_owns_support_media
 
+    api_key = (request.headers.get("X-API-Key") or request.args.get("api_key") or "").strip()
+    uid_raw = request.headers.get("X-User-Id") or request.args.get("user_id") or ""
+    try:
+        user_id = int(uid_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "auth_required"}), 401
+    if not api_key or not user_id:
+        return jsonify({"error": "auth_required"}), 401
+    from models import User
+
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+    if not user_owns_support_media(int(user.id), filename):
+        return jsonify({"error": "forbidden"}), 403
     got = read_support_media(filename)
     if not got:
         return jsonify({"error": "not_found"}), 404
@@ -5077,30 +5592,199 @@ def admin_support_reopen_route(thread_id: str):
     return jsonify(result)
 
 
+@app.route("/api/admin/panel-unlock", methods=["POST", "OPTIONS"], strict_slashes=False)
+@_rate_limit("6 per hour")
+def admin_panel_unlock_route():
+    """Hidden Help & Support tap sequence → short-lived gate token."""
+    if request.method == "OPTIONS":
+        return "", 204
+    import time as _time
+
+    from admin_security import (
+        admin_security_enabled,
+        device_id_redacted,
+        issue_gate_token,
+        record_fail,
+        validate_unlock_steps,
+    )
+
+    if not admin_security_enabled():
+        return jsonify({"error": "security_disabled"}), 503
+
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[
+        0
+    ].strip()
+
+    data = request.get_json(silent=True) or {}
+    device_id = str(
+        data.get("device_id")
+        or request.headers.get("X-Admin-Device-Id")
+        or ""
+    ).strip()
+    steps = data.get("steps") if isinstance(data.get("steps"), list) else []
+
+    if not validate_unlock_steps(steps):
+        record_fail(ip, max_fails=12)
+        _time.sleep(1)
+        return jsonify({"error": "invalid_sequence"}), 403
+
+    if record_fail(ip, max_fails=30):
+        _time.sleep(2)
+        return jsonify({"error": "rate_limited"}), 429
+
+    gate_token, exp = issue_gate_token(device_id)
+    return jsonify(
+        {
+            "ok": True,
+            "gate_token": gate_token,
+            "expires_at": exp,
+            "device_id": device_id_redacted(device_id),
+        }
+    )
+
+
 @app.route("/api/admin/login", methods=["POST", "OPTIONS"], strict_slashes=False)
+@_rate_limit("8 per hour")
 def admin_panel_login_route():
-    """Username/password gate for the admin panel — returns the admin API token."""
+    """Username/password + MPIN gate for the admin panel — returns the admin API token."""
     if request.method == "OPTIONS":
         return "", 204
     import hmac
+    import threading
     import time as _time
+    from datetime import datetime, timezone
 
     data = request.get_json(silent=True) or {}
     username = str(data.get("username") or "").strip()
     password = str(data.get("password") or "")
+    mpin = str(data.get("mpin") or "").strip()
+    device_id = str(
+        data.get("device_id") or request.headers.get("X-Admin-Device-Id") or ""
+    ).strip()
+    enroll_code = str(data.get("enroll_code") or "").strip()
+    gate_token = str(
+        data.get("gate_token") or request.headers.get("X-Admin-Gate") or ""
+    ).strip()
     expected_user = os.environ.get("ADMIN_LOGIN_USER", "IMFSR@58225")
     expected_pass = os.environ.get("ADMIN_LOGIN_PASS", "Scorpio@2031")
+    expected_mpin = os.environ.get("ADMIN_LOGIN_MPIN", "5239")
+
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[
+        0
+    ].strip()
+
+    def _notify_admin_login(*, ok: bool, reason: str = "") -> None:
+        try:
+            from order_founder_alert import _send_telegram
+
+            stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            user_hint = username[:24] + ("…" if len(username) > 24 else "")
+            if ok:
+                text = (
+                    "🔐 Cosmic Admin login\n"
+                    f"User: {user_hint or '—'}\n"
+                    f"IP: {ip or '—'}\n"
+                    f"Time: {stamp}"
+                )
+            else:
+                text = (
+                    "⚠️ Cosmic Admin login FAILED\n"
+                    f"User: {user_hint or '—'}\n"
+                    f"IP: {ip or '—'}\n"
+                    f"Reason: {reason or 'invalid'}\n"
+                    f"Time: {stamp}"
+                )
+            _send_telegram(text)
+        except Exception:
+            app.logger.exception("[admin/login] telegram notify failed")
 
     user_ok = hmac.compare_digest(username.encode(), expected_user.encode())
     pass_ok = hmac.compare_digest(password.encode(), expected_pass.encode())
-    if not (user_ok and pass_ok):
-        _time.sleep(1)  # slow down brute-force attempts
+    mpin_ok = hmac.compare_digest(mpin.encode(), expected_mpin.encode())
+
+    if not user_ok or not pass_ok:
+        _time.sleep(1)
+        threading.Thread(
+            target=lambda: _notify_admin_login(ok=False, reason="username/password"),
+            daemon=True,
+        ).start()
         return jsonify({"error": "invalid_login"}), 401
+
+    if not mpin_ok:
+        _time.sleep(1)
+        threading.Thread(
+            target=lambda: _notify_admin_login(ok=False, reason="mpin"),
+            daemon=True,
+        ).start()
+        return jsonify({"error": "invalid_login"}), 401
+
+    try:
+        from admin_security import (
+            admin_security_enabled,
+            device_id_redacted,
+            is_device_allowed,
+            issue_session_token,
+            register_device,
+            verify_gate_token,
+        )
+
+        if admin_security_enabled():
+            if not verify_gate_token(gate_token, device_id):
+                threading.Thread(
+                    target=lambda: _notify_admin_login(ok=False, reason="panel_locked"),
+                    daemon=True,
+                ).start()
+                return jsonify({"error": "panel_locked"}), 403
+            if not is_device_allowed(device_id):
+                ok_reg, reason = register_device(
+                    device_id,
+                    label=str(data.get("device_label") or username)[:80],
+                    enroll_code=enroll_code,
+                )
+                if not ok_reg:
+                    threading.Thread(
+                        target=lambda: _notify_admin_login(
+                            ok=False, reason=f"device:{reason}"
+                        ),
+                        daemon=True,
+                    ).start()
+                    if reason == "enroll_code_required":
+                        return jsonify({"error": "enroll_code_required"}), 403
+                    if reason == "device_limit_reached":
+                        return jsonify({"error": "device_limit_reached"}), 403
+                    return jsonify({"error": "device_not_allowed"}), 403
+                try:
+                    from order_founder_alert import _send_telegram
+
+                    _send_telegram(
+                        "📱 Cosmic Admin device enrolled\n"
+                        f"Device: {device_id_redacted(device_id)}\n"
+                        f"User: {username[:24]}\n"
+                        f"IP: {ip or '—'}"
+                    )
+                except Exception:
+                    pass
+    except Exception as sec_exc:
+        app.logger.exception("[admin/login] security layer failed: %s", sec_exc)
 
     admin_secret = os.environ.get("ADMIN_SECRET", "").strip() or ADMIN_SECRET
     if not admin_secret:
         return jsonify({"error": "admin_not_configured"}), 503
-    return jsonify({"ok": True, "token": admin_secret})
+
+    session_token = admin_secret
+    try:
+        from admin_security import admin_security_enabled, issue_session_token
+
+        if admin_security_enabled():
+            session_token, _exp = issue_session_token(device_id)
+    except Exception:
+        pass
+
+    threading.Thread(
+        target=lambda: _notify_admin_login(ok=True),
+        daemon=True,
+    ).start()
+    return jsonify({"ok": True, "token": session_token, "device_id": device_id})
 
 
 @app.route("/api/admin/login-activity", methods=["GET"])
@@ -5115,20 +5799,25 @@ def admin_login_activity():
     offset = int(request.args.get("offset") or 0)
     offset = max(0, offset)
 
-    q = LoginActivity.query
+    from admin_dashboard import batch_profile_counts, resolve_login_activity_display
+    from sqlalchemy import or_
 
-    # App auth is Gmail / Google only (no OTP rows in this feed by default).
-    gmail_only = (request.args.get("gmail_only") or "1").strip().lower()
-    if gmail_only not in ("0", "false", "no"):
-        q = q.filter(LoginActivity.email.isnot(None), LoginActivity.email != "")
+    q = LoginActivity.query
 
     user_id = request.args.get("user_id", type=int)
     if user_id:
         q = q.filter(LoginActivity.user_id == user_id)
 
-    email = (request.args.get("email") or "").strip()
-    if email:
-        q = q.filter(LoginActivity.email.ilike(f"%{email}%"))
+    search = (request.args.get("email") or request.args.get("search") or "").strip()
+    if search:
+        like = f"%{search}%"
+        q = q.outerjoin(User, LoginActivity.user_id == User.id).filter(
+            or_(
+                LoginActivity.email.ilike(like),
+                User.phone.ilike(like),
+                User.email.ilike(like),
+            )
+        )
 
     success = (request.args.get("success") or "").strip().lower()
     if success in ("1", "true", "yes"):
@@ -5143,9 +5832,7 @@ def admin_login_activity():
         .all()
     )
 
-    total = q.count()
-
-    from admin_dashboard import batch_profile_counts
+    total = q.order_by(None).count()
 
     login_user_ids = [int(r.user_id) for r in rows if r.user_id]
     profile_counts = batch_profile_counts(db.session, login_user_ids)
@@ -5158,6 +5845,7 @@ def admin_login_activity():
     for r in rows:
         uid = int(r.user_id) if r.user_id else None
         u = users_by_id.get(uid) if uid else None
+        login_display = resolve_login_activity_display(r, u)
         items.append(
             {
                 "id": r.id,
@@ -5167,6 +5855,9 @@ def admin_login_activity():
                     (getattr(u, "cosmo_user_id", None) or "").strip().upper() if u else ""
                 ),
                 "email": r.email,
+                "phone": (getattr(u, "phone", None) or "") if u else "",
+                "login_method": login_display["login_method"],
+                "login_id": login_display["login_id"],
                 "provider": r.provider,
                 "firebase_uid": r.firebase_uid,
                 "ip": r.ip,
@@ -9446,6 +10137,9 @@ def astrovastu_create_order_route():
     sku = (data.get("sku") or "").strip()
     pname = (data.get("property_name") or "").strip()
     pid_in = data.get("purchase_id")
+    urgent = bool(data.get("urgent"))
+    # Optional Priority add-on — does not change SKU catalog prices.
+    priority_fee = 149 if urgent else 0
 
     if not user_id or not api_key:
         return jsonify({"error": "auth_required"}), 401
@@ -9472,11 +10166,22 @@ def astrovastu_create_order_route():
             or purchase.sku != sku
         ):
             purchase = None
+    charge_inr = int(spec["price"]) + priority_fee
     if not purchase:
         purchase = AstroVastuPurchase(
             user_id=user.id,
             sku=sku,
-            amount=spec["price"],
+            amount=charge_inr,
+            property_name=pname or None,
+            status="created",
+        )
+        db.session.add(purchase)
+        db.session.commit()
+    elif int(purchase.amount or 0) != charge_inr:
+        purchase = AstroVastuPurchase(
+            user_id=user.id,
+            sku=sku,
+            amount=charge_inr,
             property_name=pname or None,
             status="created",
         )
@@ -9490,11 +10195,13 @@ def astrovastu_create_order_route():
     try:
         rz_order = pg.create_order(
             receipt=order_id,
-            amount_inr=spec["price"],
+            amount_inr=charge_inr,
             notes={
                 "kind": "astrovastu",
                 "purchase_id": str(purchase.id),
                 "sku": sku,
+                "urgent": "1" if urgent else "0",
+                "priority_fee": str(priority_fee),
             },
         )
     except Exception as e:
@@ -9512,7 +10219,7 @@ def astrovastu_create_order_route():
         pg.checkout_response(
             order_id,
             rz_order,
-            spec["price"],
+            charge_inr,
             user,
             purchase_id=purchase.id,
             sku=sku,
@@ -10015,9 +10722,8 @@ def ask_route():
             "raw_passthrough_empty",
         ):
             try:
-                from question_history import persist_ask_question_result
-
-                persist_ask_question_result(
+                schedule_persist_ask_question_result(
+                    current_app._get_current_object(),
                     user_id=rp_user.id,
                     question_text=question,
                     result=out,
@@ -10025,7 +10731,7 @@ def ask_route():
                 )
             except Exception as _qh_exc:
                 print(
-                    f"[ask:RP] question_history save failed (non-fatal): " f"{_qh_exc}",
+                    f"[ask:RP] question_history async save failed (non-fatal): {_qh_exc}",
                     flush=True,
                 )
         return jsonify(out)
@@ -10073,7 +10779,7 @@ def ask_route():
             503,
         )
 
-    _scope_hit = _ask_scope_refusal(question, lang, None, history)
+    _scope_hit = _ask_scope_refusal(question, lang, None, history, kundli=kundli)
     if _scope_hit:
         _scope_kind, msg = _scope_hit
         _log_brand_guard_question(question, data)
@@ -10890,22 +11596,8 @@ def ask_stream_route():
             flush=True,
         )
 
-    try:
-        from ask_scope_gate import assess_ask_scope, scope_refusal_payload
-
-        _scope_v_s = assess_ask_scope(question, history)
-        if not _scope_v_s.allowed:
-            print(
-                f"[ask/stream] scope_gate blocked reason={_scope_v_s.reason}",
-                flush=True,
-            )
-            _log_brand_guard_question(question, data)
-            return _ask_stream_client_response(scope_refusal_payload(_scope_v_s.reason, question=question, lang=lang))
-        if getattr(_scope_v_s, "normalized_question", None):
-            question = _scope_v_s.normalized_question
-            print(f"[ask/stream] scope_llm normalized q={question[:60]!r}", flush=True)
-    except Exception as _sg_exc_s:
-        print(f"[ask/stream] scope_gate error (non-fatal): {_sg_exc_s}", flush=True)
+    # Scope gate runs inside raw_passthrough_ask after kundli resolve — not here
+    # (client payload may lack planets while server DB has the native chart).
 
     try:
         from ask_privacy_guard import apply_privacy_guard
@@ -11162,9 +11854,8 @@ def ask_stream_route():
             "raw_passthrough_empty",
         ):
             try:
-                from question_history import persist_ask_question_result
-
-                qid = persist_ask_question_result(
+                schedule_persist_ask_question_result(
+                    current_app._get_current_object(),
                     user_id=rp_user_s.id,
                     question_text=question,
                     result=out_s,
@@ -11172,11 +11863,9 @@ def ask_stream_route():
                         rp_user_s.kundli.id if rp_user_s.kundli else None
                     ),
                 )
-                if qid:
-                    out_s["question_id"] = qid
             except Exception as _qh_exc_s:
                 print(
-                    f"[ask/stream:RP] question_history save failed "
+                    f"[ask/stream:RP] question_history async save failed "
                     f"(non-fatal): {_qh_exc_s}",
                     flush=True,
                 )
@@ -11221,7 +11910,7 @@ def ask_stream_route():
             503,
         )
 
-    _scope_hit = _ask_scope_refusal(question, lang, None, history)
+    _scope_hit = _ask_scope_refusal(question, lang, None, history, kundli=kundli)
     if _scope_hit:
         _scope_kind, msg = _scope_hit
         _log_brand_guard_question(question, data)
@@ -15631,6 +16320,15 @@ def payment_webhook():
             app.logger.warning("[RZ-NM] webhook: no purchase for order=%s", order_id)
         return jsonify({"status": "ok"}), 200
 
+    if tags.get("kind") == "palmistry_report" or (order_id and order_id.startswith("PL")):
+        import palmistry_report_billing as _plb
+
+        if _plb.grant_from_webhook(order_id, tags):
+            app.logger.info("[RZ-PL] webhook granted palmistry_report order=%s", order_id)
+        else:
+            app.logger.warning("[RZ-PL] webhook: no purchase for order=%s", order_id)
+        return jsonify({"status": "ok"}), 200
+
     if tags.get("kind") == "face_reading_report" or (order_id and order_id.startswith("FR")):
         import face_reading_report_billing as _frb
 
@@ -15638,6 +16336,30 @@ def payment_webhook():
             app.logger.info("[RZ-FR] webhook granted face_reading_report order=%s", order_id)
         else:
             app.logger.warning("[RZ-FR] webhook: no purchase for order=%s", order_id)
+        return jsonify({"status": "ok"}), 200
+
+    if tags.get("kind") == "birth_time_rectification" or (
+        order_id and order_id.startswith("BT")
+    ):
+        import birth_time_rectification_billing as _btrb
+
+        if _btrb.grant_from_webhook(order_id, tags):
+            app.logger.info(
+                "[RZ-BT] webhook granted birth_time_rectification order=%s", order_id
+            )
+        else:
+            app.logger.warning(
+                "[RZ-BT] webhook: no purchase for order=%s", order_id
+            )
+        return jsonify({"status": "ok"}), 200
+
+    if tags.get("kind") == "business_vastu" or (order_id and order_id.startswith("BZ")):
+        import business_vastu_billing as _bvb
+
+        if _bvb.grant_from_webhook(order_id, tags):
+            app.logger.info("[RZ-BZ] webhook granted business_vastu order=%s", order_id)
+        else:
+            app.logger.warning("[RZ-BZ] webhook: no purchase for order=%s", order_id)
         return jsonify({"status": "ok"}), 200
 
     if tags.get("kind") == "gemstone" or (order_id and order_id.startswith("GM")):
@@ -19677,12 +20399,45 @@ except Exception as _nm_reg_exc:
         pass
 
 try:
+    from palmistry_report_api import register_palmistry_report_routes
+
+    register_palmistry_report_routes(app)
+except Exception as _pl_reg_exc:
+    try:
+        print(f"[palmistry_report_api] route register failed: {_pl_reg_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
     from face_reading_report_api import register_face_reading_report_routes
 
     register_face_reading_report_routes(app)
 except Exception as _fr_reg_exc:
     try:
         print(f"[face_reading_report_api] route register failed: {_fr_reg_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
+    from birth_time_rectification_api import register_birth_time_rectification_payment_routes
+
+    register_birth_time_rectification_payment_routes(app)
+except Exception as _btr_pay_exc:
+    try:
+        print(
+            f"[birth_time_rectification_api] route register failed: {_btr_pay_exc}",
+            flush=True,
+        )
+    except Exception:
+        pass
+
+try:
+    from business_vastu_api import register_business_vastu_payment_routes
+
+    register_business_vastu_payment_routes(app)
+except Exception as _bv_pay_exc:
+    try:
+        print(f"[business_vastu_api] route register failed: {_bv_pay_exc}", flush=True)
     except Exception:
         pass
 

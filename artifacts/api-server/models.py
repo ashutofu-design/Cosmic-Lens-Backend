@@ -47,6 +47,12 @@ class User(db.Model):
     # ── Daily AI question quota ───────────────────────────────────────────────
     daily_questions_used = db.Column(db.Integer, default=0, nullable=False)
     daily_questions_date = db.Column(db.String(10), default="", nullable=False) # YYYY-MM-DD
+    # Signup-only V1 allowance. New users get 3 questions total, never daily.
+    ask_v1_free_questions_used = db.Column(db.Integer, default=0, nullable=False)
+    # Extra free Q from Cosmic Pack referral rewards (stackable).
+    ask_v1_bonus_questions = db.Column(db.Integer, default=0, nullable=False)
+    # Set once when user enters a friend's referral code (CL{id}).
+    referred_by_user_id = db.Column(db.Integer, nullable=True, index=True)
 
     # ── Preferred response language (overrides per-question detection) ────────
     # Allowed: "en" | "hi" | "hn" | NULL (auto-detect from each question)
@@ -80,6 +86,15 @@ class User(db.Model):
     career_unlocked       = db.Column(db.Boolean, default=False, nullable=False)
     career_unlock_order_id = db.Column(db.String(200), nullable=True)
     career_unlocked_at    = db.Column(db.DateTime, nullable=True)
+
+    # ── Cosmic Intelligence V1 question packs ────────────────────────────────
+    ask_v1_questions_left = db.Column(db.Integer, default=0, nullable=False)
+    # Total questions granted in the current pack window (stacks on rebuy).
+    # used = max(0, total - left) for UI "X used · Y left".
+    ask_v1_questions_total = db.Column(db.Integer, default=0, nullable=False)
+    ask_v1_expires_at = db.Column(db.DateTime, nullable=True)
+    ask_v1_pack_id = db.Column(db.String(20), nullable=True)
+    ask_v1_last_consume_source = db.Column(db.String(12), nullable=True)  # pack | daily | free
 
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     last_active    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -131,6 +146,35 @@ class User(db.Model):
             "last_active":  self.last_active.isoformat() if self.last_active else None,
             "has_kundli":   self.kundli is not None,
         }
+
+
+class AppUsageDay(db.Model):
+    """Foreground app usage accumulated per user and IST calendar day."""
+
+    __tablename__ = "app_usage_days"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    usage_date = db.Column(db.String(10), nullable=False, index=True)
+    foreground_seconds = db.Column(db.Integer, nullable=False, default=0)
+    session_count = db.Column(db.Integer, nullable=False, default=0)
+    first_seen_at = db.Column(db.DateTime, nullable=True)
+    last_seen_at = db.Column(db.DateTime, nullable=True)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "usage_date", name="uq_app_usage_user_day"),
+    )
 
 
 class Kundli(db.Model):
@@ -306,6 +350,75 @@ class AstroVastuPropertyUnlock(db.Model):
         db.UniqueConstraint("user_id", "property_name", name="uq_avpu_user_property"),
         db.Index("ix_avpu_user_unlocked", "user_id", "unlocked_at"),
     )
+
+
+class AskV1Purchase(db.Model):
+    """One-time Cosmic Intelligence V1 question-pack purchase (Razorpay)."""
+
+    __tablename__ = "ask_v1_purchases"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pack_id = db.Column(db.String(20), nullable=False)  # starter | popular | power
+    amount = db.Column(db.Integer, nullable=False, default=0)
+    order_id = db.Column(db.String(200), nullable=True, unique=True)
+    status = db.Column(db.String(20), nullable=False, default="created")  # created/paid/failed
+    granted = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    paid_at = db.Column(db.DateTime, nullable=True)
+
+
+class V3LivePurchase(db.Model):
+    """One-time Cosmic Intelligence V3 live-session pack purchase (Razorpay)."""
+
+    __tablename__ = "v3_live_purchases"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pack_id = db.Column(db.String(10), nullable=False)  # 15 | 30 | 45 | 60
+    amount = db.Column(db.Integer, nullable=False, default=0)
+    order_id = db.Column(db.String(200), nullable=True, unique=True)
+    status = db.Column(db.String(20), nullable=False, default="created")  # created/paid/failed
+    granted = db.Column(db.Boolean, nullable=False, default=False)
+    session_id = db.Column(db.String(80), nullable=True, index=True)
+    preferred_language = db.Column(db.String(10), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    paid_at = db.Column(db.DateTime, nullable=True)
+
+
+class PackReferralReward(db.Model):
+    """Idempotent: one Cosmic Pack referral reward per referred buyer (lifetime)."""
+
+    __tablename__ = "pack_referral_rewards"
+
+    id = db.Column(db.Integer, primary_key=True)
+    referrer_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    buyer_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    source_kind = db.Column(db.String(20), nullable=False)  # ask_v1 | v3
+    source_key = db.Column(db.String(80), nullable=False)
+    questions_granted = db.Column(db.Integer, nullable=False, default=3)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class AstroVastuPurchase(db.Model):
@@ -821,3 +934,81 @@ class UserPersonality(db.Model):
     sample_size     = db.Column(db.Integer, default=0, nullable=False)
     last_refreshed_at = db.Column(db.DateTime, default=datetime.utcnow,
                                     nullable=False)
+
+
+def normalize_instagram_question(question: str) -> str:
+    """Trim + casefold for exact-match comparison (not fuzzy)."""
+    return (question or "").strip().casefold()
+
+
+class InstagramAnswer(db.Model):
+    """Pre-written answers keyed by reel video number + exact question text."""
+
+    __tablename__ = "instagram_answers"
+
+    id = db.Column(db.Integer, primary_key=True)
+    video_number = db.Column(db.Integer, nullable=False, index=True)
+    question = db.Column(db.Text, nullable=False)
+    question_normalized = db.Column(db.Text, nullable=False, index=True)
+    answer = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(16), nullable=False, default="active", index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "video_number",
+            "question_normalized",
+            name="uq_instagram_answer_video_question",
+        ),
+    )
+
+    def to_dict(self, include_answer: bool = True) -> dict:
+        preview = (self.answer or "").strip()
+        if len(preview) > 120:
+            preview = preview[:117] + "..."
+        out = {
+            "id": self.id,
+            "video_number": self.video_number,
+            "question": self.question,
+            "status": self.status,
+            "answer_preview": preview,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+        if include_answer:
+            out["answer"] = self.answer
+        return out
+
+
+class InstagramAnswerRequest(db.Model):
+    """Future user answer history — references InstagramAnswer, not duplicate answer text."""
+
+    __tablename__ = "instagram_answer_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    instagram_answer_id = db.Column(
+        db.Integer,
+        db.ForeignKey("instagram_answers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    video_number = db.Column(db.Integer, nullable=False, index=True)
+    question = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(24), nullable=False, default="no_match", index=True)
+    answered_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    instagram_answer = db.relationship("InstagramAnswer", foreign_keys=[instagram_answer_id])

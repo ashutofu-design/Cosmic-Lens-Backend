@@ -23,7 +23,9 @@ user's Ask flow.
 
 from __future__ import annotations
 
+import copy
 import re
+import threading
 import uuid
 from datetime import datetime
 from typing import Any, Iterable, Optional
@@ -431,6 +433,28 @@ def _load_kundli_chart_for_admin_question(uq) -> tuple[dict | None, dict | None]
     return chart, birth
 
 
+def _hydrate_admin_observability(
+    llm_ctx: dict | None,
+    *,
+    question_text: str,
+    answer_text: str,
+) -> dict | None:
+    """Rebuild observability (incl. selected JSON blocks) from saved ctx — no engine/LLM re-run."""
+    if not isinstance(llm_ctx, dict):
+        return llm_ctx
+    try:
+        from ask_observability_debug import attach_observability_to_context
+
+        return attach_observability_to_context(
+            llm_ctx,
+            question_text=question_text or "",
+            answer_text=answer_text or "",
+        )
+    except Exception as exc:
+        print(f"[question_history] observability hydrate skipped: {exc}", flush=True)
+        return llm_ctx
+
+
 def _bootstrap_admin_llm_context_from_row(
     uq: UserQuestion,
     llm_ctx: dict | None,
@@ -511,8 +535,17 @@ def _bootstrap_admin_llm_context_from_row(
     return out
 
 
-def get_admin_ask_question(question_id: str) -> dict | None:
-    """Single Ask row for admin detail — includes answer + refreshed llm_context."""
+def get_admin_ask_question(
+    question_id: str,
+    *,
+    refresh_understanding: bool = False,
+    recompute_engines: bool = False,
+) -> dict | None:
+    """Single Ask row for admin detail — includes answer + llm_context.
+
+    Default is fast load (stored context only). Pass refresh_understanding or
+    recompute_engines for heavy repair/re-run (LLM + timing engines).
+    """
     from models import User
 
     qid = (question_id or "").strip()
@@ -539,15 +572,11 @@ def get_admin_ask_question(question_id: str) -> dict | None:
     llm_ctx: dict | None = None
     if raw_ctx:
         try:
-            from ask_llm_context_debug import (
-                build_marriage_bcp_step2_admin_payload,
-                parse_llm_context_from_db,
-                recompute_marriage_bcp_from_kundli,
-            )
+            from ask_llm_context_debug import parse_llm_context_from_db
 
             llm_ctx = parse_llm_context_from_db(
                 raw_ctx,
-                refresh_understanding=True,
+                refresh_understanding=refresh_understanding,
             )
         except Exception as exc:
             print(f"[question_history] llm_context parse failed: {exc}", flush=True)
@@ -559,21 +588,41 @@ def get_admin_ask_question(question_id: str) -> dict | None:
             except Exception:
                 llm_ctx = {"raw": str(raw_ctx)[:8000]}
 
+    llm_ctx = _bootstrap_admin_llm_context_from_row(
+        uq, llm_ctx if isinstance(llm_ctx, dict) else None,
+    )
+    llm_ctx = _hydrate_admin_observability(
+        llm_ctx if isinstance(llm_ctx, dict) else None,
+        question_text=uq.question_text or "",
+        answer_text=uq.answer_text or "",
+    )
+
+    # Default: read-only snapshot — question, answer, and JSON saved at Ask time.
+    # No LLM calls, no engine re-runs, no kundli reload.
+    if not refresh_understanding and not recompute_engines:
+        d["llm_context"] = llm_ctx if isinstance(llm_ctx, dict) else None
+        d.pop("llm_context_json", None)
+        return d
+
+    from ask_llm_context_debug import _is_marriage_question_text
+    from ask_property.timing_registry import is_property_timing_question
+
+    marriage_q = _is_marriage_question_text(uq.question_text or "") or (
+        (uq.topic or "").strip().lower() in ("marriage", "vivah")
+    )
+    property_q_hint = (uq.topic or "").strip().lower() == "property" or is_property_timing_question(
+        uq.question_text or "", None,
+    )
     chart, birth = _load_kundli_chart_for_admin_question(uq)
     try:
         from ask_llm_context_debug import (
             _is_career_timing_admin_ctx,
-            _is_marriage_question_text,
             _is_property_timing_admin_ctx,
             build_marriage_bcp_step2_admin_payload,
             recompute_marriage_bcp_from_kundli,
             recompute_property_bcp_from_kundli,
         )
-        from ask_property.timing_registry import is_property_timing_question
 
-        marriage_q = _is_marriage_question_text(uq.question_text or "") or (
-            (uq.topic or "").strip().lower() in ("marriage", "vivah")
-        )
         career_q = isinstance(llm_ctx, dict) and _is_career_timing_admin_ctx(llm_ctx)
         if chart and marriage_q and not career_q:
             llm_ctx = recompute_marriage_bcp_from_kundli(
@@ -584,7 +633,9 @@ def get_admin_ask_question(question_id: str) -> dict | None:
                 topic=uq.topic or "",
             )
             bcp_payload = build_marriage_bcp_step2_admin_payload(
-                llm_ctx, chart, birth,
+                llm_ctx if isinstance(llm_ctx, dict) else {},
+                chart,
+                birth,
             )
             if bcp_payload:
                 d["marriage_bcp_step2"] = bcp_payload
@@ -627,10 +678,6 @@ def get_admin_ask_question(question_id: str) -> dict | None:
             )
     except Exception as exc:
         print(f"[question_history] MR admin recompute skipped: {exc}", flush=True)
-    if isinstance(llm_ctx, dict):
-        llm_ctx = _bootstrap_admin_llm_context_from_row(uq, llm_ctx)
-    else:
-        llm_ctx = _bootstrap_admin_llm_context_from_row(uq, None)
     if isinstance(llm_ctx, dict):
         try:
             qtext = (uq.question_text or "").strip()
@@ -966,6 +1013,34 @@ def persist_ask_question_result(
     else:
         print(f"[question_history] persist_failed q={question_text[:72]!r}", flush=True)
     return qid
+
+
+def schedule_persist_ask_question_result(
+    app: Any,
+    *,
+    user_id: int,
+    question_text: str,
+    result: dict[str, Any],
+    primary_kundli_id: Optional[int] = None,
+) -> None:
+    """Fire-and-forget DB persist — returns immediately; does not block HTTP response."""
+    if not user_id or not (question_text or "").strip():
+        return
+    payload = copy.deepcopy(result) if isinstance(result, dict) else {}
+
+    def _run() -> None:
+        try:
+            with app.app_context():
+                persist_ask_question_result(
+                    user_id=user_id,
+                    question_text=question_text,
+                    result=payload,
+                    primary_kundli_id=primary_kundli_id,
+                )
+        except Exception as exc:
+            print(f"[question_history] async persist failed: {exc}", flush=True)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def save_stream_ask_question(

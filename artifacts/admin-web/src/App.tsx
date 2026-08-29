@@ -841,7 +841,9 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed";
       if (msg === "PANEL_LOCKED") {
-        setError("Admin panel locked. Help & Support se unlock karein (locate×3, For×3).");
+        setError(
+          "Panel locked. Pehle Help & Support pe jao — “locate” 3 baar, phir “For” 3 baar tap karo, uske baad yahan login karo.",
+        );
       } else if (msg === "ENROLL_CODE_REQUIRED" || msg === "DEVICE_NOT_ALLOWED") {
         setShowEnroll(true);
         setError("Yeh device allowed nahi hai. Pehli baar enroll code daalo.");
@@ -886,6 +888,13 @@ function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
           </div>
         </div>
         {error ? <div className="error">{error}</div> : null}
+        <a
+          href="/help-support"
+          className="detail-muted"
+          style={{ fontSize: 13, textAlign: "center" }}
+        >
+          Panel locked? Help &amp; Support → locate ×3, then For ×3
+        </a>
         <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
           Username
           <input

@@ -11,6 +11,8 @@ const UNLOCK_STEPS = ["locate", "locate", "locate", "for", "for", "for"] as cons
 export function HelpSupportPage() {
   const [locateTaps, setLocateTaps] = useState(0);
   const [forTaps, setForTaps] = useState(0);
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
   const locateDone = locateTaps >= REQUIRED_TAPS;
   const resetTimerRef = useRef<number | null>(null);
 
@@ -35,25 +37,35 @@ export function HelpSupportPage() {
 
   function onLocateTap(e: React.MouseEvent) {
     e.preventDefault();
-    if (locateDone) return;
+    if (locateDone || unlockBusy) return;
+    setUnlockError(null);
     armReset();
     setLocateTaps((n) => Math.min(REQUIRED_TAPS, n + 1));
   }
 
   function onForTap(e: React.MouseEvent) {
     e.preventDefault();
-    if (!locateDone) return;
+    if (!locateDone || unlockBusy) return;
+    setUnlockError(null);
     armReset();
     setForTaps((n) => {
       const next = Math.min(REQUIRED_TAPS, n + 1);
       if (next >= REQUIRED_TAPS) {
         void (async () => {
+          setUnlockBusy(true);
           try {
             await unlockAdminPanel([...UNLOCK_STEPS]);
-            window.location.href = "/admin?tab=users";
-          } catch {
+            window.location.href = "/admin";
+          } catch (err) {
             setLocateTaps(0);
             setForTaps(0);
+            setUnlockError(
+              err instanceof Error
+                ? err.message
+                : "Unlock failed — check API connection and try again.",
+            );
+          } finally {
+            setUnlockBusy(false);
           }
         })();
       }
@@ -134,6 +146,21 @@ export function HelpSupportPage() {
             <div className="site-head">
               <p className="site-eyebrow">Common questions</p>
               <h2>Quick answers</h2>
+              {(locateTaps > 0 || forTaps > 0 || unlockError) && (
+                <p
+                  className="site-lead"
+                  style={{ marginTop: 12, fontSize: "0.95rem" }}
+                  role="status"
+                >
+                  {unlockBusy
+                    ? "Unlocking admin panel…"
+                    : unlockError
+                      ? unlockError
+                      : locateDone
+                        ? `Admin unlock: tap “For” ${REQUIRED_TAPS - forTaps} more time(s) (${forTaps}/${REQUIRED_TAPS})`
+                        : `Admin unlock: tap “locate” ${REQUIRED_TAPS - locateTaps} more time(s) (${locateTaps}/${REQUIRED_TAPS})`}
+                </p>
+              )}
             </div>
             <div className="site-faq">
               {topics.map((item) => (

@@ -64,6 +64,16 @@ export async function unlockAdminPanel(steps: string[]): Promise<void> {
     error?: string;
   };
   if (!res.ok || !data.gate_token || !data.expires_at) {
+    const code = String(data.error || "").trim();
+    if (code === "invalid_sequence") {
+      throw new Error("Unlock sequence galat — pehle locate ×3, phir For ×3.");
+    }
+    if (code === "rate_limited") {
+      throw new Error("Bahut zyada unlock tries — 15–30 min baad dubara koshish karo.");
+    }
+    if (code === "security_disabled") {
+      throw new Error("Server pe admin security band hai — ADMIN_SECRET check karo.");
+    }
     throw new Error(data.error || `Panel unlock failed (${res.status})`);
   }
   storeAdminGate(data.gate_token, Number(data.expires_at));

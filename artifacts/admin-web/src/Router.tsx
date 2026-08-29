@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { hasAdminToken } from "./api";
 import { isAdminRoute, routePath } from "./routePath";
 import { hasValidAdminGate } from "./lib/adminGate";
 import { HelpSupportPage } from "./site/HelpSupportPage";
@@ -25,7 +26,8 @@ export function Router() {
   }, [isAdmin]);
 
   if (isAdmin) {
-    if (!hasValidAdminGate()) {
+    // Gate unlock (Help page taps) only required before first login — not every visit.
+    if (!hasValidAdminGate() && !hasAdminToken()) {
       window.location.replace("/help-support");
       return (
         <div className="site-boot" style={{ padding: 24, textAlign: "center" }}>

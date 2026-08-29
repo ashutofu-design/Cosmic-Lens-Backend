@@ -23,28 +23,12 @@ V3_PACK_CATALOG = {
 
 
 def payment_bypass() -> bool:
-    if (os.environ.get("ASK_V3_PAYMENT_BYPASS") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        return True
-    if (os.environ.get("ASK_V1_PAYMENT_BYPASS") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        return True
-    try:
-        import payment_gateway as pg
+    from billing_security import payment_bypass_from_env
 
-        if not pg.configured():
-            return True
-    except Exception:
-        pass
-    return False
+    return payment_bypass_from_env(
+        "ASK_V3_PAYMENT_BYPASS",
+        "ASK_V1_PAYMENT_BYPASS",
+    )
 
 
 def get_pack(pack_id: str) -> dict | None:
@@ -239,6 +223,17 @@ def mark_purchase_paid_and_grant(
 def grant_from_webhook(order_id: str, tags: dict) -> bool:
     try:
         pid = tags.get("purchase_id")
+        from models import V3LivePurchase
+        import payment_gateway as pg
+
+        purchase = None
+        if pid:
+            purchase = V3LivePurchase.query.get(int(pid))
+        elif order_id:
+            purchase = V3LivePurchase.query.filter_by(order_id=order_id).first()
+        min_inr = int(purchase.amount or 0) if purchase else None
+        if not pg.is_receipt_paid(order_id, min_amount_inr=min_inr):
+            return False
         result = mark_purchase_paid_and_grant(
             purchase_id=int(pid) if pid else None,
             order_id=order_id,

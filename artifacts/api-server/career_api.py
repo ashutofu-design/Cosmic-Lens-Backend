@@ -44,17 +44,8 @@ def register_career_routes(app) -> None:
         if request.method == "OPTIONS":
             return "", 204
         if not pg.configured():
-            user, err = _resolve_user()
-            if err:
-                return err
-            access = billing.check_access(user.id)
-            return jsonify(
-                {
-                    **access,
-                    "already_entitled": True,
-                    "payment_required": False,
-                }
-            )
+            body, code = pg.not_configured_error()
+            return jsonify(body), code
 
         user, err = _resolve_user()
         if err:
@@ -116,7 +107,7 @@ def register_career_routes(app) -> None:
 
         if not getattr(user, "career_unlocked", False) and order_id and pg.configured():
             try:
-                if pg.is_receipt_paid(order_id):
+                if pg.is_receipt_paid(order_id, min_amount_inr=billing.price_inr()):
                     billing.mark_unlocked(user.id, order_id=order_id)
             except Exception as exc:
                 log.warning("[career] poll RZ: %s", exc)

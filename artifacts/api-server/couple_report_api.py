@@ -104,6 +104,12 @@ def register_couple_report_routes(app) -> None:
             body, code = pg.not_configured_error()
             return jsonify(body), code
 
+        from play_integrity import check_play_integrity_request
+
+        ok, ierr = check_play_integrity_request()
+        if not ok:
+            return ierr
+
         user, err = _resolve_user()
         if err:
             return err
@@ -190,7 +196,10 @@ def register_couple_report_routes(app) -> None:
 
         if purchase.status == "created" and purchase.order_id and pg.configured():
             try:
-                if pg.is_receipt_paid(purchase.order_id):
+                if pg.is_receipt_paid(
+                    purchase.order_id,
+                    min_amount_inr=int(purchase.amount or 0) or None,
+                ):
                     billing.mark_paid(purchase.id, order_id=purchase.order_id)
                     purchase = CoupleReportPurchase.query.get(purchase_id)
             except Exception as exc:

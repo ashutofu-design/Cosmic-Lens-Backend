@@ -148,7 +148,10 @@ def register_gemstone_routes(app) -> None:
 
         if row.status == "created" and row.order_id and pg.configured():
             try:
-                if pg.is_receipt_paid(row.order_id):
+                if pg.is_receipt_paid(
+                    row.order_id,
+                    min_amount_inr=int(row.amount or 0) or None,
+                ):
                     billing.mark_paid(row.id, order_id=row.order_id)
                     row = GemstoneOrder.query.get(order_row_id)
             except Exception as exc:

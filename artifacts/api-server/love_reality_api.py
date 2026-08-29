@@ -568,6 +568,12 @@ def register_love_reality_routes(flask_app) -> None:
             if not isinstance(data.get("p1"), dict) or not isinstance(data.get("p2"), dict):
                 return jsonify({"error": "expected_p1_p2"}), 400
 
+            from api_auth import require_authed_user
+
+            auth_user, auth_err = require_authed_user()
+            if auth_err:
+                return auth_err
+
             try:
                 from vedic.love_reality.compute_bundle import compute_love_reality_bundle
                 from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
@@ -582,17 +588,7 @@ def register_love_reality_routes(flask_app) -> None:
 
             lang = normalize_love_reality_pdf_lang(data.get("lang"))
 
-            user_id = 0
-            uid_hdr = (request.headers.get("X-User-Id") or "").strip()
-            if uid_hdr:
-                try:
-                    from flask_app import get_authed_user
-
-                    auth_user, _err = get_authed_user(int(uid_hdr))
-                    if auth_user is not None:
-                        user_id = int(auth_user.id)
-                except Exception:
-                    pass
+            user_id = int(auth_user.id)
 
             if _billing.payment_required() and not _billing.love_reality_pro_free() and not user_id:
                 return jsonify(
@@ -1388,7 +1384,7 @@ def register_love_reality_routes(flask_app) -> None:
     try:
         from love_reality_human_orders import register_human_order_routes
 
-        register_human_order_routes(flask_app)
+        register_human_order_routes(flask_app, rate_limit=getattr(flask_app, "_rate_limit_fn", None))
     except Exception as _ho_exc:
         try:
             print(f"[love_reality_api] human order routes failed: {_ho_exc}", flush=True)

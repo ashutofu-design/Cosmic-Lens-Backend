@@ -47,23 +47,17 @@ LABELS: dict[str, str] = {
 
 
 def payment_bypass() -> bool:
-    return (os.environ.get("BUSINESS_VASTU_PAYMENT_BYPASS") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from billing_security import payment_bypass_from_env
+
+    return payment_bypass_from_env("BUSINESS_VASTU_PAYMENT_BYPASS")
 
 
 def payment_required() -> bool:
+    from billing_security import payment_required_flag
+
     if payment_bypass():
         return False
-    return (os.environ.get("BUSINESS_VASTU_PAYMENT_REQUIRED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    return payment_required_flag("BUSINESS_VASTU_PAYMENT_REQUIRED")
 
 
 def normalize_upload_mode(raw: Any) -> str:
@@ -296,6 +290,14 @@ def grant_from_webhook(order_id: str, tags: dict) -> bool:
             order_id=order_id, product=PRODUCT_BUSINESS_VASTU
         ).first()
     if not purchase:
+        return False
+    import payment_gateway as pg
+
+    if not pg.is_receipt_paid(
+        order_id or purchase.order_id or "",
+        min_amount_inr=int(purchase.amount or 0) or None,
+    ):
+        log.warning("[business_vastu] webhook grant blocked order=%s", order_id)
         return False
     return mark_paid(purchase.id, order_id=order_id or purchase.order_id)
 

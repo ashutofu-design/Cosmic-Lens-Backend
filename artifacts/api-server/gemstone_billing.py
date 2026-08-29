@@ -236,6 +236,13 @@ def grant_from_webhook(receipt: str, notes: dict[str, str]) -> bool:
         oid = 0
     if not oid:
         return False
+    from models import GemstoneOrder
+    import payment_gateway as pg
+
+    row = GemstoneOrder.query.get(oid)
+    min_inr = int(row.amount_inr or 0) if row else None
+    if not pg.is_receipt_paid(receipt, min_amount_inr=min_inr):
+        return False
     return mark_paid(oid, receipt)
 
 

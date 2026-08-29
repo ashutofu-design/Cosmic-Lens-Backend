@@ -150,7 +150,10 @@ def register_birth_time_rectification_payment_routes(app) -> None:
 
         if purchase.status == "created" and purchase.order_id and pg.configured():
             try:
-                if pg.is_receipt_paid(purchase.order_id):
+                if pg.is_receipt_paid(
+                    purchase.order_id,
+                    min_amount_inr=int(purchase.amount or 0) or None,
+                ):
                     billing.mark_paid(purchase.id, order_id=purchase.order_id)
                     purchase = CoupleReportPurchase.query.get(purchase_id)
             except Exception as e:

@@ -168,7 +168,10 @@ def register_ask_v3_routes(app) -> None:
 
         if purchase.status == "created" and purchase.order_id and pg.configured():
             try:
-                if pg.is_receipt_paid(purchase.order_id):
+                if pg.is_receipt_paid(
+                    purchase.order_id,
+                    min_amount_inr=int(purchase.amount or 0) or None,
+                ):
                     billing.mark_purchase_paid_and_grant(purchase_id=purchase.id)
                     purchase = V3LivePurchase.query.get(purchase_id)
             except Exception as exc:

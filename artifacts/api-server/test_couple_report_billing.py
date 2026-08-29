@@ -51,7 +51,9 @@ def test_love_reality_pro_free_off_requires_pay(monkeypatch):
 
 
 def test_payment_bypass_entitles(monkeypatch):
+    monkeypatch.setenv("DEV_PAYMENT_BYPASS", "1")
     monkeypatch.setenv("COUPLE_REPORT_PAYMENT_BYPASS", "1")
+    monkeypatch.delenv("PROD", raising=False)
     monkeypatch.delenv("COUPLE_REPORT_PAYMENT_REQUIRED", raising=False)
     assert billing.payment_bypass()
     cp = billing.cache_params_from_birth("en", {"day": 1, "month": 1, "year": 1990, "lat": 1, "lon": 1}, {"day": 2, "month": 2, "year": 1991, "lat": 2, "lon": 2})

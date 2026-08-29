@@ -79,33 +79,30 @@ def label_for(product: str, deliverable: str = "report", urgent: bool = False) -
 
 
 def payment_bypass() -> bool:
-    return (os.environ.get("COUPLE_REPORT_PAYMENT_BYPASS") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from billing_security import payment_bypass_from_env
+
+    return payment_bypass_from_env("COUPLE_REPORT_PAYMENT_BYPASS")
 
 
 def love_reality_pro_free() -> bool:
-    """Temporary free Love Reality Pro PDF. Set LOVE_REALITY_PRO_FREE=0 to re-enable pay."""
-    return (os.environ.get("LOVE_REALITY_PRO_FREE") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
+    """Love Reality Pro PDF free mode. Never honoured in production."""
+    from billing_security import env_bool, is_production
+
+    if is_production():
+        return False
+    return env_bool(
+        "LOVE_REALITY_PRO_FREE",
+        production_default="0",
+        dev_default="1",
     )
 
 
 def payment_required() -> bool:
+    from billing_security import payment_required_flag
+
     if payment_bypass():
         return False
-    return (os.environ.get("COUPLE_REPORT_PAYMENT_REQUIRED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    return payment_required_flag("COUPLE_REPORT_PAYMENT_REQUIRED")
 
 
 def cache_params_from_birth(
@@ -335,5 +332,13 @@ def grant_from_webhook(order_id: str, tags: dict) -> bool:
         except (IndexError, ValueError):
             pass
     if not purchase:
+        return False
+    import payment_gateway as pg
+
+    if not pg.is_receipt_paid(
+        order_id,
+        min_amount_inr=int(purchase.amount or 0) or None,
+    ):
+        log.warning("[couple_report] webhook grant blocked order=%s", order_id)
         return False
     return mark_paid(purchase.id, order_id=order_id)

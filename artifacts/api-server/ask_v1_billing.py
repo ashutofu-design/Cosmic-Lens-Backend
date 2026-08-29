@@ -49,21 +49,9 @@ ASK_V1_PACK_CATALOG = {
 
 
 def payment_bypass() -> bool:
-    if (os.environ.get("ASK_V1_PAYMENT_BYPASS") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        return True
-    try:
-        import payment_gateway as pg
+    from billing_security import payment_bypass_from_env
 
-        if not pg.configured():
-            return True
-    except Exception:
-        pass
-    return False
+    return payment_bypass_from_env("ASK_V1_PAYMENT_BYPASS")
 
 
 def list_packs() -> list[dict]:
@@ -263,6 +251,17 @@ def mark_purchase_paid_and_grant(purchase_id: int | None = None, order_id: str |
 def grant_from_webhook(order_id: str, tags: dict) -> bool:
     pid = tags.get("purchase_id")
     try:
+        from models import AskV1Purchase
+        import payment_gateway as pg
+
+        purchase = None
+        if pid:
+            purchase = AskV1Purchase.query.get(int(pid))
+        elif order_id:
+            purchase = AskV1Purchase.query.filter_by(order_id=order_id).first()
+        min_inr = int(purchase.amount or 0) if purchase else None
+        if not pg.is_receipt_paid(order_id, min_amount_inr=min_inr):
+            return False
         result = mark_purchase_paid_and_grant(
             purchase_id=int(pid) if pid else None,
             order_id=order_id,

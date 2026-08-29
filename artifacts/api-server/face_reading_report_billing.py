@@ -22,23 +22,17 @@ CATALOG: dict[str, dict[str, Any]] = {
 
 
 def payment_bypass() -> bool:
-    return (os.environ.get("FACE_READING_PAYMENT_BYPASS") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    from billing_security import payment_bypass_from_env
+
+    return payment_bypass_from_env("FACE_READING_PAYMENT_BYPASS")
 
 
 def payment_required() -> bool:
+    from billing_security import payment_required_flag
+
     if payment_bypass():
         return False
-    return (os.environ.get("FACE_READING_PAYMENT_REQUIRED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    return payment_required_flag("FACE_READING_PAYMENT_REQUIRED")
 
 
 def face_cache_params(
@@ -227,5 +221,13 @@ def grant_from_webhook(order_id: str, tags: dict) -> bool:
     if not purchase and order_id:
         purchase = CoupleReportPurchase.query.filter_by(order_id=order_id).first()
     if not purchase or purchase.product != PRODUCT_FACE_READING_PRO:
+        return False
+    import payment_gateway as pg
+
+    if not pg.is_receipt_paid(
+        order_id,
+        min_amount_inr=int(purchase.amount or 0) or None,
+    ):
+        log.warning("[face_reading_report] webhook grant blocked order=%s", order_id)
         return False
     return mark_paid(purchase.id, order_id=order_id)

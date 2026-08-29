@@ -26,5 +26,18 @@ flask-sock>=0.7,<1
 simple-websocket>=1.0,<2
 razorpay>=1.4,<2
 pywebpush>=2.0
-# Razorpay SDK imports pkg_resources (removed from setuptools 81+)
+# Razorpay SDK imports pkg_resources (removed from setuptools 81+).
+# This keeps us below the CVE-2026-59890 fix (83.0.0), which is a MANIFEST.in
+# sdist-packaging bug on macOS — not reachable from a running server.
 setuptools>=65.0,<81
+
+# Security floor. Transitive via firebase-admin / pywebpush / pyjwt, but pinned
+# here so the resolver cannot pick a version with the known JWT-path CVEs.
+cryptography>=50.0.0
+# App Check token verification (app_attestation.py) — was only transitive.
+pyjwt[crypto]>=2.8
+
+# NOTE: protobuf is held at 4.25.x by mediapipe==0.10.21 (protobuf>=4.25.3,<5),
+# so CVE-2026-0994 (ParseDict recursion DoS, fixed in 5.29.6) has no available
+# fix on this line. We never call json_format.ParseDict on untrusted input.
+# Upgrading mediapipe (0.10.35+ relaxes the pin) is the route to clearing it.

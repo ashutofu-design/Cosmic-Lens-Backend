@@ -101,28 +101,55 @@ def checkout_response(
     return payload
 
 
-def is_receipt_paid(receipt: str) -> bool:
-    if not receipt or not configured():
+def is_receipt_paid(receipt: str, *, min_amount_inr: int | None = None) -> bool:
+    details = receipt_payment_details(receipt)
+    if not details or not details.get("captured"):
         return False
+    if min_amount_inr is not None:
+        expected_paise = int(min_amount_inr) * 100
+        if int(details.get("amount_paise") or 0) < expected_paise:
+            log.warning(
+                "[RZ] amount mismatch receipt=%s paid=%s expected>=%s",
+                receipt,
+                details.get("amount_paise"),
+                expected_paise,
+            )
+            return False
+    return True
+
+
+def receipt_payment_details(receipt: str) -> dict[str, Any] | None:
+    """Return {captured: bool, amount_paise: int, currency: str} or None."""
+    if not receipt or not configured():
+        return None
     try:
         client = _client()
         orders = client.order.all({"receipt": receipt})
         items = orders.get("items") or []
         if not items:
-            return False
+            return None
         rz_order_id = items[0]["id"]
         payments = client.order.payments(rz_order_id)
         pay_items = payments.get("items") or []
-        return any(p.get("status") == "captured" for p in pay_items)
+        for pay in pay_items:
+            if pay.get("status") != "captured":
+                continue
+            return {
+                "captured": True,
+                "amount_paise": int(pay.get("amount") or 0),
+                "currency": str(pay.get("currency") or "INR"),
+                "razorpay_payment_id": pay.get("id"),
+            }
+        return {"captured": False, "amount_paise": 0, "currency": "INR"}
     except Exception as exc:
         log.warning("[RZ] poll error for receipt %s: %s", receipt, exc)
-        return False
+        return None
 
 
 def verify_webhook_signature(raw_body: bytes, signature: str) -> bool:
     if not RAZORPAY_WEBHOOK_SECRET:
-        log.warning("[RZ] webhook secret not set — skipping verification")
-        return True
+        log.error("[RZ] webhook secret not set — rejecting webhook")
+        return False
     if not signature:
         return False
     try:
@@ -158,3 +185,45 @@ def handle_paid_webhook(payload: dict) -> tuple[str, dict[str, str]] | None:
     if not receipt:
         return None
     return receipt, notes
+
+
+def webhook_captured_amount_paise(payload: dict) -> int | None:
+    """Best-effort captured amount from Razorpay webhook JSON."""
+    pay_entity = (payload.get("payload") or {}).get("payment", {}).get("entity") or {}
+    if str(pay_entity.get("status") or "").lower() == "captured":
+        try:
+            return int(pay_entity.get("amount") or 0)
+        except (TypeError, ValueError):
+            return None
+    order_entity = (payload.get("payload") or {}).get("order", {}).get("entity") or {}
+    if order_entity.get("amount") is not None:
+        try:
+            return int(order_entity.get("amount") or 0)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def webhook_payment_satisfies(
+    payload: dict,
+    receipt: str,
+    min_amount_inr: int | None,
+) -> bool:
+    """True when webhook (or receipt poll fallback) shows a captured payment >= min."""
+    if not receipt:
+        return False
+    if min_amount_inr is not None and int(min_amount_inr) > 0:
+        expected_paise = int(min_amount_inr) * 100
+        paise = webhook_captured_amount_paise(payload)
+        if paise is not None:
+            if paise < expected_paise:
+                log.warning(
+                    "[RZ] webhook amount mismatch receipt=%s paid=%s expected>=%s",
+                    receipt,
+                    paise,
+                    expected_paise,
+                )
+                return False
+            return True
+        return is_receipt_paid(receipt, min_amount_inr=min_amount_inr)
+    return is_receipt_paid(receipt)

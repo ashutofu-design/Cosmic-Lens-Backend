@@ -1,8 +1,11 @@
 """Career Life Map unlock — one-time ₹1 access per user."""
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
+
+log = logging.getLogger(__name__)
 
 
 def price_inr() -> int:
@@ -10,28 +13,20 @@ def price_inr() -> int:
 
 
 def payment_bypass() -> bool:
-    if (os.environ.get("CAREER_PAYMENT_BYPASS") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
-        return True
-    try:
-        import payment_gateway as pg
+    from billing_security import payment_bypass_from_env
 
-        if not pg.configured():
-            return True
-    except Exception:
-        pass
-    return False
+    return payment_bypass_from_env("CAREER_PAYMENT_BYPASS")
 
 
 def payment_required() -> bool:
-    """Paywall only when explicitly enabled (CAREER_PAYMENT_REQUIRED=1) and not bypassed."""
+    """Paywall on in production unless explicitly disabled."""
     if payment_bypass():
         return False
-    flag = (os.environ.get("CAREER_PAYMENT_REQUIRED") or "0").strip().lower()
+    from billing_security import is_production
+
+    flag = (os.environ.get("CAREER_PAYMENT_REQUIRED") or "").strip().lower()
+    if not flag:
+        return is_production()
     return flag in ("1", "true", "yes", "on")
 
 
@@ -98,6 +93,11 @@ def grant_from_webhook(order_id: str, tags: dict) -> bool:
         else:
             return False
     try:
+        import payment_gateway as pg
+
+        if not pg.is_receipt_paid(order_id, min_amount_inr=price_inr()):
+            log.warning("[career] webhook grant blocked order=%s", order_id)
+            return False
         return mark_unlocked(int(uid), order_id=order_id)
     except (TypeError, ValueError):
         return False

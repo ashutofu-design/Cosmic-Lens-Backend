@@ -1468,7 +1468,7 @@ function AdminPanel() {
     });
     if (!Array.isArray(data.items)) {
       setAskQaError(
-        "Invalid API response — rebuild admin with VITE_API_BASE + VITE_ADMIN_SECRET in artifacts/admin-web/.env, then npm run build",
+        "Invalid API response — rebuild admin with VITE_API_BASE in artifacts/admin-web/.env, then npm run build",
       );
       setAskQuestions([]);
       setAskQaTotal(0);
@@ -1555,7 +1555,7 @@ function AdminPanel() {
       else if (tab === "v3live")
         setV3Error(
           msg === "Unauthorized"
-            ? "Unauthorized — VITE_ADMIN_SECRET admin-web/.env mein VPS ADMIN_SECRET se match nahi kar raha. Admin restart karo (Ctrl+C → npm run dev) ya neeche wala curl test chalao."
+            ? "Unauthorized — admin panel login se session token lo (POST /api/admin/login). Server ADMIN_SECRET configured hona chahiye."
             : msg,
         );
       else if (tab === "support") setSupportError(msg);
@@ -1807,6 +1807,20 @@ function AdminPanel() {
       syncV3PendingAlarm(0);
     };
   }, []);
+
+  function handleAdminLogout() {
+    if (!window.confirm("Logout from admin panel?")) return;
+    adminLogout();
+    window.location.reload();
+  }
+
+  function closeUserDetailView() {
+    setDirectLookupOpen(false);
+    setDetailUserId(null);
+    setDetail(null);
+    setAskProfile(null);
+    setDetailError(null);
+  }
 
   async function onLookupUser() {
     const value = userIdInput.trim();
@@ -2865,8 +2879,7 @@ function AdminPanel() {
   const isLocalProxy =
     import.meta.env.DEV &&
     (!proxyTarget || /^(https?:\/\/)?(127\.0\.0\.1|localhost)(:\d+)?\/?$/i.test(proxyTarget));
-  const adminSecretOk =
-    Boolean((import.meta.env.VITE_ADMIN_SECRET || "").trim()) || isLocalProxy;
+  const apiBaseOk = Boolean((import.meta.env.VITE_API_BASE || "").trim()) || isLocalProxy;
 
   return (
     <div className={`admin-shell${mobileNavOpen ? " mobile-nav-open" : ""}`}>
@@ -2992,11 +3005,7 @@ function AdminPanel() {
           <button
             type="button"
             className="nav-item nav-refresh"
-            onClick={() => {
-              if (!window.confirm("Logout from admin panel?")) return;
-              adminLogout();
-              window.location.reload();
-            }}
+            onClick={handleAdminLogout}
           >
             <span className="nav-icon" aria-hidden>
               ⎋
@@ -3017,21 +3026,35 @@ function AdminPanel() {
             ☰
           </button>
           <span className="mobile-topbar-title">{meta.title}</span>
+          <button
+            type="button"
+            className="mobile-logout-btn"
+            aria-label="Logout"
+            onClick={handleAdminLogout}
+          >
+            Logout
+          </button>
         </header>
 
         <header className="top-bar">
-          <h2>{meta.title}</h2>
-          <p className="subtitle">{meta.subtitle}</p>
+          <div className="top-bar-head">
+            <div>
+              <h2>{meta.title}</h2>
+              <p className="subtitle">{meta.subtitle}</p>
+            </div>
+            <button type="button" className="top-bar-logout" onClick={handleAdminLogout}>
+              Logout
+            </button>
+          </div>
         </header>
 
-      {!adminSecretOk ? (
+      {!apiBaseOk ? (
         <div className="error">
           <strong>API not configured.</strong> Create <code>artifacts/admin-web/.env</code> with{" "}
-          <code>VITE_ADMIN_SECRET</code> (same as VPS <code>ADMIN_SECRET</code>). For local dev run{" "}
-          <code>.\scripts\start-admin-local.ps1</code> (uses{" "}
-          <code>VITE_API_PROXY_TARGET=http://127.0.0.1:8080</code> and{" "}
-          <code>ADMIN_NO_AUTH=1</code> on API). For static build also set{" "}
-          <code>VITE_API_BASE</code>, then rebuild.
+          <code>VITE_API_BASE</code> (production) or run{" "}
+          <code>.\scripts\start-admin-local.ps1</code> for local dev (proxy to{" "}
+          <code>http://127.0.0.1:8080</code>). Sign in with admin username/password — do not embed{" "}
+          <code>ADMIN_SECRET</code> in the frontend build.
         </div>
       ) : null}
 
@@ -5192,7 +5215,14 @@ function AdminPanel() {
 
       {tab === "users" ? (
         <section className="section">
-          <h2>Users ({total})</h2>
+          <div className="section-head users-section-head">
+            {directLookupOpen || detailUserId !== null ? (
+              <button type="button" className="users-back-btn" onClick={closeUserDetailView}>
+                ← Back
+              </button>
+            ) : null}
+            <h2>Users ({total})</h2>
+          </div>
           <div className="card user-id-lookup">
             <h3>Complete user inspector</h3>
             <p className="detail-muted">
@@ -5218,16 +5248,7 @@ function AdminPanel() {
                 {detailLoading && directLookupOpen ? "Searching…" : "Open full account"}
               </button>
               {directLookupOpen ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDirectLookupOpen(false);
-                    setDetailUserId(null);
-                    setDetail(null);
-                    setAskProfile(null);
-                    setDetailError(null);
-                  }}
-                >
+                <button type="button" onClick={closeUserDetailView}>
                   Close
                 </button>
               ) : null}

@@ -285,6 +285,31 @@ body {
   margin-bottom: 28px;
 }
 
+.top-bar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.top-bar-logout {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.top-bar-logout:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.65);
+}
+
 .top-bar h2 {
   margin: 0;
   font-family: "Fraunces", Georgia, serif;
@@ -1933,6 +1958,33 @@ code {
   background: rgba(30, 58, 138, 0.35);
 }
 
+.users-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.users-section-head h2 {
+  margin: 0;
+}
+
+.users-back-btn {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(124, 58, 237, 0.1);
+  color: var(--accent-bright);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.users-back-btn:hover {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: var(--border-glow);
+}
+
 /* ── Mobile nav (hidden on desktop) ─────────────────────────── */
 .mobile-topbar,
 .mobile-nav-backdrop,
@@ -2008,6 +2060,18 @@ code {
     padding: 0;
     font-size: 1.25rem;
     line-height: 1;
+  }
+
+  .mobile-logout-btn {
+    margin-left: auto;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.1);
+    color: #fca5a5;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
   }
 
   .mobile-topbar-title {

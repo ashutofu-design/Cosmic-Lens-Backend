@@ -12,7 +12,11 @@ PORT="${PORT:-8080}"
 # diagnostic harness (/tmp/research/) can run wide test batches
 # without tripping the 402 quota gate. Production deploys override
 # via env if needed.
-export ANON_DAILY_LIMIT="${ANON_DAILY_LIMIT:-2000}"
+if [ "${PROD:-0}" = "1" ]; then
+  export ANON_DAILY_LIMIT="${ANON_DAILY_LIMIT:-10}"
+else
+  export ANON_DAILY_LIMIT="${ANON_DAILY_LIMIT:-2000}"
+fi
 # Only standalone cosmic-telegram PM2 process may poll (else Telegram HTTP 409).
 export TELEGRAM_POLL_FROM_API="${TELEGRAM_POLL_FROM_API:-0}"
 
@@ -37,6 +41,13 @@ if [ -z "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ]; then
 fi
 
 if [ "${PROD:-0}" = "1" ]; then
+  echo "[start] validating production security config…"
+  python3 -c "
+from dotenv import load_dotenv
+load_dotenv('.env', override=True)
+from startup_security import enforce_production_config
+enforce_production_config()
+"
   echo "[start] PROD=1 → starting gunicorn on :$PORT"
   exec gunicorn \
     --workers "${GUNICORN_WORKERS:-4}" \

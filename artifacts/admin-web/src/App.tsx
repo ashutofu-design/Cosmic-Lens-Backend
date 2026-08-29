@@ -80,7 +80,7 @@ import {
   formatDate,
   formatInr,
   profileBirthFields,
-  API_BASE,
+  getApiBase,
   adminLogin,
   adminLogout,
   hasAdminToken,
@@ -2381,7 +2381,7 @@ function AdminPanel() {
   function v3MediaSrc(url?: string): string {
     if (!url) return "";
     if (url.startsWith("http") || url.startsWith("data:")) return url;
-    return `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+    return `${getApiBase()}${url.startsWith("/") ? "" : "/"}${url}`;
   }
 
   function exportTxCsv() {
@@ -2888,7 +2888,11 @@ function AdminPanel() {
   const isLocalProxy =
     import.meta.env.DEV &&
     (!proxyTarget || /^(https?:\/\/)?(127\.0\.0\.1|localhost)(:\d+)?\/?$/i.test(proxyTarget));
-  const apiBaseOk = Boolean((import.meta.env.VITE_API_BASE || "").trim()) || isLocalProxy;
+  const apiBaseOk =
+    Boolean(getApiBase()) ||
+    isLocalProxy ||
+    (typeof window !== "undefined" &&
+      window.location.hostname.toLowerCase().endsWith("coosmic.icu"));
 
   return (
     <div className={`admin-shell${mobileNavOpen ? " mobile-nav-open" : ""}`}>
@@ -3072,6 +3076,11 @@ function AdminPanel() {
       {tab === "dashboard" && dash ? (
         <>
           <div className="grid stats">
+            {dash.generated_at ? (
+              <p className="detail-muted" style={{ gridColumn: "1 / -1", margin: "0 0 4px" }}>
+                Live from database · updated {formatDate(dash.generated_at)}
+              </p>
+            ) : null}
             <div className="stat-card">
               <h3>Total users</h3>
               <div className="value">{dash.total_users}</div>
@@ -3100,23 +3109,7 @@ function AdminPanel() {
               <h3>Month ₹</h3>
               <div className="value gold">{formatInr(dash.payments.month_inr)}</div>
             </div>
-            <div className="stat-card">
-              <h3>Lifetime ₹</h3>
-              <div className="value gold">{formatInr(dash.payments.lifetime_inr)}</div>
-            </div>
           </div>
-          <section className="section card">
-            <h2>Subscriptions</h2>
-            <p className="detail-muted">{dash.subscriptions.message}</p>
-            <ul className="product-list">
-              {Object.entries(dash.subscriptions.plan_counts).map(([plan, n]) => (
-                <li key={plan}>
-                  <span className="badge">{plan}</span>
-                  <span>{n} users</span>
-                </li>
-              ))}
-            </ul>
-          </section>
         </>
       ) : null}
 
@@ -4939,7 +4932,7 @@ function AdminPanel() {
                         const src = m.image_url
                           ? m.image_url.startsWith("http") || m.image_url.startsWith("data:")
                             ? m.image_url
-                            : `${API_BASE}${m.image_url.startsWith("/") ? "" : "/"}${m.image_url}`
+                            : `${getApiBase()}${m.image_url.startsWith("/") ? "" : "/"}${m.image_url}`
                           : "";
                         return (
                           <div

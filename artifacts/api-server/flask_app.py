@@ -484,12 +484,18 @@ try:
         return f"ip:{get_remote_address()}"
 
     rate_limit_key = _rate_limit_key
-    limiter = Limiter(
-        key_func=_rate_limit_key,
-        app=app,
-        default_limits=["1000 per hour", "60 per minute"],
-        storage_uri=_limiter_storage,
-    )
+    _limiter_kwargs: dict = {
+        "key_func": _rate_limit_key,
+        "app": app,
+        "default_limits": ["1000 per hour", "60 per minute"],
+        "storage_uri": _limiter_storage,
+    }
+    if _redis_url:
+        _limiter_kwargs["storage_options"] = {
+            "socket_connect_timeout": 3,
+            "socket_timeout": 3,
+        }
+    limiter = Limiter(**_limiter_kwargs)
     if _redis_url:
         app.logger.info("[limiter] using shared storage at %s", _redis_url.split("@")[-1])
     else:
@@ -5777,7 +5783,6 @@ def admin_support_reopen_route(thread_id: str):
 
 
 @app.route("/api/admin/panel-unlock", methods=["POST", "OPTIONS"], strict_slashes=False)
-@_rate_limit("6 per hour")
 def admin_panel_unlock_route():
     """Hidden Help & Support tap sequence → short-lived gate token."""
     if request.method == "OPTIONS":
@@ -5787,6 +5792,7 @@ def admin_panel_unlock_route():
     from admin_security import (
         admin_security_enabled,
         device_id_redacted,
+        is_ip_blocked,
         issue_gate_token,
         record_fail,
         validate_unlock_steps,
@@ -5799,6 +5805,9 @@ def admin_panel_unlock_route():
         0
     ].strip()
 
+    if is_ip_blocked(ip, max_fails=30):
+        return jsonify({"error": "rate_limited"}), 429
+
     data = request.get_json(silent=True) or {}
     device_id = str(
         data.get("device_id")
@@ -5808,13 +5817,11 @@ def admin_panel_unlock_route():
     steps = data.get("steps") if isinstance(data.get("steps"), list) else []
 
     if not validate_unlock_steps(steps):
-        record_fail(ip, max_fails=12)
+        if record_fail(ip, max_fails=12):
+            _time.sleep(2)
+            return jsonify({"error": "rate_limited"}), 429
         _time.sleep(1)
         return jsonify({"error": "invalid_sequence"}), 403
-
-    if record_fail(ip, max_fails=30):
-        _time.sleep(2)
-        return jsonify({"error": "rate_limited"}), 429
 
     gate_token, exp = issue_gate_token(device_id)
     return jsonify(

@@ -21,13 +21,30 @@ _STORE_LOCK = threading.Lock()
 _FAIL_BUCKETS: dict[str, list[float]] = {}
 
 
+def _is_production() -> bool:
+    try:
+        from billing_security import is_production
+
+        return is_production()
+    except Exception:
+        if os.environ.get("PROD", "").strip().lower() in ("1", "true", "yes", "on"):
+            return True
+        return os.environ.get("FLASK_ENV", "").strip().lower() == "production"
+
+
 def admin_security_relaxed() -> bool:
+    # Defence in depth: startup_security refuses to boot production with this
+    # flag, but a misconfigured PROD detection must still not relax admin auth.
+    if _is_production():
+        return False
     return os.environ.get("ADMIN_SECURITY_RELAXED", "").strip() == "1"
 
 
 def admin_allow_all_devices() -> bool:
     """When true, any valid device ID is allowed (no enroll code / cap)."""
-    raw = os.environ.get("ADMIN_ALLOW_ALL_DEVICES", "1").strip().lower()
+    if _is_production():
+        return False
+    raw = os.environ.get("ADMIN_ALLOW_ALL_DEVICES", "0").strip().lower()
     return raw in ("1", "true", "yes", "on")
 
 
@@ -328,8 +345,17 @@ def validate_unlock_steps(steps: list[Any]) -> bool:
     return True
 
 
+def is_ip_blocked(ip: str, *, window_sec: int = 900, max_fails: int = 8) -> bool:
+    """Return True if IP exceeded the fail budget (read-only)."""
+    key = str(ip or "unknown").strip()[:64]
+    now = time.time()
+    with _STORE_LOCK:
+        bucket = [t for t in _FAIL_BUCKETS.get(key, []) if now - t < window_sec]
+        return len(bucket) > max_fails
+
+
 def record_fail(ip: str, *, window_sec: int = 900, max_fails: int = 8) -> bool:
-    """Return True if IP should be blocked."""
+    """Record a failed attempt; return True if IP should now be blocked."""
     key = str(ip or "unknown").strip()[:64]
     now = time.time()
     with _STORE_LOCK:

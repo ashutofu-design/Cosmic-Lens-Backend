@@ -64,12 +64,23 @@ PRODUCT_LABELS: dict[str, str] = {
 
 
 def admin_no_auth() -> bool:
-    return (os.environ.get("ADMIN_NO_AUTH") or "0").strip().lower() in (
+    """Local dev only — never honored in production."""
+    if (os.environ.get("ADMIN_NO_AUTH") or "0").strip().lower() not in (
         "1",
         "true",
         "yes",
         "on",
-    )
+    ):
+        return False
+    try:
+        from billing_security import is_production
+
+        if is_production():
+            return False
+    except Exception:
+        # Cannot prove we are not in production — refuse to drop admin auth.
+        return False
+    return True
 
 
 def _now_naive() -> datetime:
@@ -266,14 +277,17 @@ def build_dashboard(db_session, *, force_refresh: bool = False) -> dict[str, Any
     ):
         return cached
 
-    from sqlalchemy import func
+    from sqlalchemy import func, or_
 
     from models import (
+        AskV1Purchase,
         AstroVastuPurchase,
         CoupleReportPurchase,
+        GemstoneOrder,
         Kundli,
         Profile,
         User,
+        V3LivePurchase,
     )
 
     now = _now_naive()
@@ -282,7 +296,7 @@ def build_dashboard(db_session, *, force_refresh: bool = False) -> dict[str, Any
     start_month = _since(days=30)
 
     total_users = User.query.count()
-    pro_users = User.query.filter_by(is_pro=True).count()
+    pro_users = User.query.filter(or_(User.is_pro.is_(True), User.plan == "pro")).count()
     active_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
     active_today = User.query.filter(User.last_active >= active_cutoff).count()
     total_kundli = Kundli.query.count()
@@ -300,8 +314,34 @@ def build_dashboard(db_session, *, force_refresh: bool = False) -> dict[str, Any
             q = q.filter(AstroVastuPurchase.paid_at >= since)
         return int(q.with_entities(func.coalesce(func.sum(AstroVastuPurchase.amount), 0)).scalar() or 0)
 
+    def _sum_gemstone_since(since: datetime | None) -> int:
+        q = GemstoneOrder.query.filter_by(status="paid")
+        if since is not None:
+            q = q.filter(GemstoneOrder.paid_at >= since)
+        return int(
+            q.with_entities(func.coalesce(func.sum(GemstoneOrder.amount_inr), 0)).scalar() or 0
+        )
+
+    def _sum_ask_v1_since(since: datetime | None) -> int:
+        q = AskV1Purchase.query.filter_by(status="paid")
+        if since is not None:
+            q = q.filter(AskV1Purchase.paid_at >= since)
+        return int(q.with_entities(func.coalesce(func.sum(AskV1Purchase.amount), 0)).scalar() or 0)
+
+    def _sum_v3_live_since(since: datetime | None) -> int:
+        q = V3LivePurchase.query.filter_by(status="paid")
+        if since is not None:
+            q = q.filter(V3LivePurchase.paid_at >= since)
+        return int(q.with_entities(func.coalesce(func.sum(V3LivePurchase.amount), 0)).scalar() or 0)
+
     def payment_totals(since: datetime | None) -> int:
-        t = _sum_couple_since(since) + _sum_av_since(since)
+        t = (
+            _sum_couple_since(since)
+            + _sum_av_since(since)
+            + _sum_gemstone_since(since)
+            + _sum_ask_v1_since(since)
+            + _sum_v3_live_since(since)
+        )
         try:
             from career_billing import price_inr as career_price
 

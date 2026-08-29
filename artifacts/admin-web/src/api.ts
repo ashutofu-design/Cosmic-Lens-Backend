@@ -1,6 +1,12 @@
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+import { resolveApiBase } from "./lib/apiBase";
 
-export { API_BASE };
+/** Runtime API origin — works on admin.coosmic.icu even when VITE_API_BASE was empty at build. */
+export function getApiBase(): string {
+  return resolveApiBase();
+}
+
+/** Legacy export; prefer getApiBase() for fetches. */
+export const API_BASE = getApiBase();
 
 import { getAdminDeviceId } from "./lib/adminDevice";
 import { clearAdminGate, getAdminGateToken } from "./lib/adminGate";
@@ -43,7 +49,7 @@ export async function adminLogin(
   };
   const gate = getAdminGateToken();
   if (gate) headers["X-Admin-Gate"] = gate;
-  const res = await fetch(`${API_BASE}/api/admin/login`, {
+  const res = await fetch(`${getApiBase()}/api/admin/login`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -92,7 +98,7 @@ function adminHeaders(extra?: Record<string, string>): Record<string, string> {
 }
 
 async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const url = `${getApiBase()}${path}`;
   const res = await fetch(url, {
     ...init,
     headers: adminHeaders(init?.headers as Record<string, string> | undefined),
@@ -133,7 +139,7 @@ export interface Dashboard {
     today_inr: number;
     week_inr: number;
     month_inr: number;
-    lifetime_inr: number;
+    lifetime_inr?: number;
   };
   purchases_by_product: { key: string; label: string; count: number }[];
   astrovastu_purchases: { sku: string; label: string; count: number }[];
@@ -905,7 +911,7 @@ export async function fetchPalmistryMediaUrl(
   name: string,
 ): Promise<string | null> {
   const res = await fetch(
-    `${API_BASE}/api/admin/palmistry-orders/${encodeURIComponent(orderId)}/media/${hand}/${encodeURIComponent(name)}`,
+    `${getApiBase()}/api/admin/palmistry-orders/${encodeURIComponent(orderId)}/media/${hand}/${encodeURIComponent(name)}`,
     { headers: adminHeaders() },
   );
   if (!res.ok) return null;
@@ -917,7 +923,7 @@ export async function fetchLifeMapOrderMedia(
   orderId: string,
 ): Promise<{ url: string; mime: string }> {
   const res = await fetch(
-    `${API_BASE}/api/admin/lifemap-orders/astrovastu/${encodeURIComponent(orderId)}/media`,
+    `${getApiBase()}/api/admin/lifemap-orders/astrovastu/${encodeURIComponent(orderId)}/media`,
     { headers: adminHeaders() },
   );
   if (!res.ok) {
@@ -932,7 +938,7 @@ export async function fetchBusinessVastuMedia(
   item: number | "plan",
 ): Promise<{ url: string; mime: string }> {
   const res = await fetch(
-    `${API_BASE}/api/admin/lifemap-orders/business-vastu/${encodeURIComponent(orderId)}/media?item=${item}`,
+    `${getApiBase()}/api/admin/lifemap-orders/business-vastu/${encodeURIComponent(orderId)}/media?item=${item}`,
     { headers: adminHeaders() },
   );
   if (!res.ok) {

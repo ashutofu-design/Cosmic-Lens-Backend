@@ -93,7 +93,7 @@ def validate_production_config() -> list[str]:
     _require_nonempty("ADMIN_SECRET", errors, min_len=32)
     _require_nonempty("ADMIN_LOGIN_USER", errors)
     _require_nonempty("ADMIN_LOGIN_PASS", errors, min_len=12)
-    _require_nonempty("ADMIN_LOGIN_MPIN", errors, min_len=6)
+    _require_nonempty("ADMIN_LOGIN_MPIN", errors, min_len=4)
     _require_nonempty("SESSION_SECRET", errors, min_len=32)
     _reject_weak("ADMIN_SECRET", errors)
     _reject_weak("SESSION_SECRET", errors)

@@ -1,4 +1,5 @@
-# EAS uploads from monorepo root — exclude everything not needed for mobile Android build.
+# EAS uploads from monorepo root — mobile Android build only.
+# Do NOT keep other apps' package.json (they pull missing workspace:* deps like @workspace/db).
 
 # Dependencies (reinstalled on EAS)
 **/node_modules
@@ -13,13 +14,13 @@
 .vscode
 .cursor
 
-# Other workspace apps (not mobile)
+# Other workspace apps (not mobile) — exclude entirely
 artifacts/api-server
 artifacts/admin-web
 artifacts/mockup-sandbox
 /scripts
 
-# Shared workspace libs at repo root only (do NOT exclude artifacts/cosmic-lens-mobile/lib)
+# Shared workspace libs at repo root (mobile does not use them)
 /lib
 
 # Python / backend artifacts

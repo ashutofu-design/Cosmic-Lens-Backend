@@ -2,6 +2,7 @@
 
 # compiled output
 dist
+dist-web/
 tmp
 out-tsc
 *.tsbuildinfo
@@ -67,5 +68,28 @@ backups/snapshots/*
 !.env.example
 artifacts/api-server/.env
 artifacts/api-server/.env.txt
+artifacts/api-server/data/palm_scans/
 artifacts/admin-web/.env
 artifacts/cosmic-lens-mobile/.env
+artifacts/cosmic-lens-mobile/_keystore_extract/
+artifacts/cosmic-lens-mobile/upload-keystore.jks
+artifacts/cosmic-lens-mobile/credentials.json
+**/*keystore-credentials*
+numerology agent/.env
+
+# Signing material / service accounts — never commit
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.p8
+**/credentials.json
+**/service-account*.json
+**/serviceAccount*.json
+**/*-firebase-adminsdk-*.json
+
+# Release source maps must not ship or be committed
+**/*.map
+artifacts/cosmic-lens-mobile/dist/
+artifacts/cosmic-lens-mobile/android/app/build/

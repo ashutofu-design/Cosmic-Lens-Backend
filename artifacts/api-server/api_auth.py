@@ -99,7 +99,19 @@ def auth_error_response(require_user) -> tuple | None:
 
 
 def assert_route_user_id(route_user_id: int):
-    """For /api/user/<id>/... — URL id must match authenticated header user."""
+    """For /api/user/<id>/... — URL id must match authenticated user.
+
+    Prefer X-User-Id + X-API-Key. Older mobile builds only sent X-API-Key on
+    these URL-scoped routes; accept that when the key matches route_user_id.
+    """
+    uid_hdr = (request.headers.get("X-User-Id") or "").strip()
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if not uid_hdr and api_key:
+        user, err = get_authed_user(route_user_id)
+        if user:
+            return user, None
+        if err:
+            return None, err
     user, err = require_authed_user()
     if err:
         return None, err

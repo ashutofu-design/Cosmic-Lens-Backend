@@ -5,8 +5,14 @@ import { Alert, AppState, Platform, type AppStateStatus } from "react-native";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
 import { coerceUILang, type UILang } from "@/lib/i18n";
-import { API_BASE, apiFetchWithTimeout } from "@/lib/apiConfig";
+import { API_BASE, apiFetchWithTimeout, userAuthHeaders } from "@/lib/apiConfig";
 import { clearAllLocalReports } from "@/lib/localReports";
+import {
+  clearApiKey,
+  loadApiKey,
+  saveApiKey,
+  userWithoutApiKey,
+} from "@/lib/secureApiKey";
 import {
   attachPushReceivedHandler,
   presentReportReadyNotification,
@@ -259,7 +265,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         // Load user — migrate legacy (name+email only) to new AuthUser format
         let hydratedUser: AuthUser | null = null;
         if (u) {
-          hydratedUser = JSON.parse(u) as AuthUser;
+          const parsed = JSON.parse(u) as AuthUser;
+          let apiKey = parsed.api_key ?? null;
+          if (apiKey) {
+            await saveApiKey(parsed.id, apiKey);
+            await AsyncStorage.setItem(KEYS.user, JSON.stringify(userWithoutApiKey(parsed)));
+          } else {
+            apiKey = await loadApiKey(parsed.id);
+          }
+          if (apiKey) {
+            hydratedUser = { ...parsed, api_key: apiKey };
+          } else {
+            hydratedUser = parsed;
+          }
         } else if (legacyUser) {
           const old = JSON.parse(legacyUser);
           // Old format only had name/email — treat as guest
@@ -359,6 +377,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     stopReportAutoSync();
     if (keepLastUserId && prevId != null) {
       removals.push(AsyncStorage.setItem(KEYS.lastUserId, String(prevId)));
+    } else if (prevId != null) {
+      removals.push(clearApiKey(prevId));
     }
     Promise.all(removals).catch(() => {});
   }, []);
@@ -379,7 +399,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       const r = await fetch(`${API_BASE}/api/user/${currentUser.id}/profiles/sync`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": currentUser.api_key },
+        headers: {
+          "Content-Type": "application/json",
+          ...userAuthHeaders(currentUser),
+        },
         body: JSON.stringify({
           profiles: list.map(p => ({
             id: p.id, name: p.name, gender: p.gender, relation: p.relation ?? "",
@@ -403,7 +426,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!u?.id || !u?.api_key) return;
     try {
       const r = await apiFetchWithTimeout(`${API_BASE}/api/user/${u.id}/profiles`, {
-        headers: { "X-API-Key": u.api_key },
+        headers: userAuthHeaders(u),
       }, 8000);
       if (r.status === 404 || r.status === 401) {
         await invalidateDeletedAccount();
@@ -605,13 +628,20 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
       _setUser(u);
       userRef.current = u;
-      AsyncStorage.setItem(KEYS.user, JSON.stringify(u)).catch(() => {});
+      if (u.api_key) {
+        await saveApiKey(u.id, u.api_key);
+      }
+      AsyncStorage.setItem(KEYS.user, JSON.stringify(userWithoutApiKey(u))).catch(() => {});
       AsyncStorage.setItem(KEYS.lastUserId, String(u.id)).catch(() => {});
       void pullProfilesFromCloud(u);
     } else {
+      const prevId = userRef.current?.id;
       _setUser(null);
       userRef.current = null;
       AsyncStorage.removeItem(KEYS.user).catch(() => {});
+      if (prevId != null) {
+        void clearApiKey(prevId);
+      }
     }
   }, [pullProfilesFromCloud]);
 
@@ -630,7 +660,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const primaryProfile = profiles.find(p => p.id === primaryId) ?? profiles[0] ?? null;
     const kundli = primaryProfile?.kundli ?? null;
-    if (!kundli?.planets?.length) { _setDoshData(null); return; }
+    const currentUser = userRef.current;
+    if (!kundli?.planets?.length || !currentUser?.id || !currentUser?.api_key) {
+      _setDoshData(null);
+      return;
+    }
 
     const fp = JSON.stringify({
       p: kundli.planets.map(pl => `${pl.name}:${pl.house}`).sort(),
@@ -645,7 +679,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     fetch(`${API_BASE}/api/dosh-analysis`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(currentUser.id),
+        "X-API-Key": currentUser.api_key,
+      },
       body: JSON.stringify({
         planets: kundli.planets,
         nakshatra: kundli.nakshatra ?? "",
@@ -678,7 +716,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       await fetch(`${API_BASE}/api/user/${currentUser.id}/kundli`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": currentUser.api_key },
+        headers: {
+          "Content-Type": "application/json",
+          ...userAuthHeaders(currentUser),
+        },
         body: JSON.stringify(payload),
       });
     } catch { /* silent — local data is the source of truth */ }
@@ -694,7 +735,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser?.id) return;
     try {
       const r = await fetch(`${API_BASE}/api/user/${currentUser.id}/kundli`, {
-        headers: { "X-API-Key": currentUser.api_key ?? "" },
+        headers: userAuthHeaders(currentUser),
       });
       if (r.status === 404 || r.status === 401) {
         await invalidateDeletedAccount();
@@ -704,8 +745,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const data = await r.json();
       if (data?.user) {
         const updated: AuthUser = { ...currentUser, ...data.user };
+        if (updated.api_key) {
+          await saveApiKey(updated.id, updated.api_key);
+        }
         _setUser(updated);
-        AsyncStorage.setItem(KEYS.user, JSON.stringify(updated)).catch(() => {});
+        AsyncStorage.setItem(KEYS.user, JSON.stringify(userWithoutApiKey(updated))).catch(() => {});
       }
       await pullProfilesFromCloud(currentUser);
     } catch { /* silent */ }
@@ -749,7 +793,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       try {
         const r = await apiFetchWithTimeout(
           `${API_BASE}/api/user/${u.id}/profiles`,
-          { headers: { "X-API-Key": u.api_key } },
+          { headers: userAuthHeaders(u) },
           8000,
         );
         if (cancelled) return;

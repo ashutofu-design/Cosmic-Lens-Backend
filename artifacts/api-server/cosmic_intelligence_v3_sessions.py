@@ -862,12 +862,27 @@ def _v3_tx_row(rec: dict[str, Any]) -> dict[str, Any] | None:
             or rec.get("queued_at")
             or rec.get("created_at")
         )
-        display_status = "paid" if status in ("accepted", "ended") else status
+        if status in ("queued", "pending", "awaiting_user"):
+            display_status = "bought"
+            subtitle = (
+                f"{minutes} min · Bought — deducted when you talk"
+                if minutes
+                else "Bought — deducted when you talk"
+            )
+        elif status == "accepted":
+            display_status = "live"
+            subtitle = f"{minutes} min live" if minutes else "Live now"
+        elif status == "ended":
+            display_status = "used"
+            subtitle = f"{minutes} min · Used" if minutes else "Used"
+        else:
+            display_status = status
+            subtitle = f"{minutes} min live" if minutes else "Live consultation"
         return {
             "id": f"v3-{rec.get('session_id')}",
             "kind": "v3_live",
             "title": f"Cosmic Intelligence V3 · {label}",
-            "subtitle": f"{minutes} min live" if minutes else "Live consultation",
+            "subtitle": subtitle,
             "amount_inr": amount,
             "order_id": str(rec.get("session_id") or "")[:12],
             "status": display_status,
@@ -878,6 +893,66 @@ def _v3_tx_row(rec: dict[str, Any]) -> dict[str, Any] | None:
         }
     except Exception:
         return None
+
+
+def _v3_pack_amount(rec: dict[str, Any]) -> int:
+    amount = int(rec.get("price_inr") or 0)
+    if amount <= 0:
+        pack = PACKS.get(str(rec.get("pack_id") or ""))
+        amount = int((pack or {}).get("price_inr") or 0)
+    return max(0, amount)
+
+
+def v3_balance_for_user(user_id: int) -> dict[str, Any]:
+    """Unused V3 INR stays on Help → Transactions until the user starts talking."""
+    uid = int(user_id or 0)
+    unused = 0
+    used = 0
+    unused_n = 0
+    used_n = 0
+    seen: set[str] = set()
+    unused_st = frozenset({"queued", "pending", "awaiting_user"})
+    used_st = frozenset({"accepted", "ended"})
+    if uid > 0:
+        for rec in _iter_all_records():
+            try:
+                if int(rec.get("user_id") or 0) != uid:
+                    continue
+                status = _normalize_status(rec.get("status"))
+                if status not in unused_st and status not in used_st:
+                    continue
+                amount = _v3_pack_amount(rec)
+                sid = str(rec.get("session_id") or "").strip()
+                if sid:
+                    seen.add(sid)
+                if status in unused_st:
+                    unused += amount
+                    unused_n += 1
+                else:
+                    used += amount
+                    used_n += 1
+            except Exception:
+                continue
+        try:
+            from models import V3LivePurchase
+
+            for p in V3LivePurchase.query.filter_by(user_id=uid, status="paid").all():
+                sid = str(getattr(p, "session_id", "") or "").strip()
+                if sid and sid in seen:
+                    continue
+                unused += int(getattr(p, "amount", 0) or 0)
+                unused_n += 1
+                if sid:
+                    seen.add(sid)
+        except Exception:
+            pass
+    return {
+        "balance_inr": unused,
+        "used_inr": used,
+        "bought_inr": unused + used,
+        "unused_sessions": unused_n,
+        "used_sessions": used_n,
+    }
 
 
 def list_v3_transactions_for_user(user_id: int) -> list[dict[str, Any]]:
@@ -1182,7 +1257,9 @@ def get_v3_messages(
     }
 
 
-def save_v3_image_data_url(data_url: str) -> str | None:
+def save_v3_image_data_url(
+    data_url: str, owner_user_id: int | None = None
+) -> str | None:
     raw = (data_url or "").strip()
     if not raw.startswith("data:image"):
         return None
@@ -1198,6 +1275,13 @@ def save_v3_image_data_url(data_url: str) -> str | None:
         path = os.path.join(_UPLOADS, name)
         with open(path, "wb") as fh:
             fh.write(data)
+        if owner_user_id is not None:
+            try:
+                meta_path = os.path.join(_UPLOADS, f"{name}.owner")
+                with open(meta_path, "w", encoding="utf-8") as meta_fh:
+                    meta_fh.write(str(int(owner_user_id)))
+            except Exception:
+                pass
         return f"/api/cosmic-intelligence-v3/media/{name}"
     except Exception:
         return None
@@ -1223,6 +1307,28 @@ def read_v3_media(filename: str) -> tuple[bytes, str] | None:
         return data, mime
     except Exception:
         return None
+
+
+def user_owns_v3_media(user_id: int, filename: str) -> bool:
+    """True if media belongs to user_id (sidecar owner file or session message ref)."""
+    name = os.path.basename((filename or "").strip())
+    if not name:
+        return False
+    meta_path = os.path.join(_UPLOADS, f"{name}.owner")
+    if os.path.isfile(meta_path):
+        try:
+            with open(meta_path, encoding="utf-8") as fh:
+                return int(fh.read().strip()) == int(user_id)
+        except Exception:
+            pass
+    needle = f"/api/cosmic-intelligence-v3/media/{name}"
+    for rec in _iter_all_records():
+        if int(rec.get("user_id") or 0) != int(user_id):
+            continue
+        for msg in rec.get("messages") or []:
+            if needle in str(msg.get("image_url") or ""):
+                return True
+    return False
 
 
 def list_v3_sessions(

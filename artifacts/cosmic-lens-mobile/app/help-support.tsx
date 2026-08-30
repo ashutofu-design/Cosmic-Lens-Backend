@@ -62,6 +62,23 @@ type TxRow = {
   paid_at: string | null;
 };
 
+type TxBalance = {
+  balance_inr: number;
+  used_inr: number;
+  bought_inr: number;
+  unused_sessions: number;
+  used_sessions: number;
+};
+
+function txStatusLabel(status?: string): string {
+  const s = (status || "").toLowerCase();
+  if (s === "bought") return "Bought";
+  if (s === "used") return "Used";
+  if (s === "live") return "Live";
+  if (s === "paid") return "Paid";
+  return status || "";
+}
+
 type TabKey = "chat" | "tx";
 
 const SUPPORT_EMAIL = "supportcosmiclens@gmail.com";
@@ -72,25 +89,21 @@ const TEAM_AVATARS = [
   { initials: "SM", bg: "#f59e0b" },
 ];
 
-function mediaSrc(
-  url?: string,
-  auth?: { userId?: number | null; apiKey?: string | null },
-): string {
+function mediaSrc(url?: string): string {
   if (!url) return "";
-  let full =
-    url.startsWith("http") || url.startsWith("data:")
-      ? url
-      : `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
-  if (
-    auth?.userId &&
-    auth?.apiKey &&
-    full.includes("/api/support/media/") &&
-    !full.includes("api_key=")
-  ) {
-    const sep = full.includes("?") ? "&" : "?";
-    full = `${full}${sep}user_id=${encodeURIComponent(String(auth.userId))}&api_key=${encodeURIComponent(auth.apiKey)}`;
-  }
-  return full;
+  return url.startsWith("http") || url.startsWith("data:")
+    ? url
+    : `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+function mediaAuthHeaders(
+  auth?: { userId?: number | null; apiKey?: string | null },
+): Record<string, string> | undefined {
+  if (!auth?.userId || !auth?.apiKey) return undefined;
+  return {
+    "X-User-Id": String(auth.userId),
+    "X-API-Key": auth.apiKey,
+  };
 }
 
 function timeLabel(ts?: string): string {
@@ -184,6 +197,7 @@ export default function HelpSupportScreen() {
   const [adminTyping, setAdminTyping] = useState(false);
   const [tab, setTab] = useState<TabKey>("chat");
   const [txItems, setTxItems] = useState<TxRow[]>([]);
+  const [txBalance, setTxBalance] = useState<TxBalance | null>(null);
   const [txLoading, setTxLoading] = useState(false);
   const [txRefreshing, setTxRefreshing] = useState(false);
 
@@ -301,6 +315,7 @@ export default function HelpSupportScreen() {
   const fetchTransactions = useCallback(async () => {
     if (!user?.id || !user?.api_key) {
       setTxItems([]);
+      setTxBalance(null);
       return;
     }
     try {
@@ -310,6 +325,18 @@ export default function HelpSupportScreen() {
       const json = await res.json().catch(() => ({}) as any);
       if (!res.ok) throw new Error(String(json.error || res.status));
       setTxItems(Array.isArray(json.purchases) ? json.purchases : []);
+      const bal = json.balance;
+      setTxBalance(
+        bal && typeof bal === "object"
+          ? {
+              balance_inr: Number(bal.balance_inr) || 0,
+              used_inr: Number(bal.used_inr) || 0,
+              bought_inr: Number(bal.bought_inr) || 0,
+              unused_sessions: Number(bal.unused_sessions) || 0,
+              used_sessions: Number(bal.used_sessions) || 0,
+            }
+          : null,
+      );
     } catch {
       /* keep previous list */
     } finally {
@@ -821,21 +848,48 @@ export default function HelpSupportScreen() {
               />
             }
             ListHeaderComponent={
-              <View
-                style={[
-                  s.txHero,
-                  {
-                    backgroundColor: C.isDark ? "#1a1408" : "#fffbeb",
-                    borderColor: C.isDark ? "#78350f66" : "#fde68a",
-                  },
-                ]}
-              >
-                <MaterialCommunityIcons name="circle-multiple" size={28} color="#f59e0b" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.txHeroTitle, { color: C.text }]}>Transaction history</Text>
+              <View style={{ gap: 10 }}>
+                <View
+                  style={[
+                    s.txBalanceCard,
+                    {
+                      backgroundColor: C.isDark ? "#1a1408" : "#fffbeb",
+                      borderColor: C.isDark ? "#78350f66" : "#fde68a",
+                    },
+                  ]}
+                >
+                  <Text style={[s.txBalanceLabel, { color: C.textMuted }]}>Balance</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <MaterialCommunityIcons name="circle-multiple" size={28} color="#f59e0b" />
+                    <Text style={s.txBalanceAmt}>
+                      {(txBalance?.balance_inr ?? 0).toLocaleString("en-IN")}
+                    </Text>
+                  </View>
                   <Text style={[s.txHeroSub, { color: C.textMuted }]}>
-                    All payments · V1 packs · V3 live · reports — shown as coins
+                    Unused V3 Live. Deducted only when you start talking.
                   </Text>
+                  <Text style={[s.txBalanceMeta, { color: C.textDim }]}>
+                    Bought {(txBalance?.bought_inr ?? 0).toLocaleString("en-IN")}
+                    {"  ·  "}
+                    Used {(txBalance?.used_inr ?? 0).toLocaleString("en-IN")}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    s.txHero,
+                    {
+                      backgroundColor: C.isDark ? "#11131c" : "#fff",
+                      borderColor: C.isDark ? "#232636" : "#e6e6f2",
+                    },
+                  ]}
+                >
+                  <MaterialCommunityIcons name="receipt" size={22} color="#f59e0b" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.txHeroTitle, { color: C.text }]}>Transaction history</Text>
+                    <Text style={[s.txHeroSub, { color: C.textMuted }]}>
+                      V3 shows Bought until you talk — then Used
+                    </Text>
+                  </View>
                 </View>
               </View>
             }
@@ -884,7 +938,9 @@ export default function HelpSupportScreen() {
                   ) : null}
                   <Text style={[s.txMeta, { color: C.textDim }]}>
                     {formatTxWhen(item.paid_at)}
-                    {item.status && item.status !== "paid" ? ` · ${item.status}` : ""}
+                    {item.status && item.status !== "paid"
+                      ? ` · ${txStatusLabel(item.status)}`
+                      : ""}
                   </Text>
                 </View>
                 <CoinAmount amount={item.amount_inr} />
@@ -985,7 +1041,10 @@ export default function HelpSupportScreen() {
                     {item.text ? <Text style={[s.msg, { color: "#fff" }]}>{item.text}</Text> : null}
                     {item.image_url ? (
                       <Image
-                        source={{ uri: mediaSrc(item.image_url, { userId: user?.id, apiKey: user?.api_key }) }}
+                        source={{
+                          uri: mediaSrc(item.image_url),
+                          headers: mediaAuthHeaders({ userId: user?.id, apiKey: user?.api_key }),
+                        }}
                         style={s.img}
                         resizeMode="cover"
                       />
@@ -1037,7 +1096,10 @@ export default function HelpSupportScreen() {
                     ) : null}
                     {item.image_url ? (
                       <Image
-                        source={{ uri: mediaSrc(item.image_url, { userId: user?.id, apiKey: user?.api_key }) }}
+                        source={{
+                          uri: mediaSrc(item.image_url),
+                          headers: mediaAuthHeaders({ userId: user?.id, apiKey: user?.api_key }),
+                        }}
                         style={s.img}
                         resizeMode="cover"
                       />
@@ -1162,6 +1224,25 @@ const s = StyleSheet.create({
   },
   tabTxt: { fontSize: 13, fontWeight: "700" },
   txList: { padding: 14, gap: 10 },
+  txBalanceCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
+  },
+  txBalanceLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  txBalanceAmt: {
+    color: "#f59e0b",
+    fontSize: 32,
+    fontWeight: "800",
+    fontFamily: "Nunito_700Bold",
+  },
+  txBalanceMeta: { fontSize: 12, fontWeight: "600", marginTop: 2 },
   txHero: {
     flexDirection: "row",
     alignItems: "center",

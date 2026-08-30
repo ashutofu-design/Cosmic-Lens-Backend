@@ -213,3 +213,22 @@ def test_legacy_pending_treated_as_queued(v3):
     got = v3.get_v3_session(a["session_id"])
     assert v3._normalize_status(got.get("status")) == "queued"
     assert v3.queue_position_for(a["session_id"]) == 1
+
+
+def test_v3_balance_unused_until_talk(v3):
+    live = _mk(v3, 81, "15")
+    v3.admin_ready_v3_session(live["session_id"])
+    v3.user_accept_v3_session(live["session_id"], user_id=81)
+    queued = _mk(v3, 81, "30")
+
+    bal = v3.v3_balance_for_user(81)
+    assert bal["balance_inr"] == 699
+    assert bal["used_inr"] == 399
+    assert bal["bought_inr"] == 1098
+    assert bal["unused_sessions"] == 1
+    assert bal["used_sessions"] == 1
+
+    rows = v3.list_v3_transactions_for_user(81)
+    statuses = {r["id"]: r["status"] for r in rows}
+    assert statuses[f"v3-{queued['session_id']}"] == "bought"
+    assert statuses[f"v3-{live['session_id']}"] == "live"

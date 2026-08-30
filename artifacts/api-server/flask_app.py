@@ -3534,9 +3534,15 @@ def list_user_purchases(user_id):
     if err:
         return err
 
+    from cosmic_intelligence_v3_sessions import v3_balance_for_user
     from purchase_history import build_user_purchase_history
 
-    return jsonify({"purchases": build_user_purchase_history(user_id)})
+    return jsonify(
+        {
+            "purchases": build_user_purchase_history(user_id),
+            "balance": v3_balance_for_user(user_id),
+        }
+    )
 
 
 @app.route("/api/user/<int:user_id>/profiles/deleted", methods=["GET"])

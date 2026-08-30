@@ -1,7 +1,7 @@
 # Payments, refunds, and transactions
 
 ## No wallet
-Cosmic Lens has NO rupee wallet / balance. Paid orders show on Help → Transactions. Ask question credits show on Profile → Cosmic Packs or the Ask pack bar (“N of 3 free”, “Pack · left/total · till date”). That Ask bar is question credits only — not money.
+Cosmic Lens has NO rupee wallet / balance. Paid orders and payments show on Help → Transactions. Ask question credits show on Profile → Cosmic Packs or the Ask pack bar (“N of 3 free”, “Pack · left/total · till date”). That Ask bar is question credits only — not money.
 
 ## How to pay
 Prices in ₹ include applicable GST. Pay via UPI / card / netbanking in the payment sheet. If the payment sheet closed, tap Pay again.

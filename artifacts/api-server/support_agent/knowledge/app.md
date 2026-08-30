@@ -10,8 +10,8 @@ More includes: Panchang & Muhurat; Kundli & Charts (Planet Position / Kundli —
 Public User ID is COSMO + digits (example COSMO109) on Profile. Assigned at signup; cannot be changed.
 
 ## Login — Google or phone OTP
-Two login ways: (1) Continue with Google; (2) Indian mobile OTP — +91 and 10 digits, then 6-digit SMS OTP. OTP is for the app/device flow (not always on web).
-If login is stuck or the app sends you back to login: Profile → Logout if you can, force-stop Cosmic Lens, open again, then sign in. Email supportcosmiclens@gmail.com if it still fails.
+Two login ways: Google or Indian mobile OTP (+91, 10 digits, 6-digit SMS). If login ke baad logout / stuck: force-stop the app, then sign in again.
+OTP is for the app/device flow (not always on web). Profile → Logout then sign in if needed. Email supportcosmiclens@gmail.com if it still fails.
 
 ## OTP not received / wrong OTP
 First send can take 15–30 seconds. Resend OTP unlocks after about 2 minutes. Check SMS and spam. Wrong OTP: type again or tap Resend. Session expired: tap Resend OTP and use the new code.

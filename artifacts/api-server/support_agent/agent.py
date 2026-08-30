@@ -89,6 +89,12 @@ def _pick_price_line(body: str, question: str) -> str:
         prefer = [ln for ln in lines if re.search(r"60\s*min|1\s*hour|one\s*hour", ln, re.I)]
     elif re.search(r"(?i)\b(sasta|cheapest|starter)\b", q):
         prefer = [ln for ln in lines if re.search(r"starter|sasta|cheapest|₹49", ln, re.I)]
+    elif re.search(r"(?i)\bpopular\b", q):
+        prefer = [ln for ln in lines if re.search(r"popular|₹99", ln, re.I)]
+    elif re.search(r"(?i)\bpower\b", q):
+        prefer = [ln for ln in lines if re.search(r"power|₹299", ln, re.I)]
+    elif re.search(r"(?i)\bshop\b", q) and re.search(r"(?i)vastu", q):
+        prefer = [ln for ln in lines if re.search(r"shop", ln, re.I)]
     elif re.search(r"(?i)\b(video)\b", q) and re.search(r"(?i)\b(milan|love|numerology|palm)", q):
         prefer = [ln for ln in lines if re.search(r"video", ln, re.I)]
     chosen = prefer[0] if prefer else lines[0]

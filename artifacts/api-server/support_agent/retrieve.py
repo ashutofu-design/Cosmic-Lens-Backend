@@ -116,6 +116,12 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "welcome": ("welcome", "gift", "bonus", "free", "signup"),
     "gift": ("gift", "welcome", "bonus", "free", "questions"),
     "instagram": ("instagram", "reel", "answers"),
+    "language": ("language", "lang", "profile", "hindi", "english", "hinglish"),
+    "logout": ("logout", "login", "force", "stuck", "sign"),
+    "farq": ("farq", "help", "ask", "difference"),
+    "queue": ("queue", "accept", "v3", "live", "miss"),
+    "book": ("book", "v3", "live", "pack", "accept"),
+    "wallet": ("wallet", "balance", "transactions", "payment"),
     "family": ("family", "profile", "profiles", "member"),
     "transaction": ("transaction", "payment", "wallet", "order"),
     "razorpay": ("razorpay", "cashfree", "payment", "pay"),
@@ -238,6 +244,34 @@ def retrieve_chunks(
     wants_pack = bool(
         re.search(r"(?i)\b(pack|starter|popular|power|sasta|cheapest)\b", question or "")
     ) and not wants_v3
+    wants_wallet = bool(
+        re.search(
+            r"(?i)\b(wallet|transactions?|paise kahan|payments? show|payment kahan|dikhe)\b",
+            question or "",
+        )
+    )
+    wants_where_pdf = bool(
+        re.search(r"(?i)\b(where|kahan|milega)\b", question or "")
+        and re.search(r"(?i)\b(pdf|report)\b", question or "")
+        and not price_ask
+    )
+    wants_language = bool(re.search(r"(?i)\b(language|lang)\b", question or ""))
+    wants_career1 = bool(re.search(r"(?i)\bcareer\b", question or "") and re.search(r"(?i)\b(1|₹1|rupee|unlock)\b", question or ""))
+    wants_birth_edit = bool(
+        re.search(r"(?i)\b(galat|wrong|edit|daal)\b", question or "")
+        and re.search(r"(?i)\b(birth|time|kundli)\b", question or "")
+        and "rectif" not in q_lower
+    )
+    wants_help_vs_ask = bool(
+        re.search(r"(?i)\bhelp\b", question or "") and re.search(r"(?i)\b(ask|farq|difference)\b", question or "")
+    )
+    wants_numero = "numerology" in q_lower
+    wants_love = bool(re.search(r"(?i)\blove\s+reality|love reality\b", question or ""))
+    wants_palm = bool(re.search(r"(?i)\bpalm", question or ""))
+    wants_btr = bool(re.search(r"(?i)\brectif", question or ""))
+    wants_biz_vastu = bool(re.search(r"(?i)\bbusiness\s+vastu|\bshop\b", question or "") and re.search(r"(?i)vastu|shop", question or ""))
+    wants_forecast = bool(re.search(r"(?i)\b(forecast|7\s*day|7-day)\b", question or ""))
+    v3_howto = wants_v3 and bool(re.search(r"(?i)\b(book|kaise|queue|miss|accept)\b", question or "")) and not price_ask
 
     scored: list[tuple[float, KnowledgeChunk]] = []
     for ch in index:
@@ -270,6 +304,55 @@ def retrieve_chunks(
                 score += 3.0
             if wants_milan and "dosh" in title_l:
                 score -= 4.0
+            if wants_numero and ch.source == "numerology.md" and "pro" in title_l:
+                score += 4.0
+            if wants_love and ch.source == "relationship.md" and "love" in title_l:
+                score += 4.0
+            if wants_palm and ch.source == "vastu.md" and "palmistry pro" in title_l:
+                score += 4.0
+            if wants_btr and ch.source == "faq.md" and "rectif" in title_l:
+                score += 4.5
+            if wants_career1 and ch.source == "faq.md" and "career" in title_l and "₹1" in (ch.text or ""):
+                score += 4.5
+            if wants_career1 and "confirm prices" in title_l:
+                score -= 4.0
+            if wants_biz_vastu and ch.source == "vastu.md" and "business" in title_l:
+                score += 4.0
+            if (wants_numero or wants_love or wants_palm or wants_btr or wants_biz_vastu or wants_career1) and (
+                ch.source == "ask_packs.md" and "pack price" in title_l
+            ):
+                score -= 5.0
+
+        if wants_wallet and ch.source == "payments.md" and "wallet" in title_l:
+            score += 5.0
+        if wants_wallet and "processor" in title_l:
+            score -= 4.0
+        if wants_where_pdf and ch.source == "reports.md":
+            score += 4.5
+        if wants_where_pdf and "₹" in (ch.text or "") and ch.source == "relationship.md":
+            score -= 4.0
+        if wants_language and ch.source == "app.md" and "language" in title_l:
+            score += 5.0
+        if wants_language and "theme" in title_l:
+            score -= 3.5
+        if wants_birth_edit and ch.source == "faq.md" and "edit" in title_l:
+            score += 5.0
+        if wants_birth_edit and ch.source == "app.md" and "kundli and charts" in title_l:
+            score -= 4.0
+        if wants_help_vs_ask and ch.source == "app.md" and ("help vs ask" in title_l or "divya" in title_l):
+            score += 5.0
+        if wants_help_vs_ask and ch.source == "ask_packs.md":
+            score -= 5.0
+        if wants_forecast and "forecast" in title_l:
+            score += 4.5
+        if wants_forecast and "how today's energy works" in title_l:
+            score -= 3.5
+        if v3_howto and ch.source == "ask_packs.md" and "how it works" in title_l:
+            score += 4.5
+        if v3_howto and "price" in title_l:
+            score -= 4.0
+        if re.search(r"(?i)\b(logout|stuck|force-stop|force stop)\b", question or "") and "login" in title_l:
+            score += 3.5
 
         scored.append((score, ch))
 

@@ -32,7 +32,7 @@ _PDF_AI = re.compile(
 _V1V3 = re.compile(r"(?i)\b(v1|v3|ask|live|pack|engine|bot|answer|chart)\b")
 
 _OFF_APP = re.compile(
-    r"(?i)\b(weather|cricket|stock market|bitcoin|recipe|homework|politics|"
+    r"(?i)\b(weather|cricket|\bipl\b|stock market|bitcoin|recipe|homework|politics|"
     r"who is the prime minister|write code for me)\b"
 )
 _PRODUCTS = (

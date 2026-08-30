@@ -123,6 +123,17 @@ def _short_from_chunks(chunks: list[Any], question: str = "") -> str:
         and not price_q
     )
     wants_btr = bool(re.search(r"(?i)\brectif", q))
+    v3_howto = bool(
+        re.search(r"(?i)\b(v3|live)\b", q)
+        and re.search(
+            r"(?i)("
+            r"\b(connect|queue|accept|waiting|miss|book|kaise|bought|kharida)\b|"
+            r"not able|cannot|can.?t connect|nahi ho"
+            r")",
+            q,
+        )
+        and not price_q
+    )
     ordered = list(chunks)
 
     def _title(c: Any) -> str:
@@ -134,6 +145,16 @@ def _short_from_chunks(chunks: list[Any], question: str = "") -> str:
     def _src(c: Any) -> str:
         return str(getattr(c, "source", "") or "")
 
+    if v3_howto:
+        how = [
+            c
+            for c in ordered
+            if _src(c).endswith("ask_packs.md")
+            and "how it works" in _title(c)
+            and "price" not in _title(c)
+        ]
+        if how:
+            ordered = how
     if where_pdf:
         loc = [
             c

@@ -47,8 +47,8 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "ask": ("ask", "pack", "v1", "v3", "engine", "chart", "live"),
     "ai": ("ai", "engine", "v1", "v3", "ask", "chatgpt"),
     "chatgpt": ("chatgpt", "ai", "engine", "v1", "v3", "ask"),
-    "v3": ("v3", "live", "guide", "queue", "accept", "pack", "min", "session", "prices"),
-    "live": ("live", "v3", "guide", "session", "queue", "min", "prices"),
+    "v3": ("v3", "live", "guide", "queue", "accept", "pack", "min", "session"),
+    "live": ("live", "v3", "guide", "session", "queue", "min"),
     "session": ("session", "v3", "live", "min", "guide", "prices"),
     "guide": ("guide", "v3", "live", "session"),
     "hour": ("hour", "min", "v3", "live", "prices", "60"),
@@ -121,6 +121,9 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "farq": ("farq", "help", "ask", "difference"),
     "queue": ("queue", "accept", "v3", "live", "miss"),
     "book": ("book", "v3", "live", "pack", "accept"),
+    "connect": ("connect", "queue", "accept", "waiting", "v3", "live", "ask"),
+    "bought": ("bought", "paid", "v3", "queue", "accept", "connect"),
+    "kharida": ("kharida", "bought", "paid", "v3", "queue", "accept", "connect"),
     "wallet": ("wallet", "balance", "transactions", "payment", "payments"),
     "family": ("family", "profile", "profiles", "member"),
     "transaction": ("transaction", "payment", "payments", "wallet", "order"),
@@ -163,6 +166,15 @@ def _query_tokens(question: str) -> set[str]:
         and not _PRICE_ASK.search(question or "")
     )
     skip_pack_price = bool(re.search(r"\brectif", low))
+    skip_v3_price = bool(
+        re.search(r"\b(v3|live)\b", low)
+        and re.search(
+            r"\b(connect|queue|accept|waiting|miss|book|kaise|bought|kharida)\b|"
+            r"not able|cannot|can t|nahi ho",
+            low,
+        )
+        and not _PRICE_ASK.search(question or "")
+    )
     out: set[str] = set()
     for t in raw:
         if t in _STOP:
@@ -185,6 +197,9 @@ def _query_tokens(question: str) -> set[str]:
                     extra.discard("pack")
                     extra.discard("prices")
                     extra.discard("starter")
+                if skip_v3_price:
+                    extra.discard("prices")
+                    extra.discard("min")
                 out.update(extra)
     if skip_ask_pack:
         out.discard("prices")
@@ -194,6 +209,11 @@ def _query_tokens(question: str) -> set[str]:
     if skip_priority:
         out.discard("priority")
         out.add("reports")
+    if skip_v3_price:
+        out.discard("prices")
+        out.add("queue")
+        out.add("accept")
+        out.add("connect")
     return out
 
 
@@ -311,7 +331,15 @@ def retrieve_chunks(
     wants_btr = bool(re.search(r"(?i)\brectif", question or ""))
     wants_biz_vastu = bool(re.search(r"(?i)\bbusiness\s+vastu|\bshop\b", question or "") and re.search(r"(?i)vastu|shop", question or ""))
     wants_forecast = bool(re.search(r"(?i)\b(forecast|7\s*day|7-day)\b", question or ""))
-    v3_howto = wants_v3 and bool(re.search(r"(?i)\b(book|kaise|queue|miss|accept)\b", question or "")) and not price_ask
+    v3_howto = wants_v3 and bool(
+        re.search(
+            r"(?i)("
+            r"\b(book|kaise|queue|miss|accept|connect|bought|kharida|waiting)\b|"
+            r"not able|cannot connect|can.?t connect|nahi ho"
+            r")",
+            question or "",
+        )
+    ) and not price_ask
 
     scored: list[tuple[float, KnowledgeChunk]] = []
     for ch in index:
@@ -408,9 +436,9 @@ def retrieve_chunks(
         if wants_forecast and "how today's energy works" in title_l:
             score -= 3.5
         if v3_howto and ch.source == "ask_packs.md" and "how it works" in title_l:
-            score += 4.5
+            score += 8.0
         if v3_howto and "price" in title_l:
-            score -= 4.0
+            score -= 8.0
         if re.search(r"(?i)\b(logout|stuck|force-stop|force stop)\b", question or "") and "login" in title_l:
             score += 3.5
 

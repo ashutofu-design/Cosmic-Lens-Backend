@@ -141,6 +141,9 @@ class SupportAgentTests(unittest.TestCase):
             btr = run("Birth Time Rectification price", lang="en")
             self.assertRegex(btr["reply"], re.compile(r"₹?999|rectif", re.I))
             self.assertNotRegex(btr["reply"], re.compile(r"₹49|Starter", re.I))
+            v3c = run("I bought Cosmic V3 but I am not able to connect", lang="en")
+            self.assertRegex(v3c["reply"], re.compile(r"queue|accept|ask|waiting|connect", re.I))
+            self.assertNotRegex(v3c["reply"], re.compile(r"₹399|₹49", re.I))
         finally:
             sag._llm = orig
 

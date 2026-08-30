@@ -138,6 +138,17 @@ _PRICE_ASK = re.compile(
     r"(?i)\b(price|pricing|prices|cost|costly|charge|fee|rate|kitne|kitna|kitni|"
     r"sasta|sasti|cheapest|mehnga|mehngi|rupee|rs\.?|inr|padta|padega|costly)\b|₹"
 )
+_DELIVERY_ASK = re.compile(
+    r"(?i)(kitne\s+din|kitne\s+day|how many days|delivery time|din me aata|report delivery)"
+)
+
+
+def is_price_question(question: str) -> bool:
+    """₹ / kitna price — but not 'kitne din' delivery."""
+    q = question or ""
+    if _DELIVERY_ASK.search(q):
+        return False
+    return bool(_PRICE_ASK.search(q))
 
 
 @dataclass(frozen=True)
@@ -163,9 +174,13 @@ def _query_tokens(question: str) -> set[str]:
     skip_priority = bool(
         re.search(r"\b(where|kahan|milega)\b", low)
         and re.search(r"\b(pdf|report)\b", low)
-        and not _PRICE_ASK.search(question or "")
+        and not is_price_question(question or "")
     )
-    skip_pack_price = bool(re.search(r"\brectif", low))
+    skip_pack_price = bool(
+        re.search(r"\brectif", low)
+        or re.search(r"\b(expire|expired|credits?)\b", low)
+        or _DELIVERY_ASK.search(question or "")
+    )
     skip_v3_price = bool(
         re.search(r"\b(v3|live)\b", low)
         and re.search(
@@ -173,7 +188,7 @@ def _query_tokens(question: str) -> set[str]:
             r"not able|cannot|can t|nahi ho",
             low,
         )
-        and not _PRICE_ASK.search(question or "")
+        and not is_price_question(question or "")
     )
     out: set[str] = set()
     for t in raw:
@@ -183,8 +198,9 @@ def _query_tokens(question: str) -> set[str]:
         if skip_ask_pack and t in ("ask", "pack", "kitne", "kitna"):
             continue
         if skip_pack_price and t in ("price", "prices", "kitne", "kitna"):
-            out.add("rectification")
-            out.add("999")
+            if re.search(r"\brectif", low):
+                out.add("rectification")
+                out.add("999")
             continue
         for key, syns in _SYNONYMS.items():
             if t == key or t in syns:
@@ -293,7 +309,7 @@ def retrieve_chunks(
             if t in q:
                 df[t] = df.get(t, 0) + 1
 
-    price_ask = bool(_PRICE_ASK.search(question or ""))
+    price_ask = is_price_question(question or "")
     q_lower = (question or "").lower()
     wants_milan = "milan" in q_lower
     wants_v3 = bool(re.search(r"(?i)\b(v3|live\s+guide|live\s+session)\b", question or ""))
@@ -310,10 +326,30 @@ def retrieve_chunks(
             question or "",
         )
     )
+    wants_otp = bool(re.search(r"(?i)\b(otp|resend|sms)\b", question or ""))
+    wants_how_pay = bool(
+        re.search(r"(?i)(how to pay|kaise pay|pay kaise|how do i pay)", question or "")
+    )
+    wants_delivery = bool(_DELIVERY_ASK.search(question or ""))
+    wants_delete = bool(re.search(r"(?i)\bdelete\b", question or "") and re.search(r"(?i)\baccount\b", question or ""))
+    wants_instagram = bool(re.search(r"(?i)\binstagram\b", question or "") and re.search(r"(?i)\b(answer|reel|kaise)\b", question or ""))
+    wants_astro_where = bool(
+        re.search(r"(?i)\bastrovastu\b", question or "")
+        and re.search(r"(?i)\b(kahan|where|khole|open)\b", question or "")
+    )
+    wants_credits_how = bool(
+        re.search(r"(?i)\bcredits?\b", question or "")
+        and re.search(r"(?i)\b(how|work|kaise)\b", question or "")
+    )
+    wants_expire = bool(re.search(r"(?i)\bexpir", question or ""))
+    wants_notif = bool(re.search(r"(?i)\b(notification|alert)\b", question or "") and re.search(r"(?i)\b(nahi|not|aa rahe)\b", question or ""))
+    wants_priority_miss = bool(re.search(r"(?i)\bpriority\b", question or "") and re.search(r"(?i)\b(miss|missed|refund)\b", question or ""))
+    wants_milan_partner = bool(re.search(r"(?i)\b(partner|milan)\b", question or "") and re.search(r"(?i)\b(add|kaise)\b", question or ""))
     wants_where_pdf = bool(
         re.search(r"(?i)\b(where|kahan|milega)\b", question or "")
         and re.search(r"(?i)\b(pdf|report)\b", question or "")
         and not price_ask
+        and not wants_delivery
     )
     wants_language = bool(re.search(r"(?i)\b(language|lang)\b", question or ""))
     wants_career1 = bool(re.search(r"(?i)\bcareer\b", question or "") and re.search(r"(?i)\b(1|₹1|rupee|unlock)\b", question or ""))
@@ -331,15 +367,16 @@ def retrieve_chunks(
     wants_btr = bool(re.search(r"(?i)\brectif", question or ""))
     wants_biz_vastu = bool(re.search(r"(?i)\bbusiness\s+vastu|\bshop\b", question or "") and re.search(r"(?i)vastu|shop", question or ""))
     wants_forecast = bool(re.search(r"(?i)\b(forecast|7\s*day|7-day)\b", question or ""))
+    v3_book = wants_v3 and bool(re.search(r"(?i)\b(book|kaise book)\b", question or "")) and not price_ask
     v3_howto = wants_v3 and bool(
         re.search(
             r"(?i)("
-            r"\b(book|kaise|queue|miss|accept|connect|bought|kharida|waiting)\b|"
-            r"not able|cannot connect|can.?t connect|nahi ho"
+            r"\b(queue|miss|accept|connect|bought|kharida|waiting|session)\b|"
+            r"not able|cannot connect|can.?t connect|nahi ho|how do v3"
             r")",
             question or "",
         )
-    ) and not price_ask
+    ) and not price_ask and not v3_book
 
     scored: list[tuple[float, KnowledgeChunk]] = []
     for ch in index:
@@ -439,6 +476,64 @@ def retrieve_chunks(
             score += 8.0
         if v3_howto and "price" in title_l:
             score -= 8.0
+        if v3_book and ch.source == "ask_packs.md" and "how to book" in title_l:
+            score += 9.0
+        if v3_book and ch.source == "ask_packs.md" and "cannot connect" in (ch.text or "").lower():
+            score -= 4.0
+        if v3_book and "price" in title_l:
+            score -= 8.0
+        if wants_otp and "otp not" in title_l:
+            score += 9.0
+        if wants_otp and title_l.startswith("login"):
+            score -= 7.0
+        if wants_how_pay and "how to pay" in title_l:
+            score += 9.0
+        if wants_how_pay and "confirm" in title_l:
+            score -= 8.0
+        if wants_delivery and ch.source == "reports.md" and "delivery time" in title_l:
+            score += 10.0
+        if wants_delivery and ch.source == "reports.md" and "priority fee" in title_l:
+            score -= 6.0
+        if wants_delivery and ch.source in ("relationship.md", "numerology.md", "subscription.md"):
+            score -= 8.0
+        if wants_delete and "delete account" in title_l:
+            score += 10.0
+        if wants_delete and "cosmo" in title_l:
+            score -= 10.0
+        if wants_instagram and "instagram answers" in title_l:
+            score += 10.0
+        if wants_instagram and "talk to founder" in title_l:
+            score -= 10.0
+        if wants_astro_where and ch.source == "vastu.md" and "astrovastu" in title_l and "free" in title_l:
+            score += 10.0
+        if wants_astro_where and "business vastu" in title_l:
+            score -= 8.0
+        if wants_credits_how and "credits" in title_l:
+            score += 10.0
+        if wants_credits_how and "pack price" in title_l:
+            score -= 10.0
+        if wants_expire and "expir" in title_l:
+            score += 10.0
+        if wants_expire and "pack price" in title_l:
+            score -= 10.0
+        if wants_notif and "notification" in title_l:
+            score += 8.0
+        if wants_priority_miss and "priority fee guarantee" in title_l:
+            score += 10.0
+        if wants_priority_miss and "delivery time" in title_l:
+            score += 4.0
+        if wants_milan_partner and ch.source == "relationship.md" and "milan basic" in title_l:
+            score += 8.0
+        if wants_numero and not price_ask and ch.source == "numerology.md" and "numerology pro" in title_l and "contents" not in title_l:
+            score += 6.0
+        if wants_numero and not price_ask and "numerology basic" in title_l:
+            score -= 6.0
+        if wants_career1 and ch.source == "faq.md" and "career" in title_l and "₹1" in title_l:
+            score += 6.0
+        if wants_biz_vastu and price_ask and "confirm prices" in title_l:
+            score -= 8.0
+        if wants_biz_vastu and price_ask and "business vastu checkout" in title_l:
+            score += 8.0
         if re.search(r"(?i)\b(logout|stuck|force-stop|force stop)\b", question or "") and "login" in title_l:
             score += 3.5
 

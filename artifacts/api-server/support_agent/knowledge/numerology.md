@@ -7,7 +7,7 @@ Life Map → Explore → Numerology.
 Basic is free on-screen numbers: Life Path, Destiny, Soul Urge and related core identity / traits / love pattern / year timing / lucky elements style summaries shown in the Basic tab. Instant on screen — not a PDF.
 
 ## Numerology Pro
-Pro is a paid expert PDF (Life Mastery) and optional personalized video — not an instant auto file.
+Numerology Pro is a paid expert PDF (Life Mastery) and optional personalized video — not an instant auto file and not the free Basic tab.
 PDF offer ₹299. Video ₹799.
 Report priority +₹149; video priority +₹299 when selected on screen.
 After pay, files land in My Reports (standard 4–6 business days; Priority ~12h when selected).

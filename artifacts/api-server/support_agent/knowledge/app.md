@@ -37,8 +37,8 @@ First-time / unlock flows: create primary kundli with name, date of birth, birth
 ## Profile and family
 Kundli / birth details: Profile → edit. Add family or partner profiles (name, gender, DOB, time, place). Set one as primary. Delete account: Profile → About → type DELETE.
 
-## Delete account effects
-Deleting is permanent: login removed; kundlis, profiles, and chat erased within about 30 days. GST invoices may be kept for legal periods. Confirm by typing DELETE.
+## Delete account
+To delete your account: Profile → About → type DELETE. Permanent: login removed; kundlis, profiles, and chat erased within about 30 days. GST invoices may be kept for legal periods.
 
 ## Referral
 Refer & Earn: Profile. Share code like CL + your user id. Friend enters once at signup. When that friend buys any Ask V1 or V3 pack, you get 3 free Ask questions (one reward per referred buyer).
@@ -74,7 +74,7 @@ Muhurat: auspicious times for Wedding, Griha Pravesh, Business Start, Vehicle, N
 More → Gemstones: Vedic gemstone guide (Navratna style tips) and certified gems shop. Request on WhatsApp for real photos/videos before paying. In-app buy (if shown) uses the Pay screen amount — confirm there. Paid gemstone orders appear on Help → Transactions. Cosmic Help does not invent a gemstone rupee price.
 
 ## Daily Alerts and notifications
-Daily Alerts: daily planetary guidance cards (energy score, Moon, insight, lucky colour/numbers). Multi-profile where shown. If alerts do not arrive: phone Settings → Cosmic Lens → Notifications ON, then reopen the app. Push may also cover V3 ready / report ready when enabled.
+If notifications / alerts are not coming: phone Settings → Cosmic Lens → Notifications ON, then reopen the app. Daily Alerts are planetary guidance cards (energy, Moon, lucky colour/numbers). Push may also cover V3 ready / report ready.
 
 ## Instagram Answers
 Instagram Answers (reel / DM auto-reply) is not live. It is hidden in the app. Do not give a how-to. Say it is not available yet.

@@ -32,8 +32,14 @@ Half hour / 30 min ₹699 (most popular).
 One hour / 1 hour / 60 min ₹1299.
 Listed one-time session prices — state these when asked; Pay screen is final if it differs.
 
+## V3 Live how to book
+Book V3 on Ask → language → Cosmic Packs (focus V3). After pay you join the waiting list. Timer starts only after Accept when the Guide is ready — not at purchase.
+
 ## V3 Live how it works
-Paid / bought V3 but cannot connect? Open the Ask tab (not Cosmic Help): after pay you join the queue; when the Guide is ready, tap Accept & Start within about 2 minutes or you go to the end of the line. Timer starts only after Accept — not at purchase. Book on Cosmic Packs (Ask → language → Cosmic Packs, focus V3). End chat is final (no re-entry for that session).
+Paid / bought V3 but cannot connect? Open the Ask tab (not Cosmic Help): after pay you join the queue; when the Guide is ready, tap Accept & Start within about 2 minutes or you go to the end of the line. Timer starts only after Accept — not at purchase. End chat is final (no re-entry for that session).
+
+## Pack expired
+If a V1 pack expire / till date passed, leftover questions are gone. Buy another pack on Cosmic Packs. Previous Ask chat stays.
 
 ## Cosmic Packs hub
 Profile → Cosmic Packs (or from Ask) is the buy hub for one-time V1 question packs and V3 Live sessions.

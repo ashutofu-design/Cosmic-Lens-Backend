@@ -57,13 +57,17 @@ _INTERNAL_ASK = re.compile(
 _DEVANAGARI = re.compile(r"[\u0900-\u097f]")
 
 _HARD_ESCALATE = re.compile(
-    r"(?i)\b(refund|chargeback|fraud|legal|lawyer|screenshot|"
-    r"paid.*(missing|nahi)|money\s+cut|payment\s+failed)\b"
+    r"(?i)\b(refund|fraud|legal|lawyer|screenshot|"
+    r"paid.*(missing|nahi)|money\s+cut|payment\s+failed|"
+    r"(i want a |raise a |karna|karun).{0,12}chargeback|chargeback (kar|do|chahiye))\b"
 )
 
 _PRICE_ASK = re.compile(
     r"(?i)\b(price|pricing|prices|cost|costly|charge|fee|rate|kitne|kitna|kitni|"
     r"sasta|sasti|cheapest|mehnga|mehngi|rupee|rs\.?|inr|padta|padega)\b|₹"
+)
+_DELIVERY_ASK = re.compile(
+    r"(?i)(kitne\s+din|kitne\s+day|how many days|delivery time|din me aata|report delivery)"
 )
 
 
@@ -116,23 +120,30 @@ def _short_from_chunks(chunks: list[Any], question: str = "") -> str:
             q,
         )
     )
-    price_q = bool(_PRICE_ASK.search(q))
+    price_q = bool(_PRICE_ASK.search(q)) and not bool(_DELIVERY_ASK.search(q))
     where_pdf = bool(
         re.search(r"(?i)\b(where|kahan|milega)\b", q)
         and re.search(r"(?i)\b(pdf|report)\b", q)
         and not price_q
+        and not _DELIVERY_ASK.search(q)
     )
     wants_btr = bool(re.search(r"(?i)\brectif", q))
+    v3_book = bool(
+        re.search(r"(?i)\b(v3|live)\b", q)
+        and re.search(r"(?i)\bbook\b", q)
+        and not price_q
+    )
     v3_howto = bool(
         re.search(r"(?i)\b(v3|live)\b", q)
         and re.search(
             r"(?i)("
-            r"\b(connect|queue|accept|waiting|miss|book|kaise|bought|kharida)\b|"
+            r"\b(connect|queue|accept|waiting|miss|bought|kharida)\b|"
             r"not able|cannot|can.?t connect|nahi ho"
             r")",
             q,
         )
         and not price_q
+        and not v3_book
     )
     ordered = list(chunks)
 
@@ -145,16 +156,44 @@ def _short_from_chunks(chunks: list[Any], question: str = "") -> str:
     def _src(c: Any) -> str:
         return str(getattr(c, "source", "") or "")
 
+    def _prefer(match) -> None:
+        nonlocal ordered
+        hit = [c for c in ordered if match(c)]
+        if hit:
+            ordered = hit
+
+    if v3_book:
+        _prefer(lambda c: _src(c).endswith("ask_packs.md") and "how to book" in _title(c))
     if v3_howto:
-        how = [
-            c
-            for c in ordered
-            if _src(c).endswith("ask_packs.md")
+        _prefer(
+            lambda c: _src(c).endswith("ask_packs.md")
             and "how it works" in _title(c)
             and "price" not in _title(c)
-        ]
-        if how:
-            ordered = how
+        )
+    if re.search(r"(?i)\b(otp|resend)\b", q):
+        _prefer(lambda c: "otp not" in _title(c))
+    if re.search(r"(?i)(how to pay|kaise pay|pay kaise)", q):
+        _prefer(lambda c: "how to pay" in _title(c))
+    if _DELIVERY_ASK.search(q):
+        _prefer(lambda c: _src(c).endswith("reports.md") and "delivery time" in _title(c))
+    if re.search(r"(?i)\bdelete\b", q) and re.search(r"(?i)\baccount\b", q):
+        _prefer(lambda c: "delete account" in _title(c))
+    if re.search(r"(?i)\binstagram\b", q):
+        _prefer(lambda c: "instagram answers" in _title(c))
+    if re.search(r"(?i)\bastrovastu\b", q) and re.search(r"(?i)\b(kahan|khole|where)\b", q):
+        _prefer(lambda c: "astrovastu" in _title(c) and "free" in _title(c))
+    if re.search(r"(?i)\bcredits?\b", q) and re.search(r"(?i)\b(how|work|kaise)\b", q):
+        _prefer(lambda c: "credits" in _title(c))
+    if re.search(r"(?i)\bexpir", q):
+        _prefer(lambda c: "expir" in _title(c))
+    if re.search(r"(?i)\b(notification|alert)\b", q) and re.search(r"(?i)\b(nahi|not)\b", q):
+        _prefer(lambda c: "notification" in _title(c))
+    if re.search(r"(?i)\bpriority\b", q) and re.search(r"(?i)\bmiss", q):
+        _prefer(lambda c: "priority fee guarantee" in _title(c) or "delivery time" in _title(c))
+    if re.search(r"(?i)\bnumerology\b", q) and not price_q:
+        _prefer(lambda c: "numerology pro" in _title(c) and "contents" not in _title(c))
+    if re.search(r"(?i)\bshop\b", q) and re.search(r"(?i)vastu", q):
+        _prefer(lambda c: "business vastu" in _title(c))
     if where_pdf:
         loc = [
             c
@@ -472,33 +511,20 @@ def run(
             "retrieved_sources": [c.source for c in chunks],
         }
 
-    # V3 connect / book / queue — LLM was mixing "Accept joins the queue".
-    v3_howto = bool(
-        re.search(r"(?i)\b(v3|live)\b", text or "")
-        and re.search(
-            r"(?i)("
-            r"\b(connect|queue|accept|waiting|miss|book|kaise|bought|kharida)\b|"
-            r"not able|cannot|can.?t connect|nahi ho"
-            r")",
-            text or "",
-        )
-        and not _PRICE_ASK.search(text or "")
-    )
-    if v3_howto:
-        kb = _kb_answer()
-        if kb:
-            return kb
-
-    wallet_howto = bool(
+    # How-to facts: skip LLM paraphrase (it picks the wrong pack/price chunk).
+    force_kb = bool(
         re.search(
             r"(?i)("
-            r"\bwallet\b|where do payments|payments? show|payment kahan|"
-            r"paise kahan|transactions kahan"
+            r"\b(otp|resend|wallet|expir|notification|instagram|astrovastu)\b|"
+            r"how to pay|kaise pay|credits? work|delete account|"
+            r"kitne din|delivery time|priority miss|business vastu shop|"
+            r"\b(v3|live)\b.*\b(connect|queue|accept|book|bought|kharida|kaise)\b|"
+            r"where do payments|payment kahan|paise kahan"
             r")",
             text or "",
         )
     )
-    if wallet_howto:
+    if force_kb:
         kb = _kb_answer()
         if kb:
             return kb

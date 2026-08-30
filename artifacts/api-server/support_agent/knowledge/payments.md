@@ -22,7 +22,7 @@ Usually not: change of mind after credit or delivery; “prediction felt wrong�
 If the bank was debited but payment stayed pending/failed, reverse often happens in about 5–7 business days (bank/RBI timing). Exact bank settlement date is not visible in Help — escalate if needed.
 
 ## Chargebacks
-Raising a chargeback without contacting support first may lead to account suspension.
+Chargeback = asking your bank to reverse a payment. Contact Cosmic Help / support first. Raising a chargeback without contacting support first may lead to account suspension.
 
 ## Priority fee guarantee
 For products that offer 12-hour Priority: if the 12-hour delivery window is missed, the Priority fee is 100% refunded (as stated on the product screen).

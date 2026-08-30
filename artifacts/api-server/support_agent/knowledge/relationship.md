@@ -10,7 +10,7 @@ WhatsApp / mobile may be required for Personalized Video Explanation before chec
 Expert-written / recorded after pay — not an instant auto file. Delivered to My Reports (4–6 business days standard; Priority ~12h).
 
 ## Kundli Milan Basic
-Open: Life Map → Relationship → Kundli Milan (also linked from Home).
+Add a partner first: Profile → add partner / family profile (name, gender, DOB, time, place), then open Life Map → Relationship → Kundli Milan (also linked from Home).
 Basic tools are free: Marriage Structure score /100 and Gun Milan /36, with compatibility style lenses shown on screen (soul sync / destiny / emotional bond style chips).
 
 ## Kundli Milan Pro

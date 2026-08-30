@@ -472,6 +472,37 @@ def run(
             "retrieved_sources": [c.source for c in chunks],
         }
 
+    # V3 connect / book / queue — LLM was mixing "Accept joins the queue".
+    v3_howto = bool(
+        re.search(r"(?i)\b(v3|live)\b", text or "")
+        and re.search(
+            r"(?i)("
+            r"\b(connect|queue|accept|waiting|miss|book|kaise|bought|kharida)\b|"
+            r"not able|cannot|can.?t connect|nahi ho"
+            r")",
+            text or "",
+        )
+        and not _PRICE_ASK.search(text or "")
+    )
+    if v3_howto:
+        kb = _kb_answer()
+        if kb:
+            return kb
+
+    wallet_howto = bool(
+        re.search(
+            r"(?i)("
+            r"\bwallet\b|where do payments|payments? show|payment kahan|"
+            r"paise kahan|transactions kahan"
+            r")",
+            text or "",
+        )
+    )
+    if wallet_howto:
+        kb = _kb_answer()
+        if kb:
+            return kb
+
     llm = _llm(text, L, history, tool_text, retrieved, has_image=False)
     if llm:
         relation = str(llm.get("relation") or forced_relation)

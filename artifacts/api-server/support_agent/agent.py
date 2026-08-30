@@ -24,6 +24,7 @@ from support_agent.intent import (
     not_ai_engine_reply,
     reply_lang,
     reply_overlaps_previous_bot,
+    v3_power_engine_reply,
 )
 from support_agent.knowledge import load_knowledge
 from support_agent.response_guard import guard

@@ -22,21 +22,21 @@ _STILL_WAITING = {
 
 def detect_reply_lang(text: str, preferred: str | None = None) -> str:
     try:
-        from support_agent.intent import detect_lang
+        from support_agent.intent import detect_lang, reply_lang
 
-        return detect_lang(text, preferred)
+        return reply_lang(detect_lang(text, preferred))
     except Exception:
         v = (preferred or "").strip().lower()
-        return v if v in ("en", "hn", "hi") else "hn"
+        return "en" if v == "en" else "hn"
 
 
 def wait_for_support_reply(lang: str) -> str:
-    L = lang if lang in _WAIT else "hn"
+    L = "en" if (lang or "").strip().lower() == "en" else "hn"
     return _WAIT[L]
 
 
 def still_waiting_reply(lang: str) -> str:
-    L = lang if lang in _STILL_WAITING else "en"
+    L = "en" if (lang or "").strip().lower() == "en" else "hn"
     return _STILL_WAITING[L]
 
 

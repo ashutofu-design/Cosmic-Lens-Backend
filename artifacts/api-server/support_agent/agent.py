@@ -19,6 +19,7 @@ from support_agent.intent import (
     is_ask_tab_question,
     is_off_app_question,
     last_user_and_bot,
+    reply_lang,
     reply_overlaps_previous_bot,
 )
 from support_agent.knowledge import load_knowledge
@@ -37,13 +38,21 @@ _INTERNAL_ASK = re.compile(
     r"(clients?|users?|customers?)\s+(buy|bought|purchased|buyed)|"
     r"(buy|bought|buyed|purchase|order).{0,40}(today|aaj)|"
     r"sales\s+(today|data|report|count)|orders?\s+today|"
-    r"revenue|admin\s+panel|other\s+users?|all\s+users?|"
+    r"revenue|admin\s+(panel|login|mpin|token|unlock)|other\s+users?|all\s+users?|"
     r"database|system\s+prompt|api[\s_-]?keys?|server\s+logs?|"
     r"kitne\s+(clients?|users?|log|logon|ne kharid)|"
     r"aaj\s+kitne|total\s+(sales|orders|customers)|"
-    r"give\s+me\s+internal|show\s+me\s+(admin|sales|stats)"
+    r"give\s+me\s+internal|show\s+me\s+(admin|sales|stats)|"
+    r"source\s+code|gunicorn|nginx|\bpm2\b|\bvps\b|\.env\b|"
+    r"openai|which\s+model|model\s+name|gpt-|"
+    r"firebase\s+(key|secret|service)|service.?account|"
+    r"how\s+(do\s+you|we|does\s+the\s+app)\s+calculate|"
+    r"engine\s+(code|formula|internals)|prompt\s+injection|"
+    r"enroll.?code|admin.?secret"
     r")"
 )
+
+_DEVANAGARI = re.compile(r"[\u0900-\u097f]")
 
 _HARD_ESCALATE = re.compile(
     r"(?i)\b(refund|chargeback|fraud|legal|lawyer|screenshot|"
@@ -202,9 +211,7 @@ def _llm(
     if client is None:
         log.warning("[support_agent] OpenAI client missing")
         return None
-    lang_name = {"en": "English", "hi": "Hindi (Devanagari)", "hn": "Hinglish"}.get(
-        lang, "Hinglish"
-    )
+    lang_name = "English" if reply_lang(lang) == "en" else "Hinglish (Roman script, not Hindi Devanagari)"
     hist_lines: list[str] = []
     for m in history[-6:]:
         if not isinstance(m, dict):
@@ -219,7 +226,7 @@ def _llm(
     retrieved_block = retrieved.strip() or "(none — do not invent product facts; escalate if tools do not answer)"
     prompt = (
         f"{extra}"
-        f"Reply language: {lang_name}.\n"
+        f"Reply language: {lang_name}. Never use Hindi Devanagari.\n"
         "JSON only: "
         '{"relation":"follow_up"|"new","escalate":false,"reply":"..."}\n\n'
         "STEP 1: Set relation (follow_up|new).\n"
@@ -279,7 +286,7 @@ def run(
     from support_agent.intent import detect_lang
 
     history = history if isinstance(history, list) else []
-    L = detect_lang(text, lang)
+    L = reply_lang(detect_lang(text, lang))
 
     tools = snapshot(user)
     tool_text = str(tools.get("text") or "")
@@ -400,6 +407,16 @@ def run(
             relation = "follow_up"
 
         reply, leaked = guard(str(llm.get("reply") or ""), L, text)
+        if _DEVANAGARI.search(reply or ""):
+            kb = _kb_answer()
+            if kb:
+                return kb
+            reply = (
+                "I can answer in English or Hinglish only. Ask again in English or Hinglish."
+                if L == "en"
+                else "Main English ya Hinglish me hi jawab deta hoon. English ya Hinglish me dobara likho."
+            )
+            leaked = False
         escalate = _as_bool(llm.get("escalate")) or leaked
         if leaked:
             reply, _ = guard(handoff_reply(L), L, text)

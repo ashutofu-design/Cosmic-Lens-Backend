@@ -40,4 +40,7 @@ ALLOWED_KNOWLEDGE = load_knowledge()
 
 
 def pick(answers: dict[str, str], lang: str) -> str:
-    return answers.get(lang) or answers["hn"]
+    L = (lang or "").strip().lower()
+    if L == "hi":
+        L = "hn"
+    return answers.get(L) or answers.get("hn") or answers.get("en") or ""

@@ -15,3 +15,6 @@ Report priority fee typically ₹149; video priority fee typically ₹299 (some 
 
 ## Missing report
 If a paid PDF is missing, Cosmic Help uses this account’s report status tool. Open My Reports and pull to refresh. If nothing is listed after the stated window, escalate.
+
+## How to open a delivered PDF
+More → My Library → My Reports → tap the delivered order. Share/open using the phone’s PDF viewer. Palmistry VIP is WhatsApp video (no PDF row). GST invoices may exist for legal records even after account delete.

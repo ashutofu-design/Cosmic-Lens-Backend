@@ -9,9 +9,10 @@ from support_agent.escalation import handoff_reply
 _LEAK = re.compile(
     r"(api[_-]?key|TELEGRAM_|FOUNDER_|"
     r"\bpm2\b|\bvps\b|flask_app|\.env\b|postgres|sqlalchemy|webhook|"
-    r"admin\s*(panel|token|key)|thread_id|support_threads|razorpay.?secret|"
+    r"admin\s*(panel|token|key|secret|mpin)|thread_id|support_threads|razorpay.?secret|"
     r"cashfree.?secret|localhost:\d+|127\.0\.0\.1|"
     r"system\s*prompt|calculation\s*code|numerology\s*engine|"
+    r"gunicorn|nginx|openai_helper|service.?account|"
     r"telegram|database\s+(id|dump)|prompt\s+injection)",
     re.I,
 )

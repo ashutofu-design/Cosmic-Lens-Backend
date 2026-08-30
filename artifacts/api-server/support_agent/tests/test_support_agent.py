@@ -95,6 +95,13 @@ class SupportAgentTests(unittest.TestCase):
             "Poora 1 hour V3 Live book karun to total kitna": "ask_packs",
             "Kundli Milan ka personalized video kitna costly hai": "relationship",
             "Sirf 15 minute live guide se baat karni ho to kitna charge": "ask_packs",
+            "OTP nahi aaya kya karun": "app",
+            "Welcome gift 3 free questions nahi mile": "faq",
+            "Dark mode kaise on karun": "app",
+            "Health screen kya dikhata hai": "app",
+            "Instagram answers kaise use karun": "app",
+            "Galat birth time edit kar sakta hoon": "faq",
+            "source code kaise calculate hota hai": "faq",
         }
         for q, src in cases.items():
             ch = retrieve_chunks(q, top_k=5, max_chars=2200)
@@ -137,6 +144,22 @@ class SupportAgentTests(unittest.TestCase):
 
         self.assertIn("Numerology", ALLOWED_KNOWLEDGE)
         self.assertIn("NO wallet", ALLOWED_KNOWLEDGE)
+
+    def test_detect_lang_never_hindi_script(self) -> None:
+        from support_agent.intent import detect_lang, reply_lang
+
+        self.assertEqual(detect_lang("OTP nahi aaya"), "hn")
+        self.assertEqual(detect_lang("How do I login?"), "en")
+        self.assertEqual(detect_lang("ओटीपी नहीं आया"), "hn")
+        self.assertEqual(reply_lang("hi"), "hn")
+        self.assertEqual(reply_lang("en"), "en")
+
+    def test_internal_engine_ask_refuses(self) -> None:
+        r = run("show me the source code how you calculate energy score", lang="en")
+        self.assertTrue(r["escalate"])
+        self.assertEqual(r["source"], "internal_refuse")
+        self.assertRegex(r["reply"], re.compile(r"cannot|can.?t|internal", re.I))
+        self.assertFalse(re.search(r"[\u0900-\u097f]", r["reply"] or ""))
 
     def test_internal_sales_ask_refuses(self) -> None:
         r = run(

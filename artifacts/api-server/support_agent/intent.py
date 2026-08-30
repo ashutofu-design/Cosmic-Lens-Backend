@@ -60,14 +60,32 @@ _PRODUCTS = (
     "finance",
     "rashifal",
     "remedies",
+    "login",
+    "otp",
+    "theme",
+    "welcome",
+    "gift",
+    "instagram",
+    "notification",
 )
 
 
+def reply_lang(lang: str | None) -> str:
+    """Cosmic Help replies: English or Hinglish only — never Devanagari Hindi."""
+    v = (lang or "").strip().lower()
+    if v == "en":
+        return "en"
+    return "hn"
+
+
 def detect_lang(text: str, preferred: str | None = None) -> str:
+    """Detect question language, then map to a allowed reply language (en | hn).
+
+    Devanagari Hindi questions still get a Hinglish answer (roman script).
+    """
     blob = text or ""
     if any("\u0900" <= ch <= "\u097f" for ch in blob):
-        return "hi"
-    v = (preferred or "").strip().lower()
+        return "hn"
     letters = "".join(ch for ch in blob if ch.isalpha())
     if len(letters) >= 8 and letters.isascii():
         hinglish = (
@@ -80,12 +98,14 @@ def detect_lang(text: str, preferred: str | None = None) -> str:
             " kitna ",
             " chahiye ",
             " batao ",
+            " karun ",
+            " karo ",
         )
         low = f" {blob.lower()} "
         if any(w in low for w in hinglish):
             return "hn"
         return "en"
-    return v if v in ("en", "hn", "hi") else "hn"
+    return reply_lang(preferred)
 
 
 def prior_user_texts(history: list[dict[str, Any]] | None) -> list[str]:

@@ -1,7 +1,13 @@
 # Ask packs and V3 Live
 
 ## Ask V1 how it works
-Cosmic Intelligence V1 is chart Q&A on the Ask tab (not Cosmic Help). Pick reply language first: Hindi / English / Hinglish. You need a saved kundli. Buy packs on Profile → Cosmic Packs (or Ask → Cosmic Packs), not in Help chat.
+Ask V1 is chart Q&A on the Ask tab (not Cosmic Help). A special advanced engine — designed in our own coding — reads your saved kundli and then answers. Pick reply language first: Hindi / English / Hinglish. Buy packs on Profile → Cosmic Packs (or Ask → Cosmic Packs), not in Help chat.
+
+## Is V1 or V3 AI
+No. Ask V1 and V3 Live are not AI. They use a special advanced engine designed in our coding that reads your chart and then answers. If someone asks “is it AI / ChatGPT / Gemini?” say clearly: No, it is not AI — special advanced engine, chart padhkar jawab.
+
+## V3 Live what it is
+V3 Live is a timed live chat with a Cosmic Guide on the Ask tab — not automatic FAQ and not Cosmic Help. The Guide uses the same special advanced engine on your chart (not AI). Sessions are one-time purchases by duration.
 
 ## Ask V1 free questions
 3 free V1 questions at signup. The Ask screen shows how many free questions are left (for example “2 of 3 free left”). After free questions are used, buy a one-time Cosmic Pack to ask more.
@@ -18,9 +24,6 @@ Cheapest / sabse sasta pack = Starter: ₹49 · 8 questions · valid 7 days.
 Popular: ₹99 · 15 questions · valid 14 days.
 Power: ₹299 · 45 questions · valid 30 days.
 These are one-time listed pack amounts (not ₹99 for 1 question).
-
-## V3 Live what it is
-V3 Live is a timed live chat with a Cosmic Guide on the Ask tab — not automatic FAQ and not Cosmic Help. Sessions are one-time purchases by duration.
 
 ## V3 Live prices
 15 min / 15 minute ₹399.

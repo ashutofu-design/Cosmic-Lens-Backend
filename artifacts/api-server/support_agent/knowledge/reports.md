@@ -1,7 +1,7 @@
 # Reports delivery and My Reports
 
 ## Where reports go
-Paid Pro PDFs and videos arrive in My Reports after the expert prepares them. They are not instant AI PDFs. Palmistry VIP video may go to WhatsApp instead of a PDF file.
+Paid Pro PDFs and videos arrive in My Reports after the expert prepares them. They are not instant auto files. Palmistry VIP video may go to WhatsApp instead of a PDF file.
 
 ## After you pay
 Order success screen: Order Confirmed, optional Order ID, ETA text. Tap Track in My Reports to follow delivery. Trust line: Secure · Expert reviewed · PDF or WhatsApp video as purchased.

@@ -32,7 +32,7 @@ _WALLET_BOILER = re.compile(
     r"(?:Cosmic Lens (?:has no wallet|mein wallet nahi hota)[^.।]*[.।]\s*)"
     r"(?:Paid orders (?:show on|Help)[^.।]*Transactions[^.।]*[.।]\s*)?"
     r"(?:Ask credits[^.।]*(?:Cosmic Packs|Profile)[^.।]*[.।]\s*)?"
-    r"(?:Pro PDFs?[^.।]*(?:My Reports|instant AI|expert)[^.।]*[.।]\s*)?",
+    r"(?:Pro PDFs?[^.।]*(?:My Reports|instant auto|expert)[^.।]*[.।]\s*)?",
     re.I,
 )
 _WALLET_BOILER_HI = re.compile(
@@ -66,6 +66,18 @@ def strip_unsolicited_wallet(reply: str, user_text: str = "") -> str:
     return cleaned
 
 
+_MODEL_BRAND = re.compile(
+    r"(?i)\b(chatgpt|chat\s*gpt|openai|gemini|\bllm\b|gpt-?\d+)\b"
+)
+_INSTANT_AI = re.compile(r"(?i)\binstant\s+AI\b")
+
+
+def scrub_model_names(reply: str) -> str:
+    """Never name ChatGPT / OpenAI / Gemini. Keep a clear 'not AI' deny if present."""
+    t = _INSTANT_AI.sub("instant auto file", reply or "")
+    return _MODEL_BRAND.sub("the special engine", t)
+
+
 def polite(reply: str, lang: str) -> str:
     r = (reply or "").strip()
     if not r:
@@ -83,7 +95,7 @@ def guard(reply: str, lang: str, user_text: str = "") -> tuple[str, bool]:
         return polite(handoff_reply(lang), lang), True
     if _LEAK.search(text):
         return polite(handoff_reply(lang), lang), True
-    cleaned = polite(strip_unsolicited_wallet(text, user_text), lang)
+    cleaned = polite(scrub_model_names(strip_unsolicited_wallet(text, user_text)), lang)
     if not cleaned.strip():
         # Prefer original (minus Happy) over empty → wait-for-team spam
         cleaned = polite(_HAPPY.sub("", text).strip(), lang)

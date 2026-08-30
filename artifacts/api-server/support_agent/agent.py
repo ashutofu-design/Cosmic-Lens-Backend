@@ -16,9 +16,11 @@ from support_agent.escalation import (
 )
 from support_agent.intent import (
     classify_relation,
+    is_ai_product_ask,
     is_ask_tab_question,
     is_off_app_question,
     last_user_and_bot,
+    not_ai_engine_reply,
     reply_lang,
     reply_overlaps_previous_bot,
 )
@@ -301,6 +303,17 @@ def run(
             "source": "screenshot",
             "relation": "new",
             "agent_state": "waiting_for_human",
+            "tools": tools,
+        }
+
+    if is_ai_product_ask(text):
+        reply, _ = guard(not_ai_engine_reply(text, L), L, text)
+        return {
+            "escalate": False,
+            "reply": reply,
+            "source": "not_ai_engine",
+            "relation": "new",
+            "agent_state": "answered",
             "tools": tools,
         }
 

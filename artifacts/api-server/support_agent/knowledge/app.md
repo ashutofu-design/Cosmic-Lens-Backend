@@ -59,7 +59,7 @@ Life Map → Health. On-screen wellness / Tridosha-style summary from your saved
 Life Map → Finance. On-screen money-flow / wealth-style summary from your saved kundli. Needs a kundli. Free on-screen summary — not a PDF and not Cosmic Help prediction. Deeper cards follow that screen. Expert PDFs are separate one-time My Reports products.
 
 ## Ask and Future
-Ask: Cosmic Intelligence V1 and V3 Live (one-time packs / sessions). Future tab: on-screen current dasha timeline (MD / AD / PD style) — not a PDF. Dasha Risk / timing notes on Future are on-screen guidance, not Cosmic Help predictions.
+Ask: Ask V1 and V3 Live (one-time packs / sessions). A special advanced engine reads your chart and answers — not AI. Future tab: on-screen current dasha timeline (MD / AD / PD style) — not a PDF. Dasha Risk / timing notes on Future are on-screen guidance, not Cosmic Help predictions.
 
 ## Kundli and charts
 More → Planet Position (titled Kundli): free birth chart / planetary positions — D1, Divisional, KP, Ashtakavarga, Navatara, Jaimini, Transit tabs; planet cards show sign, degrees, house. Kundli tab also shows Ascendant, Moon, Nakshatra, and navigable dasha (MD / Antar / Pratyantar). Needs saved kundli (demo for some tabs without it).

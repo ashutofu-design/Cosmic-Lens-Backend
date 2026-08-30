@@ -14,20 +14,20 @@ class SupportAgentTests(unittest.TestCase):
         self.assertTrue(leaked)
         self.assertNotRegex(text, re.compile(r"api_key|flask_app", re.I))
 
-    def test_guard_keeps_ai_report_answer(self) -> None:
+    def test_guard_keeps_expert_report_answer(self) -> None:
         text, leaked = guard(
-            "Love Reality Pro PDF is not an instant AI report. Our expert writes it after you pay.",
+            "Love Reality Pro PDF is not an instant auto file. Our expert writes it after you pay.",
             "en",
         )
         self.assertFalse(leaked)
         self.assertIn("expert", text.lower())
-        self.assertNotRegex(text, re.compile(r"Happy to help", re.I))
+        self.assertNotRegex(text, re.compile(r"Happy to help|ChatGPT|OpenAI", re.I))
 
     def test_guard_strips_wallet_dump_from_howto(self) -> None:
         raw = (
             "Happy to help. Cosmic Lens has no wallet — paid orders show on Help → Transactions. "
             "Ask credits are under Profile → Cosmic Packs. Pro PDFs (Love Reality, Milan, Numerology) "
-            "are written by our expert after pay, not instant AI, and arrive in My Reports. "
+            "are written by our expert after pay, not an instant auto file, and arrive in My Reports. "
             "AstroVastu is under Life Map → Explore."
         )
         text, leaked = guard(raw, "en", "AstroVastu kaise use karun?")
@@ -36,28 +36,19 @@ class SupportAgentTests(unittest.TestCase):
         self.assertIn("AstroVastu", text)
 
     def test_ai_answers_relationship_report(self) -> None:
-        import support_agent.agent as sag
+        r = run("tell me is the realationship report a ai report", lang="en")
+        self.assertFalse(r["escalate"])
+        self.assertEqual(r["source"], "not_ai_engine")
+        self.assertIn("expert", r["reply"].lower())
+        self.assertRegex(r["reply"], re.compile(r"not AI", re.I))
 
-        orig = sag._llm
-
-        def fake_llm(*_a, **_k):
-            return {
-                "escalate": False,
-                "reply": (
-                    "Love Reality Pro PDF is written by our expert after you pay — "
-                    "it is not an instant AI PDF. Open Life Map → Relationship."
-                ),
-                "source": "llm",
-            }
-
-        sag._llm = fake_llm  # type: ignore[method-assign]
-        try:
-            r = run("tell me is the realationship report a ai report", lang="en")
-            self.assertFalse(r["escalate"])
-            self.assertIn("expert", r["reply"].lower())
-            self.assertEqual(r["source"], "llm")
-        finally:
-            sag._llm = orig
+    def test_v1_is_ai_denied(self) -> None:
+        r = run("V1 kya AI hai kya chatgpt use hota hai", lang="hn")
+        self.assertFalse(r["escalate"])
+        self.assertEqual(r["source"], "not_ai_engine")
+        self.assertRegex(r["reply"], re.compile(r"nahi|not AI", re.I))
+        self.assertIn("engine", r["reply"].lower())
+        self.assertNotRegex(r["reply"], re.compile(r"chatgpt|openai|gemini", re.I))
 
     def test_no_ai_falls_back_to_knowledge(self) -> None:
         import support_agent.agent as sag
@@ -102,6 +93,7 @@ class SupportAgentTests(unittest.TestCase):
             "Instagram answers kaise use karun": "app",
             "Galat birth time edit kar sakta hoon": "faq",
             "source code kaise calculate hota hai": "faq",
+            "V1 kya AI hai": "ask_packs",
         }
         for q, src in cases.items():
             ch = retrieve_chunks(q, top_k=5, max_chars=2200)
@@ -143,7 +135,7 @@ class SupportAgentTests(unittest.TestCase):
         from support_agent.knowledge import ALLOWED_KNOWLEDGE
 
         self.assertIn("Numerology", ALLOWED_KNOWLEDGE)
-        self.assertIn("NO wallet", ALLOWED_KNOWLEDGE)
+        self.assertIn("NO rupee wallet", ALLOWED_KNOWLEDGE)
 
     def test_detect_lang_never_hindi_script(self) -> None:
         from support_agent.intent import detect_lang, reply_lang

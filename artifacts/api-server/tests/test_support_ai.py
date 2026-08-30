@@ -23,16 +23,13 @@ class SupportAiTests(unittest.TestCase):
         }
 
     def test_ai_relationship_report(self) -> None:
-        self._fake(
-            "Love Reality Pro PDF is written by our expert after you pay — "
-            "it is not an instant AI PDF."
-        )
         r = sai.answer_support(
             "tell me is the realationship report a ai report", lang="en"
         )
         self.assertFalse(r["escalate"])
         self.assertIn("expert", r["reply"].lower())
-        self.assertEqual(r["source"], "llm")
+        self.assertEqual(r["source"], "not_ai_engine")
+        self.assertRegex(r["reply"], re.compile(r"not AI", re.I))
 
     def test_refund_escalates_when_ai_says_so(self) -> None:
         self._fake(
@@ -53,7 +50,7 @@ class SupportAiTests(unittest.TestCase):
         self._fake(
             "Happy to help. Cosmic Lens has no wallet — paid orders show on Help → Transactions. "
             "Ask credits are under Profile → Cosmic Packs. Pro PDFs (Love Reality, Milan, Numerology) "
-            "are written by our expert after pay, not instant AI, and arrive in My Reports. "
+            "are written by our expert after pay, not an instant auto file, and arrive in My Reports. "
             "AstroVastu reports are expert-written after payment."
         )
         r = sai.answer_support("AstroVastu kaise use karun?", lang="en")
@@ -81,11 +78,11 @@ class SupportAiTests(unittest.TestCase):
 
     def test_ai_report_wording_not_scrubbed(self) -> None:
         out = sai.scrub_customer_reply(
-            "Happy to help. Love Reality Pro is not an instant AI PDF. Our expert writes it.",
+            "Happy to help. Love Reality Pro is not an instant auto file. Our expert writes it.",
             "en",
         )
         self.assertIn("expert", out.lower())
-        self.assertIn("AI", out)
+        self.assertNotRegex(out, re.compile(r"ChatGPT|OpenAI|Gemini", re.I))
 
     def test_account_card_customer_safe(self) -> None:
         from types import SimpleNamespace

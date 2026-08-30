@@ -21,6 +21,16 @@ _ASK_KUNDLI = re.compile(
     r"my\s+birth\s+chart\s+(mean|say)"
     r")\b"
 )
+_AI_WORD = re.compile(
+    r"(?i)\b(ai|artificial\s+intelligence|chatgpt|chat\s*gpt|openai|gemini|"
+    r"llm|gpt-?\d*|machine\s+learning)\b"
+)
+_AI_SECRET = re.compile(r"(?i)(api\s*key|system\s*prompt|source\s*code|secret|\.env)")
+_PDF_AI = re.compile(
+    r"(?i)\b(pdf|report|pro|love\s+reality|milan|numerology|palmistry)\b"
+)
+_V1V3 = re.compile(r"(?i)\b(v1|v3|ask|live|pack|engine|bot|answer|chart)\b")
+
 _OFF_APP = re.compile(
     r"(?i)\b(weather|cricket|stock market|bitcoin|recipe|homework|politics|"
     r"who is the prime minister|write code for me)\b"
@@ -171,6 +181,42 @@ def is_ask_tab_question(text: str) -> bool:
 
 def is_off_app_question(text: str) -> bool:
     return bool(_OFF_APP.search(text or ""))
+
+
+def is_ai_product_ask(text: str) -> bool:
+    """User asking if V1 / V3 / reports / the app is AI — not asking for secrets."""
+    t = text or ""
+    if not _AI_WORD.search(t):
+        return False
+    if _AI_SECRET.search(t):
+        return False
+    return True
+
+
+def not_ai_engine_reply(text: str, lang: str) -> str:
+    """Clear deny: not AI. Special/advanced engine reads the chart (or expert PDF)."""
+    L = reply_lang(lang)
+    t = text or ""
+    pdf_only = bool(_PDF_AI.search(t)) and not _V1V3.search(t)
+    if pdf_only:
+        if L == "en":
+            return (
+                "No — it is not AI. The Pro PDF is written by our expert after you pay. "
+                "It is not an instant auto file."
+            )
+        return (
+            "Nahi — yeh AI nahi hai. Pro PDF pay ke baad expert likhte hain. "
+            "Instant auto file nahi hoti."
+        )
+    if L == "en":
+        return (
+            "No — it is not AI. Ask V1 and V3 use a special advanced engine "
+            "that reads your chart and then answers."
+        )
+    return (
+        "Nahi — yeh AI nahi hai. Ask V1 aur V3 ek special advanced engine use karte hain "
+        "jo aapka chart padhkar jawab deta hai."
+    )
 
 
 def reply_overlaps_previous_bot(reply: str, prev_bot: str, *, relation: str) -> bool:

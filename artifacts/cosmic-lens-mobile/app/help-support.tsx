@@ -1,11 +1,10 @@
 /**
  * Help & Support — persistent chat with the Cosmic Care Team.
- * Text + images; history saved; no timer (unlike V3 live consultations).
+ * Text chat only; history saved; no timer (unlike V3 live consultations).
  * Designed to feel like a large, professional, always-on support desk.
  */
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -15,7 +14,7 @@ import {
   FlatList,
   I18nManager,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Linking,
   Platform,
   Pressable,
@@ -29,6 +28,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
+import { AppKeyboardAvoidingView as KeyboardAvoidingView } from "@/components/AppKeyboardAvoidingView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
@@ -200,6 +200,32 @@ export default function HelpSupportScreen() {
   const [txBalance, setTxBalance] = useState<TxBalance | null>(null);
   const [txLoading, setTxLoading] = useState(false);
   const [txRefreshing, setTxRefreshing] = useState(false);
+  const [webKbInset, setWebKbInset] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const sync = () => {
+      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setWebKbInset(covered);
+    };
+    sync();
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    return () => {
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    const evt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const sub = Keyboard.addListener(evt, () => {
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    });
+    return () => sub.remove();
+  }, []);
 
   const authHeaders = useCallback(
     () => ({
@@ -591,71 +617,6 @@ export default function HelpSupportScreen() {
     }
   };
 
-  const sendImage = async () => {
-    if (!threadId || sending || !user?.id) return;
-    try {
-      Haptics.selectionAsync().catch(() => {});
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert("Permission needed", "Allow photo access to send a screenshot.");
-        return;
-      }
-      const picked = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-        base64: true,
-      });
-      if (picked.canceled || !picked.assets?.[0]?.base64) return;
-      const asset = picked.assets[0];
-      const mime = asset.mimeType || "image/jpeg";
-      const dataUrl = `data:${mime};base64,${asset.base64}`;
-      setSending(true);
-      const res = await fetch(
-        `${API_BASE}/api/support/thread/${encodeURIComponent(threadId)}/message`,
-        {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify({ user_id: user.id, data_url: dataUrl, text: "" }),
-        },
-      );
-      const json = await res.json().catch(() => ({}) as any);
-      if (res.status === 404 || json?.error === "not_found") {
-        const sid = await ensureThread();
-        if (!sid) {
-          Alert.alert("Image failed", "Chat was closed. Please try again.");
-          return;
-        }
-        setThreadId(sid);
-        const retry = await fetch(
-          `${API_BASE}/api/support/thread/${encodeURIComponent(sid)}/message`,
-          {
-            method: "POST",
-            headers: authHeaders(),
-            body: JSON.stringify({ user_id: user.id, data_url: dataUrl, text: "" }),
-          },
-        );
-        const retryJson = await retry.json().catch(() => ({}) as any);
-        if (!retry.ok) {
-          Alert.alert("Image failed", String(retryJson.error || `HTTP ${retry.status}`));
-          return;
-        }
-        await refresh(sid);
-        requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-        return;
-      }
-      if (!res.ok) {
-        Alert.alert("Image failed", String(json.error || `HTTP ${res.status}`));
-        return;
-      }
-      await refresh(threadId);
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-    } catch (e) {
-      Alert.alert("Image failed", e instanceof Error ? e.message : "Could not send");
-    } finally {
-      setSending(false);
-    }
-  };
-
   const firstName = (user?.name || "").trim().split(/\s+/)[0] || "";
 
   // ── Login gate ──────────────────────────────────────────────────────────────
@@ -711,7 +672,7 @@ export default function HelpSupportScreen() {
   return (
     <KeyboardAvoidingView
       style={[s.root, { backgroundColor: C.isDark ? "#050709" : "#f4f4fb" }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
       keyboardVerticalOffset={0}
     >
       <Stack.Screen options={{ headerShown: false }} />
@@ -739,32 +700,6 @@ export default function HelpSupportScreen() {
         </View>
         <TeamAvatarCluster />
       </LinearGradient>
-
-      {/* ── Trust strip ── */}
-      <View
-        style={[
-          s.trustStrip,
-          {
-            backgroundColor: C.isDark ? "#0d1117" : "#fff",
-            borderBottomColor: C.border,
-          },
-        ]}
-      >
-        <View style={s.trustItem}>
-          <Feather name="clock" size={13} color={C.accent} />
-          <Text style={[s.trustTxt, { color: C.textMuted }]}>AI first</Text>
-        </View>
-        <View style={[s.trustDivider, { backgroundColor: C.border }]} />
-        <View style={s.trustItem}>
-          <Feather name="zap" size={13} color={C.accent} />
-          <Text style={[s.trustTxt, { color: C.textMuted }]}>Short answers</Text>
-        </View>
-        <View style={[s.trustDivider, { backgroundColor: C.border }]} />
-        <View style={s.trustItem}>
-          <Feather name="lock" size={13} color={C.accent} />
-          <Text style={[s.trustTxt, { color: C.textMuted }]}>Secure chat</Text>
-        </View>
-      </View>
 
       {/* ── Chat | Transactions tabs ── */}
       <View
@@ -962,6 +897,7 @@ export default function HelpSupportScreen() {
           extraData={displayMessages}
           keyExtractor={(m) => m.id}
           contentContainerStyle={s.list}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           ListHeaderComponent={
             <View
@@ -1119,19 +1055,12 @@ export default function HelpSupportScreen() {
         style={[
           s.inputRow,
           {
-            paddingBottom: Math.max(insets.bottom, 10),
+            paddingBottom: Math.max(insets.bottom, 10) + webKbInset,
             borderTopColor: C.border,
             backgroundColor: C.isDark ? "#0a0a0c" : "#fff",
           },
         ]}
       >
-        <Pressable
-          onPress={() => void sendImage()}
-          disabled={sending || !threadId}
-          style={[s.iconBtn, { opacity: sending || !threadId ? 0.4 : 1 }]}
-        >
-          <Feather name="image" size={22} color={C.accent} />
-        </Pressable>
         <TextInput
           ref={inputRef}
           value={draft}
@@ -1139,6 +1068,9 @@ export default function HelpSupportScreen() {
           placeholder="Ask about the app…"
           placeholderTextColor={C.textMuted}
           editable={!sending && !!threadId}
+          onFocus={() => {
+            requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+          }}
           style={[
             s.input,
             {
@@ -1194,16 +1126,6 @@ const s = StyleSheet.create({
     backgroundColor: "#4ade80",
   },
   heroSub: { fontSize: 12, color: "rgba(255,255,255,0.85)", fontWeight: "600" },
-  trustStrip: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-evenly",
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  trustItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  trustTxt: { fontSize: 11, fontWeight: "600" },
-  trustDivider: { width: StyleSheet.hairlineWidth, height: 14 },
   tabRow: {
     flexDirection: "row",
     gap: 8,
@@ -1341,7 +1263,6 @@ const s = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  iconBtn: { padding: 8, marginBottom: 2 },
   input: {
     flex: 1,
     minHeight: 42,

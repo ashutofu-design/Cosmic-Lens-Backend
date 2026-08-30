@@ -165,7 +165,7 @@ def ok(reply: str, source: str, yes: str, no: str | None) -> bool:
 def main() -> int:
     fail = 0
     print(f"{'n':>3}  {'src':<18} result  question")
-    print("-" * 88)
+    print("-" * 96)
     for i, (q, yes, no) in enumerate(CASES, 1):
         r = run(q, lang=None)
         reply = re.sub(r"\s+", " ", (r.get("reply") or "")).strip()
@@ -175,9 +175,8 @@ def main() -> int:
             fail += 1
         mark = "PASS" if passed else "FAIL"
         print(f"{i:3}  {src[:18]:<18} {mark}  {q}")
-        if not passed:
-            print(f"     → {reply[:220]}")
-    print("-" * 88)
+        print(f"     → {reply}")
+    print("-" * 96)
     print(f"DONE  {100 - fail}/100 pass  {fail} fail")
     return 1 if fail else 0
 

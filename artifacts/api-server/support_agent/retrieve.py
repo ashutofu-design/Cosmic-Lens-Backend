@@ -121,9 +121,12 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "farq": ("farq", "help", "ask", "difference"),
     "queue": ("queue", "accept", "v3", "live", "miss"),
     "book": ("book", "v3", "live", "pack", "accept"),
-    "wallet": ("wallet", "balance", "transactions", "payment"),
+    "wallet": ("wallet", "balance", "transactions", "payment", "payments"),
     "family": ("family", "profile", "profiles", "member"),
-    "transaction": ("transaction", "payment", "wallet", "order"),
+    "transaction": ("transaction", "payment", "payments", "wallet", "order"),
+    "payment": ("payment", "payments", "transaction", "wallet", "order"),
+    "payments": ("payments", "payment", "transaction", "wallet", "order"),
+    "show": ("show", "transactions", "payment"),
     "razorpay": ("razorpay", "cashfree", "payment", "pay"),
     "cashfree": ("cashfree", "razorpay", "payment", "subscription"),
 }
@@ -154,6 +157,12 @@ def _query_tokens(question: str) -> set[str]:
         re.search(r"\b(farq|difference|language|lang)\b", low)
         and re.search(r"\b(help|ask)\b", low)
     )
+    skip_priority = bool(
+        re.search(r"\b(where|kahan|milega)\b", low)
+        and re.search(r"\b(pdf|report)\b", low)
+        and not _PRICE_ASK.search(question or "")
+    )
+    skip_pack_price = bool(re.search(r"\brectif", low))
     out: set[str] = set()
     for t in raw:
         if t in _STOP:
@@ -161,15 +170,30 @@ def _query_tokens(question: str) -> set[str]:
         out.add(t)
         if skip_ask_pack and t in ("ask", "pack", "kitne", "kitna"):
             continue
+        if skip_pack_price and t in ("price", "prices", "kitne", "kitna"):
+            out.add("rectification")
+            out.add("999")
+            continue
         for key, syns in _SYNONYMS.items():
             if t == key or t in syns:
-                out.update(syns)
-                out.add(key)
+                extra = set(syns)
+                extra.add(key)
+                if skip_priority:
+                    extra.discard("priority")
+                    extra.discard("delivery")
+                if skip_pack_price:
+                    extra.discard("pack")
+                    extra.discard("prices")
+                    extra.discard("starter")
+                out.update(extra)
     if skip_ask_pack:
         out.discard("prices")
         out.discard("starter")
         out.add("help")
         out.add("language")
+    if skip_priority:
+        out.discard("priority")
+        out.add("reports")
     return out
 
 
@@ -343,14 +367,24 @@ def retrieve_chunks(
             ):
                 score -= 5.0
 
-        if wants_wallet and ch.source == "payments.md" and "wallet" in title_l:
+        if wants_wallet and ch.source == "payments.md" and (
+            "wallet" in title_l or "transaction" in title_l
+        ):
             score += 8.0
+        if wants_wallet and ch.source == "payments.md" and "transaction" in (ch.text or "").lower():
+            score += 3.0
         if wants_wallet and "what cosmic help can answer" in title_l:
-            score -= 6.0
+            score -= 8.0
+        if wants_wallet and "help vs ask" in title_l:
+            score -= 8.0
         if wants_wallet and "processor" in title_l:
             score -= 4.0
+        if wants_where_pdf and ch.source == "reports.md" and "where reports" in title_l:
+            score += 10.0
+        if wants_where_pdf and ch.source == "reports.md" and "priority" in title_l:
+            score -= 8.0
         if wants_where_pdf and ch.source == "reports.md":
-            score += 8.0
+            score += 4.0
         if wants_where_pdf and ch.source in ("numerology.md", "relationship.md", "vastu.md"):
             score -= 6.0
         if wants_where_pdf and "what cosmic help can answer" in title_l:

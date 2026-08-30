@@ -126,6 +126,24 @@ class SupportAgentTests(unittest.TestCase):
             milan[0].title if milan else "empty",
         )
 
+    def test_location_and_btr_answers(self) -> None:
+        import support_agent.agent as sag
+
+        orig = sag._llm
+        sag._llm = lambda *_a, **_k: None  # type: ignore[method-assign]
+        try:
+            pay = run("Where do payments show?", lang="en")
+            self.assertRegex(pay["reply"], re.compile(r"transaction", re.I))
+            pdf = run("Where is my PDF?", lang="en")
+            self.assertRegex(pdf["reply"], re.compile(r"my reports|reports", re.I))
+            pdf_hn = run("PDF kahan milega", lang="hn")
+            self.assertRegex(pdf_hn["reply"], re.compile(r"my reports|reports", re.I))
+            btr = run("Birth Time Rectification price", lang="en")
+            self.assertRegex(btr["reply"], re.compile(r"₹?999|rectif", re.I))
+            self.assertNotRegex(btr["reply"], re.compile(r"₹49|Starter", re.I))
+        finally:
+            sag._llm = orig
+
     def test_nonsense_no_retrieval_escalates(self) -> None:
         r = run("qwerty asdf zxcvb plugh", lang="en")
         self.assertTrue(r["escalate"])

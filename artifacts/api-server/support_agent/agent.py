@@ -109,34 +109,64 @@ def _short_from_chunks(chunks: list[Any], question: str = "") -> str:
     """1–2 line product answer from retrieved knowledge — no per-topic hardcoding."""
     if not chunks:
         return ""
+    q = question or ""
     pay_q = bool(
         re.search(
-            r"(?i)\b(wallet|transaction|payment|refund|pack|credit|paid|order)\b",
-            question or "",
+            r"(?i)\b(wallet|transactions?|payments?|refund|pack|credits?|paid|order)\b",
+            q,
         )
     )
-    price_q = bool(_PRICE_ASK.search(question or ""))
+    price_q = bool(_PRICE_ASK.search(q))
+    where_pdf = bool(
+        re.search(r"(?i)\b(where|kahan|milega)\b", q)
+        and re.search(r"(?i)\b(pdf|report)\b", q)
+        and not price_q
+    )
+    wants_btr = bool(re.search(r"(?i)\brectif", q))
     ordered = list(chunks)
-    if not pay_q:
-        non_pay = [
+
+    def _title(c: Any) -> str:
+        return str(getattr(c, "title", "") or "").lower()
+
+    def _text(c: Any) -> str:
+        return str(getattr(c, "text", "") or "")
+
+    def _src(c: Any) -> str:
+        return str(getattr(c, "source", "") or "")
+
+    if where_pdf:
+        loc = [
             c
-            for c in chunks
-            if not str(getattr(c, "source", "")).endswith("payments.md")
+            for c in ordered
+            if _src(c).endswith("reports.md")
+            and "priority" not in _title(c)
+            and ("where reports" in _title(c) or "my reports" in _text(c).lower())
         ]
+        if loc:
+            ordered = loc
+    if not pay_q and not where_pdf:
+        non_pay = [c for c in ordered if not _src(c).endswith("payments.md")]
         if non_pay:
             ordered = non_pay
-    if price_q:
+    if price_q and wants_btr:
+        btr = [
+            c
+            for c in ordered
+            if "rectif" in _title(c) or "rectif" in _text(c).lower()
+        ]
+        if btr:
+            ordered = btr
+    elif price_q:
         priced = [
             c
             for c in ordered
-            if "₹" in str(getattr(c, "text", "") or "")
-            or "price" in str(getattr(c, "title", "") or "").lower()
+            if "₹" in _text(c) or "price" in _title(c)
         ]
         if priced:
             priced.sort(
                 key=lambda c: (
-                    0 if "price" in str(getattr(c, "title", "") or "").lower() else 1,
-                    0 if "₹" in str(getattr(c, "text", "") or "") else 1,
+                    0 if "price" in _title(c) else 1,
+                    0 if "₹" in _text(c) else 1,
                 )
             )
             ordered = priced

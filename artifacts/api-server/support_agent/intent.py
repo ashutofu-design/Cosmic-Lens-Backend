@@ -183,8 +183,18 @@ def is_off_app_question(text: str) -> bool:
     return bool(_OFF_APP.search(text or ""))
 
 
+_HELP_SELF = re.compile(
+    r"(?i)("
+    r"cosmic\s*help|"
+    r"\b(tum|aap|you|your)\b|"
+    r"\bare you\b"
+    r")"
+)
+_ASK_V1V3_SUBJECT = re.compile(r"(?i)\b(v1|v3|ask\s+bot|ask\s+tab|ask\s+v1|ask\s+v3)\b")
+
+
 def is_ai_product_ask(text: str) -> bool:
-    """User asking if V1 / V3 / reports / the app is AI — not asking for secrets."""
+    """User asking if V1 / V3 / Help / reports / the app is AI — not asking for secrets."""
     t = text or ""
     if not _AI_WORD.search(t):
         return False
@@ -193,10 +203,30 @@ def is_ai_product_ask(text: str) -> bool:
     return True
 
 
+def _is_help_self_ai_ask(text: str) -> bool:
+    """'Are you / is Cosmic Help AI?' — not 'is V1/V3/Ask AI?'."""
+    t = text or ""
+    if _ASK_V1V3_SUBJECT.search(t):
+        return False
+    return bool(_HELP_SELF.search(t))
+
+
 def not_ai_engine_reply(text: str, lang: str) -> str:
-    """Clear deny: not AI. Special/advanced engine reads the chart (or expert PDF)."""
+    """Clear deny: not AI. Help = support. V1/V3 = chart engine. PDF = expert."""
     L = reply_lang(lang)
     t = text or ""
+    if _is_help_self_ai_ask(t):
+        if L == "en":
+            return (
+                "No — Cosmic Help is not AI. "
+                "I am in-app support: app how-to, payments, this account. "
+                "Personal kundli questions go to the Ask tab."
+            )
+        return (
+            "Nahi — Cosmic Help AI nahi hai. "
+            "Main in-app support hoon: app kaise use kare, payments, yeh account. "
+            "Personal kundli ke liye Ask tab use karo."
+        )
     pdf_only = bool(_PDF_AI.search(t)) and not _V1V3.search(t)
     if pdf_only:
         if L == "en":

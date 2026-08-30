@@ -4,8 +4,7 @@
 Any price in knowledge is guidance. The Pay screen for that purchase is authoritative — especially for AstroVastu / Business Vastu where marketing stickers can differ from checkout. All paid products are one-time (no monthly subscription plan).
 
 ## Birth Time Rectification
-Open Birth Time Rectification from the kundli / profile flow when offered.
-Price: ₹999 one-time (offer may show savings vs older ₹2,999). Reviewed by an astrologer.
+Birth Time Rectification price is ₹999 one-time. Open it from the kundli / profile flow when offered (offer may show savings vs older ₹2,999). Reviewed by an astrologer.
 Steps: (1) Identity — name, gender, DOB, approximate birth time, place; (2) at least 5 life milestones with month/year/impact; (3) top events from about the last 15 years. Pay unlocks form submit.
 
 ## Career ₹1 unlock

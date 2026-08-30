@@ -149,15 +149,27 @@ def _tokenize(text: str) -> list[str]:
 
 def _query_tokens(question: str) -> set[str]:
     raw = _tokenize(question)
+    low = " ".join(raw)
+    skip_ask_pack = bool(
+        re.search(r"\b(farq|difference|language|lang)\b", low)
+        and re.search(r"\b(help|ask)\b", low)
+    )
     out: set[str] = set()
     for t in raw:
         if t in _STOP:
             continue
         out.add(t)
+        if skip_ask_pack and t in ("ask", "pack", "kitne", "kitna"):
+            continue
         for key, syns in _SYNONYMS.items():
             if t == key or t in syns:
                 out.update(syns)
                 out.add(key)
+    if skip_ask_pack:
+        out.discard("prices")
+        out.discard("starter")
+        out.add("help")
+        out.add("language")
     return out
 
 
@@ -246,7 +258,11 @@ def retrieve_chunks(
     ) and not wants_v3
     wants_wallet = bool(
         re.search(
-            r"(?i)\b(wallet|transactions?|paise kahan|payments? show|payment kahan|dikhe)\b",
+            r"(?i)("
+            r"\bwallet\b|transactions?|"
+            r"paise kahan|payment kahan|"
+            r"where do payments|payments? show|payments? dikh"
+            r")",
             question or "",
         )
     )
@@ -308,10 +324,14 @@ def retrieve_chunks(
                 score += 4.0
             if wants_love and ch.source == "relationship.md" and "love" in title_l:
                 score += 4.0
-            if wants_palm and ch.source == "vastu.md" and "palmistry pro" in title_l:
-                score += 4.0
+            if wants_palm and ch.source == "vastu.md" and "palmistry" in title_l and "pro" in title_l:
+                score += 6.5
+            if wants_palm and "confirm prices" in title_l:
+                score -= 6.0
             if wants_btr and ch.source == "faq.md" and "rectif" in title_l:
-                score += 4.5
+                score += 7.0
+            if wants_btr and "confirm prices" in title_l:
+                score -= 6.0
             if wants_career1 and ch.source == "faq.md" and "career" in title_l and "₹1" in (ch.text or ""):
                 score += 4.5
             if wants_career1 and "confirm prices" in title_l:
@@ -324,25 +344,31 @@ def retrieve_chunks(
                 score -= 5.0
 
         if wants_wallet and ch.source == "payments.md" and "wallet" in title_l:
-            score += 5.0
+            score += 8.0
+        if wants_wallet and "what cosmic help can answer" in title_l:
+            score -= 6.0
         if wants_wallet and "processor" in title_l:
             score -= 4.0
         if wants_where_pdf and ch.source == "reports.md":
-            score += 4.5
-        if wants_where_pdf and "₹" in (ch.text or "") and ch.source == "relationship.md":
-            score -= 4.0
+            score += 8.0
+        if wants_where_pdf and ch.source in ("numerology.md", "relationship.md", "vastu.md"):
+            score -= 6.0
+        if wants_where_pdf and "what cosmic help can answer" in title_l:
+            score -= 5.0
         if wants_language and ch.source == "app.md" and "language" in title_l:
-            score += 5.0
+            score += 8.0
+        if wants_language and ch.source == "ask_packs.md":
+            score -= 8.0
         if wants_language and "theme" in title_l:
             score -= 3.5
         if wants_birth_edit and ch.source == "faq.md" and "edit" in title_l:
             score += 5.0
         if wants_birth_edit and ch.source == "app.md" and "kundli and charts" in title_l:
             score -= 4.0
-        if wants_help_vs_ask and ch.source == "app.md" and ("help vs ask" in title_l or "divya" in title_l):
-            score += 5.0
+        if wants_help_vs_ask and ch.source == "app.md" and "help vs ask" in title_l:
+            score += 8.0
         if wants_help_vs_ask and ch.source == "ask_packs.md":
-            score -= 5.0
+            score -= 8.0
         if wants_forecast and "forecast" in title_l:
             score += 4.5
         if wants_forecast and "how today's energy works" in title_l:

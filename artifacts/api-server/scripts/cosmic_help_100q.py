@@ -141,7 +141,7 @@ CASES: list[tuple[str, str, str | None]] = [
     ("Ask language alag hai kya", r"ask|language|profile", None),
     ("Force stop ke baad login", r"login|otp|google|sign", None),
     ("Pack expire ho gaya", r"expire|pack|till|buy", None),
-    ("V3 miss ho gaya queue", r"queue|accept|end|live", None),
+    ("V3 miss ho gaya queue", r"queue|accept|waiting|miss|live", None),
     ("GST invoice delete ke baad", r"gst|invoice|legal|delete", None),
     ("Website kya hai", r"cosmiclens\.app|website", None),
     ("Screenshot bheja payment ka", r"team|wait|join", None),

@@ -145,6 +145,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description="Ask Cosmic Help from the terminal")
     p.add_argument("question", nargs="*", help="Question text (or use --pricing / -q)")
     p.add_argument("--pricing", action="store_true", help="Run built-in 20 pricing questions")
+    p.add_argument("--50", dest="set50", action="store_true", help="Run 50 manual Cosmic Help checks")
     p.add_argument("-q", "--questions-file", type=Path, help="One question per line")
     p.add_argument("--from", dest="from_i", type=int, default=1, help="Start index (1-based)")
     p.add_argument("--to", dest="to_i", type=int, default=0, help="End index inclusive (0=all)")
@@ -153,7 +154,10 @@ def main() -> int:
     args = p.parse_args()
 
     cases: list[tuple[str, str | None]] = []
-    if args.pricing:
+    if args.set50:
+        qfile = API_ROOT / "scripts" / "cosmic_help_50q.txt"
+        cases = [(line, None) for line in _load_file(qfile)]
+    elif args.pricing:
         cases = [(q, exp) for q, exp in PRICING_QUESTIONS]
     elif args.questions_file:
         for line in _load_file(args.questions_file):
@@ -164,6 +168,7 @@ def main() -> int:
         p.print_help()
         print("\nExamples:")
         print('  python scripts/ask_cosmic_help.py "Starter pack kitne ka hai?"')
+        print("  python scripts/ask_cosmic_help.py --50")
         print("  python scripts/ask_cosmic_help.py --pricing")
         return 2
 

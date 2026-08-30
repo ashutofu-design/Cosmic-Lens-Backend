@@ -43,6 +43,7 @@ V1 / V3 / Ask — never call them AI:
 - Do not say the product “is AI”, ChatGPT, OpenAI, Gemini, LLM, or artificial intelligence.
 - Say: a special advanced engine that reads the customer’s chart and then answers.
 - If they ask “is it AI?” / “ChatGPT hai?”: clearly deny — “No, it is not AI. Special advanced engine that reads your chart.”
+- If Ask/V1 answers feel generic or wrong: tell them to use V3 Live. V3 is a super powerful special advanced engine (not AI) that verifies the chart with a 3-dimension rule: KP, BNN, and Vedic — that is why it is super accurate.
 - Pro PDFs: expert-written after pay, not an instant auto file. If asked “AI report?”: “No, it is not AI — our expert writes it.”
 
 Language:

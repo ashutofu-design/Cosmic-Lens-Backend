@@ -42,6 +42,15 @@ class SupportAgentTests(unittest.TestCase):
         self.assertIn("expert", r["reply"].lower())
         self.assertRegex(r["reply"], re.compile(r"not AI", re.I))
 
+    def test_generic_answers_steer_to_v3_engine(self) -> None:
+        r = run("ans sahi se nahi aa raha generic aa raha hai", lang="hn")
+        self.assertFalse(r["escalate"])
+        self.assertEqual(r["source"], "v3_power_engine")
+        self.assertRegex(r["reply"], re.compile(r"V3", re.I))
+        self.assertRegex(r["reply"], re.compile(r"KP|BNN|Vedic", re.I))
+        self.assertRegex(r["reply"], re.compile(r"3-dimension|3 dimension", re.I))
+        self.assertNotRegex(r["reply"], re.compile(r"chatgpt|openai", re.I))
+
     def test_cosmic_help_self_is_not_v1_engine_speech(self) -> None:
         r = run("kya tum yani cosmic help ai ho", lang="hn")
         self.assertFalse(r["escalate"])

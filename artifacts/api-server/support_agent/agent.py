@@ -18,6 +18,7 @@ from support_agent.intent import (
     classify_relation,
     is_ai_product_ask,
     is_ask_tab_question,
+    is_generic_or_wrong_answer_ask,
     is_off_app_question,
     last_user_and_bot,
     not_ai_engine_reply,
@@ -412,6 +413,17 @@ def run(
             "escalate": False,
             "reply": reply,
             "source": "not_ai_engine",
+            "relation": "new",
+            "agent_state": "answered",
+            "tools": tools,
+        }
+
+    if is_generic_or_wrong_answer_ask(text):
+        reply, _ = guard(v3_power_engine_reply(L), L, text)
+        return {
+            "escalate": False,
+            "reply": reply,
+            "source": "v3_power_engine",
             "relation": "new",
             "agent_state": "answered",
             "tools": tools,

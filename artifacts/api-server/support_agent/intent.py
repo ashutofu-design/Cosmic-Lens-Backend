@@ -183,6 +183,51 @@ def is_off_app_question(text: str) -> bool:
     return bool(_OFF_APP.search(text or ""))
 
 
+_GENERIC_ANS = re.compile(
+    r"(?i)("
+    r"\bgeneric\b|"
+    r"sahi se nahi|sahi nahi aa|sahi nahi lag|"
+    r"not (correct|accurate|right)|"
+    r"wrong answer|galat jawab|jawab galat|"
+    r"hamesha (same|generic|ek jaisa)|"
+    r"always (generic|same|wrong)|"
+    r"answers? (are |is )?(generic|wrong|same|not)"
+    r")"
+)
+_NOT_CHART_COMPLAINT = re.compile(
+    r"(?i)\b(otp|pdf|login|wallet|connect|queue|transaction|payment failed)\b"
+)
+
+
+def is_generic_or_wrong_answer_ask(text: str) -> bool:
+    """V1/Ask answers feel generic or wrong → steer to V3 (3-dimension engine)."""
+    t = text or ""
+    if not _GENERIC_ANS.search(t):
+        return False
+    if _NOT_CHART_COMPLAINT.search(t):
+        return False
+    return True
+
+
+def v3_power_engine_reply(lang: str) -> str:
+    L = reply_lang(lang)
+    if L == "en":
+        return (
+            "If answers feel generic or not right, use V3 Live. "
+            "It is a super powerful special advanced engine — not AI. "
+            "It verifies your chart with a 3-dimension rule: KP, BNN, and Vedic. "
+            "That is why V3 is super accurate and very powerful. "
+            "Book on Ask → language → Cosmic Packs (V3)."
+        )
+    return (
+        "Agar answers generic ya sahi nahi aa rahe, V3 Live use karo. "
+        "Woh super powerful special advanced engine hai — AI nahi. "
+        "Chart ko 3-dimension rule se verify karta hai: KP, BNN, aur Vedic. "
+        "Isliye V3 super accurate aur bahut zyada powerful hai. "
+        "Book: Ask → language → Cosmic Packs (V3)."
+    )
+
+
 _HELP_SELF = re.compile(
     r"(?i)("
     r"cosmic\s*help|"

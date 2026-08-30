@@ -60,6 +60,8 @@ CASES: list[tuple[str, str, str | None]] = [
     ("How do V3 Live sessions work?", r"accept|queue|pack|live|min", None),
     ("V3 kaise book kare", r"pack|ask|accept|live", None),
     ("I bought Cosmic V3 but I am not able to connect", r"queue|accept|ask|waiting|connect", r"₹399|₹49"),
+    ("ans sahi se nahi aa raha generic aa raha hai", r"V3|KP|BNN|Vedic|3-dimension", r"chatgpt"),
+    ("Answers are always generic", r"V3|KP|BNN|Vedic", None),
     # Wallet / pay
     ("Where is my wallet?", r"no wallet|wallet nahi|transactions", None),
     ("Wallet me paise kahan gaye", r"wallet|transactions", None),

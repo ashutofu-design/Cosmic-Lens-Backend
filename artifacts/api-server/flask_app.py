@@ -2816,22 +2816,27 @@ def _firebase_verify_phone_user(
 ):
     from sqlalchemy.exc import IntegrityError
 
-    if not phone_e164.startswith("+91"):
-        _record_login_activity(success=False, provider="firebase", error="phone_not_supported")
+    from signup_free_gift import (
+        canonical_phone_e164,
+        initial_free_questions_used,
+        record_signup_gift_claims,
+    )
+
+    phone_e164 = canonical_phone_e164(phone_e164)
+    if not phone_e164:
+        _record_login_activity(success=False, provider="firebase", error="invalid_phone")
         return (
             jsonify(
                 {
                     "ok": False,
-                    "error": "Only Indian mobile numbers are supported (+91).",
+                    "error": "Invalid Indian mobile number.",
                 }
             ),
-            403,
+            400,
         )
 
     cc_norm = "91"
     ph_norm = phone_e164[3:]
-
-    from signup_free_gift import initial_free_questions_used, record_signup_gift_claims
 
     user = User.query.filter_by(phone=phone_e164).first()
     is_new = False
@@ -2843,7 +2848,10 @@ def _firebase_verify_phone_user(
             phone=phone_e164,
             country_code=cc_norm,
             api_key=secrets.token_hex(32),
-            ask_v1_free_questions_used=initial_free_questions_used(phone=phone_e164),
+            ask_v1_free_questions_used=initial_free_questions_used(
+                phone=phone_e164,
+                firebase_uid=firebase_uid,
+            ),
         )
         db.session.add(user)
         try:
@@ -2869,6 +2877,7 @@ def _firebase_verify_phone_user(
                 app.logger.exception("[firebase-verify] auto_start_trial failed")
             record_signup_gift_claims(
                 phone=phone_e164,
+                firebase_uid=firebase_uid,
                 user_id=user.id,
                 source="signup",
                 commit=False,
@@ -2902,9 +2911,25 @@ def _firebase_verify_phone_user(
 
 def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_on_signup, subscription_status):
     from sqlalchemy.exc import IntegrityError
-    from signup_free_gift import initial_free_questions_used, record_signup_gift_claims
+    from signup_free_gift import (
+        canonical_email,
+        initial_free_questions_used,
+        record_signup_gift_claims,
+    )
+
+    raw_email = (email or "").strip()
+    email = canonical_email(email)
+    if not email:
+        return (
+            jsonify({"ok": False, "error": "Google account has no valid email."}),
+            401,
+        )
 
     user = User.query.filter_by(email=email).first()
+    if not user and raw_email.lower() != email:
+        user = User.query.filter_by(email=raw_email.lower()).first()
+        if user:
+            user.email = email
     if not user and firebase_uid:
         user = User.query.filter_by(google_id=firebase_uid).first()
 
@@ -2917,7 +2942,10 @@ def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_
             email=email,
             google_id=firebase_uid or None,
             api_key=secrets.token_hex(32),
-            ask_v1_free_questions_used=initial_free_questions_used(email=email),
+            ask_v1_free_questions_used=initial_free_questions_used(
+                email=email,
+                firebase_uid=firebase_uid,
+            ),
         )
         db.session.add(user)
         try:
@@ -2945,6 +2973,7 @@ def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_
                 app.logger.exception("[firebase-verify] auto_start_trial failed")
             record_signup_gift_claims(
                 email=email,
+                firebase_uid=firebase_uid,
                 user_id=user.id,
                 source="signup",
                 commit=False,
@@ -3317,6 +3346,17 @@ def update_user_personal(user_id):
             user.country_code = "91"
             if hasattr(user, "personal_phone_locked"):
                 user.personal_phone_locked = True
+            try:
+                from signup_free_gift import record_signup_gift_claims
+
+                record_signup_gift_claims(
+                    phone=phone_e164,
+                    user_id=user.id,
+                    source="phone_linked",
+                    commit=False,
+                )
+            except Exception:
+                pass
             changed = True
 
     if errors and not changed:

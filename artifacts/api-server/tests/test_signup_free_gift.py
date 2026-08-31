@@ -52,6 +52,59 @@ class SignupFreeGiftTests(unittest.TestCase):
             int(QUESTION_LIMITS["free"]),
         )
 
+    def test_phone_space_and_format_variants_blocked(self) -> None:
+        from signup_free_gift import (
+            canonical_phone_e164,
+            initial_free_questions_used,
+            record_signup_gift_claims,
+            signup_gift_already_claimed,
+        )
+        from subscription_helper import QUESTION_LIMITS
+
+        base = "+919876543210"
+        record_signup_gift_claims(phone=base, source="signup")
+        self.assertEqual(canonical_phone_e164("+91 98765 43210"), base)
+        self.assertEqual(canonical_phone_e164("919876543210"), base)
+        self.assertEqual(canonical_phone_e164("9876543210"), base)
+        self.assertTrue(signup_gift_already_claimed(phone="+91 98765 43210"))
+        self.assertEqual(
+            initial_free_questions_used(phone="9876543210"),
+            int(QUESTION_LIMITS["free"]),
+        )
+
+    def test_gmail_plus_and_dots_blocked(self) -> None:
+        from signup_free_gift import (
+            canonical_email,
+            initial_free_questions_used,
+            record_signup_gift_claims,
+            signup_gift_already_claimed,
+        )
+        from subscription_helper import QUESTION_LIMITS
+
+        record_signup_gift_claims(email="user@gmail.com", source="signup")
+        self.assertEqual(canonical_email("u.s.e.r+spam@gmail.com"), "user@gmail.com")
+        self.assertTrue(signup_gift_already_claimed(email="u.s.e.r@gmail.com"))
+        self.assertEqual(
+            initial_free_questions_used(email="user+2@gmail.com"),
+            int(QUESTION_LIMITS["free"]),
+        )
+
+    def test_firebase_uid_replay_blocked(self) -> None:
+        from signup_free_gift import (
+            initial_free_questions_used,
+            record_signup_gift_claims,
+            signup_gift_already_claimed,
+        )
+        from subscription_helper import QUESTION_LIMITS
+
+        uid = "firebase_uid_abc123"
+        record_signup_gift_claims(firebase_uid=uid, source="signup")
+        self.assertTrue(signup_gift_already_claimed(firebase_uid=uid))
+        self.assertEqual(
+            initial_free_questions_used(firebase_uid=uid),
+            int(QUESTION_LIMITS["free"]),
+        )
+
     def test_account_delete_locks_phone_for_future_signup(self) -> None:
         from models import User
         from signup_free_gift import (
@@ -78,14 +131,6 @@ class SignupFreeGiftTests(unittest.TestCase):
             initial_free_questions_used(phone=phone),
             int(QUESTION_LIMITS["free"]),
         )
-
-    def test_email_identity_also_blocked(self) -> None:
-        from signup_free_gift import initial_free_questions_used, record_signup_gift_claims
-
-        email = "user@example.com"
-        self.assertEqual(initial_free_questions_used(email=email), 0)
-        record_signup_gift_claims(email=email, source="signup")
-        self.assertEqual(initial_free_questions_used(email=email), 3)
 
 
 if __name__ == "__main__":

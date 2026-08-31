@@ -373,12 +373,22 @@ def build_travel_selected_blocks(
         "note": (
             f"Question focus={focus}: top facts are for LLM priority reading (not full EE dump)."
         ),
+        "domain": "travel",
     }
     try:
         from ask_selected_blocks_common import (
             coverage_check_selected_blocks,
             coverage_note_lines,
+            finalize_selected_blocks_audit,
         )
+
+        audit = finalize_selected_blocks_audit(
+            audit,
+            pack,
+            question=question or "",
+            meta=meta,
+        )
+        blocks = audit.get("expected_blocks") or blocks
 
         coverage = coverage_check_selected_blocks(
             question or "",

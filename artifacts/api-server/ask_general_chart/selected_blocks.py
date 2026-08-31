@@ -165,7 +165,19 @@ def build_general_selected_blocks(
             coverage_check_selected_blocks,
             coverage_note_lines,
             dna_boost_note_lines,
+            finalize_selected_blocks_audit,
         )
+
+        audit = finalize_selected_blocks_audit(
+            audit,
+            pack,
+            question=question or "",
+            meta=meta,
+            priority_header=(
+                "QUESTION_PRIORITY_FACTS (from General Chart Execution — use in this order):"
+            ),
+        )
+        blocks = audit.get("expected_blocks") or blocks
 
         coverage = coverage_check_selected_blocks(
             question or "",

@@ -614,12 +614,22 @@ def build_relationship_selected_blocks(
         "has_d1": bool(_chart_ok(pack.get("d1"))),
         "has_d9": bool(_chart_ok(pack.get("d9"))),
         "question": (question or "").strip()[:200],
+        "domain": "relationship",
     }
     try:
         from ask_selected_blocks_common import (
             coverage_check_selected_blocks,
             coverage_note_lines,
+            finalize_selected_blocks_audit,
         )
+
+        audit = finalize_selected_blocks_audit(
+            audit,
+            pack,
+            question=question or "",
+            meta=meta,
+        )
+        relevant = audit.get("expected_blocks") or relevant
 
         coverage = coverage_check_selected_blocks(
             question or "",

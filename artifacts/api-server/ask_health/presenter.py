@@ -43,15 +43,16 @@ def to_health_llm_payload(result: EngineResult, *, question: str = "") -> str:
             execution=execution if isinstance(execution, dict) else None,
         )
         priority = str(selected.get("priority_facts_for_llm") or "").strip()
-        if priority:
-            parts.append(priority)
-            # Keep for admin audit when narrator runs
+        if priority or selected.get("expected_blocks"):
+            if priority:
+                parts.append(priority)
             checks["health_selected_blocks_preview"] = {
                 "focus": selected.get("focus"),
                 "focus_label": selected.get("focus_label"),
                 "expected_blocks": (selected.get("expected_blocks") or [])[:8],
                 "priority_facts_for_llm": priority,
                 "source": "health_engine_execution",
+                "selection_fallback": selected.get("selection_fallback"),
             }
             result.checks = checks
     except Exception:

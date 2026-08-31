@@ -5792,29 +5792,38 @@ def _rich_chart_text_for_llm_fallback(
     kundli: Any,
     birth: Any = None,
     question: str = "",
+    selected_block_text: str = "",
+    *,
+    checks: Any = None,
+    slice_meta: Any = None,
+    marriage_block: str = "",
+    career_block: str = "",
+    domain_timing_block: str = "",
 ) -> str:
-    """Full D1+D9+dignity chart block when domain engine facts are missing."""
-    if not isinstance(kundli, dict) or not kundli:
-        return "(no chart data available)"
+    """D1-first LLM context: selected domain blocks when present, else full D1 block."""
     try:
-        from kundli_full_context import build_full_chart_context  # type: ignore
-
-        intel_obj = None
-        try:
-            analyze_chart, _ = _chart_intel()
-            intel_obj = analyze_chart(kundli, birth)
-        except Exception:
-            pass
-        block = build_full_chart_context(
-            kundli=kundli,
-            intel=intel_obj,
-            birth=birth if isinstance(birth, dict) else None,
-            question=question or "",
+        from ask_chart_llm_fallback import (
+            build_chart_text_for_llm_answer,
+            extract_selected_block_text,
         )
-        if (block or "").strip():
-            return block.strip()
+
+        sel = (selected_block_text or "").strip()
+        if not sel:
+            sel = extract_selected_block_text(
+                checks=checks if isinstance(checks, dict) else None,
+                slice_meta=slice_meta if isinstance(slice_meta, dict) else None,
+                marriage_block=marriage_block or "",
+                career_block=career_block or "",
+                domain_timing_block=domain_timing_block or "",
+            )
+        return build_chart_text_for_llm_answer(
+            kundli,
+            question=question or "",
+            birth=birth,
+            selected_block_text=sel,
+        )
     except Exception as _rich_exc:
-        print(f"[raw_passthrough] rich chart fallback skipped: {_rich_exc}", flush=True)
+        print(f"[raw_passthrough] d1 chart fallback skipped: {_rich_exc}", flush=True)
     return _raw_compact_chart(
         kundli, include_dasha=False, static_dasha_hint=True,
     )
@@ -10679,6 +10688,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             kundli,
                             birth=birth,
                             question=question or "",
+                            checks=(
+                                dcr_love_meta.get("checks")
+                                if isinstance(dcr_love_meta, dict)
+                                and isinstance(dcr_love_meta.get("checks"), dict)
+                                else None
+                            ),
+                            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else None,
+                            marriage_block=marriage_block or "",
+                            career_block=career_block or "",
+                            domain_timing_block=domain_timing_block or "",
                         )
                     except Exception:
                         try:
@@ -11775,6 +11794,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             marriage_block=marriage_block or "",
             career_block=career_block or "",
             domain_timing_block=domain_timing_block or "",
+            kundli=kundli,
         )
         if _refusal is not None:
             return _attach_admin(
@@ -11829,6 +11849,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     kundli,
                     birth=birth,
                     question=question or "",
+                    checks=_eng_checks,
+                    slice_meta=_eng_slice,
+                    marriage_block=marriage_block or "",
+                    career_block=career_block or "",
+                    domain_timing_block=domain_timing_block or "",
                 )
                 extra_rules = (extra_rules or "") + build_universal_chart_llm_rules(
                     question or "",

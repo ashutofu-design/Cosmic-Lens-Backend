@@ -555,6 +555,7 @@ def enforce_engine_only_or_refuse(
     marriage_block: str = "",
     career_block: str = "",
     domain_timing_block: str = "",
+    kundli: Any = None,
 ) -> Optional[dict]:
     """Return refusal payload when LLM must not run chart-only; None = OK to proceed."""
     if direct_llm_allowed():
@@ -562,6 +563,18 @@ def enforce_engine_only_or_refuse(
 
     checks = checks or {}
     slice_meta = slice_meta or {}
+
+    try:
+        from ask_chart_llm_fallback import d1_llm_fallback_allowed
+
+        _d1_fallback = d1_llm_fallback_allowed(question, kundli, llm_intent)
+    except Exception:
+        _d1_fallback = chart_has_d1(kundli)
+
+    def _allow_d1_llm_instead_of_refuse() -> Optional[dict]:
+        if _d1_fallback:
+            return None
+        return no_engine_refusal_result(question, qtype=qtype)
 
     has_domain = passthrough_has_domain_engine_facts(
         checks=checks,
@@ -590,16 +603,20 @@ def enforce_engine_only_or_refuse(
                     return build_timing_domain_clarifier_result(question, qtype=qtype)
             except Exception:
                 pass
-        # Marriage/career timing must never fall back to chart-only LLM hallucination.
         if missing == "marriage_timing":
+            if _d1_fallback:
+                return None
             return marriage_timing_unavailable_result(question, qtype=qtype)
         if missing == "career_timing" or (
             isinstance(missing, str) and missing.endswith("_timing") and missing != "general_timing"
         ):
-            return no_engine_refusal_result(question, qtype=qtype)
+            alt = _allow_d1_llm_instead_of_refuse()
+            if alt is None:
+                return None
+            return alt
         if no_engine_llm_enabled():
             return None
-        return no_engine_refusal_result(question, qtype=qtype)
+        return _allow_d1_llm_instead_of_refuse()
     if not has_domain:
         try:
             from ask_timing_clarify import (
@@ -632,7 +649,7 @@ def enforce_engine_only_or_refuse(
                 return None
         except Exception:
             pass
-        return no_engine_refusal_result(question, qtype=qtype)
+        return _allow_d1_llm_instead_of_refuse()
     return None
 
 

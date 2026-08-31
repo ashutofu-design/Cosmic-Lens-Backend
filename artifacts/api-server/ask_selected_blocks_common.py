@@ -283,6 +283,331 @@ def dna_boost_note_lines(applied: list[str]) -> list[str]:
     return ["DNA MATCH BOOST → " + ", ".join(applied[:8])]
 
 
+_DEFAULT_FOCUS_HOUSES = (1, 10, 7, 9)
+_DEFAULT_FOCUS_PLANETS = (
+    "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn",
+)
+
+
+def _execution_substantive(execution: dict[str, Any]) -> bool:
+    if not isinstance(execution, dict) or not execution:
+        return False
+    if execution.get("schema_version") or execution.get("domain"):
+        return True
+    d1 = execution.get("d1")
+    if isinstance(d1, dict) and not d1.get("error"):
+        return True
+    return bool(
+        execution.get("d9")
+        or execution.get("dimensions")
+        or execution.get("composite_score") is not None
+        or execution.get("strength_label")
+        or execution.get("afflictions")
+    )
+
+
+def _d1_from_execution(execution: dict[str, Any]) -> dict[str, Any]:
+    d1 = execution.get("d1")
+    if isinstance(d1, dict) and not d1.get("error"):
+        return d1
+    return {}
+
+
+def format_priority_facts_for_llm_common(
+    blocks: list[dict[str, Any]],
+    *,
+    limit: int = 5,
+    header: str = "",
+) -> str:
+    """Compact ranked facts for narrator — weak / question-relevant first."""
+    if not blocks:
+        return ""
+    lines = [
+        header
+        or "QUESTION_PRIORITY_FACTS (from Engine Execution only — use in this order):",
+        "Rules: #1 = main reason + MUST include its natural chart proof in the answer",
+        "(planet + house/dignity, e.g. Saturn 6th debilitated). Max 2–3 facts total.",
+        "Weak/dignity pressure > exalted support; exalted/strong = support only.",
+        "Do not invent planets outside this list; do not dump every fact.",
+    ]
+    for b in blocks[: max(1, limit)]:
+        rank = b.get("rank") or "?"
+        role = b.get("role") or "neutral"
+        proof_hint = ""
+        if rank == 1 or rank == "1":
+            proof_hint = " ← CITE THIS as proof"
+        detail = b.get("detail") or b.get("why") or ""
+        lines.append(
+            f"#{rank} [{role}] {b.get('label')}: {detail}{proof_hint}"
+        )
+    return "\n".join(lines)
+
+
+def ensure_minimum_selected_blocks(
+    blocks: list[dict[str, Any]],
+    execution: dict[str, Any] | None,
+    *,
+    question: str = "",
+    focus: str = "",
+    domain: str = "",
+    focus_houses: tuple[int, ...] | None = None,
+    focus_planets: tuple[str, ...] | None = None,
+) -> tuple[list[dict[str, Any]], bool]:
+    """When engine execution exists, always return ≥1 selected block."""
+    if blocks:
+        return blocks, False
+    if not isinstance(execution, dict) or not _execution_substantive(execution):
+        return blocks, False
+
+    houses = focus_houses
+    planets = focus_planets
+    if domain and (not houses or not planets):
+        try:
+            from ask_unified.specs import get_domain_spec
+
+            spec = get_domain_spec(domain.strip().lower())
+            if spec:
+                if not houses:
+                    houses = tuple(spec.focus_houses[:4])
+                if not planets:
+                    planets = tuple(
+                        p for p in spec.focus_planets if p != "Ascendant"
+                    )[:6]
+        except Exception:
+            pass
+    houses = houses or _DEFAULT_FOCUS_HOUSES
+    planets = planets or _DEFAULT_FOCUS_PLANETS
+
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(
+        bid: str,
+        label: str,
+        detail: str,
+        *,
+        priority: int,
+        role: str = "neutral",
+        why: str = "",
+    ) -> None:
+        if bid in seen:
+            return
+        seen.add(bid)
+        row: dict[str, Any] = {
+            "id": bid,
+            "label": label,
+            "detail": detail,
+            "priority": priority,
+            "role": role,
+        }
+        if why:
+            row["why"] = why
+        out.append(row)
+
+    why_prefix = f"Focus={focus or domain or 'engine'}; minimum EE fallback"
+
+    for row in dasha_blocks_from_pack(execution, focus=focus):
+        if isinstance(row, dict) and row.get("id"):
+            add(
+                str(row["id"]),
+                str(row.get("label") or row["id"]),
+                str(row.get("detail") or row.get("why") or ""),
+                priority=int(row.get("priority") or 85),
+                role=str(row.get("role") or "support"),
+                why=str(row.get("why") or why_prefix),
+            )
+
+    d1 = _d1_from_execution(execution)
+    dims = execution.get("dimensions") or d1.get("dimensions") or {}
+    if isinstance(dims, dict):
+        for dim_key, row in list(dims.items())[:4]:
+            if not isinstance(row, dict):
+                continue
+            verdict = str(row.get("verdict") or "")
+            role = (
+                "weak" if verdict == "RED"
+                else ("support" if verdict == "GREEN" else "neutral")
+            )
+            pr = 90 if verdict == "RED" else (70 if verdict == "YELLOW" else 55)
+            add(
+                f"dim.{dim_key}",
+                f"Dimension · {dim_key}",
+                f"{verdict} — {row.get('reason') or ''}".strip(" —"),
+                priority=pr,
+                role=role,
+                why=why_prefix,
+            )
+
+    asc = d1.get("ascendant") or execution.get("ascendant")
+    if asc:
+        add("d1.lagna", "D1 · Lagna", str(asc), priority=86, role="neutral", why=why_prefix)
+
+    lords = d1.get("house_lords") if isinstance(d1.get("house_lords"), dict) else {}
+    for h in houses:
+        st = lords.get(f"h{h}") if isinstance(lords, dict) else None
+        if not isinstance(st, dict) or not st.get("lord"):
+            continue
+        dig = str(st.get("lord_dignity") or "")
+        role = (
+            "weak"
+            if dig in ("debilitated", "enemy") or st.get("lord_in_dusthana")
+            else "neutral"
+        )
+        if dig in ("exalted", "own"):
+            role = "support"
+        add(
+            f"lord.h{h}",
+            f"House lord · h{h}",
+            (
+                f"{st.get('lord')} → H{st.get('lord_house')} · "
+                f"{st.get('lord_sign')} · {dig}"
+            ),
+            priority=80 if role == "weak" else 50,
+            role=role,
+            why=why_prefix,
+        )
+
+    karakas = d1.get("karakas") if isinstance(d1.get("karakas"), dict) else {}
+    for pname in planets:
+        k = karakas.get(pname) if isinstance(karakas, dict) else None
+        if not isinstance(k, dict) or not k.get("house"):
+            continue
+        dig = str(k.get("dignity") or "")
+        role = (
+            "weak" if dig in ("debilitated", "enemy")
+            else ("support" if dig in ("exalted", "own") else "neutral")
+        )
+        add(
+            f"planet.{pname}",
+            f"Planet · {pname}",
+            f"{pname} · {k.get('sign')} · H{k.get('house')} · {dig}",
+            priority=75 if role == "weak" else 48,
+            role=role,
+            why=why_prefix,
+        )
+
+    for i, row in enumerate((d1.get("domain_houses") or [])[:4]):
+        if not isinstance(row, dict):
+            continue
+        h = row.get("house")
+        if not h:
+            continue
+        add(
+            f"domain_house.{h}",
+            f"Domain house · H{h}",
+            (
+                f"lord={row.get('lord')} · H{row.get('lord_house')} · "
+                f"{row.get('lord_dignity') or ''}"
+            ).strip(),
+            priority=58,
+            role="neutral",
+            why=why_prefix,
+        )
+
+    lagnesh_pack = execution.get("lagnesh")
+    if isinstance(lagnesh_pack, dict):
+        d1_ln = lagnesh_pack.get("d1")
+        if isinstance(d1_ln, dict) and d1_ln.get("lord"):
+            dig = str(d1_ln.get("lord_dignity") or d1_ln.get("dignity") or "")
+            add(
+                "d1.lagnesh",
+                "D1 · Lagnesh",
+                (
+                    f"{d1_ln.get('lord')} → H{d1_ln.get('lord_house')} · "
+                    f"{d1_ln.get('lord_sign') or d1_ln.get('sign')} · {dig}"
+                ),
+                priority=82,
+                role="neutral",
+                why=why_prefix,
+            )
+
+    afflictions = execution.get("afflictions") or d1.get("afflictions") or []
+    for i, line in enumerate(list(afflictions)[:3]):
+        add(f"affliction.{i}", "Affliction", str(line), priority=72, role="weak", why=why_prefix)
+
+    if execution.get("strength_label") or execution.get("composite_score") is not None:
+        add(
+            "pack.composite",
+            "Theme strength",
+            (
+                f"score={execution.get('composite_score')}/100 — "
+                f"{execution.get('strength_label') or ''}"
+            ).strip(" —"),
+            priority=40,
+            role="neutral",
+            why=why_prefix,
+        )
+
+    if not out and isinstance(karakas, dict):
+        for pname, k in list(karakas.items())[:6]:
+            if not isinstance(k, dict) or not k.get("house"):
+                continue
+            add(
+                f"planet.{pname}",
+                f"Planet · {pname}",
+                f"{pname} · {k.get('sign')} · H{k.get('house')}",
+                priority=45,
+                role="neutral",
+                why=why_prefix,
+            )
+
+    if not out:
+        add(
+            "execution.present",
+            "Engine execution",
+            "Engine execution ran — use full EE JSON + D1 positions for this question.",
+            priority=30,
+            role="neutral",
+            why=why_prefix,
+        )
+
+    out.sort(key=lambda b: (-int(b.get("priority") or 0), str(b.get("id") or "")))
+    for i, b in enumerate(out, start=1):
+        b["rank"] = i
+    return out, True
+
+
+def finalize_selected_blocks_audit(
+    audit: dict[str, Any],
+    execution: dict[str, Any] | None,
+    *,
+    question: str = "",
+    meta: dict[str, Any] | None = None,
+    priority_header: str = "",
+) -> dict[str, Any]:
+    """Guarantee selected blocks + priority_facts whenever engine execution exists."""
+    audit = dict(audit or {})
+    blocks = list(audit.get("expected_blocks") or audit.get("available_blocks") or [])
+    focus = str(audit.get("focus") or "").strip()
+    domain = str(audit.get("domain") or "").strip()
+
+    blocks, fallback_used = ensure_minimum_selected_blocks(
+        blocks,
+        execution if isinstance(execution, dict) else None,
+        question=question or "",
+        focus=focus,
+        domain=domain,
+    )
+    audit["expected_blocks"] = blocks
+    audit["available_blocks"] = blocks
+    audit["expected_block_ids"] = sorted({str(b.get("id") or "") for b in blocks if b.get("id")})
+    audit["priority_facts_for_llm"] = format_priority_facts_for_llm_common(
+        blocks,
+        header=priority_header or None,
+    )
+    if fallback_used:
+        audit["selection_fallback"] = "minimum_from_engine_execution"
+        notes = audit.get("overlap_notes")
+        if not isinstance(notes, list):
+            notes = [str(notes)] if notes else []
+        notes.append(
+            "Auto-selected minimum blocks from Engine Execution "
+            "(never empty when EE present)."
+        )
+        audit["overlap_notes"] = notes
+    return audit
+
+
 def coverage_check_selected_blocks(
     question: str,
     *,

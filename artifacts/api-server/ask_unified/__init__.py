@@ -50,6 +50,29 @@ def attach_domain_engine_execution(
         if pack.get("composite_score") is not None:
             checks[f"{domain}_score"] = pack.get("composite_score")
         result.checks = checks
+        try:
+            selected = build_domain_selected_blocks(
+                question or "",
+                "",
+                meta={"checks": checks, "routing_label": result.archetype},
+                domain=domain,
+                execution=pack,
+            )
+            if selected.get("expected_blocks") or pack:
+                checks[f"{domain}_selected_blocks_preview"] = {
+                    "applies": True,
+                    "focus": selected.get("focus"),
+                    "focus_label": selected.get("focus_label"),
+                    "expected_blocks": (selected.get("expected_blocks") or [])[:8],
+                    "available_blocks": (selected.get("expected_blocks") or [])[:8],
+                    "priority_facts_for_llm": selected.get("priority_facts_for_llm") or "",
+                    "source": f"{domain}_engine_execution",
+                    "domain": domain,
+                    "selection_fallback": selected.get("selection_fallback"),
+                }
+                result.checks = checks
+        except Exception:
+            pass
     except Exception as exc:
         checks = dict(result.checks or {})
         checks[f"{domain}_engine_execution_error"] = str(exc)[:180]
@@ -192,7 +215,7 @@ def to_domain_llm_payload(
             domain=domain, execution=execution if isinstance(execution, dict) else None,
         )
         priority = str(selected.get("priority_facts_for_llm") or "").strip()
-        if priority:
+        if priority or selected.get("expected_blocks"):
             parts.append(priority)
             checks[f"{domain}_selected_blocks_preview"] = {
                 "applies": True,
@@ -203,6 +226,7 @@ def to_domain_llm_payload(
                 "priority_facts_for_llm": priority,
                 "source": f"{domain}_engine_execution",
                 "domain": domain,
+                "selection_fallback": selected.get("selection_fallback"),
             }
             result.checks = checks
     except Exception:
@@ -368,8 +392,18 @@ def build_domain_selected_blocks(
             coverage_check_selected_blocks,
             coverage_note_lines,
             dna_boost_note_lines,
+            finalize_selected_blocks_audit,
             question_wants_everything,
         )
+
+        audit = finalize_selected_blocks_audit(
+            audit,
+            pack,
+            question=question or "",
+            meta=meta,
+        )
+        blocks = audit.get("expected_blocks") or blocks
+        priority_text = str(audit.get("priority_facts_for_llm") or priority_text)
 
         if question_wants_everything(question or "", meta) and spec:
             # Widen limit already encoded in blocks; tag coverage notes.

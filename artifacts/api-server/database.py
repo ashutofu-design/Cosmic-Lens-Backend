@@ -294,6 +294,27 @@ def run_schema_migrations() -> None:
                 try:
                     conn.execute(text(
                         """
+                        CREATE TABLE IF NOT EXISTS signup_free_gift_claims (
+                            id SERIAL PRIMARY KEY,
+                            identity_kind VARCHAR(8) NOT NULL,
+                            identity_value VARCHAR(255) NOT NULL,
+                            source VARCHAR(32) NOT NULL DEFAULT 'signup',
+                            first_user_id INTEGER,
+                            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                            CONSTRAINT uq_signup_free_gift_identity UNIQUE (identity_kind, identity_value)
+                        )
+                        """
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_signup_free_gift_kind_value "
+                        "ON signup_free_gift_claims (identity_kind, identity_value)"
+                    ))
+                except Exception:
+                    pass
+
+                try:
+                    conn.execute(text(
+                        """
                         CREATE TABLE IF NOT EXISTS v3_live_purchases (
                             id SERIAL PRIMARY KEY,
                             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -631,6 +652,38 @@ def ensure_user_questions_telemetry_columns() -> None:
             print(f"[DB] ensure_user_questions_telemetry_columns sqlite: {e}", flush=True)
 
 
+def ensure_login_activity_columns() -> None:
+    """Best-effort login_activity.is_new_user for admin New/Old column."""
+    url = get_database_url()
+    if "postgresql" in url:
+        statements = [
+            "ALTER TABLE login_activity ADD COLUMN IF NOT EXISTS is_new_user BOOLEAN",
+        ]
+    else:
+        statements = []
+
+    for sql in statements:
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text(sql))
+                conn.commit()
+        except Exception as e:
+            print(f"[DB] ensure_login_activity_columns: {e}", flush=True)
+
+    if "postgresql" not in url:
+        try:
+            with db.engine.connect() as conn:
+                _sqlite_add_column(
+                    conn,
+                    "login_activity",
+                    "is_new_user",
+                    "ALTER TABLE login_activity ADD COLUMN is_new_user BOOLEAN",
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"[DB] ensure_login_activity_columns sqlite: {e}", flush=True)
+
+
 def init_db(app):
 
     url = get_database_url()
@@ -646,6 +699,7 @@ def init_db(app):
         db.create_all()
 
         run_schema_migrations()
+        ensure_login_activity_columns()
         try:
             from cosmo_user_id import backfill_missing_cosmo_user_ids
 
@@ -654,6 +708,14 @@ def init_db(app):
                 print(f"[DB] Backfilled {n} cosmo_user_id(s)", flush=True)
         except Exception as bf_exc:
             print(f"[DB] cosmo_user_id backfill note: {bf_exc}", flush=True)
+        try:
+            from signup_free_gift import backfill_signup_free_gift_claims
+
+            n = backfill_signup_free_gift_claims()
+            if n:
+                print(f"[DB] Backfilled {n} signup free gift claim(s)", flush=True)
+        except Exception as bf_exc:
+            print(f"[DB] signup free gift backfill note: {bf_exc}", flush=True)
 
     db_type = "PostgreSQL" if "postgresql" in url else "SQLite"
     try:

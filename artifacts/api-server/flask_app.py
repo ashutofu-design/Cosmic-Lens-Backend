@@ -603,6 +603,7 @@ def _record_login_activity(
     email: str | None = None,
     firebase_uid: str | None = None,
     error: str = "",
+    is_new_user: bool | None = None,
 ) -> None:
     """Best-effort: never break auth flow if logging fails."""
     try:
@@ -615,6 +616,7 @@ def _record_login_activity(
             user_agent=_cl_user_agent(),
             success=bool(success),
             error=(error or "")[:200],
+            is_new_user=(bool(is_new_user) if is_new_user is not None else None),
         )
         db.session.add(row)
         db.session.commit()
@@ -2829,6 +2831,8 @@ def _firebase_verify_phone_user(
     cc_norm = "91"
     ph_norm = phone_e164[3:]
 
+    from signup_free_gift import initial_free_questions_used, record_signup_gift_claims
+
     user = User.query.filter_by(phone=phone_e164).first()
     is_new = False
     if not user:
@@ -2839,7 +2843,7 @@ def _firebase_verify_phone_user(
             phone=phone_e164,
             country_code=cc_norm,
             api_key=secrets.token_hex(32),
-            ask_v1_free_questions_used=0,
+            ask_v1_free_questions_used=initial_free_questions_used(phone=phone_e164),
         )
         db.session.add(user)
         try:
@@ -2863,6 +2867,12 @@ def _firebase_verify_phone_user(
                 auto_start_trial_on_signup(user)
             except Exception:
                 app.logger.exception("[firebase-verify] auto_start_trial failed")
+            record_signup_gift_claims(
+                phone=phone_e164,
+                user_id=user.id,
+                source="signup",
+                commit=False,
+            )
     else:
         if not user.api_key:
             user.api_key = secrets.token_hex(32)
@@ -2880,6 +2890,7 @@ def _firebase_verify_phone_user(
         user=user,
         email=(getattr(user, "email", None) or None),
         firebase_uid=(firebase_uid or getattr(user, "google_id", None) or None),
+        is_new_user=is_new,
     )
 
     payload = user.to_dict()
@@ -2891,6 +2902,7 @@ def _firebase_verify_phone_user(
 
 def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_on_signup, subscription_status):
     from sqlalchemy.exc import IntegrityError
+    from signup_free_gift import initial_free_questions_used, record_signup_gift_claims
 
     user = User.query.filter_by(email=email).first()
     if not user and firebase_uid:
@@ -2905,7 +2917,7 @@ def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_
             email=email,
             google_id=firebase_uid or None,
             api_key=secrets.token_hex(32),
-            ask_v1_free_questions_used=0,
+            ask_v1_free_questions_used=initial_free_questions_used(email=email),
         )
         db.session.add(user)
         try:
@@ -2931,6 +2943,12 @@ def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_
                 auto_start_trial_on_signup(user)
             except Exception:
                 app.logger.exception("[firebase-verify] auto_start_trial failed")
+            record_signup_gift_claims(
+                email=email,
+                user_id=user.id,
+                source="signup",
+                commit=False,
+            )
     else:
         if not user.api_key:
             user.api_key = secrets.token_hex(32)
@@ -2952,6 +2970,7 @@ def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_
         user=user,
         email=email,
         firebase_uid=(firebase_uid or None),
+        is_new_user=is_new,
     )
 
     payload = user.to_dict()
@@ -3456,6 +3475,9 @@ def delete_user_account(user_id):
 
     deleted_email = user.email
     try:
+        from signup_free_gift import ensure_claims_on_account_delete
+
+        ensure_claims_on_account_delete(user)
         # 1) Delete kundlis (no CASCADE on this FK)
         Kundli.query.filter_by(user_id=user_id).delete(synchronize_session=False)
         # 2) Profiles cascade automatically via ondelete="CASCADE"
@@ -5998,7 +6020,7 @@ def admin_login_activity():
     offset = int(request.args.get("offset") or 0)
     offset = max(0, offset)
 
-    from admin_dashboard import batch_profile_counts, resolve_login_activity_display
+    from admin_dashboard import batch_profile_counts, batch_first_success_login_ids, resolve_login_activity_display, resolve_login_user_status
     from sqlalchemy import or_
 
     q = LoginActivity.query
@@ -6035,6 +6057,7 @@ def admin_login_activity():
 
     login_user_ids = [int(r.user_id) for r in rows if r.user_id]
     profile_counts = batch_profile_counts(db.session, login_user_ids)
+    first_success_by_user = batch_first_success_login_ids(db.session, login_user_ids)
     users_by_id: dict[int, User] = {}
     if login_user_ids:
         for u in User.query.filter(User.id.in_(list(set(login_user_ids)))).all():
@@ -6063,6 +6086,7 @@ def admin_login_activity():
                 "user_agent": r.user_agent,
                 "success": bool(r.success),
                 "error": r.error,
+                "user_status": resolve_login_user_status(r, first_success_by_user),
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "profile_count": profile_counts.get(uid, 0) if uid else 0,
             }

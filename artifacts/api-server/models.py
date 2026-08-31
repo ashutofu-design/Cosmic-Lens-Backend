@@ -293,6 +293,7 @@ class LoginActivity(db.Model):
 
     success     = db.Column(db.Boolean, nullable=False, default=False, index=True)
     error       = db.Column(db.String(200), nullable=False, default="")
+    is_new_user = db.Column(db.Boolean, nullable=True, index=True)
 
     created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
@@ -394,6 +395,24 @@ class V3LivePurchase(db.Model):
     preferred_language = db.Column(db.String(10), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     paid_at = db.Column(db.DateTime, nullable=True)
+
+
+class SignupFreeGiftClaim(db.Model):
+    """Phone/email that already received the one-time signup Ask gift (survives account deletion)."""
+
+    __tablename__ = "signup_free_gift_claims"
+
+    id = db.Column(db.Integer, primary_key=True)
+    identity_kind = db.Column(db.String(8), nullable=False)   # phone | email
+    identity_value = db.Column(db.String(255), nullable=False)
+    source = db.Column(db.String(32), nullable=False, default="signup")
+    first_user_id = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("identity_kind", "identity_value", name="uq_signup_free_gift_identity"),
+        db.Index("ix_signup_free_gift_kind_value", "identity_kind", "identity_value"),
+    )
 
 
 class PackReferralReward(db.Model):

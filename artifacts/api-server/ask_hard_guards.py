@@ -799,3 +799,34 @@ def no_engine_refusal_result(question: str, *, qtype: str = "STATIC") -> dict:
         "engine_tag": "ans-engine",
         "follow_ups": [],
     }
+
+
+def chart_has_d1(kundli: Any) -> bool:
+    """True when birth chart has at least one planet row (D1 base)."""
+    if not isinstance(kundli, dict):
+        return False
+    planets = kundli.get("planets")
+    return isinstance(planets, list) and len(planets) > 0
+
+
+def d1_required_refusal_result(*, lang: str = "hn", qtype: str = "STATIC") -> dict:
+    """Personal/chart Ask without saved D1 — never generic engine refusal."""
+    is_hi = (lang or "").lower() in ("hi", "hn")
+    text = (
+        "Is sawal ke liye pehle apni kundli save karein (janam date, time, place). "
+        "D1 chart hamare system ka base hai — bina chart ke personal jawab nahi diya ja sakta."
+        if is_hi
+        else (
+            "Please save your birth chart first (date, time, place). "
+            "D1 is required — we cannot answer personal chart questions without it."
+        )
+    )
+    return {
+        "text": text,
+        "topic": "chart_required",
+        "question_type": qtype,
+        "confidence": 1.0,
+        "source": "d1_required",
+        "engine_tag": "ans-engine",
+        "follow_ups": [],
+    }

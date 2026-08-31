@@ -6178,6 +6178,30 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         )
                 except Exception as _fu_exc:
                     print(f"[raw_passthrough] FOLLOWUP_LOCK skipped: {_fu_exc}", flush=True)
+                # Regex repair: if Phase2 said general but career/marriage/etc. keywords
+                # are clear, upgrade domain before engine routing (always-on safety net).
+                try:
+                    from ask_route_from_understanding import apply_understanding_routing
+
+                    if isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin = apply_understanding_routing(
+                            question or "",
+                            _phase2_understand,
+                            _llm_intent_admin,
+                        )
+                        _phase2_understand["domain"] = _llm_intent_admin.get(
+                            "domain", _phase2_understand.get("domain")
+                        )
+                        if _llm_intent_admin.get("career_archetype"):
+                            _phase2_understand["archetype"] = _llm_intent_admin.get(
+                                "career_archetype"
+                            )
+                except Exception as _route_repair_exc:
+                    print(
+                        f"[raw_passthrough] apply_understanding_routing skipped: "
+                        f"{_route_repair_exc}",
+                        flush=True,
+                    )
                 _p2_branch = str(_phase2_understand.get("branch") or "engine")
                 print(
                     f"[raw_passthrough] PHASE2_UNDERSTAND branch={_p2_branch} "
@@ -6208,6 +6232,23 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if _p2_branch == "refuse":
                     _p2_branch = "engine"
                     _phase2_understand["branch"] = "engine"
+                if _p2_branch != "knowledge":
+                    try:
+                        from ask_hard_guards import chart_has_d1, d1_required_refusal_result
+
+                        if not chart_has_d1(kundli):
+                            return _attach_admin(
+                                d1_required_refusal_result(lang=lang or "hn"),
+                                question=question or "",
+                                question_type="STATIC",
+                                is_timing=False,
+                                llm_called=False,
+                                skip_reason="d1_required",
+                                intent_source="understand_phase2",
+                                llm_intent=_llm_intent_admin,
+                            )
+                    except Exception as _d1_exc:
+                        print(f"[raw_passthrough] d1_required gate skipped: {_d1_exc}", flush=True)
                 if _p2_branch == "knowledge":
                     try:
                         from ask_knowledge_fast import try_astrology_knowledge_fast_answer

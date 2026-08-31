@@ -452,18 +452,10 @@ def mandatory_domain_chart_fallback_eligible(
                     return False
         except Exception:
             return False
-    summary = str((llm_intent or {}).get("question_summary") or "").strip()
-    understood = str((llm_intent or {}).get("question_understood") or "").strip().lower()
-    if not summary and understood != "yes":
-        try:
-            from ask_love.timing_registry import is_love_static_loyalty_question  # type: ignore
-
-            if not is_love_static_loyalty_question(question or ""):
-                return False
-        except Exception:
-            return False
     if not mandatory_static_domain_detected(question, llm_intent, checks):
         return False
+    # Classifier/regex domain hit beats low LLM understanding confidence —
+    # e.g. batch prefix "Hate 2. career..." must not refuse when career keywords clear.
     return True
 
 

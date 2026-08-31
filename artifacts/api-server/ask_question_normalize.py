@@ -312,6 +312,26 @@ def _fix_contextual_phrase_typos(text: str) -> str:
     return t
 
 
+_BATCH_PREFIX_RX = re.compile(
+    r"(?ix)^\s*"
+    r"(?:"
+    r"(?:hate|test|batch|q|question|item|case)\s*"
+    r")?"
+    r"\d{1,3}\s*[\.\):\-]\s*"
+)
+
+
+def _strip_batch_list_prefix(text: str) -> str:
+    """Remove '2. career...', 'Hate 2. career...', 'Q3) ...' test-batch prefixes."""
+    q = (text or "").strip()
+    while q:
+        m = _BATCH_PREFIX_RX.match(q)
+        if not m:
+            break
+        q = q[m.end() :].strip()
+    return q
+
+
 def prepare_ask_question(question: str) -> str:
     """
     Normalize user question for gates, classifiers, and LLM.
@@ -321,6 +341,8 @@ def prepare_ask_question(question: str) -> str:
     q = " ".join(q.split())
     if not q:
         return q
+
+    q = _strip_batch_list_prefix(q)
 
     q = _collapse_repeated_letters(q)
 

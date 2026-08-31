@@ -32,6 +32,15 @@ class TestAskQuestionNormalize(unittest.TestCase):
         self.assertIn("bachcha", out.lower())
         self.assertNotIn("sacha pyaar", out.lower())
 
+    def test_batch_number_prefix_stripped(self):
+        q = (
+            "Hate 2. career According to my birth chart which career sector is best "
+            "for me, job or business which is best"
+        )
+        out = prepare_ask_question(q)
+        self.assertTrue(out.lower().startswith("career according"))
+        self.assertNotIn("hate 2", out.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

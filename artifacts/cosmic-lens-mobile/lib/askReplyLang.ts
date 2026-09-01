@@ -38,13 +38,18 @@ export function loadAskReplyLang(raw: string | null | undefined): AskReplyLang {
   return coerceUILang(raw || "hn");
 }
 
-const STRONG_HINGLISH = new Set([
+const ASTRO_LOANWORDS = new Set([
+  "kundli", "dasha", "rashi", "nakshatra", "graha", "yog", "dosh", "manglik",
+  "shaadi", "shadi", "vivah", "naukri", "pati", "patni", "rishta", "upay",
+  "mantra", "puja",
+]);
+
+const STRONG_HINGLISH_GRAMMAR = new Set([
   "kab", "kya", "kyon", "kyun", "kaise", "kaun", "kahan", "kitna", "kitne",
   "hai", "hain", "hoga", "hogi", "mera", "meri", "mere", "mujhe", "mujhko",
-  "aap", "aapka", "aapki", "aapke", "mai", "main", "mein", "shaadi", "shadi",
-  "naukri", "batao", "nahi", "nahin", "kundli", "dasha", "milega", "milegi",
-  "karu", "chahiye", "abhi", "kabhi", "lekin", "kyunki", "toh", "bhi",
-  "kaisa", "kaisi", "patni", "pati", "vivah", "rishta", "upay",
+  "aap", "aapka", "aapki", "aapke", "mai", "main", "mein", "batao", "nahi",
+  "nahin", "milega", "milegi", "karu", "chahiye", "abhi", "kabhi", "lekin",
+  "kyunki", "toh", "bhi", "kaisa", "kaisi",
 ]);
 
 const ENGLISH_FUNC = new Set([
@@ -80,18 +85,21 @@ export function detectAskLangFromQuestion(question: string): AskReplyLang | null
   if (!tokens.length) return null;
 
   const unique = new Set(tokens);
-  const strong = [...unique].filter((t) => STRONG_HINGLISH.has(t));
+  const grammar = [...unique].filter((t) => STRONG_HINGLISH_GRAMMAR.has(t));
+  const grammarHits = tokens.filter((t) => STRONG_HINGLISH_GRAMMAR.has(t)).length;
   const enFunc = tokens.filter((t) => ENGLISH_FUNC.has(t)).length;
   const n = tokens.length;
 
-  // Long English prose must not flip to Hinglish
-  if (n >= 18 && enFunc / n >= 0.2) {
-    if (strong.length < 2) return "en";
+  // English question (even with kundli/dasha loanwords) → English reply.
+  if (n >= 3 && enFunc >= 2 && grammarHits < 2 && enFunc / n >= 0.18) {
+    return "en";
   }
 
-  if (strong.length >= 2) return "hn";
-  if (strong.length >= 1 && strong.length / Math.max(1, unique.size) >= 0.12) {
-    return "hn";
+  if (n >= 18 && enFunc / n >= 0.2 && grammar.length < 2) {
+    return "en";
   }
+
+  if (grammar.length >= 2 || grammarHits >= 2) return "hn";
+  if (grammar.length >= 1 && enFunc === 0) return "hn";
   return "en";
 }

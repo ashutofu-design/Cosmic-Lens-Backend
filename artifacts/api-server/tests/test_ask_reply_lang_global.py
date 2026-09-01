@@ -58,6 +58,21 @@ class TestAskReplyLangGlobal(unittest.TestCase):
             "hn",
         )
 
+    def test_english_with_kundli_loanword(self):
+        from openai_helper import _detect_question_lang, _resolve_response_lang
+
+        q = "What does my kundli say about my career?"
+        self.assertEqual(_detect_question_lang(q, "hn"), "en")
+        self.assertEqual(_resolve_response_lang(q, "hinglish", "hn"), "en")
+
+    def test_english_when_will_marry(self):
+        from openai_helper import _detect_question_lang
+
+        self.assertEqual(
+            _detect_question_lang("When will I get married?", "hn"),
+            "en",
+        )
+
     def test_preferred_does_not_override_question(self):
         from openai_helper import _resolve_response_lang
 

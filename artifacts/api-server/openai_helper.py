@@ -14015,14 +14015,22 @@ _ENGLISH_FUNC_TOKENS = {
     "please", "could", "tell", "analyze", "situation", "currently",
 }
 
-# High-signal Roman Hindi markers (short Qs + long prose guard)
+# Astro terms often used in English questions — must NOT alone flip language to hn.
+_ASTRO_LOANWORD_TOKENS = frozenset({
+    "kundli", "dasha", "rashi", "nakshatra", "graha", "yog", "dosh", "manglik",
+    "shaadi", "shadi", "vivah", "naukri", "naukari", "pati", "patni", "rishta",
+    "upay", "upaay", "mantra", "puja", "daan", "vrat", "totka", "mangal",
+})
+
+# High-signal Roman Hindi grammar (not loanwords borrowed into English questions).
 _STRONG_HINGLISH_TOKENS = {
     "kab", "kya", "kyon", "kyun", "kaise", "kaun", "kahan", "kitna", "kitne",
     "hai", "hain", "hoga", "hogi", "mera", "meri", "mere", "mujhe", "mujhko",
-    "aap", "aapka", "aapki", "aapke", "mai", "main", "mein", "shaadi", "shadi",
-    "naukri", "batao", "nahi", "nahin", "kundli", "dasha", "milega", "milegi",
-    "karu", "chahiye", "abhi", "kabhi", "lekin", "kyunki", "toh", "bhi",
-    "kaisa", "kaisi", "patni", "pati", "vivah", "rishta", "upay",
+    "aap", "aapka", "aapki", "aapke", "mai", "main", "mein", "batao", "nahi",
+    "nahin", "milega", "milegi", "karu", "chahiye", "abhi", "kabhi", "lekin",
+    "kyunki", "toh", "bhi", "kaisa", "kaisi", "ghar", "apna", "apni", "apne",
+    "kuch", "sahi", "nayi", "naya", "hoga", "hogi", "raha", "rahi", "rahe",
+    "karna", "karke", "jaunga", "jaungi", "hoyega", "chahie", "bataiye",
 }
 
 
@@ -14052,26 +14060,37 @@ def _detect_question_lang(question: str, fallback: str) -> str:
 
     n = len(tokens)
     unique = set(tokens)
-    hinglish_unique = {t for t in unique if t in _HINGLISH_TOKENS}
-    strong_unique = {t for t in unique if t in _STRONG_HINGLISH_TOKENS}
+    grammar_unique = {t for t in unique if t in _STRONG_HINGLISH_TOKENS}
+    hinglish_unique = {
+        t for t in unique if t in _HINGLISH_TOKENS and t not in _ASTRO_LOANWORD_TOKENS
+    }
+    grammar_hits = sum(1 for t in tokens if t in _STRONG_HINGLISH_TOKENS)
     en_func = sum(1 for t in tokens if t in _ENGLISH_FUNC_TOKENS)
 
-    # Long English paragraph (user's marriage essay style) → English unless
-    # there are clear Roman-Hindi markers.
-    if n >= 18 and (en_func / n) >= 0.20:
-        if len(strong_unique) < 2:
+    # English prose (incl. short Qs with loanwords like kundli/dasha) → English.
+    if n >= 3 and en_func >= 2 and grammar_hits < 2:
+        if (en_func / n) >= 0.18:
             return "en"
 
-    # Short / mixed: need distinct Hinglish markers (not repeated "the")
-    if len(strong_unique) >= 2:
+    # Long English paragraph (user's marriage essay style) → English unless
+    # there are clear Roman-Hindi grammar markers.
+    if n >= 18 and (en_func / n) >= 0.20:
+        if len(grammar_unique) < 2:
+            return "en"
+
+    # Hinglish: need Hindi grammar markers, not a lone astro loanword.
+    if len(grammar_unique) >= 2:
         return "hn"
-    if len(hinglish_unique) >= 2 and len(strong_unique) >= 1:
+    if grammar_hits >= 2:
         return "hn"
-    if len(strong_unique) >= 1 and (len(strong_unique) / max(1, len(unique))) >= 0.12:
+    if len(grammar_unique) >= 1 and len(hinglish_unique) >= 2 and en_func == 0:
         return "hn"
+    if len(grammar_unique) >= 1 and (len(grammar_unique) / max(1, len(unique))) >= 0.20:
+        if en_func == 0:
+            return "hn"
 
     fb = (fallback or "").lower()
-    if fb in {"hi", "hn"}:
+    if fb in {"hi", "hn"} and en_func == 0 and grammar_hits >= 1:
         return fb
     return "en"
 

@@ -2109,10 +2109,23 @@ export default function AskScreen() {
         if (!isCurrent()) return;
 
         const trimmedBody = rawBody.trim();
-        if (!isStream || (trimmedBody.startsWith("{") && !trimmedBody.includes("data:"))) {
+        const looksLikeSse =
+          trimmedBody.includes("data:") &&
+          (trimmedBody.includes('"done"') ||
+            trimmedBody.includes('"kind"') ||
+            trimmedBody.includes('"delta"'));
+        const useJsonPath =
+          !isStream &&
+          !looksLikeSse &&
+          (trimmedBody.startsWith("{") || trimmedBody.startsWith("["));
+        if (useJsonPath) {
           let json: any = null;
           try { json = JSON.parse(trimmedBody); } catch { json = null; }
           await commitJsonAnswer(json);
+          return;
+        }
+        if (!trimmedBody) {
+          failQuietly("Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
           return;
         }
 

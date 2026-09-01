@@ -173,13 +173,16 @@ def _ask_stream_sse_with_keepalive(work_fn, *, label: str = "ask"):
     """
     import queue
     import threading
-    from flask import Response, stream_with_context
+    from flask import Response, copy_current_request_context, current_app, stream_with_context
 
     result_q: queue.Queue = queue.Queue(maxsize=1)
+    app_obj = current_app._get_current_object()
 
+    @copy_current_request_context
     def _worker():
         try:
-            result_q.put(("ok", work_fn()))
+            with app_obj.app_context():
+                result_q.put(("ok", work_fn()))
         except Exception as exc:
             import traceback
 
@@ -198,7 +201,16 @@ def _ask_stream_sse_with_keepalive(work_fn, *, label: str = "ask"):
                 yield ": keepalive\n\n"
         if kind == "err":
             yield "data: " + json.dumps(
-                {"error": str(payload)},
+                {
+                    "done": True,
+                    "error": str(payload),
+                    "text": (
+                        "Abhi jawab generate nahi ho pa raha. "
+                        "Thodi der baad try karein."
+                    ),
+                    "follow_ups": [],
+                    "source": "ask_stream_worker_error",
+                },
                 ensure_ascii=False,
             ) + "\n\n"
             return
@@ -210,7 +222,7 @@ def _ask_stream_sse_with_keepalive(work_fn, *, label: str = "ask"):
                 f"text_len={len(str(final.get('text') or ''))} label={label}",
                 flush=True,
             )
-            yield "data: " + json.dumps(final, ensure_ascii=False) + "\n\n"
+            yield "data: " + json.dumps(final, ensure_ascii=False, default=str) + "\n\n"
         except Exception as exc:
             import traceback
 

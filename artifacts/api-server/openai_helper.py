@@ -11677,80 +11677,114 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
             if _m17_final is not None:
                 return _m17_final
-            print(
-                "[marriage_timing_m17] marriage_timing_engine_unavailable "
-                f"marriage_block_len={len(marriage_block or '')} "
-                f"kundli_dict={isinstance(kundli, dict)} "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
-            )
-            _unavail_blocks: dict = {}
-            _unavail_slice: dict = {}
-            _chart_diag = _normalize_passthrough_kundli(kundli)
-            _planets_n = len((_chart_diag or {}).get("planets") or [])
-            _failure = (
-                "chart_missing"
-                if not _chart_diag or not _planets_n
-                else "engine_empty"
-            )
-            _mer_diag: dict = {}
+            _d1_marriage_fb = False
             try:
-                if _chart_diag:
-                    from event_timing.marriage.kp_from_chart import resolve_kp
+                from ask_chart_llm_fallback import chart_has_d1, d1_llm_fallback_allowed
 
-                    _mer_diag = _marriage_timing_engine_result(
-                        _chart_diag,
-                        {},
-                        resolve_kp(_chart_diag, {}, birth),
-                        birth,
-                        question=question or "",
-                    ) or {}
-                from ask_llm_context_debug import (
-                    build_marriage_engine_trace,
-                    build_marriage_unavailable_admin_meta,
+                _d1_marriage_fb = d1_llm_fallback_allowed(
+                    question or "",
+                    kundli,
+                    _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                 )
+            except Exception:
+                try:
+                    from ask_hard_guards import chart_has_d1
 
-                if isinstance(_mer_diag, dict) and _mer_diag:
-                    _trace_diag = build_marriage_engine_trace(_mer_diag)
-                    if _trace_diag:
-                        _unavail_blocks["engine_trace"] = _trace_diag
-                _unavail_slice = build_marriage_unavailable_admin_meta(
-                    partial_engine=_mer_diag if _mer_diag else None,
-                    failure=_failure,
-                    planets_count=_planets_n,
-                )
-            except Exception as _diag_exc:
+                    _d1_marriage_fb = chart_has_d1(kundli)
+                except Exception:
+                    _d1_marriage_fb = False
+            if _d1_marriage_fb:
                 print(
-                    f"[raw_passthrough] marriage unavailable diag skipped: "
-                    f"{str(_diag_exc)[:160]}",
+                    "[raw_passthrough] MARRIAGE_TIMING → D1 LLM fallback "
+                    f"(M17 empty) q={(question or '')[:60]!r}",
                     flush=True,
                 )
                 try:
-                    from ask_llm_context_debug import build_marriage_unavailable_admin_meta
-
-                    _unavail_slice = build_marriage_unavailable_admin_meta(
-                        failure=_failure,
-                        planets_count=_planets_n,
+                    chart_text = _rich_chart_text_for_llm_fallback(
+                        kundli,
+                        birth=birth,
+                        question=question or "",
+                        marriage_block=marriage_block or "",
+                        domain_timing_block=domain_timing_block or "",
                     )
                 except Exception:
                     pass
-            return _attach_admin(
-                marriage_timing_unavailable_result(question or "", qtype=qtype),
-                question=question or "",
-                question_type=qtype,
-                is_timing=True,
-                checks={
-                    "slice_type": "timing_marriage_engine",
-                    "is_marriage_engine": bool(_unavail_blocks.get("engine_trace")),
-                },
-                chart_text=chart_text,
-                blocks=_unavail_blocks,
-                slice_meta=_unavail_slice,
-                llm_called=False,
-                skip_reason="marriage_timing_engine_unavailable",
-                intent_source=_intent_source,
-                llm_intent=_llm_intent_admin,
-            )
+                _chart_slice_type = "llm_no_engine_v1"
+            else:
+                print(
+                    "[marriage_timing_m17] marriage_timing_engine_unavailable "
+                    f"marriage_block_len={len(marriage_block or '')} "
+                    f"kundli_dict={isinstance(kundli, dict)} "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+                _unavail_blocks: dict = {}
+                _unavail_slice: dict = {}
+                _chart_diag = _normalize_passthrough_kundli(kundli)
+                _planets_n = len((_chart_diag or {}).get("planets") or [])
+                _failure = (
+                    "chart_missing"
+                    if not _chart_diag or not _planets_n
+                    else "engine_empty"
+                )
+                _mer_diag: dict = {}
+                try:
+                    if _chart_diag:
+                        from event_timing.marriage.kp_from_chart import resolve_kp
+
+                        _mer_diag = _marriage_timing_engine_result(
+                            _chart_diag,
+                            {},
+                            resolve_kp(_chart_diag, {}, birth),
+                            birth,
+                            question=question or "",
+                        ) or {}
+                    from ask_llm_context_debug import (
+                        build_marriage_engine_trace,
+                        build_marriage_unavailable_admin_meta,
+                    )
+
+                    if isinstance(_mer_diag, dict) and _mer_diag:
+                        _trace_diag = build_marriage_engine_trace(_mer_diag)
+                        if _trace_diag:
+                            _unavail_blocks["engine_trace"] = _trace_diag
+                    _unavail_slice = build_marriage_unavailable_admin_meta(
+                        partial_engine=_mer_diag if _mer_diag else None,
+                        failure=_failure,
+                        planets_count=_planets_n,
+                    )
+                except Exception as _diag_exc:
+                    print(
+                        f"[raw_passthrough] marriage unavailable diag skipped: "
+                        f"{str(_diag_exc)[:160]}",
+                        flush=True,
+                    )
+                    try:
+                        from ask_llm_context_debug import build_marriage_unavailable_admin_meta
+
+                        _unavail_slice = build_marriage_unavailable_admin_meta(
+                            failure=_failure,
+                            planets_count=_planets_n,
+                        )
+                    except Exception:
+                        pass
+                return _attach_admin(
+                    marriage_timing_unavailable_result(question or "", qtype=qtype),
+                    question=question or "",
+                    question_type=qtype,
+                    is_timing=True,
+                    checks={
+                        "slice_type": "timing_marriage_engine",
+                        "is_marriage_engine": bool(_unavail_blocks.get("engine_trace")),
+                    },
+                    chart_text=chart_text,
+                    blocks=_unavail_blocks,
+                    slice_meta=_unavail_slice,
+                    llm_called=False,
+                    skip_reason="marriage_timing_engine_unavailable",
+                    intent_source=_intent_source,
+                    llm_intent=_llm_intent_admin,
+                )
 
         _eng_checks = {
             "slice_type": (

@@ -29,7 +29,7 @@ const F = {
   regular:  "Nunito_400Regular",
 };
 
-import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { API_BASE, apiFetch, userAuthHeaders } from "@/lib/apiConfig";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface DayAlert {
@@ -369,7 +369,7 @@ export default function DailyAlertsScreen() {
   const C       = useC();
   const t       = useT();
   const { width } = useWindowDimensions();
-  const { profiles, primaryProfileId } = useUser();
+  const { profiles, primaryProfileId, user } = useUser();
 
   const proWithKundli = profiles.filter(p => !!p.kundli);
   const primaryFirst  = proWithKundli.sort((a, b) =>
@@ -405,7 +405,7 @@ export default function DailyAlertsScreen() {
       const timeout = setTimeout(() => ctrl.abort(), 12000);
       const res = await apiFetch(`${API_BASE}/api/daily_alerts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...userAuthHeaders(user) },
         body: JSON.stringify({
           lagna_deg:  k.ascendantDeg ?? 0,
           nakshatra:  k.nakshatra ?? "",
@@ -429,13 +429,13 @@ export default function DailyAlertsScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id, user?.api_key]);
 
   useEffect(() => {
     if (profile?.kundli) {
       fetchAlerts(profile);
     }
-  }, [profile?.id]);
+  }, [profile?.id, user?.id, user?.api_key]);
 
   const todayIndex = days.findIndex(d => d.offset === 0);
 

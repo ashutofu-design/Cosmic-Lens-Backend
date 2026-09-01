@@ -328,6 +328,9 @@ def can_ask_question(user) -> dict:
     try:
         import ask_v1_billing as _av1
 
+        if _av1.has_unlimited_questions(user):
+            return _av1.unlimited_quota()
+
         snap = _av1.wallet_snapshot(user)
         if snap.get("active") and int(snap.get("questions_left") or 0) > 0:
             left = int(snap["questions_left"])
@@ -402,6 +405,9 @@ def consume_question(user) -> dict:
 
     try:
         import ask_v1_billing as _av1
+
+        if _av1.has_unlimited_questions(user):
+            return _av1.unlimited_quota()
 
         pack_res = _av1.try_consume_pack(user)
         if pack_res is not None:
@@ -507,6 +513,13 @@ def refund_question(user) -> None:
     """Best-effort: return one Ask slot after a failed LLM response."""
     if not user or ask_quota_bypass():
         return
+    try:
+        import ask_v1_billing as _av1
+
+        if _av1.has_unlimited_questions(user):
+            return
+    except Exception:
+        pass
     try:
         import ask_v1_billing as _av1
 

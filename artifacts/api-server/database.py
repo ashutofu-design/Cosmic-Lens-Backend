@@ -296,7 +296,7 @@ def run_schema_migrations() -> None:
                         """
                         CREATE TABLE IF NOT EXISTS signup_free_gift_claims (
                             id SERIAL PRIMARY KEY,
-                            identity_kind VARCHAR(8) NOT NULL,
+                            identity_kind VARCHAR(32) NOT NULL,
                             identity_value VARCHAR(255) NOT NULL,
                             source VARCHAR(32) NOT NULL DEFAULT 'signup',
                             first_user_id INTEGER,
@@ -308,6 +308,11 @@ def run_schema_migrations() -> None:
                     conn.execute(text(
                         "CREATE INDEX IF NOT EXISTS ix_signup_free_gift_kind_value "
                         "ON signup_free_gift_claims (identity_kind, identity_value)"
+                    ))
+                    # firebase_uid (12 chars) needs wider kind column on existing DBs.
+                    conn.execute(text(
+                        "ALTER TABLE signup_free_gift_claims "
+                        "ALTER COLUMN identity_kind TYPE VARCHAR(32)"
                     ))
                 except Exception:
                     pass

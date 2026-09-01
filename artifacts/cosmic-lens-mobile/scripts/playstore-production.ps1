@@ -8,14 +8,19 @@ Set-Location $Root
 Write-Host "=== Cosmic Lens Play Store production ===" -ForegroundColor Cyan
 Write-Host "Folder: $Root"
 
-if (-not (Test-Path "./upload-keystore.jks")) {
-  Write-Host "MISSING: upload-keystore.jks in cosmic-lens-mobile folder." -ForegroundColor Red
-  Write-Host "Copy your Play upload keystore here before building."
+# Signing files are gitignored — never commit keystore passwords or credentials.json.
+$keystorePath = $env:ANDROID_KEYSTORE_PATH
+if (-not $keystorePath) { $keystorePath = "./upload-keystore.jks" }
+if (-not (Test-Path $keystorePath)) {
+  Write-Host "MISSING: Android upload keystore at $keystorePath" -ForegroundColor Red
+  Write-Host "Set ANDROID_KEYSTORE_PATH or place upload-keystore.jks locally (not in git)."
+  Write-Host "If the old key was exposed in git history, request an upload-key reset in Play Console."
   exit 1
 }
 
 if (-not (Test-Path "./credentials.json")) {
-  Write-Host "MISSING: credentials.json" -ForegroundColor Red
+  Write-Host "MISSING: credentials.json (local EAS signing config — gitignored)." -ForegroundColor Red
+  Write-Host "Create from credentials.json.example; store passwords in env / a password manager only."
   exit 1
 }
 

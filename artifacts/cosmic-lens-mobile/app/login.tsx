@@ -252,6 +252,12 @@ export default function LoginScreen() {
       const msg = String((e as Error)?.message || e || "");
       if (msg.includes("popup-closed-by-user") || msg.includes("cancelled")) {
         setError(isHindi ? "Login cancel ho gaya." : "Sign-in was cancelled.");
+      } else if (/Failed to fetch|Network request failed|network-request-failed/i.test(msg)) {
+        setError(
+          isHindi
+            ? "API proxy nahi mila. Terminal band karke `npm run dev:web` chalao, phir http://localhost:18987 kholo."
+            : "API proxy missing. Stop Metro, run npm run dev:web, then open http://localhost:18987",
+        );
       } else if (msg.toLowerCase().includes("network")) {
         setError(t.errNetwork);
       } else {

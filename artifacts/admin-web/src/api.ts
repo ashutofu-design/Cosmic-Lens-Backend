@@ -370,6 +370,7 @@ export interface LoginActivityItem {
   phone?: string | null;
   login_method?: "gmail" | "phone" | "unknown" | string;
   login_id?: string;
+  user_status?: "new" | "old" | null;
   provider: string;
   ip: string;
   success: boolean;
@@ -418,6 +419,7 @@ export interface LoginActivityRow {
   email: string | null;
   login_method?: "gmail" | "phone" | "unknown" | string;
   login_id?: string;
+  user_status?: "new" | "old" | null;
   ip: string;
   success: boolean;
   created_at: string | null;

@@ -128,5 +128,18 @@ export function buildExploreCategories(t: ReturnType<typeof useT>): LifeMapCateg
       subtitle: FACE_READING_PRO_LIVE ? t.mdFaceReadingSub : t.mdFaceReadingSubSoon,
       route: "/face-reading",
     },
+    {
+      key: "birth-time-rectification",
+      icon: "clock",
+      emoji: "🎯",
+      gradient: ["#059669", "#34d399"],
+      glowOuter: ["rgba(5,150,105,0.22)", "rgba(52,211,153,0.1)"],
+      glowColor: "#10b981",
+      badge: "PRO",
+      badgeIcon: "⏱",
+      title: t.mdBirthTimeTitle,
+      subtitle: t.mdBirthTimeSub,
+      route: "/birth-time-rectification",
+    },
   ];
 }

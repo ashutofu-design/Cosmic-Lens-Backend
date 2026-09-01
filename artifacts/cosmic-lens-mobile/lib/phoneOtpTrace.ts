@@ -1,6 +1,7 @@
 /** Structured OTP flow tracing — never logs OTP codes or full verification IDs. */
-const OTP_TRACE_ENABLED =
-  __DEV__ || process.env.EXPO_PUBLIC_OTP_TRACE === "1" || process.env.EXPO_PUBLIC_OTP_TRACE === "true";
+// Dev builds only — EXPO_PUBLIC_OTP_TRACE must not re-enable auth tracing in a
+// shipped binary, where the logs are readable via adb logcat.
+const OTP_TRACE_ENABLED = __DEV__;
 
 export function redactId(id: string | null | undefined): string {
   if (!id) return "(none)";

@@ -22,7 +22,7 @@ import { useFeatureGate } from "@/components/FeatureGate";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import { API_BASE } from "@/lib/apiConfig";
+import { API_BASE, userAuthHeaders } from "@/lib/apiConfig";
 import {
   coerceLoveBasicLang,
   pickLoveBasicCopy,
@@ -807,7 +807,7 @@ export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConf
   const topPad = Platform.OS === "android" ? Math.max(insets.top, 24) : insets.top;
   const { LockOverlay } = useFeatureGate(config.featureGate);
 
-  const { profiles, primaryProfileId, language } = useUser();
+  const { profiles, primaryProfileId, language, user } = useUser();
   const params = useLocalSearchParams<{ partnerId?: string }>();
   const partnerId = typeof params.partnerId === "string" ? params.partnerId : null;
 
@@ -844,7 +844,7 @@ export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConf
       const timer = setTimeout(() => ctrl.abort(), 30000);
       const resp = await fetch(`${API_BASE}${config.apiPath}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...userAuthHeaders(user), "Content-Type": "application/json" },
         body: JSON.stringify({
           p1: packPerson(primaryProfile.birthData),
           p2: packPerson(partnerProfile.birthData),

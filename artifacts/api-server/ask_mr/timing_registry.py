@@ -257,3 +257,34 @@ def repair_llm_intent_mr_static_timing(
     intent["mr_archetype"] = arch
     intent.pop("health_archetype", None)
     return True
+
+
+def is_marriage_timing_question(
+    question: str,
+    llm_intent: Optional[dict[str, Any]] = None,
+) -> bool:
+    """Marriage WHEN (shaadi kab) — M17 path, not love timing / MR static."""
+    q = prepare_ask_question((question or "").strip())
+    if not q:
+        return False
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        if is_marriage_relationship_static_question(q) and not has_explicit_timing_anchor(q):
+            return False
+    except Exception:
+        pass
+    try:
+        from ask_love.timing_registry import _MARRIAGE_OVERRIDE_RX
+
+        if _MARRIAGE_OVERRIDE_RX.search(q):
+            return True
+    except Exception:
+        pass
+    if not re.search(
+        r"(?ix)\b(shaadi|shadi|marriage|vivah|wedding|biwi|pati|patni)\b|"
+        r"(शादी|विवाह|पति|पत्नी)",
+        q,
+    ):
+        return False
+    return has_explicit_timing_anchor(q)

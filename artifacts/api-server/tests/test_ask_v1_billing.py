@@ -25,6 +25,8 @@ def test_catalog_locked_margins():
 
 class _FakeUser:
     def __init__(self):
+        self.id = 1
+        self.cosmo_user_id = ""
         self.ask_v1_questions_left = 0
         self.ask_v1_expires_at = None
         self.ask_v1_pack_id = None
@@ -56,3 +58,19 @@ def test_apply_pack_resets_when_expired():
     assert user.ask_v1_questions_left == 45
     assert user.ask_v1_pack_id == "power"
     assert user.ask_v1_expires_at > datetime.utcnow()
+
+
+def test_cosmo109_unlimited_wallet_and_quota():
+    user = _FakeUser()
+    user.id = 9
+    user.cosmo_user_id = "COSMO109"
+
+    snap = billing.wallet_snapshot(user)
+    assert snap["unlimited"] is True
+    assert snap["active"] is True
+    assert snap["questions_left"] == -1
+
+    quota = billing.unlimited_quota()
+    assert quota["allowed"] is True
+    assert quota["limit"] == -1
+    assert quota["via"] == "ask_v1_unlimited"

@@ -55,7 +55,7 @@ export function HelpSupportPage() {
           setUnlockBusy(true);
           try {
             await unlockAdminPanel([...UNLOCK_STEPS]);
-            window.location.href = "/admin";
+            window.location.replace("/admin");
           } catch (err) {
             setLocateTaps(0);
             setForTaps(0);
@@ -146,21 +146,28 @@ export function HelpSupportPage() {
             <div className="site-head">
               <p className="site-eyebrow">Common questions</p>
               <h2>Quick answers</h2>
-              {(locateTaps > 0 || forTaps > 0 || unlockError) && (
-                <p
-                  className="site-lead"
-                  style={{ marginTop: 12, fontSize: "0.95rem" }}
-                  role="status"
-                >
-                  {unlockBusy
-                    ? "Unlocking admin panel…"
-                    : unlockError
-                      ? unlockError
-                      : locateDone
-                        ? `Admin unlock: tap “For” ${REQUIRED_TAPS - forTaps} more time(s) (${forTaps}/${REQUIRED_TAPS})`
-                        : `Admin unlock: tap “locate” ${REQUIRED_TAPS - locateTaps} more time(s) (${locateTaps}/${REQUIRED_TAPS})`}
-                </p>
-              )}
+              <p
+                className="site-lead"
+                style={{
+                  marginTop: 12,
+                  fontSize: "0.95rem",
+                  color: unlockError ? "#fca5a5" : undefined,
+                }}
+                role="status"
+                aria-live="polite"
+              >
+                {unlockBusy
+                  ? "Unlocking admin panel…"
+                  : unlockError
+                    ? unlockError
+                    : locateDone
+                      ? forTaps >= REQUIRED_TAPS
+                        ? "Unlock ho gaya — admin page khul raha hai…"
+                        : `Step 2/2: “For” pe ${REQUIRED_TAPS - forTaps} aur tap (${forTaps}/${REQUIRED_TAPS})`
+                      : locateTaps > 0
+                        ? `Step 1/2: “locate” pe ${REQUIRED_TAPS - locateTaps} aur tap (${locateTaps}/${REQUIRED_TAPS})`
+                        : null}
+              </p>
             </div>
             <div className="site-faq">
               {topics.map((item) => (

@@ -41,6 +41,8 @@ export interface MoreT {
   mdNumerologySub:    string;
   mdFaceReadingTitle: string;
   mdFaceReadingSub:   string;
+  mdBirthTimeTitle:   string;
+  mdBirthTimeSub:     string;
   mdPalmistryTitle:   string;
   mdPalmistrySub:     string;
   mdRemediesTitle:    string;
@@ -1939,6 +1941,8 @@ const EN: MoreT = {
   mdNumerologySub:    "Deep life path & destiny analysis",
   mdFaceReadingTitle: "Face Reading Pro",
   mdFaceReadingSub:   "Vedic + Science fusion · 80+ pages",
+  mdBirthTimeTitle:   "Precision Birth Time Rectification",
+  mdBirthTimeSub:     "Minute-accurate birth time · exact chart",
   mdPalmistryTitle:   "Palmistry Advanced",
   mdPalmistrySub:     "Photo-based palm scan · Evidence-first reading",
   mdRemediesTitle:    "Planet Remedies",
@@ -3820,6 +3824,8 @@ const HN: Partial<MoreT> = {
   mdNumerologySub:    "Deep life path & destiny analysis",
   mdFaceReadingTitle: "Face Reading Pro",
   mdFaceReadingSub:   "Vedic + Science fusion · 80+ pages",
+  mdBirthTimeTitle:   "Precision Birth Time Rectification",
+  mdBirthTimeSub:     "Minute-accurate janm samay · exact chart",
   mdPalmistryTitle:   "Palmistry Advanced",
   mdPalmistrySub:     "Haath ki photo se evidence-first palm reading",
   mdRemediesTitle:    "Graha Upay",
@@ -5462,6 +5468,8 @@ const HI: Partial<MoreT> = {
   mdNumerologySub:    "गहरा लाइफ पाथ और भाग्य विश्लेषण",
   mdFaceReadingTitle: "फेस रीडिंग प्रो",
   mdFaceReadingSub:   "वैदिक + विज्ञान फ्यूजन · 80+ पेज",
+  mdBirthTimeTitle:   "प्रेसिजन जन्म समय शोधन",
+  mdBirthTimeSub:     "मिनट-सही जन्म समय · सटीक कुंडली",
   mdPalmistryTitle:   "हस्तरेखा Advanced",
   mdPalmistrySub:     "हथेली की फोटो से प्रमाण-आधारित पारंपरिक रीडिंग",
   mdRemediesTitle:    "ग्रह उपाय",

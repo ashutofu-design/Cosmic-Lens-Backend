@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
+import { useUser } from "@/context/UserContext";
 import { useT, type T } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { FACE_READING_PRO_LIVE } from "@/lib/faceReadingProConfig";
@@ -45,6 +46,7 @@ function buildSlots(t: T): { key: Slot; label: string; hint: string; emoji: stri
 export default function FaceReadingUploadScreen() {
   const C = useC();
   const t = useT();
+  const { user } = useUser();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -115,6 +117,14 @@ export default function FaceReadingUploadScreen() {
 
   async function generate() {
     if (!allReady) { Alert.alert(t.fu_addAllFirst); return; }
+    if (!user?.id || !user?.api_key) {
+      Alert.alert("Login required", "Please sign in to use Face Reading.");
+      return;
+    }
+    const authHeaders = {
+      "X-User-Id": String(user.id),
+      "X-API-Key": user.api_key,
+    };
     setErrorMsg("");
     setPdfUri(null);
     try {
@@ -133,7 +143,9 @@ export default function FaceReadingUploadScreen() {
         }
       }
       const extractRes = await fetch(`${API_BASE}/api/face_reading/extract`, {
-        method: "POST", body: fd,
+        method: "POST",
+        headers: authHeaders,
+        body: fd,
       });
       if (!extractRes.ok) {
         let detail = "";
@@ -155,7 +167,10 @@ export default function FaceReadingUploadScreen() {
       params.append("language", language);
       const analyzeRes = await fetch(`${API_BASE}/api/face_reading/analyze`, {
         method:  "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          ...authHeaders,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
         body:    params.toString(),
       });
       if (!analyzeRes.ok) throw new Error(`Analyze failed (${analyzeRes.status})`);
@@ -167,7 +182,9 @@ export default function FaceReadingUploadScreen() {
 
       if (Platform.OS === "web") {
         try {
-          const r = await fetch(pdfUrl, { headers: { "bypass-tunnel-reminder": "true" } });
+          const r = await fetch(pdfUrl, {
+            headers: { ...authHeaders, "bypass-tunnel-reminder": "true" },
+          });
           if (!r.ok) throw new Error(`PDF download failed (${r.status})`);
           const blob = await r.blob();
           const blobUrl = URL.createObjectURL(blob);
@@ -187,7 +204,7 @@ export default function FaceReadingUploadScreen() {
         }
       } else {
         const target = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + `face_reading_${sid}.pdf`;
-        const dl = await FileSystem.downloadAsync(pdfUrl, target);
+        const dl = await FileSystem.downloadAsync(pdfUrl, target, { headers: authHeaders });
         if (dl.status !== 200) throw new Error(`PDF download failed (${dl.status})`);
         setPdfUri(dl.uri);
       }

@@ -40,22 +40,16 @@ def resolve_user_for_ask_request(
     user_id: Any,
     api_key_header: str | None,
 ) -> User | None:
-    """Resolve logged-in user from body user_id + X-API-Key, or API key alone."""
-    api_key = (api_key_header or "").strip()
-    uid: int | None = None
+    """Resolve logged-in user — delegates to api_auth (header-authoritative)."""
+    from api_auth import authed_user_from_request
+
+    payload: dict[str, Any] = {}
     if user_id is not None and str(user_id).strip():
-        try:
-            uid = int(str(user_id).strip())
-        except (TypeError, ValueError):
-            uid = None
-    if uid is not None:
-        user = User.query.get(uid)
-        if user and api_key and user.api_key == api_key:
-            return user
+        payload["user_id"] = user_id
+    user, err = authed_user_from_request(payload if payload else None)
+    if err:
         return None
-    if api_key:
-        return User.query.filter_by(api_key=api_key).first()
-    return None
+    return user
 
 
 # Hard cap mirrored from UserQuestion.verdict_summary column (String 120).

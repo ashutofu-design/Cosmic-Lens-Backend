@@ -1,6 +1,7 @@
 """Telegram founder delivery — MYREPORT <order_id> + paragraph → user My Reports."""
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -914,12 +915,13 @@ def register_telegram_deliver_routes(flask_app) -> None:
     from flask import jsonify, request
 
     if "telegram_love_reality_webhook" not in flask_app.view_functions:
-        secret = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "cosmic-lens-lr").strip()
 
-        @flask_app.route(f"/api/telegram/webhook/<secret>", methods=["POST"])
+        @flask_app.route("/api/telegram/webhook/<secret>", methods=["POST"])
         def telegram_love_reality_webhook(secret: str):  # noqa: ARG001
-            expected = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "cosmic-lens-lr").strip()
-            if secret != expected:
+            # No shared default: an unset secret disables the webhook rather
+            # than falling back to a value anyone can read in this file.
+            expected = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "").strip()
+            if not expected or not hmac.compare_digest(str(secret or ""), expected):
                 return jsonify({"error": "forbidden"}), 403
             update = request.get_json(silent=True) or {}
             threading.Thread(target=_process_update_async, args=(update,), daemon=True).start()
@@ -932,7 +934,7 @@ def register_telegram_deliver_routes(flask_app) -> None:
                 return "", 204
             admin_key = (os.environ.get("ADMIN_API_KEY") or "").strip()
             hdr = (request.headers.get("X-Admin-Key") or "").strip()
-            if not admin_key or hdr != admin_key:
+            if not admin_key or not hmac.compare_digest(hdr, admin_key):
                 return jsonify({"error": "forbidden"}), 403
             data = request.get_json(silent=True) or {}
             prefix = str(data.get("order_id") or data.get("order_prefix") or "").strip()

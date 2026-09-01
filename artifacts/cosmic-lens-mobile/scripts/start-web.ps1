@@ -34,7 +34,7 @@ if (-not (Test-Path ".\node_modules\expo\bin\cli")) {
 
 Write-Host ""
 Write-Host "Starting Metro web..." -ForegroundColor Yellow
-Write-Host "Chrome khulega ~12 sec baad: http://localhost:18987" -ForegroundColor Yellow
+Write-Host "Chrome ek baar khulega jab Metro ready ho: http://localhost:18987" -ForegroundColor Yellow
 Write-Host "Is window mein Bundling % dikhega - 1-3 min wait karo" -ForegroundColor Yellow
 Write-Host "Band karne ke liye Ctrl+C" -ForegroundColor DarkGray
 Write-Host ""

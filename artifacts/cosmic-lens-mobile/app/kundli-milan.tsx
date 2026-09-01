@@ -26,7 +26,7 @@ import Svg, { Circle } from "react-native-svg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { API_BASE, apiFetch, userAuthHeaders } from "@/lib/apiConfig";
 import { KundliMilanBasicLanding } from "@/components/kundliMilan/KundliMilanBasicLanding";
 import { kootsToGunScores, type MilanGunKootScores } from "@/components/kundliMilan/MilanGunBreakdown";
 import { KundliMilanBasicResult } from "@/components/kundliMilan/KundliMilanBasicResult";
@@ -191,12 +191,14 @@ interface FormProps{title:string;onDone(d:PersonData):void;onCancel():void;}
 function AddKundliForm({title,onDone,onCancel}:FormProps){
   const C=useC();
   const t=useT();
+  const { user } = useUser();
   const [name,setName]=useState(""); const [dob,setDob]=useState("");
   const [time,setTime]=useState(""); const [place,setPlace]=useState("");
   const [err,setErr]=useState(""); const [loading,setLoading]=useState(false);
   async function submit(){
     if(!name.trim()){setErr(t.km_errName);return;}
     if(!dob||!time||!place){setErr(t.km_errAllFields);return;}
+    if(!user?.id||!user?.api_key){setErr("Please sign in first.");return;}
     setErr(""); setLoading(true);
     try{
       const[day,month,year]=dob.split("/").map(Number);
@@ -213,8 +215,8 @@ function AddKundliForm({title,onDone,onCancel}:FormProps){
       }
       const lat=geo.lat as number, lon=geo.lon as number;
       const tz=typeof geo.tz==="number" ? geo.tz : Math.round((lon/15)*2)/2;
-      const res=await apiFetch(`${API_BASE}/api/kundli`,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({name:name||t.km3_personFallback,day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place,lat,lon,tz})});
+      const res=await apiFetch(`${API_BASE}/api/kundli`,{method:"POST",headers:{"Content-Type":"application/json","X-API-Key":user.api_key},
+        body:JSON.stringify({user_id:user.id,name:name||t.km3_personFallback,day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place,lat,lon,tz})});
       if(!res.ok){
         const errData=await res.json().catch(()=>({}));
         throw new Error((errData as any)?.error||t.km3_errTryAgain);
@@ -1456,7 +1458,7 @@ export default function KundliMilanScreen(){
   const t=useT();
   const topPad=Platform.OS==="web"?67:insets.top;
   const botPad=Platform.OS==="web"?34:insets.bottom;
-  const {kundli:primaryKundli,profiles,primaryProfileId}=useUser();
+  const {kundli:primaryKundli,profiles,primaryProfileId,user}=useUser();
   const p1Profile=profiles.find(p=>p.id===primaryProfileId);
   const params=useLocalSearchParams<{partnerId?:string}>();
 
@@ -1720,6 +1722,11 @@ export default function KundliMilanScreen(){
     if((bd1 as any).tz==null) (bd1 as any).tz=Math.round(((bd1 as any).lon/15)*2)/2;
     if((bd2 as any).tz==null) (bd2 as any).tz=Math.round(((bd2 as any).lon/15)*2)/2;
 
+    if(!user?.id||!user?.api_key){
+      Alert.alert(t.km_birthMissing||"Sign in",t.km2_birthMissingBody||"Please sign in first.",[{text:t.km_okBtn}]);
+      return;
+    }
+
     setCalcLoading(true);
     MilanResultStore.clear();
     setServerGunScores(null);
@@ -1730,7 +1737,7 @@ export default function KundliMilanScreen(){
       const timer=setTimeout(()=>ctrl.abort(),plan==="basic"?60000:18000);
       const resp=await fetch(`${API_BASE}/api/kundli-milan`,{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{"Content-Type":"application/json",...userAuthHeaders(user)},
         body:JSON.stringify({
           p1:{...bd1,name:person1.name,gender:p1Profile?.gender??""},
           p2:{...bd2,name:p2.name,gender:p2Profile?.gender??""},
@@ -1806,6 +1813,10 @@ export default function KundliMilanScreen(){
 
   async function handleDownloadProPdf(){
     if(!person1||!p2)return;
+    if(!user?.id||!user?.api_key){
+      Alert.alert(t.km_birthMissing||"Sign in","Please sign in first.",[{text:t.km_okBtn}]);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     const bd1=p1Profile?.birthData ?? (person1._rawBirth ? {
@@ -1858,7 +1869,7 @@ export default function KundliMilanScreen(){
 
       const r2=await fetch(`${API_BASE}/api/kundli-milan/pro-pdf`,{
         method:"POST",
-        headers:{"Content-Type":"application/json","Accept":"application/pdf"},
+        headers:{"Content-Type":"application/json","Accept":"application/pdf",...userAuthHeaders(user)},
         body:JSON.stringify({
           p1:{...bd1,name:person1.name},
           p2:{...bd2,name:p2.name},

@@ -10,6 +10,8 @@ from typing import Any
 
 from flask import jsonify, request
 
+from api_auth import authed_user_from_request
+
 _BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".cache", "astrovastu_human_orders"))
 _lock = threading.Lock()
 _MANUAL_ROOM_SKUS = frozenset({"room_expert_199", "room_expert_99"})
@@ -258,20 +260,10 @@ def _cosmo_id(user_id: int) -> str:
 
 
 def _payment_bypass_active() -> bool:
-    """Free-submit mode: explicit env flag, or Razorpay not configured.
+    """Explicit dev bypass only — never auto-free when Razorpay is missing."""
+    from billing_security import payment_bypass_from_env
 
-    Keeps the ₹199 UI intact while letting uploads reach the founder queue
-    without a payment. Restoring Razorpay keys re-enables the paid flow
-    automatically (unless the env flag forces bypass).
-    """
-    if (os.environ.get("ROOM_UPLOAD_PAYMENT_BYPASS") or "").strip() == "1":
-        return True
-    try:
-        import payment_gateway as pg
-
-        return not pg.configured()
-    except Exception:
-        return False
+    return payment_bypass_from_env("ROOM_UPLOAD_PAYMENT_BYPASS")
 
 
 def register_astrovastu_human_order_routes(flask_app) -> None:
@@ -289,13 +281,9 @@ def register_astrovastu_human_order_routes(flask_app) -> None:
         from models import AstroVastuPurchase, User
 
         data = request.get_json(silent=True) or {}
-        user_id = data.get("user_id")
-        api_key = (request.headers.get("X-API-Key") or "").strip()
-        if not user_id or not api_key:
-            return jsonify({"error": "auth_required"}), 401
-        user = User.query.filter_by(id=user_id, api_key=api_key).first()
-        if not user:
-            return jsonify({"error": "invalid_credentials"}), 401
+        user, err = authed_user_from_request(data)
+        if err:
+            return err
 
         room_type = (data.get("room_type") or "").strip()
         direction = (data.get("direction") or "").strip().upper()
@@ -373,13 +361,9 @@ def register_astrovastu_human_order_routes(flask_app) -> None:
         from models import AstroVastuPurchase, User
 
         data = request.get_json(silent=True) or {}
-        user_id = data.get("user_id")
-        api_key = (request.headers.get("X-API-Key") or "").strip()
-        if not user_id or not api_key:
-            return jsonify({"error": "auth_required"}), 401
-        user = User.query.filter_by(id=user_id, api_key=api_key).first()
-        if not user:
-            return jsonify({"error": "invalid_credentials"}), 401
+        user, err = authed_user_from_request(data)
+        if err:
+            return err
 
         room_type = (data.get("room_type") or "").strip()
         direction = (data.get("direction") or "").strip().upper()

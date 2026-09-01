@@ -11,6 +11,113 @@ from typing import Any, Optional
 from flask import Response, jsonify, request
 
 
+def face_session_owner_error(cached, auth_user) -> tuple | None:
+    """Fail closed: missing/unparseable owner_user_id is forbidden."""
+    if not auth_user:
+        return jsonify({"ok": False, "error": "auth_required"}), 401
+    owner_id = None if not isinstance(cached, dict) else cached.get("owner_user_id")
+    if owner_id is None or owner_id == "":
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    try:
+        if int(owner_id) != int(auth_user.id):
+            return jsonify({"ok": False, "error": "forbidden"}), 403
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    return None
+
+
+def assert_face_session_owner(
+    session_cache,
+    session_id: str,
+    auth_user,
+) -> tuple[Any | None, tuple | None]:
+    """Return (cached_payload, None) or (None, flask_error_response)."""
+    if not (session_id or "").strip():
+        return None, (jsonify({"ok": False, "error": "missing_session_id"}), 400)
+    cached = session_cache.get(session_id)
+    if not cached:
+        return None, (
+            jsonify({"ok": False, "error": "session_not_found_or_expired"}),
+            404,
+        )
+    owner_err = face_session_owner_error(cached, auth_user)
+    if owner_err:
+        return None, owner_err
+    return cached, None
+
+
+def _ws_error_payload(flask_err: tuple) -> dict:
+    resp, code = flask_err
+    payload: dict[str, Any] = {"ok": False, "error": "forbidden"}
+    try:
+        data = resp.get_json()
+        if isinstance(data, dict):
+            payload = dict(data)
+            payload.setdefault("ok", False)
+    except Exception:
+        pass
+    payload["status"] = int(code or 403)
+    return payload
+
+
+def authenticate_face_ws(ws=None) -> tuple[Any | None, dict | None]:
+    """Authenticate the Face Reading WS handshake before any event is sent."""
+    from flask import has_request_context
+
+    from api_auth import require_authed_user
+
+    if has_request_context():
+        user, err = require_authed_user()
+        if err:
+            return None, _ws_error_payload(err)
+        return user, None
+
+    environ = getattr(ws, "environ", None) or {}
+    uid = (environ.get("HTTP_X_USER_ID") or "").strip()
+    if not uid:
+        return None, {"ok": False, "error": "auth_required", "status": 401}
+    try:
+        user_id = int(uid)
+    except (TypeError, ValueError):
+        return None, {"ok": False, "error": "invalid_user_id", "status": 400}
+    from models import User
+
+    api_key = (environ.get("HTTP_X_API_KEY") or "").strip()
+    user = User.query.get(user_id)
+    if not user:
+        return None, {"ok": False, "error": "User not found", "status": 404}
+    if not api_key or user.api_key != api_key:
+        return None, {
+            "ok": False,
+            "error": "Unauthorized — invalid API key",
+            "status": 401,
+        }
+    return user, None
+
+
+def prepare_face_report_ws(ws) -> tuple[dict | None, dict | None]:
+    """Auth + session ownership. Must run before get_latest/subscribe."""
+    from urllib.parse import parse_qs
+
+    from .report_async import normalize_lang
+    from vedic.face_reading import session_cache
+
+    user, auth_err = authenticate_face_ws(ws)
+    if auth_err:
+        return None, auth_err
+
+    qs = (getattr(ws, "environ", None) or {}).get("QUERY_STRING") or ""
+    params = {k: (v[0] if v else "") for k, v in parse_qs(qs).items()}
+    session_id = (params.get("session_id") or "").strip()
+    if not session_id:
+        return None, {"ok": False, "error": "missing_session_id", "status": 400}
+    _cached, owner_err = assert_face_session_owner(session_cache, session_id, user)
+    if owner_err:
+        return None, _ws_error_payload(owner_err)
+    lang = normalize_lang(params.get("language") or "hinglish")
+    return {"user": user, "session_id": session_id, "lang": lang}, None
+
+
 def _stream_pdf(pdf_bytes: bytes, filename: str, cache_header: str) -> Response:
     return Response(
         pdf_bytes,
@@ -60,7 +167,9 @@ def handle_report_pdf_inner(
         wait_for_ready,
     )
 
-    cached = session_cache.get(session_id)
+    cached, owner_err = assert_face_session_owner(session_cache, session_id, auth_user)
+    if owner_err:
+        return owner_err
     if not cached or "report_payload" not in cached:
         return (
             jsonify(
@@ -254,19 +363,28 @@ def handle_report_pdf_inner(
     )
 
 
-def handle_report_status(session_id: str, lang: str) -> Any:
+def handle_report_status(session_id: str, lang: str, *, auth_user=None) -> Any:
     from .report_async import get_job_status, normalize_lang, status_urls
 
-    if not session_id:
-        return jsonify({"ok": False, "error": "missing_session_id"}), 400
+    from vedic.face_reading import session_cache
+
+    _cached, owner_err = assert_face_session_owner(session_cache, session_id, auth_user)
+    if owner_err:
+        return owner_err
+
     st = get_job_status(session_id, lang)
     urls = status_urls(session_id, lang, request.url_root.rstrip("/"))
     return jsonify({**st, **urls}), 200
 
 
-def handle_report_events_sse(session_id: str, lang: str) -> Response:
+def handle_report_events_sse(session_id: str, lang: str, *, auth_user=None) -> Response:
     from .progress_events import get_latest, job_id, subscribe
     from .report_async import normalize_lang
+    from vedic.face_reading import session_cache
+
+    _cached, owner_err = assert_face_session_owner(session_cache, session_id, auth_user)
+    if owner_err:
+        return owner_err
 
     lang = normalize_lang(lang)
     jid = job_id(session_id, lang)
@@ -296,20 +414,17 @@ def handle_report_events_sse(session_id: str, lang: str) -> Response:
 
 def register_report_ws(sock) -> None:
     """Register WebSocket route on Flask-Sock instance."""
-    from urllib.parse import parse_qs
 
     @sock.route("/api/face_reading/report/ws")
     def face_report_ws(ws):
         from .progress_events import get_latest, job_id, subscribe
-        from .report_async import normalize_lang
 
-        qs = ws.environ.get("QUERY_STRING") or ""
-        params = {k: (v[0] if v else "") for k, v in parse_qs(qs).items()}
-        session_id = params.get("session_id") or ""
-        lang = normalize_lang(params.get("language") or "hinglish")
-        if not session_id:
-            ws.send(json.dumps({"ok": False, "error": "missing_session_id"}))
+        prepared, err = prepare_face_report_ws(ws)
+        if err:
+            ws.send(json.dumps(err, ensure_ascii=False))
             return
+        session_id = prepared["session_id"]
+        lang = prepared["lang"]
         jid = job_id(session_id, lang)
         latest = get_latest(jid)
         if latest:

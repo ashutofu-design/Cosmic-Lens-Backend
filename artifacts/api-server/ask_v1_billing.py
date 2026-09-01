@@ -47,6 +47,41 @@ ASK_V1_PACK_CATALOG = {
     },
 }
 
+# Founder / QA — unlimited V1 questions (no pack decrement, no expiry).
+ASK_V1_UNLIMITED_COSMO_IDS = frozenset({"COSMO109"})
+
+
+def _user_cosmo_id(user) -> str:
+    if not user:
+        return ""
+    cosmo = (getattr(user, "cosmo_user_id", None) or "").strip().upper()
+    if cosmo:
+        return cosmo
+    try:
+        from cosmo_user_id import cosmo_display_id_for_user_id
+
+        return (cosmo_display_id_for_user_id(user.id) or "").strip().upper()
+    except Exception:
+        return ""
+
+
+def has_unlimited_questions(user) -> bool:
+    return _user_cosmo_id(user) in ASK_V1_UNLIMITED_COSMO_IDS
+
+
+def unlimited_quota() -> dict:
+    return {
+        "allowed": True,
+        "used": 0,
+        "limit": -1,
+        "questions_left": -1,
+        "questions_total": -1,
+        "questions_used": 0,
+        "via": "ask_v1_unlimited",
+        "plan": "ask_v1_unlimited",
+        "unlimited": True,
+    }
+
 
 def payment_bypass() -> bool:
     from billing_security import payment_bypass_from_env
@@ -98,6 +133,23 @@ def pack_active(user) -> bool:
 
 
 def wallet_snapshot(user) -> dict:
+    if has_unlimited_questions(user):
+        free_used = int(getattr(user, "ask_v1_free_questions_used", 0) or 0) if user else 0
+        return {
+            "active": True,
+            "unlimited": True,
+            "questions_left": -1,
+            "questions_total": -1,
+            "questions_used": 0,
+            "free_questions_left": 0,
+            "free_questions_used": free_used,
+            "bonus_questions_left": 0,
+            "expires_at": None,
+            "pack_id": "unlimited",
+            "packs": list_packs(),
+            "payment_bypass": payment_bypass(),
+        }
+
     left = int(getattr(user, "ask_v1_questions_left", 0) or 0) if user else 0
     total = int(getattr(user, "ask_v1_questions_total", 0) or 0) if user else 0
     exp = _naive_utc(getattr(user, "ask_v1_expires_at", None)) if user else None

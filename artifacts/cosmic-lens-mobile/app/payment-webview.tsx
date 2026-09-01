@@ -23,6 +23,13 @@ import { finalizeNumerologyReportPayment } from "@/lib/numerologyReportCheckoutF
 import { finalizePalmistryReportPayment } from "@/lib/palmistryReportCheckoutFlow";
 import { finalizeBirthTimeRectificationPayment } from "@/lib/birthTimeRectificationCheckoutFlow";
 import { finalizeBusinessVastuPayment } from "@/lib/businessVastuCheckoutFlow";
+
+function payLog(...args: unknown[]) {
+  if (__DEV__) console.log(...args);
+}
+function payWarn(...args: unknown[]) {
+  if (__DEV__) console.warn(...args);
+}
 import { buildRazorpayCheckoutHtml, openRazorpayCheckoutWeb } from "@/lib/razorpayCheckout";
 import {
   getPendingAstrovastuRoomUpload,
@@ -167,7 +174,7 @@ export default function PaymentWebviewScreen() {
 
     // Strict re-check: never call SDK without a valid session id
     if (!paymentSessionId || paymentSessionId.trim() === "") {
-      console.warn("[Pay] ❌ refusing to invoke SDK with empty paymentSessionId");
+      payWarn("[Pay] ❌ refusing to invoke SDK with empty paymentSessionId");
       return;
     }
 
@@ -212,7 +219,7 @@ export default function PaymentWebviewScreen() {
       const Cashfree = await _ensureSdkLoaded();
       const cashfree = Cashfree({ mode: env });
       const components = _componentFor(method);
-      console.log(
+      payLog(
         "[Pay] 🚀 cashfree.checkout({ paymentSessionId: ...",
         paymentSessionId.slice(-12),
         "})  method=", method ?? "default",
@@ -224,9 +231,9 @@ export default function PaymentWebviewScreen() {
       };
       if (components) opts.components = components;
       const result = await cashfree.checkout(opts);
-      console.log("[Pay] checkout result", result);
+      payLog("[Pay] checkout result", result);
     } catch (e: any) {
-      console.warn("[Pay] ❌ SDK checkout failed, falling back to link:", e?.message);
+      payWarn("[Pay] ❌ SDK checkout failed, falling back to link:", e?.message);
       // Hard fallback only if SDK can't load (offline / CSP / etc)
       try { window.open(paymentLink, "_blank", "noopener,noreferrer"); } catch {}
     }
@@ -310,7 +317,7 @@ export default function PaymentWebviewScreen() {
     setOrderId("");
     handledRef.current = false;
     setPhase("creating");
-    console.log("[Pay] 🔄 creating fresh order", { plan, cycle, userId: user.id });
+    payLog("[Pay] 🔄 creating fresh order", { plan, cycle, userId: user.id });
     try {
       const ctrl  = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 15000);
@@ -326,12 +333,12 @@ export default function PaymentWebviewScreen() {
       clearTimeout(timer);
       const data = await resp.json();
       // STRICT spec: log full response for debugging.
-      console.log("ORDER RESPONSE:", data);
-      console.log("[Pay] order response meta", { ok: resp.ok, status: resp.status });
+      payLog("ORDER RESPONSE:", data);
+      payLog("[Pay] order response meta", { ok: resp.ok, status: resp.status });
 
       if (!resp.ok || data.error) {
         const msg = data.error ?? `Order creation failed (${resp.status}).`;
-        console.warn("[Pay] ❌ create-order failed:", msg);
+        payWarn("[Pay] ❌ create-order failed:", msg);
         setErrMsg(msg);
         setPhase("failed");
         return;  // do NOT open checkout on failure
@@ -340,18 +347,18 @@ export default function PaymentWebviewScreen() {
         data as { order_id: string; payment_link: string; payment_session_id: string };
 
       // STRICT spec: log session id explicitly.
-      console.log("SESSION ID:", payment_session_id);
+      payLog("SESSION ID:", payment_session_id);
 
       // STRICT validation: only payment_session_id is required to open checkout.
       // Without a valid session, do NOT open the Cashfree UI under any circumstances.
       if (!payment_session_id || payment_session_id.trim() === "") {
-        console.warn("[Pay] ❌ missing payment_session_id — refusing to open checkout");
+        payWarn("[Pay] ❌ missing payment_session_id — refusing to open checkout");
         setErrMsg("Server returned an invalid session. Please try again.");
         setPhase("failed");
         return;
       }
 
-      console.log("[Pay] ✅ fresh session", {
+      payLog("[Pay] ✅ fresh session", {
         order_id,
         session_tail: "..." + payment_session_id.slice(-20),
       });
@@ -366,7 +373,7 @@ export default function PaymentWebviewScreen() {
       // phase, and each button launches the SDK with that method preselected.
       // On native, the WebView modal will open automatically (uses paymentLink).
     } catch (e: any) {
-      console.warn("[Pay] ❌ network error:", e?.message);
+      payWarn("[Pay] ❌ network error:", e?.message);
       setErrMsg(e?.message ?? "Network error. Check connection.");
       setPhase("failed");
     }

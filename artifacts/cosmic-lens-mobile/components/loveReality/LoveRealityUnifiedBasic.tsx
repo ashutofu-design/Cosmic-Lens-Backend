@@ -14,7 +14,7 @@ import {
 
 import { LoveRealityToolSectionContent } from "@/components/loveReality/LoveRealityToolResultPanel";
 import { useUser } from "@/context/UserContext";
-import { apiFetch, apiFetchBases } from "@/lib/apiConfig";
+import { apiFetch, apiFetchBases, userAuthHeaders } from "@/lib/apiConfig";
 import { coerceLoveBasicLang, pickLoveBasicCopy } from "@/lib/loveRealityBasicLang";
 import { loveRealityProScreenCopy } from "@/lib/loveRealityProCopyI18n";
 import { LOVE_REALITY_PRO_CTA_LABEL } from "@/lib/loveRealityProCopy";
@@ -92,7 +92,7 @@ export function LoveRealityUnifiedBasic({
   initialToolKey?: string;
   onOpenPro: () => void;
 }) {
-  const { language } = useUser();
+  const { language, user } = useUser();
   const contentLang = coerceLoveBasicLang(language);
   const proUiLang = coerceProPdfLang(language);
   const proScreenCopy = loveRealityProScreenCopy(proUiLang);
@@ -138,7 +138,7 @@ export function LoveRealityUnifiedBasic({
             try {
               const resp = await apiFetch(`${base}${tool.apiPath}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { ...userAuthHeaders(user), "Content-Type": "application/json" },
                 body,
                 signal: ctrl.signal,
               });

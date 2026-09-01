@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cosmic Lens",
     "slug": "cosmic-lens-mobile",
-    "version": "1.0.17",
+    "version": "1.0.19",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "cosmic-lens",
@@ -30,7 +30,8 @@
     },
     "android": {
       "package": "com.cosmiclens.app",
-      "versionCode": 21,
+      "versionCode": 23,
+      "edgeToEdgeEnabled": true,
       "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {

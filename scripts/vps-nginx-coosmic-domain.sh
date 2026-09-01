@@ -55,6 +55,9 @@ server {
     root ${ADMIN_ROOT};
     index index.html;
 
+    # Room photo / floor plan uploads are base64 JSON — allow large bodies.
+    client_max_body_size 25m;
+
     location /api/ {
         proxy_pass http://127.0.0.1:${API_PORT};
         proxy_http_version 1.1;
@@ -77,6 +80,9 @@ server {
     listen [::]:80;
     server_name ${API_DOMAIN};
 
+    # Room photo / floor plan uploads are base64 JSON — allow large bodies.
+    client_max_body_size 25m;
+
     location / {
         proxy_pass http://127.0.0.1:${API_PORT};
         proxy_http_version 1.1;
@@ -97,6 +103,9 @@ server {
 
     root ${ADMIN_ROOT};
     index index.html;
+
+    # Room photo / floor plan uploads are base64 JSON — allow large bodies.
+    client_max_body_size 25m;
 
     location /api/ {
         proxy_pass http://127.0.0.1:${API_PORT};

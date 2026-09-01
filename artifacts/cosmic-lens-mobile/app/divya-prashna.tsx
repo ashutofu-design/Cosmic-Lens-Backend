@@ -119,6 +119,7 @@ export default function DivyaPrashnaScreen() {
       const timer = setTimeout(() => ctrl.abort(), 30000);
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      if (user?.id) headers["X-User-Id"] = String(user.id);
       const body: Record<string, unknown> = { question: q, category };
       if (user?.id) body.user_id = user.id;
 

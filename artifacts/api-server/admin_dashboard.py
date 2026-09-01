@@ -39,6 +39,43 @@ def resolve_login_activity_display(
         return {"login_method": "gmail", "login_id": email}
     return {"login_method": "unknown", "login_id": user_phone or "—"}
 
+
+def batch_first_success_login_ids(db_session, user_ids: list[int]) -> dict[int, int]:
+    """Map user_id → id of earliest successful login_activity row."""
+    if not user_ids:
+        return {}
+    from models import LoginActivity
+    from sqlalchemy import func
+
+    rows = (
+        db_session.query(LoginActivity.user_id, func.min(LoginActivity.id))
+        .filter(
+            LoginActivity.user_id.in_(user_ids),
+            LoginActivity.success.is_(True),
+        )
+        .group_by(LoginActivity.user_id)
+        .all()
+    )
+    return {int(uid): int(min_id) for uid, min_id in rows if uid is not None}
+
+
+def resolve_login_user_status(row: Any, first_success_by_user: dict[int, int]) -> str | None:
+    """Return 'new', 'old', or None (failed / unknown)."""
+    if not bool(getattr(row, "success", False)):
+        return None
+    stored = getattr(row, "is_new_user", None)
+    if stored is True:
+        return "new"
+    if stored is False:
+        return "old"
+    uid = int(row.user_id) if getattr(row, "user_id", None) else None
+    if not uid:
+        return None
+    first_id = first_success_by_user.get(uid)
+    if first_id is None:
+        return None
+    return "new" if int(row.id) == first_id else "old"
+
 _UTC = timezone.utc
 
 PLAN_LABELS: dict[str, str] = {
@@ -795,8 +832,10 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
             .limit(10)
             .all()
         )
+        first_success_by_user = batch_first_success_login_ids(db.session, [user_id])
     except Exception:
         recent_logins = []
+        first_success_by_user = {}
 
     legacy_kundli = None
     kun = Kundli.query.filter_by(user_id=user_id).first()
@@ -920,6 +959,7 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
                 "ip": row.ip or "",
                 "success": bool(row.success),
                 "created_at": row.created_at.isoformat() if row.created_at else None,
+                "user_status": resolve_login_user_status(row, first_success_by_user),
                 **resolve_login_activity_display(row, user),
             }
             for row in recent_logins

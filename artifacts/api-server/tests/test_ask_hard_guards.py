@@ -189,6 +189,24 @@ class TestEngineOnlyPolicy(unittest.TestCase):
         fail = marriage_timing_unavailable_result("mera shaadi kab hoga")
         self.assertIn("kundli", fail["text"].lower())
 
+    def test_marriage_timing_missing_blocks_d1_allows_llm(self):
+        from ask_hard_guards import enforce_engine_only_or_refuse
+
+        kundli = {
+            "ascendant": "Leo",
+            "planets": [{"name": "Venus", "sign": "Libra", "house": 7, "degrees": "10°"}],
+        }
+        out = enforce_engine_only_or_refuse(
+            question="mera shaadi kab hoga",
+            qtype="TIMING",
+            llm_intent={"domain": "marriage", "is_timing": True},
+            checks={"slice_type": "timing_full_chart"},
+            slice_meta={},
+            marriage_block="",
+            kundli=kundli,
+        )
+        self.assertIsNone(out)
+
     def test_career_timing_required_detected(self):
         from ask_hard_guards import career_timing_engine_required
 

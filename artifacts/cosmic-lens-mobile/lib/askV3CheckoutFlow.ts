@@ -25,7 +25,7 @@ export async function startAskV3PackPayment(
     const order = await createAskV3PackOrder(user, pack.id, preferredLanguage);
 
     // Dev / Razorpay off — session already queued.
-    if (order.already_entitled || order.payment_bypass || order.granted) {
+    if (order.already_entitled || order.granted) {
       router.replace("/(tabs)/ask?resumeV3=1" as any);
       return "paid_bypass";
     }

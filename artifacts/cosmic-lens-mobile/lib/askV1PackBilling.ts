@@ -46,6 +46,7 @@ export const ASK_V1_PACKS: AskV1Pack[] = [
 
 export type AskV1Wallet = {
   active: boolean;
+  unlimited?: boolean;
   questions_left: number;
   questions_total?: number;
   questions_used?: number;

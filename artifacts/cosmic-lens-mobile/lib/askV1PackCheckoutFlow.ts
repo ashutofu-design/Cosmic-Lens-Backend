@@ -13,6 +13,22 @@ import {
 
 type AuthUser = { id: number; api_key?: string | null };
 
+export function askV1WalletHasCredit(w: {
+  unlimited?: boolean;
+  active?: boolean;
+  questions_left?: number;
+  free_questions_left?: number;
+  pack_active?: boolean;
+}): boolean {
+  if (w.unlimited) return true;
+  const packLeft = Number(w.questions_left || 0);
+  const freeLeft = Number(w.free_questions_left || 0);
+  return Boolean(
+    w.active &&
+      ((w.pack_active && packLeft > 0) || freeLeft > 0 || packLeft > 0),
+  );
+}
+
 /**
  * After language pick: if wallet already has questions, enter chat;
  * otherwise show pack picker (caller) or start payment for a chosen pack.
@@ -21,6 +37,7 @@ export async function hasActiveAskV1Wallet(
   user: AuthUser | null | undefined,
 ): Promise<{
   active: boolean;
+  unlimited?: boolean;
   questions_left: number;
   questions_total?: number;
   questions_used?: number;
@@ -43,6 +60,21 @@ export async function hasActiveAskV1Wallet(
   }
   try {
     const w = await fetchAskV1Wallet(user);
+    if (w.unlimited) {
+      return {
+        active: true,
+        unlimited: true,
+        pack_active: true,
+        pack_id: "unlimited",
+        questions_left: -1,
+        questions_total: -1,
+        questions_used: 0,
+        free_questions_left: 0,
+        free_questions_used: Math.max(0, Number(w.free_questions_used ?? 0)),
+        expires_at: null,
+        fetchOk: true,
+      };
+    }
     const packLeft = Number(w.questions_left || 0);
     const freeUsed = Math.max(0, Number(w.free_questions_used ?? 0));
     const freeLeftFromApi = w.free_questions_left;
@@ -97,7 +129,7 @@ export async function startAskV1PackPayment(
     const order = await createAskV1PackOrder(user, packId);
 
     // Dev / Razorpay off — already credited.
-    if (order.already_entitled || order.payment_bypass || order.active) {
+    if (order.already_entitled || order.active) {
       return "paid_bypass";
     }
 

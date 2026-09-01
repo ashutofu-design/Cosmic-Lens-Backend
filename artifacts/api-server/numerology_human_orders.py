@@ -11,6 +11,8 @@ from typing import Any
 
 from flask import jsonify, request
 
+from api_auth import authed_user_from_request
+
 _BASE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".cache", "numerology_human_orders")
 )
@@ -252,17 +254,9 @@ def register_numerology_human_order_routes(flask_app) -> None:
         from models import CoupleReportPurchase, User
 
         data = request.get_json(silent=True) or {}
-        user_id = data.get("user_id") or request.headers.get("X-User-Id")
-        api_key = (request.headers.get("X-API-Key") or "").strip()
-        if not user_id or not api_key:
-            return jsonify({"error": "auth_required"}), 401
-        try:
-            user_id = int(user_id)
-        except (TypeError, ValueError):
-            return jsonify({"error": "invalid_user"}), 400
-        user = User.query.filter_by(id=user_id, api_key=api_key).first()
-        if not user:
-            return jsonify({"error": "invalid_credentials"}), 401
+        user, err = authed_user_from_request(data)
+        if err:
+            return err
 
         params = data.get("params") if isinstance(data.get("params"), dict) else {}
         name = str(data.get("name") or params.get("name") or "").strip()
@@ -302,6 +296,11 @@ def register_numerology_human_order_routes(flask_app) -> None:
             int(data.get("priority_fee_inr") or 0)
             or (299 if urgent and deliverable == "video" else (149 if urgent else 0))
         )
+        from numerology_report_billing import (
+            payment_bypass as _nrb_bypass,
+            payment_required as _nrb_payment_required,
+        )
+
         if purchase_id:
             if _purchase_already_used(purchase_id):
                 return jsonify({"error": "purchase_already_submitted"}), 409
@@ -313,6 +312,17 @@ def register_numerology_human_order_routes(flask_app) -> None:
             if (purchase.product or "") != "life_mastery":
                 return jsonify({"error": "wrong_product"}), 400
             amount_inr = purchase.amount
+        elif _nrb_payment_required():
+            # A human-written report is a paid deliverable — no purchase, no order.
+            return (
+                jsonify(
+                    {
+                        "error": "payment_required",
+                        "message": "Complete payment before submitting this order.",
+                    }
+                ),
+                402,
+            )
 
         # Always persist display amount for admin (paid total, or catalog when bypass).
         if amount_inr is None or int(amount_inr or 0) <= 0:
@@ -327,13 +337,15 @@ def register_numerology_human_order_routes(flask_app) -> None:
                     __import__("os").environ.get("LIFE_MASTERY_VIDEO_PRICE_INR", "799")
                 )
             amount_inr = base + (priority_fee_inr if urgent else 0)
-        # Client may also send amount_inr (prefer higher of paid vs catalog when bypass)
-        try:
-            client_amt = int(data.get("amount_inr") or 0)
-            if client_amt > 0 and (not purchase_id or int(amount_inr or 0) <= 0):
-                amount_inr = client_amt
-        except (TypeError, ValueError):
-            pass
+        # Client-supplied amount is honoured only under a dev payment bypass;
+        # otherwise the amount always comes from the purchase or the catalog.
+        if _nrb_bypass():
+            try:
+                client_amt = int(data.get("amount_inr") or 0)
+                if client_amt > 0:
+                    amount_inr = client_amt
+            except (TypeError, ValueError):
+                pass
 
         cosmo_user_id = (str(data.get("cosmo_user_id") or "").strip().upper())
         if not cosmo_user_id:

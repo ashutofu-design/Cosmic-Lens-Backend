@@ -48,6 +48,20 @@ class TestAskChartLlmFallback(unittest.TestCase):
         )
         self.assertIsNone(out)
 
+    def test_enforce_marriage_timing_without_engine_uses_d1_not_refusal(self):
+        from ask_hard_guards import enforce_engine_only_or_refuse
+
+        out = enforce_engine_only_or_refuse(
+            question="Meri shaadi kab hogi?",
+            qtype="TIMING",
+            llm_intent={"domain": "marriage", "is_timing": True},
+            checks={"slice_type": "timing_full_chart"},
+            slice_meta={},
+            marriage_block="",
+            kundli=_SAMPLE_KUNDLI,
+        )
+        self.assertIsNone(out)
+
     def test_enforce_career_timing_without_engine_uses_d1_not_refusal(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 

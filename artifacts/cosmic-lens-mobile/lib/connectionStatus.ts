@@ -24,12 +24,8 @@ export async function checkBackendConnected(): Promise<boolean> {
  */
 export async function checkAdminConnected(): Promise<boolean> {
   try {
-    const headers: Record<string, string> = {};
-    const token = (process.env.EXPO_PUBLIC_ADMIN_SECRET || "").trim();
-    if (token) headers["X-Admin-Token"] = token;
-
-    const res = await timedFetch(`${API_BASE}/api/admin/stats`, { headers });
-    return res.ok || res.status === 401;
+    const res = await timedFetch(`${API_BASE}/api/admin/stats`);
+    return res.ok || res.status === 401 || res.status === 503;
   } catch {
     return false;
   }

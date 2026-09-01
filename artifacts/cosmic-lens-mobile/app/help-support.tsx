@@ -617,7 +617,6 @@ export default function HelpSupportScreen() {
     }
   };
 
-  const firstName = (user?.name || "").trim().split(/\s+/)[0] || "";
 
   // ── Login gate ──────────────────────────────────────────────────────────────
   if (!user?.id || !user?.api_key) {
@@ -915,7 +914,7 @@ export default function HelpSupportScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.welcomeTitle, { color: C.text }]}>
-                    {firstName ? `Hello ${firstName}` : "Hello"}
+                    Cosmic Help
                   </Text>
                   <Text style={[s.welcomeBody, { color: C.textMuted }]}>
                     Short answers about the app right here. For payment, refunds,

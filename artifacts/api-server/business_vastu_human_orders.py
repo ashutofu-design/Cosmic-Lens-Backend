@@ -10,6 +10,8 @@ from typing import Any
 
 from flask import jsonify, request
 
+from api_auth import authed_user_from_request
+
 _BASE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".cache", "business_vastu_human_orders")
 )
@@ -231,13 +233,9 @@ def register_business_vastu_human_order_routes(flask_app) -> None:
         from models import User
 
         data = request.get_json(silent=True) or {}
-        user_id = data.get("user_id")
-        api_key = (request.headers.get("X-API-Key") or "").strip()
-        if not user_id or not api_key:
-            return jsonify({"error": "auth_required"}), 401
-        user = User.query.filter_by(id=user_id, api_key=api_key).first()
-        if not user:
-            return jsonify({"error": "invalid_credentials"}), 401
+        user, err = authed_user_from_request(data)
+        if err:
+            return err
 
         btype = (data.get("business_type") or "").strip().lower()
         if btype not in ("shop", "office", "factory"):

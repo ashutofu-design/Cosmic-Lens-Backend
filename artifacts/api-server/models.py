@@ -403,7 +403,7 @@ class SignupFreeGiftClaim(db.Model):
     __tablename__ = "signup_free_gift_claims"
 
     id = db.Column(db.Integer, primary_key=True)
-    identity_kind = db.Column(db.String(8), nullable=False)   # phone | email
+    identity_kind = db.Column(db.String(32), nullable=False)  # phone | email | firebase_uid | in10 | system
     identity_value = db.Column(db.String(255), nullable=False)
     source = db.Column(db.String(32), nullable=False, default="signup")
     first_user_id = db.Column(db.Integer, nullable=True)

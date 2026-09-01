@@ -5,6 +5,7 @@ from typing import Callable
 
 from flask import Blueprint, jsonify, request
 
+from api_auth import auth_error_response
 from .engine import FaceReadingPhase2Engine
 from .rules import DEFAULT_SYSTEM_ID
 from .schema import find_raw_input_paths
@@ -14,6 +15,7 @@ def create_face_reading_phase2_blueprint(
     *,
     engine: FaceReadingPhase2Engine | None = None,
     rate_limit: Callable[[str], Callable] | None = None,
+    require_user: Callable[[], tuple] | None = None,
 ) -> Blueprint:
     interpreter = engine or FaceReadingPhase2Engine()
     blueprint = Blueprint("face_reading_phase2", __name__)
@@ -24,6 +26,9 @@ def create_face_reading_phase2_blueprint(
     @blueprint.post("/api/face-reading/interpret")
     @limit("30 per minute")
     def interpret_face():
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
         if request.files or request.mimetype != "application/json":
             return jsonify({
                 "status": "rejected",

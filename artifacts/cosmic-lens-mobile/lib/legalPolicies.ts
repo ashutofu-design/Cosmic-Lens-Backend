@@ -9,7 +9,7 @@ export const LEGAL_META = {
   operator: "Cosmic Lens",
   country: "India",
   supportEmail: "supportcosmiclens@gmail.com",
-  website: "https://cosmiclens.app",
+  website: "https://admin.coosmic.icu",
   paymentProcessor: "Razorpay Software Private Limited",
   grievanceOfficer: "Grievance Officer — Cosmic Lens",
   grievanceResponseDays: 30,

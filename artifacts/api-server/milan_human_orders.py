@@ -294,14 +294,29 @@ def list_pending_for_user(user_id: int) -> list[dict[str, Any]]:
     return out
 
 
-def register_milan_human_order_routes(flask_app) -> None:
+def register_milan_human_order_routes(flask_app, rate_limit=None) -> None:
     if "kundli_milan_human_order" in flask_app.view_functions:
         return
 
+    from api_auth import require_authed_user
+    import couple_report_billing as crb
+
+    def _rl(spec):
+        def deco(fn):
+            if rate_limit:
+                return rate_limit(spec)(fn)
+            return fn
+
+        return deco
+
     @flask_app.route("/api/kundli-milan/engine-snapshot", methods=["POST", "OPTIONS"])
+    @_rl("20 per minute")
     def kundli_milan_engine_snapshot():
         if request.method == "OPTIONS":
             return "", 204
+        user, err = require_authed_user()
+        if err:
+            return err
         data = request.get_json(silent=True) or {}
         if not isinstance(data.get("p1"), dict) or not isinstance(data.get("p2"), dict):
             return jsonify({"error": "expected_p1_p2"}), 400
@@ -315,9 +330,13 @@ def register_milan_human_order_routes(flask_app) -> None:
             return jsonify({"error": "engine_snapshot_failed", "detail": str(exc)}), 500
 
     @flask_app.route("/api/kundli-milan/human-order", methods=["POST", "OPTIONS"])
+    @_rl("10 per minute")
     def kundli_milan_human_order():
         if request.method == "OPTIONS":
             return "", 204
+        user, err = require_authed_user()
+        if err:
+            return err
         data = request.get_json(silent=True) or {}
         if not isinstance(data.get("p1"), dict) or not isinstance(data.get("p2"), dict):
             return jsonify({"error": "expected_p1_p2"}), 400
@@ -328,13 +347,7 @@ def register_milan_human_order_routes(flask_app) -> None:
         if deliverable not in ("report", "video"):
             deliverable = "report"
 
-        user_id = 0
-        uid_hdr = (request.headers.get("X-User-Id") or "").strip()
-        if uid_hdr:
-            try:
-                user_id = int(uid_hdr)
-            except Exception:
-                user_id = 0
+        user_id = int(user.id)
 
         method = str(data.get("contact_method") or "my_reports").strip().lower()
         raw_contact = str(data.get("contact_value") or data.get("whatsapp") or "").strip()
@@ -356,6 +369,20 @@ def register_milan_human_order_routes(flask_app) -> None:
             snap = build_marriage_engine_snapshot(mb)
         except Exception as exc:
             return jsonify({"error": "engine_snapshot_failed", "detail": str(exc)}), 500
+
+        amount_inr = crb.amount_for(crb.PRODUCT_MILAN, deliverable, urgent)
+        priority_fee_inr = int(crb._PRIORITY_FEES.get(crb.PRODUCT_MILAN, 299) if urgent else 0)
+
+        if crb.payment_required() and not crb.payment_bypass():
+            cache_params = crb.cache_params_from_birth(lang, data["p1"], data["p2"])
+            access = crb.check_access(user.id, crb.PRODUCT_MILAN, cache_params)
+            if not access.get("entitled"):
+                return jsonify(
+                    {
+                        "error": "payment_required",
+                        "message": "Complete Kundli Milan Pro payment before placing this order.",
+                    }
+                ), 402
 
         order_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
@@ -387,8 +414,8 @@ def register_milan_human_order_routes(flask_app) -> None:
             "deliverable": deliverable,
             "delivery": "whatsapp_video_explanation" if deliverable == "video" else "founder_manual_pdf",
             "product": "milan_pro_video" if deliverable == "video" else "milan_pro",
-            "amount_inr": int(data.get("amount_inr") or 0) or None,
-            "priority_fee_inr": int(data.get("priority_fee_inr") or 0) or (299 if urgent else 0),
+            "amount_inr": amount_inr,
+            "priority_fee_inr": priority_fee_inr,
             "eta_hours": 12 if urgent else 144,
             "eta_label": (
                 "⚡ Priority — deliver within 12 hours"

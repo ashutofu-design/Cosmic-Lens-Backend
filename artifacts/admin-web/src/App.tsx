@@ -92,6 +92,12 @@ function loginMethodLabel(method?: string): string {
   return method || "—";
 }
 
+function loginUserStatusLabel(status?: "new" | "old" | null): string {
+  if (status === "new") return "New";
+  if (status === "old") return "Old";
+  return "—";
+}
+
 function loginRowId(row: LoginActivityItem): string {
   return (
     row.login_id ||
@@ -2819,6 +2825,7 @@ function AdminPanel() {
                   <th>When (IST)</th>
                   <th>Method</th>
                   <th>Login ID</th>
+                  <th>New/Old</th>
                   <th>IP</th>
                   <th>OK</th>
                 </tr>
@@ -2829,6 +2836,7 @@ function AdminPanel() {
                     <td>{formatDate(row.created_at)}</td>
                     <td>{loginMethodLabel(row.login_method)}</td>
                     <td>{row.login_id || row.email || "—"}</td>
+                    <td>{loginUserStatusLabel(row.user_status)}</td>
                     <td>{row.ip || "—"}</td>
                     <td>{row.success ? "✓" : "✗"}</td>
                   </tr>
@@ -3234,6 +3242,7 @@ function AdminPanel() {
                   <th>User</th>
                   <th>Method</th>
                   <th>Login ID</th>
+                  <th>New/Old</th>
                   <th>IP</th>
                   <th>User ID</th>
                   <th>Profiles</th>
@@ -3264,6 +3273,7 @@ function AdminPanel() {
                     </td>
                     <td>{loginMethodLabel(row.login_method)}</td>
                     <td>{row.login_id || row.email || row.phone || "—"}</td>
+                    <td>{loginUserStatusLabel(row.user_status)}</td>
                     <td>{row.ip || "—"}</td>
                     <td>{row.cosmo_user_id || "—"}</td>
                     <td>{row.user_id ? row.profile_count ?? 0 : "—"}</td>

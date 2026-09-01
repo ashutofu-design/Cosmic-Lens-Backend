@@ -88,6 +88,17 @@ def apply_understanding_routing(
         pass
 
     try:
+        from ask_mr.timing_registry import is_marriage_timing_question
+
+        if is_marriage_timing_question(combined, out):
+            out["domain"] = "marriage"
+            out["is_timing"] = True
+            out["mr_archetype"] = out.get("mr_archetype") or "marriage_timing"
+            out["routing_label"] = out.get("routing_label") or "marriage_timing"
+    except Exception:
+        pass
+
+    try:
         from ask_love.timing_registry import is_love_timing_question
 
         if is_love_timing_question(combined, out):

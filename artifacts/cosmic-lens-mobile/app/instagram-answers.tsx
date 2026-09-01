@@ -2,7 +2,7 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { FOUNDER_PROFILE } from "@/lib/founderProfile";
+import { INSTAGRAM_ANSWERS_ENABLED } from "@/lib/instagramAnswersFeature";
 
 type ChatRole = "bot" | "user" | "system";
 
@@ -55,6 +56,12 @@ function nextId() {
 }
 
 export default function InstagramAnswersScreen() {
+  const enabled = INSTAGRAM_ANSWERS_ENABLED;
+
+  useEffect(() => {
+    if (!enabled) router.replace("/(tabs)/ask");
+  }, [enabled]);
+
   const c = useC();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
@@ -68,6 +75,8 @@ export default function InstagramAnswersScreen() {
   const scrollToEnd = useCallback(() => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
   }, []);
+
+  if (!enabled) return null;
 
   const pushBot = (text: string) => {
     setMessages((prev) => [...prev, { id: nextId(), role: "bot", text }]);

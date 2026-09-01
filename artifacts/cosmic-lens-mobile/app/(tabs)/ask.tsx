@@ -18,7 +18,6 @@ import {
   TextInput,
   Vibration,
   View,
-  useWindowDimensions,
 } from "react-native";
 import { AppKeyboardAvoidingView as KeyboardAvoidingView } from "@/components/AppKeyboardAvoidingView";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,7 +35,6 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
-  type SharedValue,
 } from "react-native-reanimated";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
@@ -51,6 +49,7 @@ import { useTabBar } from "@/context/TabBarContext";
 
 import { sanitizeAskAnswerForDisplay, askErrorToUserMessage } from "@/lib/askAnswerSanitize";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { INSTAGRAM_ANSWERS_ENABLED } from "@/lib/instagramAnswersFeature";
 import { V3LiveChat } from "@/components/V3LiveChat";
 import { presentV3ReadyNotification, setV3ReadyHandler } from "@/lib/notifications";
 import {
@@ -63,6 +62,7 @@ import {
 } from "@/lib/askReplyLang";
 import { ASK_V1_PACKS, formatAskV1Expiry, formatAskV1ExpiryLong, type AskV1PackId } from "@/lib/askV1PackBilling";
 import {
+  askV1WalletHasCredit,
   hasActiveAskV1Wallet,
   startAskV1PackPayment,
 } from "@/lib/askV1PackCheckoutFlow";
@@ -661,65 +661,12 @@ function TypewriterAnswer({
   );
 }
 
-/** Orbiting spark dots around the hero badge — reads as cosmic engine. */
-function OrbitBadgeShell({
-  children,
-  color,
-}: {
-  children: React.ReactNode;
-  color: string;
-}) {
-  const { width: winW } = useWindowDimensions();
-  const orbitW = Math.min(200, winW - 48);
-  const translateX = orbitW * 0.42;
-  const spin = useSharedValue(0);
-  useEffect(() => {
-    spin.value = withRepeat(
-      withTiming(1, { duration: 7000, easing: REasing.linear }),
-      -1,
-      false,
-    );
-  }, [spin]);
-  const ringStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${interpolate(spin.value, [0, 1], [0, 360])}deg` }],
-  }));
-  return (
-    <View style={{ alignItems: "center", justifyContent: "center", marginBottom: 4, paddingVertical: 6 }}>
-      <Reanimated.View
-        pointerEvents="none"
-        style={[
-          {
-            position: "absolute",
-            width: orbitW,
-            height: 52,
-            alignItems: "center",
-            justifyContent: "center",
-          },
-          ringStyle,
-        ]}
-      >
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <View
-            key={i}
-            style={{
-              position: "absolute",
-              width: i % 2 === 0 ? 6 : 3.5,
-              height: i % 2 === 0 ? 6 : 3.5,
-              borderRadius: 4,
-              backgroundColor: color,
-              opacity: i % 2 === 0 ? 0.85 : 0.45,
-              transform: [
-                { rotate: `${i * 60}deg` },
-                { translateX },
-              ],
-            }}
-          />
-        ))}
-      </Reanimated.View>
-      {children}
-    </View>
-  );
-}
+/** Shown on the thinking bubble while the server generates a full JSON answer. */
+const ASK_WAIT_STATUS = [
+  "Aapki kundli padh raha hoon…",
+  "Dasha aur grah dekh raha hoon…",
+  "Cosmic Intelligence jawab taiyar kar rahi hai…",
+];
 
 const ASK_EXAMPLE_QUESTIONS = [
   "When is the best time to switch jobs?",
@@ -728,14 +675,6 @@ const ASK_EXAMPLE_QUESTIONS = [
   "How is my health dasha this year?",
 ];
 
-/** Shown on the thinking bubble while the server generates a full JSON answer. */
-const ASK_WAIT_STATUS = [
-  "Aapki kundli padh raha hoon…",
-  "Dasha aur grah dekh raha hoon…",
-  "Cosmic Intelligence jawab taiyar kar rahi hai…",
-];
-
-/** Rotating example questions under the subtitle — proves the engine is “thinking”. */
 function RotatingExamples({ color, textColor }: { color: string; textColor: string }) {
   const [idx, setIdx] = useState(0);
   const fade = useSharedValue(1);
@@ -751,8 +690,8 @@ function RotatingExamples({ color, textColor }: { color: string; textColor: stri
   }, [fade]);
   const aStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
   return (
-    <View style={{ marginTop: 8, marginBottom: 2 }}>
-      <Text style={{ fontSize: 10, fontWeight: "800", color, letterSpacing: 0.8, marginBottom: 4, opacity: 0.9 }}>
+    <View style={{ marginTop: 6, alignItems: "center" }}>
+      <Text style={{ fontSize: 10, fontWeight: "800", color, letterSpacing: 0.8, marginBottom: 3, opacity: 0.9 }}>
         TRY ASKING
       </Text>
       <Reanimated.Text
@@ -762,178 +701,16 @@ function RotatingExamples({ color, textColor }: { color: string; textColor: stri
             fontWeight: "700",
             color: textColor,
             lineHeight: 18,
-            minHeight: 36,
+            minHeight: 20,
+            textAlign: "center",
           },
           aStyle,
         ]}
+        numberOfLines={1}
       >
         “{ASK_EXAMPLE_QUESTIONS[idx]}”
       </Reanimated.Text>
     </View>
-  );
-}
-
-/** Live engine status strip — high trust signal. */
-function EngineOnlineBar({ accent }: { accent: string }) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: 6,
-        alignSelf: "stretch",
-        marginTop: 8,
-        marginBottom: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 999,
-        backgroundColor: "rgba(16,185,129,0.12)",
-        borderWidth: 1,
-        borderColor: "rgba(16,185,129,0.4)",
-      }}
-    >
-      <GlowDot color="#10b981" size={6} />
-      <Text style={{ fontSize: 10.5, fontWeight: "700", color: "#34d399", letterSpacing: 0.2 }}>
-        Engine online
-      </Text>
-      <Text style={{ fontSize: 10.5, color: "rgba(255,255,255,0.45)" }}>·</Text>
-      <Text style={{ fontSize: 10.5, fontWeight: "600", color: accent, opacity: 0.9, flexShrink: 1 }}>
-        Chart intelligence ready
-      </Text>
-    </View>
-  );
-}
-
-const WAVE_BAR_COUNT = 20;
-const WAVE_PATTERN = [0.35, 0.55, 0.8, 1, 0.7, 0.95, 0.5, 0.85, 1, 0.6, 0.4, 0.75, 0.95, 0.55, 0.8, 1, 0.65, 0.45, 0.9, 0.7];
-
-/** Voice-wave hero — continuous equalizer bars under the Cosmic Advance badge. */
-function VoiceWaveHero({ color }: { color: string }) {
-  const t = useSharedValue(0);
-  const { width: winW } = useWindowDimensions();
-  useEffect(() => {
-    if (Platform.OS === "android") return;
-    t.value = withRepeat(
-      withTiming(1, { duration: 1400, easing: REasing.inOut(REasing.sin) }),
-      -1,
-      true,
-    );
-  }, [t]);
-
-  // Android: static bars — 20 animated nodes was a major jank source.
-  if (Platform.OS === "android") {
-    return (
-      <View
-        style={{
-          alignItems: "center",
-          marginTop: 2,
-          marginBottom: 8,
-          paddingVertical: 6,
-          width: "100%",
-          maxWidth: Math.min(320, winW - 32),
-          alignSelf: "center",
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", height: 28, gap: 2 }}>
-          {WAVE_PATTERN.map((base, i) => (
-            <View
-              key={i}
-              style={{
-                width: 3,
-                height: Math.max(6, 24 * base),
-                borderRadius: 2,
-                backgroundColor: color,
-                opacity: 0.55,
-              }}
-            />
-          ))}
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View
-      style={{
-        alignItems: "center",
-        marginTop: 2,
-        marginBottom: 8,
-        paddingVertical: 6,
-        paddingHorizontal: 4,
-        width: "100%",
-        maxWidth: Math.min(320, winW - 32),
-        alignSelf: "center",
-      }}
-      accessibilityLabel="Cosmic intelligence voice wave"
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          height: 28,
-          gap: 2,
-        }}
-      >
-        {Array.from({ length: WAVE_BAR_COUNT }).map((_, i) => (
-          <VoiceWaveBar
-            key={i}
-            index={i}
-            progress={t}
-            base={WAVE_PATTERN[i % WAVE_PATTERN.length]}
-            color={color}
-          />
-        ))}
-      </View>
-      <Text
-        style={{
-          marginTop: 6,
-          fontSize: 9.5,
-          fontWeight: "700",
-          letterSpacing: 1,
-          color,
-          opacity: 0.75,
-        }}
-      >
-        LISTENING TO YOUR CHART
-      </Text>
-    </View>
-  );
-}
-
-function VoiceWaveBar({
-  index,
-  progress,
-  base,
-  color,
-}: {
-  index: number;
-  progress: SharedValue<number>;
-  base: number;
-  color: string;
-}) {
-  const style = useAnimatedStyle(() => {
-    const phase = (index / WAVE_BAR_COUNT) * Math.PI * 2;
-    const wave = Math.sin(progress.value * Math.PI * 2 + phase);
-    const h = 5 + base * 20 * (0.35 + 0.65 * ((wave + 1) / 2));
-    return {
-      height: h,
-      opacity: 0.45 + base * 0.5,
-    };
-  });
-  return (
-    <Reanimated.View
-      style={[
-        {
-          width: 3,
-          borderRadius: 2,
-          backgroundColor: color,
-          minHeight: 4,
-        },
-        style,
-      ]}
-    />
   );
 }
 
@@ -1004,6 +781,7 @@ export default function AskScreen() {
     left: number;
     total: number;
     kind: "pack" | "free";
+    unlimited?: boolean;
     packId?: string;
     packLabel?: string;
     packDays?: number;
@@ -1019,6 +797,19 @@ export default function AskScreen() {
     }
     try {
       const w = await hasActiveAskV1Wallet(user);
+      if (w.unlimited) {
+        setV1WalletBar({
+          used: 0,
+          left: -1,
+          total: -1,
+          kind: "pack",
+          unlimited: true,
+          packId: "unlimited",
+          packLabel: "Unlimited",
+        });
+        setV1WalletLabel("Unlimited V1 questions");
+        return;
+      }
       const packLeft = Number(w.questions_left || 0);
       const packActive = Boolean(w.pack_active && packLeft > 0);
 
@@ -1096,9 +887,7 @@ export default function AskScreen() {
       try {
         if (user?.id && user.api_key && mode === "chat") {
           const w = await hasActiveAskV1Wallet(user);
-          const stillHas =
-            (Boolean(w.pack_active) && Number(w.questions_left || 0) > 0) ||
-            Number(w.free_questions_left || 0) > 0;
+          const stillHas = askV1WalletHasCredit(w);
           if (!stillHas) {
             await archiveAskChatSession(user.id, messagesRef.current);
           }
@@ -1211,7 +1000,7 @@ export default function AskScreen() {
       try {
         const w = await hasActiveAskV1Wallet(user);
         void refreshV1WalletLabel();
-        if (w.active && w.questions_left > 0) {
+        if (askV1WalletHasCredit(w)) {
           enterAskChat(lang);
           return;
         }
@@ -1262,7 +1051,7 @@ export default function AskScreen() {
         if (user?.id && user?.api_key) {
           try {
             const w = await hasActiveAskV1Wallet(user);
-            if (w.fetchOk === false || (w.active && w.questions_left > 0)) {
+            if (w.fetchOk === false || askV1WalletHasCredit(w)) {
               enterAskChat(lang);
               return;
             }
@@ -1869,9 +1658,7 @@ export default function AskScreen() {
       try {
         const w = await hasActiveAskV1Wallet(user);
         if (w.fetchOk === false) return;
-        const stillHas =
-          (Boolean(w.pack_active) && Number(w.questions_left || 0) > 0) ||
-          Number(w.free_questions_left || 0) > 0;
+        const stillHas = askV1WalletHasCredit(w);
         if (stillHas) return;
         // Let final assistant bubble commit into messagesRef via render if needed.
         await new Promise((r) => setTimeout(r, 100));
@@ -1953,9 +1740,7 @@ export default function AskScreen() {
         try {
         const w = await hasActiveAskV1Wallet(user);
         if (w.fetchOk) {
-          const stillHas =
-            (Boolean(w.pack_active) && Number(w.questions_left || 0) > 0) ||
-            Number(w.free_questions_left || 0) > 0;
+          const stillHas = askV1WalletHasCredit(w);
           if (!stillHas) {
             const wasFree =
               Number(w.free_questions_used || 0) >= 3 || !w.pack_active;
@@ -2685,7 +2470,7 @@ export default function AskScreen() {
     >
       {/* Header */}
       <FadeInView delay={0}>
-        <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: C.border }]}>
+        <View style={[s.header, { paddingTop: topPad + (mode === null ? 4 : 12), paddingBottom: mode === null ? 6 : 10, borderBottomColor: C.border }]}>
         <View style={s.headerTopRow}>
           {mode === "chat" ? (
             <Pressable
@@ -2785,8 +2570,14 @@ export default function AskScreen() {
                 </View>
 
                 <Text style={s.planSideQOnGrad}>
-                  {v1WalletBar.left}
-                  <Text style={s.planSideQTotalOnGrad}> of {v1WalletBar.total}</Text>
+                  {v1WalletBar.unlimited ? (
+                    "∞"
+                  ) : (
+                    <>
+                      {v1WalletBar.left}
+                      <Text style={s.planSideQTotalOnGrad}> of {v1WalletBar.total}</Text>
+                    </>
+                  )}
                 </Text>
 
                 {v1WalletBar.kind === "free" ? (
@@ -2984,32 +2775,28 @@ export default function AskScreen() {
           showsVerticalScrollIndicator={false}
         >
           <FadeInView delay={staggerDelay(0, 55, 40)}>
-            <View>
-          <OrbitBadgeShell color={C.accent || "#a78bfa"}>
-            <BreathingHeroBadge
-              style={[s.heroBadge, { backgroundColor: `${C.accent}18`, borderColor: `${C.accent}55` }]}
-            >
-              <GlowDot color={C.accent || "#a78bfa"} size={6} />
-              <Feather name="cpu" size={11} color={C.accent} />
-              <Text
-                style={[s.heroBadgeText, { color: C.accent, flexShrink: 1 }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.85}
+            <View style={s.pickerHero}>
+              <BreathingHeroBadge
+                style={[s.heroBadge, { backgroundColor: `${C.accent}18`, borderColor: `${C.accent}55` }]}
               >
-                Cosmic Advance Intelligence
+                <GlowDot color={C.accent || "#a78bfa"} size={6} />
+                <Feather name="cpu" size={11} color={C.accent} />
+                <Text
+                  style={[s.heroBadgeText, { color: C.accent, flexShrink: 1 }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                >
+                  Cosmic Advance Intelligence
+                </Text>
+              </BreathingHeroBadge>
+              <Text
+                style={[s.heroTagline, { color: C.textMuted }]}
+                numberOfLines={1}
+              >
+                Live chart intelligence · V3 + V1
               </Text>
-            </BreathingHeroBadge>
-          </OrbitBadgeShell>
-          <Text
-            style={[s.heroTagline, { color: C.textMuted }]}
-            numberOfLines={2}
-          >
-            Advanced Multi-System Engine · Live chart intelligence
-          </Text>
-          <VoiceWaveHero color={C.accent || "#a78bfa"} />
-          <RotatingExamples color={C.accent || "#a78bfa"} textColor={C.text} />
-          <EngineOnlineBar accent={C.accent || "#a78bfa"} />
+              <RotatingExamples color={C.accent || "#a78bfa"} textColor={C.text} />
             </View>
           </FadeInView>
 
@@ -3094,104 +2881,58 @@ export default function AskScreen() {
                       : v1WalletLabel || "From ₹49 · 8–45 questions · packs"}
                   </Text>
                 </View>
-                <Text style={s.modeRectifyHint}>
-                  + Precision Birth Time Rectification · minute-accurate
-                </Text>
               </View>
               <Feather name="chevron-right" size={20} color="#fff" />
             </LinearGradient>
             </PressScale>
           </FadeInView>
 
-          <FadeInView delay={staggerDelay(3, 70, 120)}>
-            <PressScale
-              accessibilityLabel="Precision Birth Time Rectification"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                if (showDemo) { router.push("/onboarding"); return; }
-                router.push("/birth-time-rectification");
-              }}
-              style={[s.modeCard, s.rectifyCard, { shadowColor: "#10b981" }]}
-            >
-              <LinearGradient
-                colors={["#064e3b", "#059669", "#34d399"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.rectifyGrad}
+          {INSTAGRAM_ANSWERS_ENABLED ? (
+            <FadeInView delay={staggerDelay(4, 70, 140)}>
+              <PressScale
+                accessibilityLabel="Free Instagram Answers"
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  if (showDemo) { router.push("/onboarding"); return; }
+                  router.push("/instagram-answers");
+                }}
+                style={[s.modeCard, s.rectifyCard, { shadowColor: "#c13584" }]}
               >
-                <CardShimmer />
-                <View style={s.modeIconWrap}>
-                  <FloatIcon delayMs={400}>
-                    <Feather name="crosshair" size={26} color="#fff" />
-                  </FloatIcon>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={s.modeTitleRow}>
-                    <Text style={s.modeTitle}>Precision Birth Time Rectification</Text>
-                    <PulsePill style={[s.modeBadge, { backgroundColor: "rgba(255,255,255,0.22)" }]}>
-                      <Text style={s.modeBadgeText}>MINUTE-ACCURATE</Text>
-                    </PulsePill>
+                <LinearGradient
+                  colors={["#4c1d95", "#833ab4", "#fd1d1d"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={s.rectifyGrad}
+                >
+                  <CardShimmer />
+                  <View style={s.modeIconWrap}>
+                    <FloatIcon delayMs={500}>
+                      <Text style={s.modeEmoji}>📱</Text>
+                    </FloatIcon>
                   </View>
-                  <Text style={s.modeBody}>
-                    One wrong minute can change your lagna. Fix your birth time with multi-system accuracy — so every answer finally matches your real life.
-                  </Text>
-                  <View style={s.modeMeta}>
-                    <Feather name="star" size={11} color="#ffffffcc" />
-                    <Text style={s.modeMetaText}>Buy once · Unlock exact chart answers</Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={s.modeTitleRow}>
+                      <Text style={s.modeTitle}>Free Instagram Answers</Text>
+                      <PulsePill style={[s.modeBadge, { backgroundColor: "rgba(255,255,255,0.22)" }]}>
+                        <Text style={s.modeBadgeText}>FREE</Text>
+                      </PulsePill>
+                    </View>
+                    <Text style={s.modeBody}>
+                      Type exact words like an Instagram DM — saved auto-reply from our reel library. Free, no pack.
+                    </Text>
+                    <View style={s.modeMeta}>
+                      <Feather name="smartphone" size={11} color="#ffffffcc" />
+                      <Text style={s.modeMetaText}>DM trigger → auto-reply · Reel # + exact words</Text>
+                    </View>
+                    <View style={s.rectifyCtaRow}>
+                      <Text style={s.rectifyCtaOnGrad}>Get free answer</Text>
+                      <Feather name="arrow-right" size={14} color="#fff" />
+                    </View>
                   </View>
-                  <View style={s.rectifyCtaRow}>
-                    <Text style={s.rectifyCtaOnGrad}>Get exact birth time</Text>
-                    <Feather name="arrow-right" size={14} color="#fff" />
-                  </View>
-                </View>
-              </LinearGradient>
-            </PressScale>
-          </FadeInView>
-
-          <FadeInView delay={staggerDelay(4, 70, 140)}>
-            <PressScale
-              accessibilityLabel="Free Instagram Answers"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                if (showDemo) { router.push("/onboarding"); return; }
-                router.push("/instagram-answers");
-              }}
-              style={[s.modeCard, s.rectifyCard, { shadowColor: "#c13584" }]}
-            >
-              <LinearGradient
-                colors={["#4c1d95", "#833ab4", "#fd1d1d"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.rectifyGrad}
-              >
-                <CardShimmer />
-                <View style={s.modeIconWrap}>
-                  <FloatIcon delayMs={500}>
-                    <Text style={s.modeEmoji}>📱</Text>
-                  </FloatIcon>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={s.modeTitleRow}>
-                    <Text style={s.modeTitle}>Free Instagram Answers</Text>
-                    <PulsePill style={[s.modeBadge, { backgroundColor: "rgba(255,255,255,0.22)" }]}>
-                      <Text style={s.modeBadgeText}>FREE</Text>
-                    </PulsePill>
-                  </View>
-                  <Text style={s.modeBody}>
-                    Type exact words like an Instagram DM — saved auto-reply from our reel library. Free, no pack.
-                  </Text>
-                  <View style={s.modeMeta}>
-                    <Feather name="smartphone" size={11} color="#ffffffcc" />
-                    <Text style={s.modeMetaText}>DM trigger → auto-reply · Reel # + exact words</Text>
-                  </View>
-                  <View style={s.rectifyCtaRow}>
-                    <Text style={s.rectifyCtaOnGrad}>Get free answer</Text>
-                    <Feather name="arrow-right" size={14} color="#fff" />
-                  </View>
-                </View>
-              </LinearGradient>
-            </PressScale>
-          </FadeInView>
+                </LinearGradient>
+              </PressScale>
+            </FadeInView>
+          ) : null}
 
           {/* Recent Questions MOVED into the chat view (fresh-thread only).
               Landing picker now stays focused on the mode cards. */}
@@ -4294,9 +4035,9 @@ const s = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Nunito_500Medium",
     textAlign: "center",
-    lineHeight: 15,
-    marginTop: 8,
-    marginBottom: 2,
+    lineHeight: 14,
+    marginTop: 6,
+    marginBottom: 0,
     paddingHorizontal: 20,
   },
 
@@ -4372,10 +4113,14 @@ const s = StyleSheet.create({
 
   // ── Mode picker ─────────────────────────────────────────────────────────
   pickerWrap: {
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 110,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 24,
     gap: 10,
+  },
+  pickerHero: {
+    alignItems: "center",
+    paddingBottom: 2,
   },
   pickerHi:   { fontSize: 22, fontWeight: "800", letterSpacing: -0.4 },
   pickerSub:  { fontSize: 13, marginBottom: 14 },
@@ -4388,7 +4133,7 @@ const s = StyleSheet.create({
     elevation: 8,
   },
   modeGrad: {
-    paddingHorizontal: 14, paddingVertical: 14,
+    paddingHorizontal: 14, paddingVertical: 13,
     flexDirection: "row", alignItems: "center", gap: 10,
   },
   modeIconWrap: {
@@ -4406,7 +4151,7 @@ const s = StyleSheet.create({
   },
   modeTitle: { color: "#fff", fontSize: 15.5, fontWeight: "800", letterSpacing: -0.3, flexShrink: 1 },
   modeBody:  { color: "#ffffffd0", fontSize: 12, lineHeight: 16, marginTop: 3 },
-  modeMeta:  { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
+  modeMeta:  { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 5 },
   modeMetaText: { color: "#ffffffcc", fontSize: 10, fontWeight: "600", flexShrink: 1 },
   modeRectifyHint: {
     color: "#ffffffb8",
@@ -4416,14 +4161,13 @@ const s = StyleSheet.create({
     lineHeight: 14,
   },
   rectifyCard: {
-    marginTop: 10,
     shadowOpacity: 0.5,
     shadowRadius: 20,
     elevation: 12,
   },
   rectifyGrad: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -4455,7 +4199,7 @@ const s = StyleSheet.create({
   modeBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "800", letterSpacing: 0.3 },
   legacyLink: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, paddingVertical: 14, marginTop: 4,
+    gap: 6, paddingVertical: 10, marginTop: 2,
   },
   legacyLinkText: { fontSize: 12, fontWeight: "600" },
 

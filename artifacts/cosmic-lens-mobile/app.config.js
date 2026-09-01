@@ -12,8 +12,15 @@ function isInstalled(moduleName) {
 
 const optionalPlugins = new Set(["@react-native-google-signin/google-signin"]);
 
+const isProductionBuild =
+  process.env.EAS_BUILD_PROFILE === "production" ||
+  process.env.NODE_ENV === "production";
+
 const plugins = appJson.expo.plugins.filter((entry) => {
   const name = Array.isArray(entry) ? entry[0] : entry;
+  if (name === "expo-dev-client" && isProductionBuild) {
+    return false;
+  }
   if (optionalPlugins.has(name)) {
     return isInstalled(name);
   }

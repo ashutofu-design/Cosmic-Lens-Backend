@@ -23,6 +23,8 @@ const DEFAULT_DEV_VPS_API = `http://${VPS_PUBLIC_IP}:8080`;
 /** Stable HTTPS API domain — mobile app (admin.coosmic.icu is admin UI only). */
 const PRODUCTION_HTTPS_API = "https://api.coosmic.icu";
 const PRODUCTION_API_URL = PRODUCTION_HTTPS_API;
+/** Laptop Chrome → localhost proxy (CORS blocks api.coosmic.icu from localhost). */
+const WEB_DEV_PROXY = "http://127.0.0.1:18081";
 
 const DEV_REPLIT_DOMAIN =
   "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
@@ -42,6 +44,12 @@ function configuredApiUrl(): string | undefined {
 
 function isWeb(): boolean {
   return typeof window !== "undefined" && typeof document !== "undefined";
+}
+
+function isLocalhostWeb(): boolean {
+  if (!isWeb()) return false;
+  const host = window.location?.hostname || "";
+  return host === "localhost" || host === "127.0.0.1";
 }
 
 function localDevApiBaseFromLocation(): string | null {
@@ -110,6 +118,12 @@ function isLaptopGunicornUrl(url: string): boolean {
 }
 
 function resolveApiBase(): string {
+  // .env often has https://api.coosmic.icu — production CORS rejects localhost
+  // and Google login shows "Failed to fetch". Force the local proxy on laptop web.
+  if (__DEV__ && isLocalhostWeb() && !useLocalBackend()) {
+    return WEB_DEV_PROXY;
+  }
+
   const fullUrl = configuredApiUrl();
   const hostOnly = process.env.EXPO_PUBLIC_DOMAIN;
 
@@ -192,7 +206,9 @@ function installDevFetchInterceptor(): void {
   const preferred =
     forced && /^https?:\/\//.test(forced)
       ? forced.replace(/\/$/, "")
-      : API_BASE;
+      : __DEV__ && isLocalhostWeb() && !useLocalBackend()
+        ? WEB_DEV_PROXY
+        : API_BASE;
 
   const shouldRewrite = (url: string) =>
     !!preferred &&
@@ -271,6 +287,12 @@ export function demoLoginApiBases(): string[] {
   const configuredNorm = configured
     ? normalizeApiUrl(configured) || configured.replace(/\/$/, "")
     : null;
+
+  // Laptop Chrome: only the local proxy — production API is CORS-blocked.
+  if (__DEV__ && isLocalhostWeb() && !useLocalBackend()) {
+    add(WEB_DEV_PROXY);
+    return out.filter(Boolean);
+  }
 
   // Laptop web: sirf configured URL (localhost proxy ya domain) — IP retry mat karo
   if (__DEV__ && isWeb() && configuredNorm && !isRawVpsIpUrl(configuredNorm)) {

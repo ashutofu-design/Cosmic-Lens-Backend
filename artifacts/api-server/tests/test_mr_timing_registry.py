@@ -12,6 +12,7 @@ from ask_love.timing_registry import is_love_timing_question
 from ask_mr.classifier import classify_mr_archetype
 from ask_mr.timing_registry import (
     has_explicit_timing_anchor,
+    is_marriage_timing_question,
     is_mr_static_question,
     mr_static_overrides_llm_timing,
     repair_llm_intent_mr_static_timing,
@@ -106,6 +107,26 @@ class TestMrTimingRegistry(unittest.TestCase):
     def test_kab_tak_chalega_stays_timing(self):
         q = "Humare rishte me stressful phase kab tak chalega"
         self.assertTrue(has_explicit_timing_anchor(q))
+
+    def test_marriage_timing_detected_not_love(self):
+        q = "Meri shaadi kab hogi?"
+        self.assertTrue(is_marriage_timing_question(q))
+        self.assertFalse(
+            is_love_timing_question(q, {"domain": "love", "is_timing": True}),
+        )
+
+    def test_apply_understanding_routing_repairs_marriage_timing(self):
+        from ask_route_from_understanding import apply_understanding_routing
+
+        q = "Meri shaadi kab hogi?"
+        out = apply_understanding_routing(
+            q,
+            {"question_summary": "Marriage timing", "domain": "general"},
+            {"domain": "general", "is_timing": False, "confidence": 0.3},
+        )
+        self.assertEqual(out.get("domain"), "marriage")
+        self.assertTrue(out.get("is_timing"))
+        self.assertEqual(out.get("mr_archetype"), "marriage_timing")
 
 
 if __name__ == "__main__":

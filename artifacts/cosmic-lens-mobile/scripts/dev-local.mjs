@@ -26,9 +26,16 @@ loadDotEnv(cwd);
 
 const useWeb = process.argv.includes("--web");
 const useClear = process.argv.includes("--clear");
+const useLocalApi = (process.env.EXPO_PUBLIC_USE_LOCAL_API || "").trim() === "1";
+const PROXY_PORT = process.env.DEV_API_PROXY_PORT || "18081";
+const WEB_PROXY = `http://127.0.0.1:${PROXY_PORT}`;
+// .env has https://api.coosmic.icu — that CORS-blocks localhost Google login.
+if (useWeb && !useLocalApi) {
+  process.env.EXPO_PUBLIC_API_URL = WEB_PROXY;
+}
 const API =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
-  (useWeb ? "http://127.0.0.1:18081" : "http://187.127.174.55:8080");
+  (useWeb ? WEB_PROXY : "http://187.127.174.55:8080");
 const PORT = process.env.EXPO_METRO_PORT || "18987";
 const isWin = process.platform === "win32";
 
@@ -61,8 +68,10 @@ const env = applyWindowsMetroConfigEnv(process.cwd(), {
       }
     : {}),
 });
-// Let Expo open the browser itself (do not set BROWSER=none).
-delete env.BROWSER;
+// One tab only — we open Chrome once after Metro is ready; Expo must not also open.
+if (useWeb) {
+  env.BROWSER = "none";
+}
 
 const candidates = [
   path.resolve(cwd, "node_modules", "expo", "bin", "cli"),
@@ -84,7 +93,11 @@ if (useWeb) {
 }
 if (useClear) args.push("--clear");
 
+let browserOpened = false;
+
 function openChrome(url) {
+  if (browserOpened) return;
+  browserOpened = true;
   try {
     if (isWin) {
       // Prefer Chrome; fall back to default browser.
@@ -116,13 +129,72 @@ function openChrome(url) {
 
 const webUrl = `http://localhost:${PORT}`;
 
+async function waitForMetro(url, maxMs = 120000) {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    try {
+      await fetch(url, { signal: AbortSignal.timeout(2500) });
+      return true;
+    } catch {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  return false;
+}
+
+async function proxyHealthy() {
+  try {
+    const r = await fetch(`${WEB_PROXY}/api/healthz`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    const j = await r.json().catch(() => null);
+    return r.ok && j?.status === "ok";
+  } catch {
+    return false;
+  }
+}
+
+async function ensureWebProxy() {
+  if (!useWeb || useLocalApi) return null;
+  if (await proxyHealthy()) {
+    console.log("[dev:local] API proxy already up ✓", WEB_PROXY);
+    return null;
+  }
+  console.log("[dev:local] Starting API proxy →", WEB_PROXY);
+  const proxy = spawn(process.execPath, [path.join(cwd, "scripts", "api-proxy.mjs")], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      DEV_API_PROXY_PORT: PROXY_PORT,
+      DEV_API_PROXY_UPSTREAM:
+        process.env.DEV_API_PROXY_UPSTREAM || "https://admin.coosmic.icu",
+    },
+    cwd,
+  });
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    if (await proxyHealthy()) {
+      console.log("[dev:local] API proxy OK ✓");
+      return proxy;
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  console.error(
+    "[dev:local] API proxy did not start. Google login will Failed to fetch.\n" +
+      "  Check: curl -sS https://admin.coosmic.icu/api/healthz",
+  );
+  return proxy;
+}
+
 console.log("[dev:local] EXPO_PUBLIC_API_URL =", API);
 console.log("[dev:local] starting:", "node", args.map((a) => (a.includes(" ") ? `"${a}"` : a)).join(" "));
 console.log("[dev:local] TEMP =", env.TEMP || process.env.TEMP);
 if (useWeb) {
   console.log("[dev:local] Web URL:", webUrl);
-  console.log("[dev:local] Chrome will open in ~12s — then watch this window for Bundling %");
+  console.log("[dev:local] Chrome will open once when Metro is ready — watch this window for Bundling %");
 }
+
+const proxyChild = await ensureWebProxy();
 
 const child = spawn(process.execPath, args, {
   stdio: "inherit",
@@ -131,16 +203,34 @@ const child = spawn(process.execPath, args, {
   cwd,
 });
 
-child.on("exit", (code) => process.exit(code ?? 0));
+function shutdown(code = 0) {
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    /* ignore */
+  }
+  try {
+    proxyChild?.kill("SIGTERM");
+  } catch {
+    /* ignore */
+  }
+  process.exit(code);
+}
+
+child.on("exit", (code) => shutdown(code ?? 0));
 child.on("error", (err) => {
   console.error("[dev:local] failed:", err?.message || err);
-  process.exit(1);
+  shutdown(1);
 });
+process.on("SIGINT", () => shutdown(0));
+process.on("SIGTERM", () => shutdown(0));
 
 if (useWeb) {
-  // Open Chrome a few times so Metro gets a real page load (triggers bundle).
-  const delays = [8000, 14000, 22000];
-  for (const ms of delays) {
-    setTimeout(() => openChrome(webUrl), ms);
-  }
+  waitForMetro(webUrl).then((ready) => {
+    if (ready) {
+      openChrome(webUrl);
+    } else {
+      console.warn("[dev:local] Metro slow — open manually:", webUrl);
+    }
+  });
 }

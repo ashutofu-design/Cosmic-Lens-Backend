@@ -5,6 +5,7 @@ from typing import Callable
 
 from flask import Blueprint, jsonify, request
 
+from api_auth import auth_error_response
 from .bilateral import BilateralPalmistryEngine
 from .engine import PalmistryPhase2Engine
 
@@ -33,6 +34,7 @@ def create_palmistry_phase2_blueprint(
     *, engine: PalmistryPhase2Engine | None = None,
     bilateral_engine: BilateralPalmistryEngine | None = None,
     rate_limit: Callable[[str], Callable] | None = None,
+    require_user: Callable[[], tuple] | None = None,
 ) -> Blueprint:
     interpreter = engine or PalmistryPhase2Engine()
     bilateral = bilateral_engine or BilateralPalmistryEngine(
@@ -46,6 +48,9 @@ def create_palmistry_phase2_blueprint(
     @blueprint.post("/api/palm-reading/interpret")
     @limit("30 per minute")
     def interpret_palm():
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
         if request.files or request.mimetype != "application/json":
             return jsonify({
                 "status": "rejected",
@@ -85,6 +90,9 @@ def create_palmistry_phase2_blueprint(
     @blueprint.post("/api/palm-reading/interpret-bilateral")
     @limit("20 per minute")
     def interpret_bilateral_palm():
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
         if request.files or request.mimetype != "application/json":
             return jsonify({
                 "status": "rejected",

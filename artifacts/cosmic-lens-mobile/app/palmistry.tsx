@@ -620,6 +620,9 @@ export default function PalmistryScreen() {
   }
 
   async function runScan(asset: ImagePicker.ImagePickerAsset, expectedSide: HandSide) {
+    if (!user?.id || !user?.api_key) {
+      throw new Error("Please sign in to scan your palm.");
+    }
     setPhase("uploading");
     const form = new FormData();
     const imagePart = await palmImagePart(asset);
@@ -638,6 +641,10 @@ export default function PalmistryScreen() {
     try {
       scanResponse = await fetch(`${apiBase}/api/palm-scan`, {
         method: "POST",
+        headers: {
+          "X-User-Id": String(user.id),
+          "X-API-Key": user.api_key,
+        },
         body: form,
       });
     } catch (cause: unknown) {

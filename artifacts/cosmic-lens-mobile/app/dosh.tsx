@@ -18,7 +18,6 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import type { DoshAnalysisResult, DoshItem } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import { API_BASE } from "@/lib/apiConfig";
 import { fmtTemplate } from "@/lib/fmtTemplate";
 import Svg, { Circle } from "react-native-svg";
 
@@ -233,19 +232,8 @@ export default function DoshScreen() {
       setDemoDosh(null);
       return;
     }
-    const controller = new AbortController();
-    setDemoLoading(true);
-    fetch(`${API_BASE}/api/dosh-analysis`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planets: DEMO_PLANETS, nakshatra: "", lang: t.lang }),
-      signal: controller.signal,
-    })
-      .then(r => r.json())
-      .then(data => setDemoDosh(data as DoshAnalysisResult))
-      .catch(() => setDemoDosh(null))
-      .finally(() => setDemoLoading(false));
-    return () => controller.abort();
+    setDemoDosh(getDemoDoshList() as DoshAnalysisResult);
+    setDemoLoading(false);
   }, [showDemo, t.lang]);
 
   const fallbackDemo = React.useMemo(() => getDemoDoshList(), []);

@@ -8,6 +8,7 @@ from typing import Callable
 import cv2
 from flask import Blueprint, Response, jsonify, request
 
+from api_auth import auth_error_response
 from .engine import FaceScanEngine
 
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
@@ -32,6 +33,7 @@ def create_face_scan_blueprint(
     *,
     engine: FaceScanEngine | None = None,
     rate_limit: Callable[[str], Callable] | None = None,
+    require_user: Callable[[], tuple] | None = None,
 ) -> Blueprint:
     scanner = engine or FaceScanEngine()
     blueprint = Blueprint("face_scan", __name__)
@@ -42,6 +44,9 @@ def create_face_scan_blueprint(
     @blueprint.post("/api/face-scan")
     @limit("10 per minute")
     def scan_face():
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
         upload = request.files.get("image")
         if upload is None:
             return jsonify({"error": {
@@ -84,6 +89,9 @@ def create_face_scan_blueprint(
     @blueprint.get("/api/face-scan/<scan_id>/annotated")
     @limit("30 per minute")
     def face_annotation(scan_id: str):
+        auth_err = auth_error_response(require_user)
+        if auth_err:
+            return auth_err
         with _LOCK:
             encoded = _ANNOTATIONS.get(scan_id)
         if encoded is None:

@@ -34,7 +34,12 @@ async function fetchHistoryOnce(
   });
   const res = await apiFetchWithTimeout(
     `${base}/api/cosmic-intelligence-v3/history?${q}`,
-    { headers: { "X-API-Key": opts.apiKey } },
+    {
+      headers: {
+        "X-API-Key": opts.apiKey,
+        "X-User-Id": String(opts.userId),
+      },
+    },
     15000,
   );
   if (!res.ok) {
@@ -83,7 +88,12 @@ export async function fetchV3ChatTranscript(opts: {
     try {
       const res = await apiFetchWithTimeout(
         `${base}/api/cosmic-intelligence-v3/session/${encodeURIComponent(opts.sessionId)}/messages?${q}`,
-        { headers: { "X-API-Key": opts.apiKey } },
+        {
+          headers: {
+            "X-API-Key": opts.apiKey,
+            "X-User-Id": String(opts.userId),
+          },
+        },
         15000,
       );
       if (!res.ok) {

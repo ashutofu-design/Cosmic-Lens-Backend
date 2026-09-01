@@ -63,6 +63,7 @@ import {
 import {
   getAskChatArchive,
   listAskChatArchives,
+  listAskHistoryFromServer,
   type AskArchivedChat,
 } from "@/lib/askChatArchive";
 import { API_BASE } from "@/lib/apiConfig";
@@ -76,6 +77,7 @@ type TalkedItem = {
   talked_at?: string | null;
   message_count: number;
   preview: string;
+  messages?: AskArchivedChat["messages"];
 };
 
 function v3ToTalked(c: V3ChatHistoryItem): TalkedItem {
@@ -99,6 +101,7 @@ function askToTalked(c: AskArchivedChat): TalkedItem {
     talked_at: c.talked_at,
     message_count: c.message_count,
     preview: c.preview,
+    messages: c.messages,
   };
 }
 
@@ -293,7 +296,29 @@ export default function MyReportsScreen() {
           : msg;
       }
       const askRows = (await listAskChatArchives(user.id)).map(askToTalked);
-      const merged = [...askRows, ...v3Rows].sort((a, b) => {
+      let histRows: TalkedItem[] = [];
+      try {
+        const hist = await listAskHistoryFromServer({
+          userId: user.id,
+          apiKey: user.api_key,
+        });
+        const covered = new Set(
+          askRows.flatMap((row) =>
+            (row.messages || [])
+              .filter((m) => m.sender === "user")
+              .map((m) => String(m.text || "").trim().toLowerCase()),
+          ),
+        );
+        histRows = hist
+          .filter((h) => {
+            const q = (h.messages || []).find((m) => m.sender === "user")?.text || "";
+            return q && !covered.has(q.trim().toLowerCase());
+          })
+          .map(askToTalked);
+      } catch {
+        histRows = [];
+      }
+      const merged = [...askRows, ...histRows, ...v3Rows].sort((a, b) => {
         const ta = a.talked_at ? new Date(a.talked_at).getTime() : 0;
         const tb = b.talked_at ? new Date(b.talked_at).getTime() : 0;
         return tb - ta;
@@ -337,7 +362,10 @@ export default function MyReportsScreen() {
     setTranscriptLoading(true);
     try {
       if (chat.source === "ask_v1") {
-        const archived = await getAskChatArchive(user.id, chat.session_id);
+        const archived =
+          (chat.messages && chat.messages.length > 0
+            ? { messages: chat.messages }
+            : await getAskChatArchive(user.id, chat.session_id));
         const msgs = (archived?.messages || []).map((m) => ({
           id: m.id,
           sender: m.sender === "assistant" ? "admin" : m.sender,

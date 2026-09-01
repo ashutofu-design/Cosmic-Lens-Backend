@@ -885,17 +885,13 @@ export default function AskScreen() {
     void (async () => {
       // Leaving chat with empty wallet must still land in Last talked.
       try {
-        if (user?.id && user.api_key && mode === "chat") {
-          const w = await hasActiveAskV1Wallet(user);
-          const stillHas = askV1WalletHasCredit(w);
-          if (!stillHas) {
-            await archiveAskChatSession(user.id, messagesRef.current);
-          }
+        if (user?.id && mode === "chat") {
+          await archiveAskChatSession(user.id, messagesRef.current);
         }
       } catch { /* non-fatal */ }
       router.push("/cosmic-packs?focus=v1" as any);
     })();
-  }, [user?.id, user?.api_key, mode]);
+  }, [user?.id, mode]);
 
   const [v3Requesting, setV3Requesting] = useState(false);
   const [v3ReqError, setV3ReqError] = useState<string | null>(null);
@@ -1458,6 +1454,9 @@ export default function AskScreen() {
             // A live V3 session is intentionally locked. The user must use End.
             return true;
           }
+          if (user?.id) {
+            void archiveAskChatSession(user.id, messagesRef.current);
+          }
           setMode(null);
           return true;
         }
@@ -1465,7 +1464,7 @@ export default function AskScreen() {
       };
       const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
       return () => sub.remove();
-    }, [mode, v3Live]),
+    }, [mode, v3Live, user?.id]),
   );
 
   const tabBarHidden = mode === "chat";
@@ -1648,13 +1647,18 @@ export default function AskScreen() {
   );
 
   /**
-   * After a successful answer: if free/pack wallet is empty, archive to
-   * My Reports → Last talked. Do NOT gate on v1WalletBar (can be null).
+   * After a successful answer: always save to Last talked, then if wallet
+   * is empty show the buy modal. Unlimited / remaining credit still archives.
    */
   const finishAskIfWalletEmpty = useCallback(
     async (snap?: Message[]) => {
       if (!user?.id || !user?.api_key) return;
       if (snap) messagesRef.current = snap;
+      try {
+        await archiveAskChatSession(user.id, messagesRef.current);
+      } catch {
+        /* non-fatal */
+      }
       try {
         const w = await hasActiveAskV1Wallet(user);
         if (w.fetchOk === false) return;
@@ -1953,13 +1957,6 @@ export default function AskScreen() {
           return;
         }
 
-        // ── Auth error (401) — restore on regenerate, error bubble on fresh
-        if (res.status === 401) {
-          failQuietly("Session expired — kripya logout karke phir login karein.");
-          return;
-        }
-
-        // ── Kundli missing (412) — profile birth details needed
         if (res.status === 412) {
           const json = await res.json().catch(() => ({} as any));
           failQuietly(
@@ -1969,7 +1966,6 @@ export default function AskScreen() {
           return;
         }
 
-        // ── Other non-2xx (5xx etc) — same restore matrix as auth.
         if (!res.ok) {
           if (res.status === 524) {
             failQuietly(
@@ -1977,7 +1973,19 @@ export default function AskScreen() {
             );
             return;
           }
-          failQuietly("Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
+          if (res.status === 401) {
+            failQuietly("Session expired — logout karke phir login karein.");
+            return;
+          }
+          const errPeek = await res.text().catch(() => "");
+          if (__DEV__) {
+            console.warn("[ask] HTTP", res.status, errPeek.slice(0, 300));
+          }
+          failQuietly(
+            res.status === 502
+              ? "API proxy fail — Metro restart karein (start-web.ps1)."
+              : "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.",
+          );
           return;
         }
 
@@ -2508,7 +2516,14 @@ export default function AskScreen() {
         <View style={s.headerTopRow}>
           {mode === "chat" ? (
             <Pressable
-              onPress={() => { Haptics.selectionAsync(); setMode(null); setV3Live(null); }}
+              onPress={() => {
+                Haptics.selectionAsync();
+                if (user?.id) {
+                  void archiveAskChatSession(user.id, messagesRef.current);
+                }
+                setMode(null);
+                setV3Live(null);
+              }}
               hitSlop={12}
               style={s.backBtn}
             >

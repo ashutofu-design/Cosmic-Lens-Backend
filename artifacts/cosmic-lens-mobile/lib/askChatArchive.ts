@@ -47,7 +47,7 @@ function previewFrom(messages: AskArchivedMessage[]): string {
   return "Cosmic Intelligence chat";
 }
 
-/** Persist current Ask thread when pack/free questions run out. */
+/** Persist current Ask thread for My Reports → Last talked (upsert same thread). */
 export async function archiveAskChatSession(
   userId: number,
   messages: ArchiveMsgIn[],
@@ -84,7 +84,26 @@ export async function archiveAskChatSession(
     const key = storageKey(userId);
     const raw = await AsyncStorage.getItem(key);
     const prev: AskArchivedChat[] = raw ? JSON.parse(raw) : [];
-    const next = [session, ...(Array.isArray(prev) ? prev : [])].slice(0, 40);
+    const list = Array.isArray(prev) ? prev : [];
+    const firstUser = userTurns[0]?.text || "";
+    const existingIdx = list.findIndex((row) => {
+      const rowFirst = (row.messages || []).find((m) => m.sender === "user")?.text || "";
+      return row.source === "ask_v1" && !!firstUser && rowFirst === firstUser;
+    });
+    let next: AskArchivedChat[];
+    if (existingIdx >= 0) {
+      const updated: AskArchivedChat = {
+        ...list[existingIdx],
+        preview: session.preview,
+        talked_at: now,
+        message_count: cleaned.length,
+        messages: cleaned,
+      };
+      next = [updated, ...list.filter((_, i) => i !== existingIdx)].slice(0, 40);
+      await AsyncStorage.setItem(key, JSON.stringify(next));
+      return updated;
+    }
+    next = [session, ...list].slice(0, 40);
     await AsyncStorage.setItem(key, JSON.stringify(next));
     return session;
   } catch {
@@ -111,4 +130,45 @@ export async function getAskChatArchive(
 ): Promise<AskArchivedChat | null> {
   const rows = await listAskChatArchives(userId);
   return rows.find((r) => r.session_id === sessionId) || null;
+}
+
+/** Server-saved V1 Q&A (every /api/ask) — fills Last talked even when local archive missed. */
+export async function listAskHistoryFromServer(opts: {
+  userId: number;
+  apiKey: string;
+}): Promise<AskArchivedChat[]> {
+  try {
+    const { getApiBase } = await import("@/lib/apiConfig");
+    const res = await fetch(`${getApiBase()}/api/history?limit=40`, {
+      headers: {
+        "X-User-Id": String(opts.userId),
+        "X-API-Key": opts.apiKey,
+      },
+    });
+    if (!res.ok) return [];
+    const j = await res.json().catch(() => ({}));
+    const items = Array.isArray(j?.items) ? j.items : [];
+    const out: AskArchivedChat[] = [];
+    for (const it of items) {
+      const q = String(it?.question_text || "").trim();
+      const a = String(it?.answer_text || "").trim();
+      if (!q) continue;
+      const messages: AskArchivedMessage[] = [
+        { sender: "user", text: q, ts: it?.created_at },
+      ];
+      if (a) messages.push({ sender: "assistant", text: a, ts: it?.created_at });
+      out.push({
+        session_id: `hist_${String(it?.id || out.length)}`,
+        source: "ask_v1",
+        label: "Cosmic Intelligence V1",
+        preview: q.length > 120 ? `${q.slice(0, 117)}…` : q,
+        talked_at: String(it?.created_at || new Date().toISOString()),
+        message_count: messages.length,
+        messages,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }

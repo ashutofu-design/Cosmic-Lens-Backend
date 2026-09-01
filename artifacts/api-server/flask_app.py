@@ -10732,6 +10732,7 @@ def ask_route():
     user_id = user.id
 
     # GLOBAL: answer language = question language (picker only if undetectable).
+    _code = ""
     try:
         from openai_helper import _ask_lang_for_request
 
@@ -10954,7 +10955,7 @@ def ask_route():
                 _admin_sync = (out.get("admin_llm_context") or {}).get("llm_intent")
                 if not isinstance(_admin_sync, dict):
                     _admin_sync = out.get("llm_intent") if isinstance(out.get("llm_intent"), dict) else None
-            enrich_ask_result_followups(out, lang=lang or "hn", admin=_admin_sync)
+            enrich_ask_result_followups(out, lang=_code or lang or "hn", admin=_admin_sync)
         except Exception as _chip_exc:
             print(f"[ask:RP] followup chips enrich skipped: {_chip_exc}", flush=True)
         try:
@@ -11815,6 +11816,7 @@ def ask_stream_route():
         pass
 
     # GLOBAL: answer language = question language (picker only if undetectable).
+    _code_s = ""
     try:
         from openai_helper import _ask_lang_for_request
 
@@ -12132,7 +12134,7 @@ def ask_stream_route():
                             else None
                         )
                 enrich_ask_result_followups(
-                    out_local, lang=lang or "hn", admin=_admin_s
+                    out_local, lang=_code_s or lang or "hn", admin=_admin_s
                 )
             except Exception as _chip_exc_s:
                 print(

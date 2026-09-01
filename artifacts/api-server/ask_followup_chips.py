@@ -158,8 +158,13 @@ _BUCKET_CHIPS: dict[str, dict[str, list[str]]] = {
 
 
 def _lang_key(lang: str) -> str:
-    l = (lang or "hn").lower()
-    if l.startswith("hi"):
+    l = (lang or "hn").strip().lower()
+    # Check hinglish BEFORE startswith("hi") — "hinglish".startswith("hi") is True.
+    if l in ("hn", "hinglish", "hg", "hi-latin", "roman"):
+        return "hn"
+    if l in ("hi", "hindi", "hin", "devanagari") or (
+        l.startswith("hi") and "hinglish" not in l
+    ):
         return "hi"
     if l.startswith("en"):
         return "en"
@@ -256,13 +261,11 @@ def enrich_ask_result_followups(
     if admin.get("subject") or item.get("subject"):
         result["subject"] = admin.get("subject") or item.get("subject")
 
-    existing = result.get("follow_ups")
-    if not (isinstance(existing, list) and any(str(x).strip() for x in existing)):
-        result["follow_ups"] = derive_follow_up_chips(
-            topic=topic,
-            domain=domain or topic,
-            bucket=bucket or archetype,
-            lang=lang,
-            is_timing=is_timing,
-        )
+    result["follow_ups"] = derive_follow_up_chips(
+        topic=topic,
+        domain=domain or topic,
+        bucket=bucket or archetype,
+        lang=lang,
+        is_timing=is_timing,
+    )
     return result

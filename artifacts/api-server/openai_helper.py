@@ -687,12 +687,79 @@ def _compose_marriage_timing_reply(
     return text
 
 
+def _devanagari_latin_counts(text: str) -> tuple[int, int]:
+    body = text or ""
+    deva = sum(1 for ch in body if "\u0900" <= ch <= "\u097F")
+    latin = sum(1 for ch in body if ("a" <= ch <= "z") or ("A" <= ch <= "Z"))
+    return deva, latin
+
+
+def _needs_hi_script_fix(question: str, text: str) -> bool:
+    """True when a Devanagari question got a mostly-Latin (Hinglish/English) answer."""
+    if not _text_has_devanagari(question or ""):
+        return False
+    body = (text or "").strip()
+    if not body:
+        return False
+    deva, latin = _devanagari_latin_counts(body)
+    if latin < 12:
+        return False
+    if deva == 0:
+        return True
+    return latin > (deva * 2)
+
+
+def _rewrite_reply_to_devanagari(text: str) -> str:
+    """One-shot rewrite when the model ignored the Hindi lock. No-op without a client."""
+    body = (text or "").strip()
+    if not body:
+        return body
+    try:
+        client = _get_client()
+    except Exception:
+        return body
+    if client is None:
+        return body
+    model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
+    try:
+        kwargs = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Rewrite the astrology answer in pure Hindi using Devanagari script. "
+                        "Keep the same meaning, facts, and length. No Roman Hindi, no English "
+                        "sentences. Proper nouns may stay in Latin. Output only the rewritten answer."
+                    ),
+                },
+                {"role": "user", "content": body},
+            ],
+        }
+        if not (
+            str(model).startswith("gpt-5")
+            or str(model).startswith(("o1", "o3", "o4"))
+        ):
+            kwargs["temperature"] = 0.2
+            kwargs["max_tokens"] = 500
+        resp = client.chat.completions.create(**kwargs)
+        out = ((resp.choices[0].message.content) or "").strip()
+        if out and _text_has_devanagari(out):
+            return out
+    except Exception as exc:
+        print(f"[ask] hindi rewrite skipped: {exc}", flush=True)
+    return body
+
+
 def align_ask_reply_to_question_lang(question: str, text: str) -> str:
     """
     Final gate for EVERY Ask answer: question script wins.
-    Currently enforces Devanagari marriage-timing one-liners; safe no-op otherwise.
+    Devanagari questions must leave with a Devanagari body (not Hinglish/English).
     """
-    return _force_devanagari_marriage_timing_answer(question or "", text or "")
+    body = _force_devanagari_marriage_timing_answer(question or "", text or "")
+    if _needs_hi_script_fix(question or "", body):
+        body = _rewrite_reply_to_devanagari(body)
+    return body
 
 
 def _compose_marriage_timing_alt_reply(
@@ -14186,6 +14253,42 @@ def _ask_lang_for_request(
     return code, api
 
 
+def _pt_language_system_override(code: str) -> str:
+    """Prepended to _PT_SYS_INTRO so Hindi/English questions are not pulled
+    into the default Hinglish Cosmo voice (examples + 'Hinglish me baat karo')."""
+    c = (code or "hn").strip().lower()
+    if c == "hi":
+        return (
+            "════════════════ REPLY LANGUAGE — हिन्दी (देवनागरी) — OVERRIDES HINGLISH BELOW ══\n"
+            "User wrote in Devanagari Hindi. Reply 100% in Devanagari Hindi.\n"
+            "FORBIDDEN: Hinglish, Roman Hindi, English sentences, Latin-script paragraphs.\n"
+            "Hinglish examples later in this prompt are FORMAT ONLY — rewrite every "
+            "word into देवनागरी (\"Dekho aapki shaadi...\" → \"देखो, आपकी शादी...\").\n"
+            "Proper nouns (names, cities) may stay Latin. Everything else is देवनागरी.\n"
+            "══════════════════════════════════════════════════════════════════════════════\n\n"
+        )
+    if c == "en":
+        return (
+            "════════════════ REPLY LANGUAGE — ENGLISH — OVERRIDES HINGLISH DEFAULT ══\n"
+            "User wrote in English. Reply 100% in natural English. No Hinglish fillers "
+            "(aap/hai/mein). Hinglish examples below are FORMAT only — rewrite in English.\n"
+            "══════════════════════════════════════════════════════════════════════════════\n\n"
+        )
+    return ""
+
+
+def _pt_sys_intro_for_ask(
+    question: str,
+    lang: str = "",
+    preferred_language: Optional[str] = None,
+) -> str:
+    try:
+        code = _resolve_response_lang(question or "", lang or "", preferred_language)
+    except Exception:
+        code = "hn"
+    return _pt_language_system_override(code) + _PT_SYS_INTRO
+
+
 def _strict_lang_block(code: str) -> str:
     """Hard, non-negotiable per-language enforcement block injected as the
     very first thing the model sees inside the user-turn payload. Per spec:
@@ -14201,6 +14304,7 @@ def _strict_lang_block(code: str) -> str:
             "  • Numbers may be either Devanagari (१-९) or Western (1-9).\n"
             "  • The ENTIRE response from first word to last must stay in Hindi —\n"
             "    NEVER switch language mid-response. This is non-negotiable.\n"
+            "  • If even one sentence is in English or Roman Hindi, the reply is WRONG.\n"
             "═══════════════════════════════════════════════════════════════\n\n"
         )
     if code == "hn":
@@ -14446,7 +14550,9 @@ def _build_messages(
                 # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
                 # (top of file). Both sync passthrough + stream passthrough
                 # use the same source of truth.
-                _sys_intro_pt = _PT_SYS_INTRO
+                _sys_intro_pt = _pt_sys_intro_for_ask(
+                    question, lang, preferred_language
+                )
                 # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS
                 # in legacy LLM_FULL_CHART_MODE passthrough too (parity with
                 # newer sync + stream passthroughs). Same helper, same args.
@@ -25515,7 +25621,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
                 # (top of file). Both sync passthrough + stream passthrough
                 # use the same source of truth.
-                _sys_intro_pt = _PT_SYS_INTRO
+                _sys_intro_pt = _pt_sys_intro_for_ask(
+                    question, lang, preferred_language
+                )
                 # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS
                 # so the 25-rule + 6-trust-layer engine actually reaches the
                 # LLM in passthrough mode (was being completely bypassed).
@@ -29355,7 +29463,9 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 _property_focus_pt_s = ""
             _msgs_pt_s: list[dict] = [{
                 "role":    "system",
-                "content": _PT_SYS_INTRO
+                "content": _pt_sys_intro_for_ask(
+                               question, lang, preferred_language
+                           )
                            + _chart_block_pt_s
                            + _kp_block_pt_s
                            + _property_focus_pt_s

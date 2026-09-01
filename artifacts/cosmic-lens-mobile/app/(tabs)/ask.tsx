@@ -2937,47 +2937,43 @@ export default function AskScreen() {
           </FadeInView>
 
           {INSTAGRAM_ANSWERS_ENABLED ? (
-            <FadeInView delay={staggerDelay(4, 70, 140)}>
+            <FadeInView delay={staggerDelay(3, 70, 120)}>
               <PressScale
-                accessibilityLabel="Free Instagram Answers"
+                accessibilityLabel="Instagram Free Answers"
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                  if (showDemo) { router.push("/onboarding"); return; }
                   router.push("/instagram-answers");
                 }}
-                style={[s.modeCard, s.rectifyCard, { shadowColor: "#c13584" }]}
+                style={[s.modeCard, { shadowColor: "#c13584" }]}
               >
                 <LinearGradient
                   colors={["#4c1d95", "#833ab4", "#fd1d1d"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={s.rectifyGrad}
+                  style={s.modeGrad}
                 >
                   <CardShimmer />
                   <View style={s.modeIconWrap}>
-                    <FloatIcon delayMs={500}>
+                    <FloatIcon delayMs={400}>
                       <Text style={s.modeEmoji}>📱</Text>
                     </FloatIcon>
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={s.modeTitleRow}>
-                      <Text style={s.modeTitle}>Free Instagram Answers</Text>
+                      <Text style={s.modeTitle}>Instagram Free Answers</Text>
                       <PulsePill style={[s.modeBadge, { backgroundColor: "rgba(255,255,255,0.22)" }]}>
                         <Text style={s.modeBadgeText}>FREE</Text>
                       </PulsePill>
                     </View>
                     <Text style={s.modeBody}>
-                      Type exact words like an Instagram DM — saved auto-reply from our reel library. Free, no pack.
+                      Reel number + exact Instagram words — saved auto-reply. Free, no pack.
                     </Text>
                     <View style={s.modeMeta}>
-                      <Feather name="smartphone" size={11} color="#ffffffcc" />
-                      <Text style={s.modeMetaText}>DM trigger → auto-reply · Reel # + exact words</Text>
-                    </View>
-                    <View style={s.rectifyCtaRow}>
-                      <Text style={s.rectifyCtaOnGrad}>Get free answer</Text>
-                      <Feather name="arrow-right" size={14} color="#fff" />
+                      <Feather name="instagram" size={11} color="#ffffffcc" />
+                      <Text style={s.modeMetaText}>DM trigger → auto-reply · no Cosmic Pack</Text>
                     </View>
                   </View>
+                  <Feather name="chevron-right" size={20} color="#fff" />
                 </LinearGradient>
               </PressScale>
             </FadeInView>

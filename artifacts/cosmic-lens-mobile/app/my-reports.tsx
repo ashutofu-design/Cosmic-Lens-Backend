@@ -78,30 +78,63 @@ type TalkedItem = {
   message_count: number;
   preview: string;
   messages?: AskArchivedChat["messages"];
+  session_ids?: string[];
 };
 
-function v3ToTalked(c: V3ChatHistoryItem): TalkedItem {
+function mergeV1Flow(local: AskArchivedChat[], hist: AskArchivedChat[]): TalkedItem | null {
+  const seen = new Set<string>();
+  const messages: AskArchivedChat["messages"] = [];
+  const rows = [...local, ...hist];
+  for (const row of rows) {
+    for (const m of row.messages || []) {
+      const text = String(m.text || "").trim();
+      if (!text) continue;
+      const key = `${m.sender}:${text.toLowerCase().slice(0, 180)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      messages.push(m);
+    }
+  }
+  messages.sort((a, b) => {
+    const ta = a.ts ? new Date(a.ts).getTime() : 0;
+    const tb = b.ts ? new Date(b.ts).getTime() : 0;
+    return ta - tb;
+  });
+  if (!messages.some((m) => m.sender === "user")) return null;
+  const last = messages[messages.length - 1];
+  const lastUser = [...messages].reverse().find((m) => m.sender === "user");
+  const preview = String(lastUser?.text || last?.text || "Tap to open full V1 chat");
   return {
-    session_id: c.session_id,
-    source: "v3",
-    label: c.label || "Cosmic Intelligence V3",
-    minutes: c.minutes,
-    status: c.status,
-    talked_at: c.talked_at || c.ended_at || c.started_at || c.created_at,
-    message_count: c.message_count,
-    preview: c.preview,
+    session_id: "ask_v1_all",
+    source: "ask_v1",
+    label: "Cosmic Intelligence V1",
+    talked_at: last?.ts || rows[0]?.talked_at || null,
+    message_count: messages.length,
+    preview: preview.length > 120 ? `${preview.slice(0, 117)}…` : preview,
+    messages,
   };
 }
 
-function askToTalked(c: AskArchivedChat): TalkedItem {
+function mergeV3Flow(rows: V3ChatHistoryItem[]): TalkedItem | null {
+  if (!rows.length) return null;
+  const ordered = [...rows].sort((a, b) => {
+    const ta = new Date(String(a.talked_at || a.ended_at || a.started_at || a.created_at || 0)).getTime();
+    const tb = new Date(String(b.talked_at || b.ended_at || b.started_at || b.created_at || 0)).getTime();
+    return ta - tb;
+  });
+  const last = ordered[ordered.length - 1];
+  const count = ordered.reduce((n, r) => n + Number(r.message_count || 0), 0);
+  const preview = String(last.preview || "Tap to open full V3 chat");
   return {
-    session_id: c.session_id,
-    source: "ask_v1",
-    label: c.label || "Cosmic Intelligence V1",
-    talked_at: c.talked_at,
-    message_count: c.message_count,
-    preview: c.preview,
-    messages: c.messages,
+    session_id: "v3_all",
+    source: "v3",
+    label: "Cosmic Intelligence V3",
+    minutes: last.minutes,
+    status: last.status,
+    talked_at: last.talked_at || last.ended_at || last.started_at || last.created_at,
+    message_count: count || ordered.length,
+    preview: preview.length > 120 ? `${preview.slice(0, 117)}…` : preview,
+    session_ids: ordered.map((r) => String(r.session_id)).filter(Boolean),
   };
 }
 
@@ -281,50 +314,33 @@ export default function MyReportsScreen() {
     if (!silent) setChatsLoading(true);
     setChatsError(null);
     try {
-      let v3Rows: TalkedItem[] = [];
+      let v3Flow: TalkedItem | null = null;
       let v3Err: string | null = null;
       try {
         const rows = await fetchV3ChatHistory({
           userId: user.id,
           apiKey: user.api_key,
         });
-        v3Rows = rows.map(v3ToTalked);
+        v3Flow = mergeV3Flow(rows);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Could not load chats";
         v3Err = /404/.test(msg)
           ? "V3 chat history API abhi server pe deploy nahi hui."
           : msg;
       }
-      const askRows = (await listAskChatArchives(user.id)).map(askToTalked);
-      let histRows: TalkedItem[] = [];
+      const localAsk = await listAskChatArchives(user.id);
+      let histAsk: AskArchivedChat[] = [];
       try {
-        const hist = await listAskHistoryFromServer({
+        histAsk = await listAskHistoryFromServer({
           userId: user.id,
           apiKey: user.api_key,
         });
-        const covered = new Set(
-          askRows.flatMap((row) =>
-            (row.messages || [])
-              .filter((m) => m.sender === "user")
-              .map((m) => String(m.text || "").trim().toLowerCase()),
-          ),
-        );
-        histRows = hist
-          .filter((h) => {
-            const q = (h.messages || []).find((m) => m.sender === "user")?.text || "";
-            return q && !covered.has(q.trim().toLowerCase());
-          })
-          .map(askToTalked);
       } catch {
-        histRows = [];
+        histAsk = [];
       }
-      const merged = [...askRows, ...histRows, ...v3Rows].sort((a, b) => {
-        const ta = a.talked_at ? new Date(a.talked_at).getTime() : 0;
-        const tb = b.talked_at ? new Date(b.talked_at).getTime() : 0;
-        return tb - ta;
-      });
+      const v1Flow = mergeV1Flow(localAsk, histAsk);
+      const merged = [v1Flow, v3Flow].filter((x): x is TalkedItem => !!x);
       setChats(merged);
-      // Only surface V3 API error when there is nothing local either.
       setChatsError(merged.length === 0 ? v3Err : null);
     } catch (e) {
       setChats([]);
@@ -381,19 +397,32 @@ export default function MyReportsScreen() {
           ),
         );
       } else {
-        const msgs = await fetchV3ChatTranscript({
-          userId: user.id,
-          apiKey: user.api_key,
-          sessionId: chat.session_id,
-        });
-        setTranscript(
-          msgs.filter(
-            (m) =>
-              m &&
-              (m.sender === "user" || m.sender === "admin" || m.sender === "system") &&
-              (String(m.text || "").trim() || String(m.image_url || "").trim()),
-          ),
-        );
+        const ids =
+          chat.session_ids && chat.session_ids.length > 0
+            ? chat.session_ids
+            : [chat.session_id];
+        const bundled: V3ChatMessage[] = [];
+        for (const sid of ids) {
+          if (!sid) continue;
+          try {
+            const msgs = await fetchV3ChatTranscript({
+              userId: user.id,
+              apiKey: user.api_key,
+              sessionId: sid,
+            });
+            bundled.push(
+              ...msgs.filter(
+                (m) =>
+                  m &&
+                  (m.sender === "user" || m.sender === "admin" || m.sender === "system") &&
+                  (String(m.text || "").trim() || String(m.image_url || "").trim()),
+              ),
+            );
+          } catch {
+            /* skip one session */
+          }
+        }
+        setTranscript(bundled);
       }
     } catch {
       setTranscript([]);
@@ -672,7 +701,7 @@ export default function MyReportsScreen() {
             </Text>
             <Text style={[s.muted, { color: C.textMuted, textAlign: "center", marginTop: 6 }]}>
               {chatsError ||
-                "V1 Ask pack khatam hone pe chat yahan save hogi · V3 live sessions bhi yahan dikhenge."}
+                "V1 Ask aur V3 live — yahan 2 sections milenge, poori baatcheet ke saath."}
             </Text>
             {chatsError ? (
               <Pressable
@@ -700,7 +729,7 @@ export default function MyReportsScreen() {
             }
             ListHeaderComponent={
               <Text style={[s.talkedHint, { color: C.textMuted }]}>
-                Past V1 Ask + V3 live chats — tap to re-read what was discussed.
+                Sirf 2 sections: V1 Ask aur V3 live. Tap karke poori baatcheet padho.
               </Text>
             }
             renderItem={({ item, index }) => {
@@ -777,10 +806,12 @@ export default function MyReportsScreen() {
                           </Text>
                         </View>
                         <Text style={[s.propName, { color: C.text }]} numberOfLines={1}>
-                          {item.label || (isAsk ? "Cosmic Intelligence V1" : "Live consultation")}
+                          {isAsk ? "Cosmic Intelligence V1" : "Cosmic Intelligence V3"}
                         </Text>
                         <Text style={[s.subMeta, { color: C.textMuted, marginTop: 4 }]} numberOfLines={2}>
-                          {item.preview || "Tap to open chat"}
+                          {item.message_count
+                            ? `${item.message_count} messages · poora flow`
+                            : "Tap to open full chat"}
                         </Text>
                         <View style={s.metaRow}>
                           <Feather name="calendar" size={10} color={C.textMuted} />

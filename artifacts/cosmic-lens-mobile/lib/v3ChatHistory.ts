@@ -30,7 +30,7 @@ async function fetchHistoryOnce(
 ): Promise<V3ChatHistoryItem[]> {
   const q = new URLSearchParams({
     user_id: String(opts.userId),
-    limit: "40",
+    limit: "80",
   });
   const res = await apiFetchWithTimeout(
     `${base}/api/cosmic-intelligence-v3/history?${q}`,

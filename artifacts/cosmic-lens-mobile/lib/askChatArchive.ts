@@ -139,7 +139,7 @@ export async function listAskHistoryFromServer(opts: {
 }): Promise<AskArchivedChat[]> {
   try {
     const { getApiBase } = await import("@/lib/apiConfig");
-    const res = await fetch(`${getApiBase()}/api/history?limit=40`, {
+    const res = await fetch(`${getApiBase()}/api/history?limit=100`, {
       headers: {
         "X-User-Id": String(opts.userId),
         "X-API-Key": opts.apiKey,

@@ -24,6 +24,7 @@ const CORS = {
   "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type,Authorization,Accept,X-Requested-With,X-API-Key,X-User-Id,bypass-tunnel-reminder,User-Agent",
+  "Access-Control-Allow-Private-Network": "true",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -77,6 +78,31 @@ function readBody(req) {
   });
 }
 
+async function pipeUpstreamResponse(up, res, extraHeaders = {}) {
+  const outHeaders = {
+    "Content-Type": up.headers.get("content-type") || "application/json",
+    ...extraHeaders,
+  };
+  const cd = up.headers.get("content-disposition");
+  if (cd) outHeaders["Content-Disposition"] = cd;
+
+  res.writeHead(up.status, outHeaders);
+
+  if (up.body) {
+    const reader = up.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(Buffer.from(value));
+    }
+    res.end();
+    return;
+  }
+
+  const buf = Buffer.from(await up.arrayBuffer());
+  res.end(buf);
+}
+
 async function forward(req, res) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, CORS);
@@ -97,23 +123,17 @@ async function forward(req, res) {
   const timeoutMs = upstreamTimeoutMs(path);
 
   try {
+    if (req.method === "POST" && path.includes("/api/ask")) {
+      console.log("[api-proxy]", req.method, path, "body_bytes=", body.length);
+    }
     const up = await fetch(target, {
       method: req.method,
       headers,
       body: body.length ? body : undefined,
       signal: AbortSignal.timeout(timeoutMs),
-      duplex: "half",
     });
 
-    const buf = Buffer.from(await up.arrayBuffer());
-    const outHeaders = {
-      "Content-Type": up.headers.get("content-type") || "application/json",
-      ...CORS,
-    };
-    const cd = up.headers.get("content-disposition");
-    if (cd) outHeaders["Content-Disposition"] = cd;
-    res.writeHead(up.status, outHeaders);
-    res.end(buf);
+    await pipeUpstreamResponse(up, res, CORS);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[api-proxy] FAIL", req.method, path, "→", msg);
@@ -142,7 +162,8 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(LOCAL_PORT, "127.0.0.1", async () => {
-  console.log(`[api-proxy] http://127.0.0.1:${LOCAL_PORT} → ${UPSTREAM}`);
+  console.log(`[api-proxy] http://localhost:${LOCAL_PORT} → ${UPSTREAM}`);
+  console.log(`[api-proxy] (bound 127.0.0.1:${LOCAL_PORT})`);
   console.log(`[api-proxy] /api/numerology-agent → ${AGENT_UPSTREAM}`);
   try {
     const probe = await fetch(`${UPSTREAM}/api/healthz`, {

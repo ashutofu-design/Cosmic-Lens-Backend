@@ -163,6 +163,84 @@ def _ask_stream_client_response(out, *, status: int = 200):
         ), 200
 
 
+def _ask_stream_sse_with_keepalive(work_fn, *, label: str = "ask"):
+    """
+    SSE wrapper for slow Ask paths (raw passthrough).
+
+    Cloudflare returns HTTP 524 when the origin sends no bytes for ~100s.
+    Yield ``started`` immediately, keepalive comments every 20s, then ``done``.
+    Mobile/web clients already parse SSE ``done`` events on /api/ask/stream.
+    """
+    import queue
+    import threading
+    from flask import Response, stream_with_context
+
+    result_q: queue.Queue = queue.Queue(maxsize=1)
+
+    def _worker():
+        try:
+            result_q.put(("ok", work_fn()))
+        except Exception as exc:
+            import traceback
+
+            traceback.print_exc()
+            result_q.put(("err", exc))
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+    def _gen():
+        yield "data: " + json.dumps({"kind": "started"}, ensure_ascii=False) + "\n\n"
+        while True:
+            try:
+                kind, payload = result_q.get(timeout=20)
+                break
+            except queue.Empty:
+                yield ": keepalive\n\n"
+        if kind == "err":
+            yield "data: " + json.dumps(
+                {"error": str(payload)},
+                ensure_ascii=False,
+            ) + "\n\n"
+            return
+        try:
+            final = _client_ask_payload(payload)
+            final["done"] = True
+            print(
+                f"[ask/stream] sse_done source={final.get('source')!r} "
+                f"text_len={len(str(final.get('text') or ''))} label={label}",
+                flush=True,
+            )
+            yield "data: " + json.dumps(final, ensure_ascii=False) + "\n\n"
+        except Exception as exc:
+            import traceback
+
+            traceback.print_exc()
+            yield "data: " + json.dumps(
+                {
+                    "done": True,
+                    "text": (
+                        "Abhi jawab generate nahi ho pa raha. "
+                        "Thodi der baad try karein."
+                    ),
+                    "follow_ups": [],
+                    "source": "ask_stream_sse_wrap_error",
+                    "error": str(exc),
+                },
+                ensure_ascii=False,
+            ) + "\n\n"
+
+    return Response(
+        stream_with_context(_gen()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "X-Cosmic-Ask-Format": "sse",
+        },
+    )
+
+
 def _build_admin_ask_questions(**kwargs):
     try:
         from admin_dashboard import build_ask_questions as _fn
@@ -188,6 +266,11 @@ PRODUCTION_CORS_ORIGINS = [
     "https://admin.coosmic.icu",
     "https://coosmic.icu",
     "https://www.coosmic.icu",
+    # Laptop Expo web (pnpm dev:web) — direct API fallback when local proxy is down.
+    "http://localhost:18987",
+    "http://127.0.0.1:18987",
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
 ]
 
 
@@ -218,6 +301,8 @@ def _cors_allowed_origins() -> list[str]:
         "http://127.0.0.1:5173",
         "http://localhost:8081",
         "http://127.0.0.1:8081",
+        "http://localhost:18987",
+        "http://127.0.0.1:18987",
         "http://localhost:19006",
         "http://127.0.0.1:19006",
     ]
@@ -11946,104 +12031,144 @@ def ask_stream_route():
                     ),
                     503,
                 )
-        try:
-            out_s = _rp_ask_s(
-                question,
-                kundli,
-                lang,
-                birth=birth,
-                user_id=(rp_user_s.id if rp_user_s else None),
-                ask_route=data.get("ask_route"),
-                history=data.get("history"),
-            )
-            print(
-                f"[ask/stream:RP] done source={out_s.get('source')!r} "
-                f"q={(question or '')[:50]!r}",
-                flush=True,
-            )
-        except Exception as _rp_exc_s:
-            print(f"[ask/stream:RP] raw_passthrough_ask failed: {_rp_exc_s}", flush=True)
-            import traceback
-
-            traceback.print_exc()
-            out_s = None
+        def _build_rp_out_s():
+            nonlocal rp_quota_s
             try:
-                from ask_mr.static_answer import recover_mr_ask_answer
-
-                out_s = recover_mr_ask_answer(
+                out_local = _rp_ask_s(
                     question,
                     kundli,
+                    lang,
                     birth=birth,
-                    lang=lang,
+                    user_id=(rp_user_s.id if rp_user_s else None),
+                    ask_route=data.get("ask_route"),
+                    history=data.get("history"),
                 )
-                if isinstance(out_s, dict):
-                    out_s.pop("llm_called", None)
-            except Exception as _rec_exc_s:
-                print(f"[ask/stream:RP] MR recovery skipped: {_rec_exc_s}", flush=True)
-            if not (isinstance(out_s, dict) and str(out_s.get("text") or "").strip()):
-                if rp_user_s:
-                    from subscription_helper import can_ask_question, refund_question
-
-                    refund_question(rp_user_s)
-                    _chk_s = can_ask_question(rp_user_s)
-                    rp_quota_s = {"used": _chk_s["used"], "limit": _chk_s["limit"]}
-                out_s = {
-                    "text": "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
-                    "topic": "general",
-                    "question_type": "STATIC",
-                    "confidence": 0.0,
-                    "source": "raw_passthrough_error",
-                    "engine_tag": "ans-cosmo",
-                    "follow_ups": [],
-                }
-        out_s = _finalize_ask_out_after_llm(out_s, rp_user_s, quota_on_success=rp_quota_s)
-        out_s["plan"] = rp_plan_s
-        try:
-            from ask_followup_chips import enrich_ask_result_followups
-
-            _admin_s = None
-            if isinstance(out_s, dict):
-                _admin_s = (out_s.get("admin_llm_context") or {}).get("llm_intent")
-                if not isinstance(_admin_s, dict):
-                    _admin_s = out_s.get("llm_intent") if isinstance(out_s.get("llm_intent"), dict) else None
-            enrich_ask_result_followups(out_s, lang=lang or "hn", admin=_admin_s)
-        except Exception as _chip_exc_s:
-            print(f"[ask/stream:RP] followup chips enrich skipped: {_chip_exc_s}", flush=True)
-        try:
-            from openai_helper import align_ask_reply_to_question_lang as _align_lang_s
-
-            if isinstance(out_s, dict) and isinstance(out_s.get("text"), str):
-                _before_s = out_s["text"]
-                out_s["text"] = _align_lang_s(question, out_s["text"])
-                if out_s["text"] != _before_s:
-                    print(
-                        f"[ask/stream:RP] lang_align fixed roman→devanagari "
-                        f"q={(question or '')[:40]!r}",
-                        flush=True,
-                    )
-        except Exception as _align_exc_s:
-            print(f"[ask/stream:RP] lang_align skipped: {_align_exc_s}", flush=True)
-        if rp_user_s is not None and out_s.get("source") not in (
-            "raw_passthrough_error",
-            "raw_passthrough_empty",
-        ):
-            try:
-                schedule_persist_ask_question_result(
-                    current_app._get_current_object(),
-                    user_id=rp_user_s.id,
-                    question_text=question,
-                    result=out_s,
-                    primary_kundli_id=(
-                        rp_user_s.kundli.id if rp_user_s.kundli else None
-                    ),
-                )
-            except Exception as _qh_exc_s:
                 print(
-                    f"[ask/stream:RP] question_history async save failed "
-                    f"(non-fatal): {_qh_exc_s}",
+                    f"[ask/stream:RP] done source={out_local.get('source')!r} "
+                    f"q={(question or '')[:50]!r}",
                     flush=True,
                 )
-        return _ask_stream_client_response(out_s)
+            except Exception as _rp_exc_s:
+                print(
+                    f"[ask/stream:RP] raw_passthrough_ask failed: {_rp_exc_s}",
+                    flush=True,
+                )
+                import traceback
+
+                traceback.print_exc()
+                out_local = None
+                try:
+                    from ask_mr.static_answer import recover_mr_ask_answer
+
+                    out_local = recover_mr_ask_answer(
+                        question,
+                        kundli,
+                        birth=birth,
+                        lang=lang,
+                    )
+                    if isinstance(out_local, dict):
+                        out_local.pop("llm_called", None)
+                except Exception as _rec_exc_s:
+                    print(
+                        f"[ask/stream:RP] MR recovery skipped: {_rec_exc_s}",
+                        flush=True,
+                    )
+                if not (
+                    isinstance(out_local, dict)
+                    and str(out_local.get("text") or "").strip()
+                ):
+                    if rp_user_s:
+                        from subscription_helper import (
+                            can_ask_question,
+                            refund_question,
+                        )
+
+                        refund_question(rp_user_s)
+                        _chk_s = can_ask_question(rp_user_s)
+                        rp_quota_s = {
+                            "used": _chk_s["used"],
+                            "limit": _chk_s["limit"],
+                        }
+                    out_local = {
+                        "text": (
+                            "Abhi jawab generate nahi ho pa raha. "
+                            "Thodi der baad try karein."
+                        ),
+                        "topic": "general",
+                        "question_type": "STATIC",
+                        "confidence": 0.0,
+                        "source": "raw_passthrough_error",
+                        "engine_tag": "ans-cosmo",
+                        "follow_ups": [],
+                    }
+            out_local = _finalize_ask_out_after_llm(
+                out_local, rp_user_s, quota_on_success=rp_quota_s
+            )
+            out_local["plan"] = rp_plan_s
+            try:
+                from ask_followup_chips import enrich_ask_result_followups
+
+                _admin_s = None
+                if isinstance(out_local, dict):
+                    _admin_s = (out_local.get("admin_llm_context") or {}).get(
+                        "llm_intent"
+                    )
+                    if not isinstance(_admin_s, dict):
+                        _admin_s = (
+                            out_local.get("llm_intent")
+                            if isinstance(out_local.get("llm_intent"), dict)
+                            else None
+                        )
+                enrich_ask_result_followups(
+                    out_local, lang=lang or "hn", admin=_admin_s
+                )
+            except Exception as _chip_exc_s:
+                print(
+                    f"[ask/stream:RP] followup chips enrich skipped: {_chip_exc_s}",
+                    flush=True,
+                )
+            try:
+                from openai_helper import align_ask_reply_to_question_lang as _align_lang_s
+
+                if isinstance(out_local, dict) and isinstance(
+                    out_local.get("text"), str
+                ):
+                    _before_s = out_local["text"]
+                    out_local["text"] = _align_lang_s(question, out_local["text"])
+                    if out_local["text"] != _before_s:
+                        print(
+                            f"[ask/stream:RP] lang_align fixed roman→devanagari "
+                            f"q={(question or '')[:40]!r}",
+                            flush=True,
+                        )
+            except Exception as _align_exc_s:
+                print(
+                    f"[ask/stream:RP] lang_align skipped: {_align_exc_s}",
+                    flush=True,
+                )
+            if rp_user_s is not None and out_local.get("source") not in (
+                "raw_passthrough_error",
+                "raw_passthrough_empty",
+            ):
+                try:
+                    schedule_persist_ask_question_result(
+                        current_app._get_current_object(),
+                        user_id=rp_user_s.id,
+                        question_text=question,
+                        result=out_local,
+                        primary_kundli_id=(
+                            rp_user_s.kundli.id if rp_user_s.kundli else None
+                        ),
+                    )
+                except Exception as _qh_exc_s:
+                    print(
+                        f"[ask/stream:RP] question_history async save failed "
+                        f"(non-fatal): {_qh_exc_s}",
+                        flush=True,
+                    )
+            return out_local
+
+        return _ask_stream_sse_with_keepalive(_build_rp_out_s, label="raw_passthrough")
 
     # ── P1.2.9 (A1) — Question length cap (stream parity) ───────────────────
     # Same hard cap as /api/ask. Killswitch: env MAX_QUESTION_CHARS=0.

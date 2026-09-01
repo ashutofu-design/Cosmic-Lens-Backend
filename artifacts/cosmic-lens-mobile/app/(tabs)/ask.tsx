@@ -48,7 +48,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useTabBar } from "@/context/TabBarContext";
 
 import { sanitizeAskAnswerForDisplay, askErrorToUserMessage } from "@/lib/askAnswerSanitize";
-import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { API_BASE, apiFetch, getApiBase, userAuthHeaders } from "@/lib/apiConfig";
 import { INSTAGRAM_ANSWERS_ENABLED } from "@/lib/instagramAnswersFeature";
 import { V3LiveChat } from "@/components/V3LiveChat";
 import { presentV3ReadyNotification, setV3ReadyHandler } from "@/lib/notifications";
@@ -1844,8 +1844,8 @@ export default function AskScreen() {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
           "Accept":       "text/event-stream, application/json",
+          ...userAuthHeaders(user),
         };
-        if (user?.api_key) headers["X-API-Key"] = user.api_key;
 
         // Conversation memory: build from POST-strip snapshot (not state),
         // excluding the new user message which is sent separately as
@@ -1873,10 +1873,9 @@ export default function AskScreen() {
         // res.body) is safe because no stream bytes have been consumed
         // yet — this is identical to apiFetch's policy. Mid-stream errors
         // still fail to the user as before.
-        const _reqInit: RequestInit = {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
+        let requestBody = "";
+        try {
+          requestBody = JSON.stringify({
             question: text.trim(),
             kundli: payloadKundliSlim,
             birthData: payloadBirth,
@@ -1886,12 +1885,22 @@ export default function AskScreen() {
               detectAskLangFromQuestion(text.trim()) || askReplyLang,
             ),
             user_id: user?.id,
-          }),
+          });
+        } catch {
+          failQuietly("Kundli data issue — Profile me birth details save karke dubara try karein.");
+          return;
+        }
+
+        const _reqInit: RequestInit = {
+          method: "POST",
+          headers,
+          body: requestBody,
           signal: ctrl.signal,
         };
         let res: Response;
+        const askUrl = `${getApiBase()}/api/ask/stream`;
         try {
-          res = await fetch(`${API_BASE}/api/ask/stream`, _reqInit);
+          res = await fetch(askUrl, _reqInit);
         } catch (_initErr: any) {
           // Bail immediately on user-cancel / supersede / unmount.
           if (_initErr?.name === "AbortError") throw _initErr;
@@ -1903,7 +1912,7 @@ export default function AskScreen() {
           }
           await new Promise(r => setTimeout(r, 600));
           if (!isCurrent()) throw _initErr;
-          res = await fetch(`${API_BASE}/api/ask/stream`, _reqInit);
+          res = await fetch(askUrl, _reqInit);
         }
 
         // Stale completion — a newer send superseded us; drop quietly.
@@ -1962,6 +1971,12 @@ export default function AskScreen() {
 
         // ── Other non-2xx (5xx etc) — same restore matrix as auth.
         if (!res.ok) {
+          if (res.status === 524) {
+            failQuietly(
+              "Server timeout (524) — jawab banne mein zyada time laga. Dubara try karein.",
+            );
+            return;
+          }
           failQuietly("Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
           return;
         }
@@ -2250,7 +2265,13 @@ export default function AskScreen() {
           failQuietly("Cancelled.");
           return;
         }
-        failQuietly("Network error — thodi der baad try karein.");
+        failQuietly(
+          __DEV__ && e?.message
+            ? /failed to fetch|load failed|network/i.test(String(e.message))
+              ? "API reach nahi ho rahi — Metro restart karein (start-web.ps1). Console mein [metro-proxy] POST dikhe."
+              : `Network error: ${String(e.message).slice(0, 160)}`
+            : "Network error — thodi der baad try karein.",
+        );
       } finally {
         if (thinkStatusTimer) clearInterval(thinkStatusTimer);
         // Only the latest in-flight request clears the loading flag; older
